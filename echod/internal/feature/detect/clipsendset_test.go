@@ -38,8 +38,8 @@ func TestOnlyClipsKeptAfterTheTargetIsSetAreCountedFrom(t *testing.T) {
 	if err != nil || since.Before(before) || since.After(time.Now().Add(time.Second)) {
 		t.Fatalf("since %q: %v", got.Since, err)
 	}
-	if got.URL != "http://trainer.local:8789" || got.Token != "" {
-		t.Fatalf("kept %+v: Tater asks for no token, and the address has no trailing slash", got)
+	if got.URL != "http://trainer.local:8789" || got.Token != "x" {
+		t.Fatalf("kept %+v: a token stays for the other targets, and the address has no trailing slash", got)
 	}
 
 	// Saved again for the same target: the moment stays, so clips kept since are still sent.

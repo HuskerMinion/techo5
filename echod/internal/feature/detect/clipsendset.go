@@ -18,6 +18,9 @@ import (
 // Where the sender's settings are changed and shown (clipsend.go does the sending): the setup page's
 // form, the select, and the two sensors.
 
+// sendClock is the time the target is stamped with; a test replaces it.
+var sendClock = time.Now
+
 // sendEntities are the select that says where clips go and the diagnostic sensors beside it.
 type sendEntities struct {
 	to     *esphome.Select
@@ -151,9 +154,8 @@ func (d *Detect) SetSend(ctx context.Context, next config.WakeSend) error {
 		if err := d.sender.CheckHome(ctx, u); err != nil {
 			return err
 		}
-		if next.Target == config.SendTater {
-			next.Token = "" // Tater Trainer asks for none: one kept would only be a secret for nothing
-		}
+		// A token saved for another target stays: Tater Trainer is never sent one, and the other is not
+		// asked to type it again.
 	}
 	for _, k := range next.Skip {
 		if !slices.Contains(config.SendKinds, k) {
@@ -168,8 +170,13 @@ func (d *Detect) SetSend(ctx context.Context, next config.WakeSend) error {
 	case next.Target == config.SendOff:
 		next.Since = ""
 	case next.Target != cur.Target || cur.Since == "":
-		// Only what is kept from now on is sent: a clip kept before anybody said where it may go is not.
-		next.Since = time.Now().UTC().Format(time.RFC3339)
+		// Only what is kept from now on is sent: a clip kept before anybody said where it may go is not. A
+		// device whose clock is not set yet has no moment to say.
+		now := sendClock()
+		if now.Year() < 2025 {
+			return errors.New("the device's clock isn't set yet; try again in a minute")
+		}
+		next.Since = now.UTC().Format(time.RFC3339)
 	default:
 		next.Since = cur.Since
 	}

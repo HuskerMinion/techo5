@@ -488,7 +488,7 @@ func TestOnlyAddressesOnTheHomeNetworkAreSentTo(t *testing.T) {
 		"192.168.1.20": true, "192.168.255.1": true, "10.0.0.5": true, "172.16.0.1": true, "172.31.255.254": true,
 		"169.254.10.10": true, "fd00::1": true, "fc00::5": true, "fe80::1": true, "::ffff:192.168.1.5": true,
 		"172.15.0.1": false, "172.32.0.1": false, "8.8.8.8": false, "1.1.1.1": false, "127.0.0.1": false,
-		"::1": false, "2001:4860:4860::8888": false, "100.64.0.1": false, "0.0.0.0": false,
+		"::1": false, "2001:4860:4860::8888": false, "100.64.0.1": true, "100.127.255.255": true, "100.63.255.255": false, "100.128.0.1": false, "fd7a:115c:a1e0::1": true, "0.0.0.0": false,
 	} {
 		if got := homeAddress(net.ParseIP(ip)); got != want {
 			t.Errorf("%s is home: %v, want %v", ip, got, want)
@@ -577,8 +577,11 @@ func TestRedirectsAreNotFollowed(t *testing.T) {
 	if hit != 0 {
 		t.Fatal("a redirect was followed")
 	}
-	if r.meta(wav).SendFailed != 307 {
-		t.Errorf("a redirect is not an upload: %+v", r.meta(wav))
+	if m := r.meta(wav); m.SendFailed != 0 || m.SentAt != "" {
+		t.Errorf("a redirect marked the clip: %+v", m)
+	}
+	if _, status := r.s.Unsent(); !strings.Contains(status, "307") {
+		t.Errorf("status %q", status)
 	}
 }
 

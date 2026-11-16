@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"fmt"
 	"log/slog"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -171,31 +172,44 @@ func newKeepClipsEntity(d *Detect) *esphome.Switch {
 		},
 	}
 	sw.OnCommand = func(on bool) {
-		d.clipsSave.Lock()
-		defer d.clipsSave.Unlock()
-		// Turned off, the recorder stops first: nothing is kept while a save that is slow to fail runs.
-		if !on && d.clips != nil {
-			d.clips.enable(false)
-		}
-		if err := saveKeepClips(on); err != nil {
-			slog.Error("saving keep wake clips failed", "err", err)
-			if on {
-				return
-			}
-			// The clips went all the same, and the off holds past a restart: it is recorded on its own
-			// and the save tried again until it holds (clipsoff.go).
-			if err := markClipsOff(); err != nil {
-				slog.Error("recording keep wake clips off failed too", "err", err)
-			}
-			d.retryClipsOffLater()
-		} else {
-			clearClipsOff()
-		}
-		sw.Set(on)
-		slog.Info("setting changed", "setting", sw.ObjectID, "using", on)
-		if on && d.clips != nil {
-			d.clips.enable(true)
+		if err := d.SetKeepClips(on); err != nil {
+			slog.Warn("keep wake clips: not changed", "err", err)
 		}
 	}
 	return sw
+}
+
+// SetKeepClips turns Keep wake clips on or off, from Home Assistant's switch or the setup page. Off deletes
+// every clip, and holds even when the state cannot be saved (clipsoff.go); on that cannot be saved is
+// refused, and the switch is put back.
+func (d *Detect) SetKeepClips(on bool) error {
+	d.clipsSave.Lock()
+	defer d.clipsSave.Unlock()
+	// Turned off, the recorder stops first: nothing is kept while a save that is slow to fail runs.
+	if !on && d.clips != nil {
+		d.clips.enable(false)
+	}
+	if err := saveKeepClips(on); err != nil {
+		slog.Error("saving keep wake clips failed", "err", err)
+		if on {
+			if d.clips != nil {
+				d.keepClips.Set(d.clips.on.Load())
+			}
+			return fmt.Errorf("could not keep it: %w", err)
+		}
+		// The clips went all the same, and the off holds past a restart: it is recorded on its own
+		// and the save tried again until it holds (clipsoff.go).
+		if err := markClipsOff(); err != nil {
+			slog.Error("recording keep wake clips off failed too", "err", err)
+		}
+		d.retryClipsOffLater()
+	} else {
+		clearClipsOff()
+	}
+	d.keepClips.Set(on)
+	slog.Info("setting changed", "setting", d.keepClips.ObjectID, "using", on)
+	if on && d.clips != nil {
+		d.clips.enable(true)
+	}
+	return nil
 }

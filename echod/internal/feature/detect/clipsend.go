@@ -27,7 +27,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
+	"maps"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -36,6 +38,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,13 +74,14 @@ const (
 )
 
 // An address that is not on the home network.
-var errNotHome = errors.New("that address is not on the home network: clips are only sent to a private address (192.168.x.y, 10.x.y.z, 172.16-31.x.y, a link-local or fc00::/7 address, or a name that resolves to one)")
+var errNotHome = errors.New("that address is not on your home network or your Tailscale network: clips are only sent to a private address (192.168.x.y, 10.x.y.z, 172.16-31.x.y, a Tailscale 100.64-127.x.y or fd7a:115c:a1e0:: address, another link-local or fc00::/7 address, or a name that resolves to one); an IPv6 address with a zone, like fe80::1%eth0, is not supported")
 
 // sendItem is the clip being sent.
 type sendItem struct {
 	wav  string
 	meta clipMeta
 	name string // the file's name without .wav
+	at   time.Time
 }
 
 // sender uploads kept clips. Everything it reaches for outside itself is a field, for the tests.
@@ -88,7 +92,7 @@ type sender struct {
 	device  func() string
 	resolve func(ctx context.Context, host string) ([]net.IP, error)
 	allow   func(net.IP) bool
-	client  *http.Client
+	roots   *x509.CertPool // what certificates are checked against: nil is the system's
 	// wait sleeps for d, or until wake fires, and says whether to go on (false once ctx is done).
 	wait    func(ctx context.Context, d time.Duration, wake <-chan struct{}) bool
 	now     func() time.Time
@@ -98,11 +102,14 @@ type sender struct {
 	nudge   chan struct{}
 	changed chan struct{}
 
-	mu      sync.Mutex
-	refused string // the settings (fingerprint) a 401 was answered to, until they change
-	unsent  int
-	status  string
-	cert    string // see Untrusted
+	mu        sync.Mutex
+	halted    string          // the settings (fingerprint) sending was stopped under, until they change
+	haltedWhy string          // and why
+	done      map[string]bool // clips sent whose sidecar could not be marked: not sent again this run
+	markErr   string          // why one could not be
+	unsent    int
+	status    string
+	cert      string // see Untrusted
 }
 
 func newSender(c *clips) *sender {
@@ -116,8 +123,8 @@ func newSender(c *clips) *sender {
 		now:     time.Now,
 		nudge:   make(chan struct{}, 1),
 		changed: make(chan struct{}, 1),
+		done:    map[string]bool{},
 	}
-	s.client = s.newClient()
 	return s
 }
 
@@ -141,30 +148,39 @@ func certFingerprint(c *x509.Certificate) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// verifyPeer accepts a certificate that verifies as usual, or whose leaf is the pinned one, and nothing
-// else. InsecureSkipVerify is on only so that this runs in place of the library's check.
-func (s *sender) verifyPeer(cs tls.ConnectionState) error {
-	if len(cs.PeerCertificates) == 0 {
-		return errors.New("the trainer sent no certificate")
+// verifyFor is the check of a connection to host, the name or the IP address in the saved address: the
+// certificate verifies as usual, for that very host, or its leaf is the pinned one, and nothing else. The
+// host is the address's own, not what the handshake sent as its server name, which is empty for an IP
+// address. InsecureSkipVerify is on only so that this runs in place of the library's check.
+func (s *sender) verifyFor(host string) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		if len(cs.PeerCertificates) == 0 {
+			return errors.New("the trainer sent no certificate")
+		}
+		leaf := cs.PeerCertificates[0]
+		inter := x509.NewCertPool()
+		for _, c := range cs.PeerCertificates[1:] {
+			inter.AddCert(c)
+		}
+		var err error
+		if host == "" {
+			err = errors.New("no host to check the certificate for")
+		} else {
+			_, err = leaf.Verify(x509.VerifyOptions{DNSName: host, Roots: s.roots, Intermediates: inter})
+		}
+		if err == nil {
+			return nil
+		}
+		fp := certFingerprint(leaf)
+		pin := strings.ToLower(s.cfg().Pin)
+		if pin != "" && pin == fp {
+			return nil
+		}
+		s.mu.Lock()
+		s.cert = fp
+		s.mu.Unlock()
+		return &CertError{Fingerprint: fp, Changed: pin != ""}
 	}
-	leaf := cs.PeerCertificates[0]
-	inter := x509.NewCertPool()
-	for _, c := range cs.PeerCertificates[1:] {
-		inter.AddCert(c)
-	}
-	_, err := leaf.Verify(x509.VerifyOptions{DNSName: cs.ServerName, Intermediates: inter})
-	if err == nil {
-		return nil
-	}
-	fp := certFingerprint(leaf)
-	pin := strings.ToLower(s.cfg().Pin)
-	if pin != "" && pin == fp {
-		return nil
-	}
-	s.mu.Lock()
-	s.cert = fp
-	s.mu.Unlock()
-	return &CertError{Fingerprint: fp, Changed: pin != ""}
 }
 
 // Untrusted is the fingerprint of the last certificate that was refused for not verifying, for the page to
@@ -175,16 +191,20 @@ func (s *sender) Untrusted() string {
 	return s.cert
 }
 
-// newClient is the client every request goes through: no proxy, no redirects (one could lead off the
-// home network), certificates verified as usual, and connections made only to a home address.
-func (s *sender) newClient() *http.Client {
+// clientFor is the client for requests to an address: no proxy, no redirects (one could lead off the home
+// network), certificates verified for that address's host, and connections made only to a home address.
+func (s *sender) clientFor(raw string) *http.Client {
+	host := ""
+	if u, err := url.Parse(raw); err == nil {
+		host = u.Hostname()
+	}
 	tr := &http.Transport{
 		Proxy:               nil,
 		DialContext:         s.dial,
 		TLSHandshakeTimeout: 10 * time.Second,
-		// Verification is done by verifyPeer, which does what the library would and accepts one more
+		// Verification is done by verifyFor, which does what the library would and accepts one more
 		// certificate: the one the owner pinned.
-		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true, VerifyConnection: s.verifyPeer, MinVersion: tls.VersionTLS12},
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true, VerifyConnection: s.verifyFor(host), MinVersion: tls.VersionTLS12},
 		ResponseHeaderTimeout: sendAsk,
 		DisableKeepAlives:     true,
 	}
@@ -205,7 +225,7 @@ func (s *sender) dial(ctx context.Context, network, addr string) (net.Conn, erro
 	if err != nil {
 		return nil, err
 	}
-	var d net.Dialer
+	d := net.Dialer{Timeout: 5 * time.Second}
 	var last error
 	for _, ip := range ips {
 		c, err := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
@@ -239,12 +259,16 @@ func (s *sender) homeIPs(ctx context.Context, host string) ([]net.IP, error) {
 	return ips, nil
 }
 
-// homeAddress is whether ip is private (RFC 1918, fc00::/7) or link-local.
+// cgnat is 100.64.0.0/10, the range Tailscale gives its devices. (Its IPv6 range, fd7a:115c:a1e0::/48, is
+// inside fc00::/7.)
+var cgnat = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
+
+// homeAddress is whether ip is private (RFC 1918, fc00::/7), link-local, or on a Tailscale network.
 func homeAddress(ip net.IP) bool {
 	if v4 := ip.To4(); v4 != nil {
 		ip = v4
 	}
-	return ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || cgnat.Contains(ip)
 }
 
 func lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
@@ -288,6 +312,9 @@ func CheckSendURL(raw string) (string, error) {
 	if u.User != nil {
 		return "", errors.New("the address has no login in it: a token is entered on its own")
 	}
+	if strings.Contains(u.Hostname(), "%") {
+		return "", errors.New("an IPv6 address with a zone, like fe80::1%eth0, is not supported: use its name or another address")
+	}
 	if u.RawQuery != "" || u.Fragment != "" || strings.Contains(raw, "?") || strings.Contains(raw, "#") {
 		return "", errors.New("the address is the trainer's base: nothing after a ? or #")
 	}
@@ -312,6 +339,10 @@ func fingerprint(w config.WakeSend) string { return w.Target + "\x00" + w.URL + 
 
 // settingsChanged wakes the sender, and lets it try again after a refused token.
 func (s *sender) settingsChanged() {
+	// Saving again is asking it to try again.
+	s.mu.Lock()
+	s.halted, s.haltedWhy = "", ""
+	s.mu.Unlock()
 	select {
 	case s.changed <- struct{}{}:
 	default:
@@ -347,21 +378,26 @@ func (s *sender) run(ctx context.Context) {
 type sendOutcome int
 
 const (
-	outSent sendOutcome = iota
-	outFailed
-	outRefused
+	outSent   sendOutcome = iota
+	outFailed             // this clip will never be taken: marked, and the rest go on
+	outStop               // the address or the settings are wrong: sending stops until they change
 	outRetry
 )
 
+// sendFailuresMax is how many clips in a row the trainer may refuse for good before sending stops: it is
+// then more likely the settings than the clips.
+const sendFailuresMax = 5
+
 // drain sends what is waiting, one clip at a time, and returns when there is nothing more to send, when
-// sending is off or refused, or when ctx is done.
+// sending is off or stopped, or when ctx is done.
 func (s *sender) drain(ctx context.Context) {
 	backoff := time.Duration(0)
+	failures := 0
 	var last string
 	for ctx.Err() == nil {
 		cfg := s.cfg()
 		if fp := fingerprint(cfg); fp != last {
-			last, backoff = fp, 0
+			last, backoff, failures = fp, 0, 0
 		}
 		if !cfg.On() {
 			s.report(0, "")
@@ -371,15 +407,18 @@ func (s *sender) drain(ctx context.Context) {
 			s.report(0, statusKeepOff)
 			return
 		}
-		item, n := s.next(cfg)
-		if s.isRefused(cfg) {
-			s.report(n, statusRefused)
+		// One look at the clips for each clip sent: it is both what to send and how many are waiting.
+		queue := s.queue(cfg)
+		n := len(queue)
+		if why, ok := s.isHalted(cfg); ok {
+			s.report(n, why)
 			return
 		}
-		if item == nil {
+		if n == 0 {
 			s.report(0, "")
 			return
 		}
+		item := queue[0]
 		// The address is looked at again before each send: a name can come to point somewhere else.
 		var out sendOutcome
 		var why string
@@ -390,26 +429,30 @@ func (s *sender) drain(ctx context.Context) {
 		}
 		switch out {
 		case outSent:
-			backoff = 0
-			s.mark(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) })
-			_, n := s.next(cfg)
-			s.report(n, "")
+			backoff, failures = 0, 0
+			s.settle(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) }, n-1)
 			// Paced: not woken by anything, so a trainer is never asked faster than this.
 			if !s.wait(ctx, sendEvery, nil) {
 				return
 			}
 		case outFailed:
+			failures++
 			slog.Warn("wake clip: the trainer refused it", "clip", item.meta.Kind+"/"+item.name, "why", why)
-			s.mark(item, func(m *clipMeta) { m.SendFailed = failedStatus(why) })
-			_, n := s.next(cfg)
-			s.report(n, "")
+			s.settle(item, func(m *clipMeta) { m.SendFailed = failedStatus(why) }, n-1)
+			if failures >= sendFailuresMax {
+				why = fmt.Sprintf("the trainer refused %d clips in a row (%s): check the address and settings", failures, why)
+				s.halt(cfg, why)
+				slog.Warn("wake clip: sending stopped", "why", why)
+				s.report(n-1, why)
+				return
+			}
 			if !s.wait(ctx, sendEvery, nil) {
 				return
 			}
-		case outRefused:
-			s.setRefused(cfg)
-			slog.Warn("wake clip: the trainer refused the token; sending stops until the settings change")
-			s.report(n, statusRefused)
+		case outStop:
+			s.halt(cfg, why)
+			slog.Warn("wake clip: sending stopped until the settings change", "why", why)
+			s.report(n, why)
 			return
 		case outRetry:
 			if backoff == 0 {
@@ -426,6 +469,27 @@ func (s *sender) drain(ctx context.Context) {
 	}
 }
 
+// settle records what became of a clip in its sidecar. When that cannot be written, the clip is not sent
+// again this run, and the status says so.
+func (s *sender) settle(it *sendItem, change func(*clipMeta), left int) {
+	err := s.mark(it, change)
+	s.mu.Lock()
+	if err != nil {
+		if len(s.done) > 4000 {
+			s.done = map[string]bool{}
+		}
+		s.done[it.wav] = true
+		s.markErr = "can't record what was sent: " + err.Error()
+	} else {
+		s.markErr = ""
+	}
+	s.mu.Unlock()
+	if err != nil {
+		slog.Warn("wake clip: could not record what became of it", "err", err)
+	}
+	s.report(left, "")
+}
+
 // failedStatus is the HTTP status in a failure's words ("HTTP 400"), -1 when there is none.
 func failedStatus(why string) int {
 	var n int
@@ -435,21 +499,26 @@ func failedStatus(why string) int {
 	return -1
 }
 
-func (s *sender) isRefused(cfg config.WakeSend) bool {
+// isHalted is whether sending was stopped under these settings, and why.
+func (s *sender) isHalted(cfg config.WakeSend) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.refused != "" && s.refused == fingerprint(cfg)
+	return s.haltedWhy, s.halted != "" && s.halted == fingerprint(cfg)
 }
 
-func (s *sender) setRefused(cfg config.WakeSend) {
+// halt stops sending until the settings change.
+func (s *sender) halt(cfg config.WakeSend, why string) {
 	s.mu.Lock()
-	s.refused = fingerprint(cfg)
+	s.halted, s.haltedWhy = fingerprint(cfg), why
 	s.mu.Unlock()
 }
 
 // report tells the sensors, when something changed.
 func (s *sender) report(unsent int, status string) {
 	s.mu.Lock()
+	if status == "" {
+		status = s.markErr
+	}
 	same := s.unsent == unsent && s.status == status
 	s.unsent, s.status = unsent, status
 	s.mu.Unlock()
@@ -465,16 +534,18 @@ func (s *sender) Unsent() (int, string) {
 	return s.unsent, s.status
 }
 
-// next is the oldest clip to send, and how many there are. A clip is to be sent when its kind is, its
-// sidecar has no sent_at and no send_failed, and it was kept after the target was set.
-func (s *sender) next(cfg config.WakeSend) (*sendItem, int) {
+// queue is the clips to send, oldest first. A clip is to be sent when its kind is, its sidecar has no
+// sent_at and no send_failed, it was kept at or after the moment the target was set, and it was not sent
+// already this run with no way to say so.
+func (s *sender) queue(cfg config.WakeSend) []*sendItem {
 	since, err := time.Parse(time.RFC3339, cfg.Since)
 	if err != nil {
-		return nil, 0 // no moment to count from: nothing is old enough to be sent
+		return nil // no moment to count from: nothing is old enough to be sent
 	}
-	var first *sendItem
-	var firstAt time.Time
-	n := 0
+	s.mu.Lock()
+	done := maps.Clone(s.done)
+	s.mu.Unlock()
+	var out []*sendItem
 	for _, kind := range clipKinds {
 		if !cfg.Sends(kind) {
 			continue
@@ -490,53 +561,73 @@ func (s *sender) next(cfg config.WakeSend) (*sendItem, int) {
 				continue
 			}
 			at, err := time.Parse(time.RFC3339, m.At)
-			if err != nil || !at.After(since) {
+			if err != nil || at.Before(since) {
 				continue
 			}
 			wav := strings.TrimSuffix(f, ".json") + ".wav"
+			if done[wav] {
+				continue
+			}
 			if _, err := os.Stat(wav); err != nil {
 				continue
 			}
-			n++
-			name := strings.TrimSuffix(filepath.Base(f), ".json")
-			if first == nil || at.Before(firstAt) || (at.Equal(firstAt) && name < first.name) {
-				m.Kind = kind
-				first, firstAt = &sendItem{wav: wav, meta: m, name: name}, at
-			}
+			m.Kind = kind
+			out = append(out, &sendItem{wav: wav, meta: m, name: strings.TrimSuffix(filepath.Base(f), ".json"), at: at})
 		}
 	}
-	return first, n
+	slices.SortFunc(out, func(a, b *sendItem) int {
+		if c := a.at.Compare(b.at); c != 0 {
+			return c
+		}
+		return strings.Compare(a.name, b.name)
+	})
+	return out
+}
+
+// next is the oldest clip to send, and how many there are.
+func (s *sender) next(cfg config.WakeSend) (*sendItem, int) {
+	q := s.queue(cfg)
+	if len(q) == 0 {
+		return nil, 0
+	}
+	return q[0], len(q)
 }
 
 // mark changes a clip's sidecar, if the clip is still there: written whole beside it and renamed over
 // it, so a power cut leaves the old or the new one.
-func (s *sender) mark(it *sendItem, change func(*clipMeta)) {
+func (s *sender) mark(it *sendItem, change func(*clipMeta)) error {
 	s.c.disk.Lock()
 	defer s.c.disk.Unlock()
 	if _, err := os.Stat(it.wav); err != nil {
-		return // pruned or purged while it was being sent
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // pruned or purged while it was being sent
+		}
+		return err
 	}
 	side := sidecar(it.wav)
 	blob, err := os.ReadFile(side)
 	if err != nil {
-		return
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 	var m clipMeta
-	if json.Unmarshal(blob, &m) != nil {
-		return
+	if err := json.Unmarshal(blob, &m); err != nil {
+		return err
 	}
 	change(&m)
 	out, _ := json.Marshal(m)
 	tmp := side + ".tmp"
 	if err := os.WriteFile(tmp, out, 0o600); err != nil {
-		slog.Warn("wake clip: could not record that it was sent", "err", err)
 		os.Remove(tmp)
-		return
+		return err
 	}
 	if err := os.Rename(tmp, side); err != nil {
-		slog.Warn("wake clip: could not record that it was sent", "err", err)
 		os.Remove(tmp)
+		return err
 	}
+	return nil
 }
 
 // send uploads one clip and says what came of it, and why when it did not go.
@@ -566,7 +657,7 @@ func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (s
 	if err != nil {
 		return outRetry, err.Error()
 	}
-	resp, err := s.client.Do(req)
+	resp, err := s.clientFor(cfg.URL).Do(req)
 	if err != nil {
 		var ce *CertError
 		if errors.As(err, &ce) {
@@ -589,17 +680,21 @@ func judge(target string, status int, body []byte) (sendOutcome, string) {
 				OK bool `json:"ok"`
 			}
 			if json.Unmarshal(body, &a) != nil || !a.OK {
-				return outRetry, "the server did not answer as Tater Trainer does"
+				return outStop, "that address answered, but not as Tater Trainer"
 			}
 		}
 		return outSent, ""
 	case status == http.StatusUnauthorized:
-		return outRefused, statusRefused
+		return outStop, statusRefused
 	case status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500:
 		return outRetry, fmt.Sprintf("the trainer answered %d%s", status, answerText(body))
-	default:
-		// 3xx is here too: a redirect is not followed, and the same clip would get the same answer.
+	case status == http.StatusBadRequest || status == http.StatusUnsupportedMediaType || status == http.StatusUnprocessableEntity:
+		// This clip will never be taken; the next may be.
 		return outFailed, fmt.Sprintf("HTTP %d%s", status, answerText(body))
+	default:
+		// A redirect, 403, 404, 405, 413 or any other refusal is about the address or the settings, not this
+		// clip: sending stops, and the clips are kept, until they change.
+		return outStop, fmt.Sprintf("the trainer answered %d%s: check the address and settings", status, answerText(body))
 	}
 }
 
@@ -782,7 +877,7 @@ func (s *sender) pingWith(ctx context.Context, cfg config.WakeSend) (string, err
 	if cfg.Target != config.SendTater && cfg.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	}
-	resp, err := s.client.Do(req)
+	resp, err := s.clientFor(cfg.URL).Do(req)
 	if err != nil {
 		var ce *CertError
 		if errors.As(err, &ce) {

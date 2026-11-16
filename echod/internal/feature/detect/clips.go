@@ -226,6 +226,9 @@ func (c *clips) enable(on bool) {
 		c.reset()
 		c.mu.Unlock()
 		c.on.Store(true)
+		if c.changed != nil {
+			c.changed() // the sender says what it will do now
+		}
 		return
 	}
 	c.on.Store(false)
@@ -261,6 +264,7 @@ func (c *clips) recount() {
 func (c *clips) recountLocked() {
 	c.countMu.Lock()
 	for _, k := range clipKinds {
+		sweepTmp(filepath.Join(c.dir, k))
 		files, _ := filepath.Glob(filepath.Join(c.dir, k, "*.wav"))
 		c.counts[k] = len(files)
 	}
@@ -490,9 +494,19 @@ func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
 // sidecar is the metadata file beside a clip.
 func sidecar(wav string) string { return strings.TrimSuffix(wav, ".wav") + ".json" }
 
+// sweepTmp removes the sidecars a power cut left half-written (clipsend.go's mark writes one beside the
+// sidecar and renames it over). Held with disk, as mark is.
+func sweepTmp(dir string) {
+	stale, _ := filepath.Glob(filepath.Join(dir, "*.json.tmp"))
+	for _, f := range stale {
+		os.Remove(f)
+	}
+}
+
 // prune keeps the newest keep files in dir, and says how many are left. The names start with the
 // time, so name order is age.
 func prune(dir string, keep int) int {
+	sweepTmp(dir)
 	files, err := filepath.Glob(filepath.Join(dir, "*.wav"))
 	if err != nil {
 		return 0
