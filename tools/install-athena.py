@@ -95,9 +95,9 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Adb, Console, Fail, Release,  # noqa: E402
-                       ask_name, ask_wifi, check_gift, check_let_add, confirm, default_dir, fail, let_add_done,
-                       need, new_api_key, note, pick_unit, run_main, step, valid_api_key, wifi_conf,
-                       write_private)
+                       ask_name, ask_wifi, check_gift, check_let_add, check_let_add_release, confirm,
+                       default_dir, fail, let_add_done, need, new_api_key, note, pick_unit, run_main, step,
+                       valid_api_key, wifi_conf, write_private)
 
 REPO = 'HuskerMinion/techo5'
 BOARD_NAME = 'Echo Show 8 2nd gen'
@@ -1817,12 +1817,14 @@ def main(argv=None):
         src = os.path.abspath(a.image)
         boot_src = os.path.abspath(a.boot) if a.boot else None
         version = 'your images'
+        check_let_add_release(a, None)
         note('store image: your own, %s' % src)
         if boot_src:
             note('boot image: your own, %s' % boot_src)
     else:
         rel = Release(REPO, a.release, a.work)
         version = rel.version
+        check_let_add_release(a, rel.version)
         src = rel.asset(image_name(rel.version))
         note('store image %s checked against the signed manifest' % os.path.basename(src))
         boot_src = None

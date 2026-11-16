@@ -561,6 +561,10 @@ def check_gift(a, **given):
 # (echod/internal/feature/api/adopt_first.go).
 LET_ADD_MARKER = 'adopt-on-first-start'
 LET_ADD_MINUTES = 30
+# The first release whose daemon turns that marker into a window. An older daemon ignores the marker,
+# so a device installed from it with --let-home-assistant-add would have no key and no window, and
+# serve the zero key until somebody opened a window by hand.
+LET_ADD_MIN_RELEASE = (1, 6, 43)
 LET_ADD_HELP = ('write no Home Assistant key: Home Assistant adds the device with nothing typed, within %d minutes '
                 'of its first start on the network; name, Wi-Fi and SSH key are kept' % LET_ADD_MINUTES)
 
@@ -576,6 +580,23 @@ def check_let_add(a, **given):
     if clash:
         fail('--let-home-assistant-add writes no key and lets Home Assistant set one, so it cannot be used with %s'
              % ', '.join(clash))
+
+
+def check_let_add_release(a, version):
+    """--let-home-assistant-add needs a release whose daemon knows the marker (LET_ADD_MIN_RELEASE).
+    version is the release's (vX.Y.Z), or None for images of one's own, which say nothing about it: those
+    are taken as they are, with a note."""
+    if not a.let_home_assistant_add:
+        return
+    if version is None:
+        note('--let-home-assistant-add: your own images must carry a daemon from v%d.%d.%d or later, '
+             'or the device ignores the marker and waits with no key' % LET_ADD_MIN_RELEASE)
+        return
+    m = re.match(r'^v(\d+)\.(\d+)\.(\d+)$', version)
+    if not m or tuple(int(x) for x in m.groups()) < LET_ADD_MIN_RELEASE:
+        fail('--let-home-assistant-add needs release v%d.%d.%d or later, and %s is older: its daemon does not '
+             'know the marker, and the device would wait with no key. Install a newer release with '
+             '--release, or leave the switch out and add the device with its key' % (LET_ADD_MIN_RELEASE + (version,)))
 
 
 def let_add_done(name):

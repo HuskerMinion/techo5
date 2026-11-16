@@ -79,7 +79,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Adb, Release, adb_devices, ask_name,  # noqa: E402
-                       ask_wifi, check_gift, check_let_add, confirm, default_dir, fail, let_add_done, list_consoles,
+                       ask_wifi, check_gift, check_let_add, check_let_add_release, confirm, default_dir, fail, let_add_done, list_consoles,
                        need, new_api_key, note, pick_unit, run_main, step, valid_api_key, wifi_conf,
                        write_private)
 
@@ -872,11 +872,13 @@ def main(argv=None):
     step('the images')
     if given:
         version = 'your images'
+        check_let_add_release(a, None)
         installer, boot, store = (os.path.abspath(x) for x in given)
         note('your own images: %s, %s, %s' % (installer, boot, store))
     else:
         rel = Release(REPO, a.release, a.work)
         version = rel.version
+        check_let_add_release(a, version)
         installer = rel.asset(installer_name(version))
         boot = rel.asset(boot_name(version))
         store = rel.asset(store_name(version))

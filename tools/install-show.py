@@ -65,7 +65,7 @@ import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Adb, Console, Fail, Fastboot, Release,  # noqa: E402
-                       ask_name, ask_wifi, check_gift, check_let_add, check_serial_access, collect_evidence, confirm,
+                       ask_name, ask_wifi, check_gift, check_let_add, check_let_add_release, check_serial_access, collect_evidence, confirm,
                        console_hint, default_dir, fail, fetch_json, let_add_done, list_consoles, md5, need,
                        new_api_key, note, pick_unit, run_main, step, valid_api_key, wait_for, wifi_conf,
                        write_private)
@@ -740,6 +740,7 @@ def main():
     step('the release')
     rel = Release(REPO, a.release, a.work)
     version = rel.version
+    check_let_add_release(a, None if a.rootfs else rel.version)
     if a.rootfs:
         rootfs = os.path.abspath(a.rootfs)
         note('root filesystem: your own, %s' % rootfs)

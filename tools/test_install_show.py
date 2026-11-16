@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import time
+import types
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -419,6 +420,18 @@ class LetHomeAssistantAdd(unittest.TestCase):
     def test_usual_install_writes_no_marker(self):
         cmd = inst.provision_command(False, 'Kitchen', 'KEY', None, None)
         self.assertNotIn('adopt-on-first-start', cmd)
+
+    def test_needs_a_release_whose_daemon_knows_the_marker(self):
+        on, off = types.SimpleNamespace(let_home_assistant_add=True), types.SimpleNamespace(let_home_assistant_add=False)
+        least = 'v%d.%d.%d' % lib.LET_ADD_MIN_RELEASE
+        older = 'v%d.%d.%d' % (lib.LET_ADD_MIN_RELEASE[:2] + (lib.LET_ADD_MIN_RELEASE[2] - 1,))
+        for v in (older, 'v1.2.22', 'v0.0.0-dev', 'spot-v9.9.9'):
+            with self.assertRaisesRegex(lib.Fail, least, msg=v):
+                lib.check_let_add_release(on, v)
+        lib.check_let_add_release(on, least)
+        lib.check_let_add_release(on, 'v%d.%d.%d' % (lib.LET_ADD_MIN_RELEASE[0] + 1, 0, 0))
+        lib.check_let_add_release(on, None)       # images of one's own: a note, not a stop
+        lib.check_let_add_release(off, older)     # without the switch any release will do
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -30,6 +30,22 @@ func markerFiles(t *testing.T, keyed bool) {
 	}
 }
 
+// startFirst is adoptOnFirstStart, with the test's end waiting for its wait for a network to be over:
+// the variables markerFiles puts back are what that wait reads.
+func startFirst(t *testing.T, ctx context.Context, a *API, psk *esphome.PSK) {
+	t.Helper()
+	a.adoptOnFirstStart(ctx, psk)
+	if done := a.firstWindow; done != nil {
+		t.Cleanup(func() {
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("the wait for a network did not end")
+			}
+		})
+	}
+}
+
 func markerGone(t *testing.T) bool {
 	t.Helper()
 	_, err := os.Stat(adoptMarker)
@@ -69,7 +85,7 @@ func TestTheMarkerWaitsForANetwork(t *testing.T) {
 	var up atomic.Bool
 	adoptOnline = up.Load
 	a := newTestAPI()
-	a.adoptOnFirstStart(context.Background(), esphome.Unprovisioned())
+	startFirst(t, context.Background(), a, esphome.Unprovisioned())
 	time.Sleep(50 * time.Millisecond)
 	if !a.AdoptionOpenUntil().IsZero() || markerGone(t) {
 		t.Fatal("the window opened with no network")
@@ -93,7 +109,7 @@ func TestTheMarkerOutlivesAStartWithNoNetwork(t *testing.T) {
 	adoptOnline = func() bool { return false }
 	a := newTestAPI()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.adoptOnFirstStart(ctx, esphome.Unprovisioned())
+	startFirst(t, ctx, a, esphome.Unprovisioned())
 	cancel()
 	time.Sleep(50 * time.Millisecond)
 	if markerGone(t) {
@@ -112,7 +128,7 @@ func TestADeviceWithAKeyIgnoresTheMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := newTestAPI()
-	a.adoptOnFirstStart(context.Background(), k)
+	startFirst(t, context.Background(), a, k)
 	if !markerGone(t) {
 		t.Error("the marker was left behind")
 	}

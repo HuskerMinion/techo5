@@ -26,6 +26,11 @@ import (
 // network. The window is longer than the setup page's, since a first install often takes a while to
 // get to Home Assistant.
 //
+// From Start until the window opens, the device already serves with the zero key, as any device
+// without a key does: anybody on its network who connects first may set one. That stretch lasts as
+// long as the device takes to get a network, and is unbounded only on a device that never gets one,
+// where nobody can reach it either. The window then bounds the rest.
+//
 // A device that already has a key ignores the marker and deletes it: the marker never takes a key
 // away. The idea of a fresh device handing itself to the first Home Assistant that asks is Andrej
 // Friesen's Dashboard Assistant (https://github.com/ajfriesen/DashboardAssistant/blob/feffd7de8b6880ceb7521a7b373425c38c845ed0/daemon/pairing.go);
@@ -57,7 +62,10 @@ func (a *API) adoptOnFirstStart(ctx context.Context, psk *esphome.PSK) {
 		dropAdoptMarker()
 		return
 	}
+	done := make(chan struct{})
+	a.firstWindow = done
 	safe.Go("api first window", func() {
+		defer close(done)
 		for !adoptOnline() {
 			select {
 			case <-ctx.Done():
