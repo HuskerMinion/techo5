@@ -62,7 +62,7 @@ func timerName(t timer.Countdown) string {
 	if t.Name != "" {
 		return t.Name
 	}
-	return "Timer"
+	return tr("timer")
 }
 
 // timerFrac is how much of t is left, 0 to 1; a timer without a length reads as full.
@@ -283,7 +283,7 @@ func (r *renderer) bigTimer(s scene) {
 	if n := len(run) - 1; n == 1 {
 		under += "  ·  " + timerName(run[1]) + " " + timer.LeftText(run[1].Left)
 	} else if n > 1 {
-		under += fmt.Sprintf("  ·  %d more timers", n)
+		under += "  ·  " + fmt.Sprintf(tr("ui_more_timers"), n)
 	}
 	r.text(r.small, under, (r.w-r.width(r.small, under))/2, bar.Max.Y+r.s(46), dim)
 }

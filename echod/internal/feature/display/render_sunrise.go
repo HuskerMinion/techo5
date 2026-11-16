@@ -7,6 +7,8 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // The sunrise page: what the screen shows while the light before an alarm comes up.
@@ -95,7 +97,7 @@ func (r *renderer) sunriseClock(s scene, p float64) {
 	ink := sunriseInk(p, float64(base-capHeight(r.clock)/2)/float64(r.h-1))
 	r.text(r.clock, hour, x, base, ink)
 	r.text(r.ampm, ampm, x+hw+gap, base, ink)
-	date := s.now.Format("Monday, January 2")
+	date := locale.LongDate(s.now, screenLang())
 	r.text(r.small, date, (r.w-r.width(r.small, date))/2, base+r.s(64), ink)
 }
 
