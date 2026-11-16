@@ -52,6 +52,11 @@ func TestV168CameraSettingsTranslateWithoutChangingValues(t *testing.T) {
 func TestV168NetbirdAndStreamingMessages(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	// Never joined: the row points to the setup page.
+	if got := netbirdSub(netbird.Status{}); got != "Needs a setup key: the setup page, Network" {
+		t.Errorf("never joined: %q", got)
+	}
+	_ = config.Set().Netbird().Joined("")
 	for _, lang := range []string{"en", "ja", "pt"} {
 		_ = config.Set().Screen().Language(lang)
 		for _, tc := range []struct {

@@ -494,8 +494,9 @@ func connectionRows(sv sheetView) []settingRow {
 	}
 	ts := tailscale.Get().State()
 	rows = append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
-	// NetBird likewise, once it has been joined: until then there is nothing to turn on here.
-	if nb := netbird.Get().State(); netbird.Available() && (nb.On || config.Get().Netbird.Joined) {
+	// NetBird likewise, always: before a first join its line points to the setup page.
+	if netbird.Available() {
+		nb := netbird.Get().State()
 		rows = append(rows, settingRow{id: "netbird", label: "NetBird", sub: netbirdSub(nb), kind: ctlToggle, on: nb.On})
 	}
 	return rows
@@ -504,6 +505,8 @@ func connectionRows(sv sheetView) []settingRow {
 // netbirdSub is the NetBird row's line.
 func netbirdSub(s netbird.Status) string {
 	switch {
+	case !s.On && !config.Get().Netbird.Joined:
+		return tr("ui_needs_a_setup_key_the_setup_page_connections")
 	case !s.On:
 		return tr("ui_reach_this_device_from_away_off")
 	case s.Downloading:
