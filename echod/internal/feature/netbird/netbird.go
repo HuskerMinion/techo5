@@ -12,8 +12,9 @@
 // device's identity on the network in its state directory, so a device joined once rejoins by itself;
 // what is kept here is whether it runs, and the management server it was joined to.
 //
-// It is started to take nothing from the network: no DNS, no routes, no SSH server, and its own
-// firewall off (ours filters its interface). WireGuard runs in the client rather than the kernel, and
+// It is started to take nothing from the network: no DNS, no routes, no SSH server. Its own firewall is
+// on, so the owner's access policies decide which ports each peer reaches, under ours: the firewall's
+// tailnet chain stays the ceiling (firewallOn). WireGuard runs in the client rather than the kernel, and
 // routing the old way, which every one of these kernels has.
 package netbird
 
@@ -221,11 +222,11 @@ func (f *Feature) Login(ctx context.Context, setupKey, management string) error 
 		}
 	}
 	name := tailscale.Hostname(config.Get().Device.Name)
-	// Everything the network could give the device is refused, and its firewall left to ours. Each is said
-	// outright: the client keeps only what it is told.
+	// Everything the network could give the device is refused, and its own firewall kept on for the access
+	// policies (firewallOn). Each is said outright: the client keeps only what it is told.
 	out, err := cli(ctx, []string{"NB_SETUP_KEY=" + setupKey}, "up",
 		"--management-url="+mgmt, "--hostname="+name, "--interface-name="+web.NetbirdTun,
-		"--disable-dns", "--disable-client-routes", "--disable-server-routes", "--disable-firewall", "--disable-ipv6",
+		"--disable-dns", "--disable-client-routes", "--disable-server-routes", "--disable-firewall=false", "--disable-ipv6",
 		"--allow-server-ssh=false", "--enable-rosenpass=false", "--disable-auto-connect=false")
 	if err != nil {
 		return fmt.Errorf("netbird: joining: %s", cmpOr(lastLine(scrub(out, setupKey)), err.Error()))
@@ -550,6 +551,9 @@ func (f *Feature) runOnce(ctx context.Context) error {
 	// socket: it goes first.
 	stopLeftovers()
 	_ = os.Remove(sockPath)
+	if err := firewallOn(filepath.Join(stateDir, "state", "default.json")); err != nil {
+		slog.Warn("netbird: turning its firewall on", "err", err)
+	}
 
 	// The daemon is told to stop when the thread that started it ends, and that thread is kept for as
 	// long as it runs, so an echod that crashes or is killed does not leave it behind.
@@ -607,6 +611,39 @@ func (f *Feature) runOnce(ctx context.Context) error {
 			f.poll(ctx)
 		}
 	}
+}
+
+// firewallOn turns the client's own firewall on in a profile joined with it off (--disable-firewall, as
+// every device was joined at first), so such a device gets its access policies too. The daemon reads the profile
+// when it starts, which is after this. Nothing to do without a profile, or with the firewall on already.
+//
+// The client's firewall can only narrow what ours lets in. On the userspace interface it filters what
+// it decrypts before the kernel sees it. A host firewall it could use instead is only ever nftables: the
+// image's iptables is the nftables one (and the athena kernel has no nftables), while ours is
+// iptables-legacy, separate tables a packet has to pass as well. So it never gets ahead of the tailnet
+// chain (tailscale.Fenced) that NetBird does not start without.
+func firewallOn(profile string) error {
+	b, err := os.ReadFile(profile)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var c map[string]json.RawMessage
+	if err := json.Unmarshal(b, &c); err != nil {
+		return fmt.Errorf("%s: %w", profile, err)
+	}
+	if string(c["DisableFirewall"]) != "true" {
+		return nil
+	}
+	c["DisableFirewall"] = json.RawMessage("false")
+	out, err := json.MarshalIndent(c, "", "    ")
+	if err != nil {
+		return err
+	}
+	slog.Info("netbird: its firewall turned on, for the access policies")
+	return writeWhole(profile, 0o600, bytes.NewReader(out))
 }
 
 // poll reads the status and says what it found.
