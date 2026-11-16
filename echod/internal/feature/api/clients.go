@@ -24,7 +24,6 @@ func (l countListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	l.n.Add(1)
-	hass.Saw(c.RemoteAddr()) // for the setup page to suggest Home Assistant's address
 	return &countConn{Conn: c, n: l.n}, nil
 }
 
@@ -40,7 +39,21 @@ type countConn struct {
 	net.Conn
 	n    *atomic.Int32
 	once sync.Once
+
+	// sent and saw: what has gone out on this connection, and the one time its address is passed to
+	// hass.Saw. Only once a session's worth has gone (sawAfter): the entity list goes to a client that
+	// has the key, while a host that only knocks, or fails the handshake, gets a few hundred bytes. So
+	// the setup page's guess at Home Assistant's address is not any host on the network that connected.
+	sent atomic.Int64
+	saw  sync.Once
 }
+
+// sawAfter is how much a connection must have been sent before its address is taken as Home
+// Assistant's: well over a hello and a handshake, well under any device's entity list.
+const sawAfter = 4 << 10
+
+// sawAddr is hass.Saw unless a test listens.
+var sawAddr = hass.Saw
 
 func (c *countConn) gone() { c.once.Do(func() { c.n.Add(-1) }) }
 
@@ -56,6 +69,9 @@ func (c *countConn) Write(p []byte) (int, error) {
 	n, err := c.Conn.Write(p)
 	if err != nil && !timedOut(err) {
 		c.gone()
+	}
+	if c.sent.Add(int64(n)) >= sawAfter {
+		c.saw.Do(func() { sawAddr(c.RemoteAddr()) }) // for the setup page to suggest Home Assistant's address
 	}
 	return n, err
 }
