@@ -56,10 +56,18 @@ func (u *Firmware) RollBack() {
 			slog.Error("saving the release rolled back from failed", "version", from, "err", err)
 		}
 	})
-	if errors.Is(err, update.ErrInstalling) {
-		err = errors.New("update: an update is being installed; roll back once it is done")
-	}
-	if err != nil {
+	switch {
+	case err == nil:
+	case errors.Is(err, update.ErrRebootAfterRollback):
+		// Not refused: the other slot is set to boot, the restart into it is what failed.
+		slog.Error("rolled back, but the reboot failed", "err", err)
+		u.Settled(EventFailed, strings.TrimPrefix(update.ErrRebootAfterRollback.Error(), "update: "))
+		feedback.Failure()
+	default:
+		if errors.Is(err, update.ErrInstalling) {
+			// The lock is held by an install or by another press's rollback.
+			err = errors.New("update: an update or a rollback is already running")
+		}
 		slog.Error("rolling back refused", "err", err)
 		u.Settled(EventFailed, "roll back refused: "+strings.TrimPrefix(err.Error(), "update: "))
 		feedback.Failure()

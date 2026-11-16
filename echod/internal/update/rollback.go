@@ -1,6 +1,7 @@
 package update
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,10 @@ import (
 // new slot has committed itself, when the trial is over and nothing rolls back by itself. Home
 // Assistant gets it as a button (feature/firmware); what is here is the part that decides whether
 // a rollback is safe, and the slot files it decides from.
+
+// ErrRebootAfterRollback is a rollback that slotctl made but the device did not restart into: the
+// other slot boots next, whenever the device next starts.
+var ErrRebootAfterRollback = errors.New("update: rolled back, but the reboot failed; restart the device")
 
 // Slot is the slot a rollback would go back to, as the store describes it.
 type Slot struct {

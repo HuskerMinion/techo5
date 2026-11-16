@@ -23,7 +23,8 @@ import (
 // while, or fall back after three failed boots. So the daemon's own trial machinery is not
 // involved: install, reboot, and the slots take it from there.
 
-const (
+// The slot paths are variables so a test can point them at a store of its own and a stand-in slotctl.
+var (
 	// slotFile is left by the initramfs and names the booted slot; its presence is what makes this a
 	// slot system.
 	slotFile = "/run/techo5/slot"
@@ -31,12 +32,15 @@ const (
 	// slotctl is the slot tool on the rootfs.
 	slotctl = "/usr/local/sbin/slotctl"
 
-	// rootfsDir is where tarballs land: the data partition survives slot changes.
-	rootfsDir = "/data/techo5-linux"
-
 	// storeDir is the slot store, mounted read-only under a running slot.
 	storeDir = "/store"
+
+	// rollbackReboot restarts the device after a rollback (a stand-in in tests).
+	rollbackReboot = rebootIntoSlot
 )
+
+// rootfsDir is where tarballs land: the data partition survives slot changes.
+const rootfsDir = "/data/techo5-linux"
 
 // slotSystem reports whether this daemon runs from a rootfs slot.
 func slotSystem() bool {
@@ -160,5 +164,8 @@ func RollBack(rolled func()) error {
 	if rolled != nil {
 		rolled()
 	}
-	return rebootIntoSlot()
+	if err := rollbackReboot(); err != nil {
+		return fmt.Errorf("%w (%v)", ErrRebootAfterRollback, err)
+	}
+	return nil
 }
