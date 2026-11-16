@@ -438,8 +438,6 @@ func (f *Feature) joinParked() bool {
 		why = err.Error() + "; give the key again"
 	}
 	// A newer key held while this one joined stays, for the next turn; only with none is the join over.
-	f.pk.Lock()
-	f.pk.Unlock()
 	f.dropParkedIfNone(why)
 	return true
 }

@@ -47,6 +47,20 @@ func newRig(t *testing.T) *parkRig {
 	wasDir, wasPoll, wasTO, wasJoin, wasGrace := stateDir, parkPoll, parkTimeout, joinTimeout, problemGrace
 	wasLog := slog.Default()
 	t.Cleanup(func() {
+		// The waiter reads these settings, so it is stopped (no key held) before they are put back.
+		if r.f != nil {
+			r.f.pk.Lock()
+			r.f.parked = nil
+			r.f.pk.Unlock()
+			for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
+				r.f.pk.Lock()
+				done := !r.f.waiting
+				r.f.pk.Unlock()
+				if done {
+					break
+				}
+			}
+		}
 		status, cli, encrypted, Available = wasStatus, wasCli, wasEnc, wasAvail
 		stateDir, parkPoll, parkTimeout, joinTimeout, problemGrace = wasDir, wasPoll, wasTO, wasJoin, wasGrace
 		slog.SetDefault(wasLog)

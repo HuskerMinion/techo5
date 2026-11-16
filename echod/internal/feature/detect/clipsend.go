@@ -109,7 +109,7 @@ type sender struct {
 	markErr   string          // why one could not be
 	unsent    int
 	status    string
-	cert      string // see Untrusted
+	cert      string             // see Untrusted
 	abort     context.CancelFunc // cancels the upload under way, for turning Keep wake clips off
 }
 
