@@ -272,6 +272,61 @@ func TestFirstRunGoesOnOnceHomeAssistantConnects(t *testing.T) {
 	}
 }
 
+// Back walks the steps the other way, down to the first counted one, which has none; it is not there
+// while the keyboard is up.
+func TestFirstRunBack(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	steps := firstrun.Steps()
+	setStep(t, frSound)
+	for i := len(steps) - 3; i >= 1; i-- {
+		frTapIn(d, d.r.frBackRect())
+		if got := firstRunStep(); got != steps[i] {
+			t.Fatalf("after Back: %q, want %q", got, steps[i])
+		}
+	}
+	if frShowsBack(d.firstRunView(time.Now())) {
+		t.Fatalf("the first step %q offers Back", firstRunStep())
+	}
+	frTapIn(d, d.r.frBackRect())
+	if got := firstRunStep(); got != steps[1] {
+		t.Fatalf("a tap where Back would be on the first step went to %q", got)
+	}
+	setStep(t, frName)
+	d.firstRun.typing = "name"
+	if frShowsBack(d.firstRunView(time.Now())) {
+		t.Fatal("Back shows over the keyboard")
+	}
+	d.firstRun.typing = ""
+	key := firstRunView{step: frHome, showKey: true, key: "a key", wifi: d.firstRun.wifi}
+	if !frKeyView(key) || frShowsBack(key) {
+		t.Fatalf("Back over the key: key view %v, Back %v", frKeyView(key), frShowsBack(key))
+	}
+	if key.showKey = false; !frShowsBack(key) {
+		t.Fatal("no Back on the Home Assistant step with the key put away")
+	}
+}
+
+// Back to the Home Assistant step after it went on by itself shows it connected, with Next, and does
+// not go on again at once.
+func TestFirstRunBackToHomeAssistantStays(t *testing.T) {
+	d, f := firstRunDisplay(t, true, false)
+	setStep(t, frHome)
+	now := time.Now()
+	d.firstRunView(now)
+	f.get(func() { f.home = true })
+	d.firstRunView(now.Add(time.Second))
+	d.firstRunView(now.Add(time.Second + frHomeLinger))
+	if got := firstRunStep(); got != stepAfter(frHome) {
+		t.Fatalf("after it connected: %q", got)
+	}
+	d.firstRunView(now.Add(2*time.Second + frHomeLinger))
+	frTapIn(d, d.r.frBackRect())
+	v := d.firstRunView(now.Add(time.Minute))
+	if got := firstRunStep(); got != frHome || v.homeJust {
+		t.Fatalf("back on Home Assistant: step %q, just connected %v", got, v.homeJust)
+	}
+}
+
 // Add it opens the window for a Home Assistant to add the device, with nothing typed; Type the key
 // shows the key; the window shown leaves only "Skip for now".
 func TestFirstRunHomeAssistantPaths(t *testing.T) {

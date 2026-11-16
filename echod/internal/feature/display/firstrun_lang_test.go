@@ -44,7 +44,7 @@ func TestFirstRunFitsInEveryLanguage(t *testing.T) {
 		for name, v := range firstRunCases(at) {
 			title, lines, note := firstRunText(v, at)
 			count := fmt.Sprintf(tr("firstrun_step_d_of_d"), v.number, v.of)
-			if w := r.width(r.title, title) + r.s(24) + r.width(r.small, count); w > right-left {
+			if w := r.frTitleIndent(v) + r.width(r.title, title) + r.s(24) + r.width(r.small, count); w > right-left {
 				t.Errorf("%s/%s: the title %q and %q are %d wide, the card %d", lang, name, title, count, w, right-left)
 			}
 			buttons := firstRunButtons(v)
@@ -54,7 +54,7 @@ func TestFirstRunFitsInEveryLanguage(t *testing.T) {
 			}
 			// The lines as firstRun lays them out, smaller if they have to be, above what is under them.
 			room := right - left
-			keyView := v.step == frHome && !v.home && v.adopt.IsZero() && v.showKey && v.key != "" && v.wifi.Address != ""
+			keyView := frKeyView(v)
 			if keyView {
 				room = r.w - r.margin - r.s(40) - r.s(200) - left - r.s(24)
 			}

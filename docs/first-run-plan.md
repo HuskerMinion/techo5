@@ -77,7 +77,8 @@ name and key and runs the routine again, for passing a device on a second time.
   suggested area), Home Assistant (added with nothing typed, or the key with a QR code, or on its
   own), updates (automatic updates on; an update installs that night), a sound check and the done
   card. Faces: a Show's screen (tried on a Show 8 2nd gen), the Spot's round screen, a Panel's screen
-  (no Wi-Fi or Updates step), and the setup page, which is the Dot's and works on any device. In
+  (no Wi-Fi or Updates step), and the setup page, which is the Dot's and works on any device. Every
+  step after the first has Back, on every face (#589). In
   English only so far.
 - **One done flag for every device**, set by finishing first run anywhere. A device in use before
   first run (a Show whose welcome card was put away, or one Home Assistant has had) is done from the

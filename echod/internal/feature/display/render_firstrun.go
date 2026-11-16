@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"golang.org/x/image/font"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 )
 
 // firstRun draws first run's step (firstrun.go): the welcome card at either end, and between them a
@@ -40,7 +42,7 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 	r.bevel(image.Rect(r.margin, r.s(40), r.w-r.margin, r.h-r.s(40)), shift(walnut, 10), true)
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
-	keyView := v.step == frHome && !v.home && v.adopt.IsZero() && v.showKey && v.key != "" && v.wifi.Address != ""
+	keyView := frKeyView(v)
 	var code image.Rectangle
 	if keyView {
 		// The QR code holds the key and nothing else: a phone reads it and pastes it into Home
@@ -50,7 +52,12 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 		room = code.Min.X - left - r.s(24)
 	}
 	title, lines, note := firstRunText(v, s.now)
-	r.text(r.title, title, left, r.s(118), amber)
+	if frShowsBack(v) {
+		b := r.frBackRect()
+		r.bevel(b, shift(walnut, 30), true)
+		r.text(r.title, frBackMark, b.Min.X+(b.Dx()-r.width(r.title, frBackMark))/2, r.s(118), cream)
+	}
+	r.text(r.title, title, left+r.frTitleIndent(v), r.s(118), amber)
 	count := fmt.Sprintf(tr("firstrun_step_d_of_d"), v.number, v.of)
 	r.text(r.small, count, r.w-r.margin-r.s(40)-r.width(r.small, count), r.s(110), dim)
 	buttons := firstRunButtons(v)
@@ -241,6 +248,37 @@ func (r *renderer) frButtonRects(buttons []frButton) []image.Rectangle {
 		right -= w + gap
 	}
 	return out
+}
+
+// frKeyView is whether the Home Assistant step shows the key and its QR code.
+func frKeyView(v firstRunView) bool {
+	return v.step == frHome && !v.home && v.adopt.IsZero() && v.showKey && v.key != "" && v.wifi.Address != ""
+}
+
+// frShowsBack is whether the step shows Back: on the steps that have one (firstrun.HasBack), and not
+// while the keyboard is up (it has Cancel), a rename restarts the daemon, or the key is up (as on the
+// Spot: the key is read off the screen, and Back would take it away).
+func frShowsBack(v firstRunView) bool {
+	return firstrun.HasBack(v.step) && v.typing == "" && !v.renaming && !frKeyView(v)
+}
+
+// frBackMark is Back's face: a chevron, which needs no words in any language. The buttons' row along
+// the foot has no room for one more on the Home Assistant step of a Show 5.
+const frBackMark = "‹"
+
+// frBackRect is where Back goes: a square key at the left of the title, the way a page's back arrow
+// sits, apart from the step's own buttons along the foot.
+func (r *renderer) frBackRect() image.Rectangle {
+	left := r.margin + r.s(40)
+	return image.Rect(left, r.s(76), left+r.s(60), r.s(136))
+}
+
+// frTitleIndent is how far the title moves right for Back beside it.
+func (r *renderer) frTitleIndent(v firstRunView) int {
+	if !frShowsBack(v) {
+		return 0
+	}
+	return r.s(76)
 }
 
 // firstRunText is a step's title, its lines, and a smaller note under them, in the screen's language.

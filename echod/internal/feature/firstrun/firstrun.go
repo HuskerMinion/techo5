@@ -74,6 +74,25 @@ func After(s string) string {
 	return Done
 }
 
+// Before is the step that comes before s, the hello card for the first.
+func Before(s string) string {
+	for i, k := range steps {
+		if k == s && i > 0 {
+			return steps[i-1]
+		}
+	}
+	return Hello
+}
+
+// HasBack is whether step s offers Back: every counted step but the first. The hello card has nothing
+// before it, the first step's only card before it is the hello card, and the done card is a tap to
+// finish. Nothing a step does is undone by going back: the network stays joined, Home Assistant keeps
+// the device, and each step shows what is set and goes on with Next.
+func HasBack(s string) bool {
+	n, _ := Number(s)
+	return n > 1
+}
+
 // Number is a step's place among the counted ones, 1 for the first after Hello, and how many there are; 0 for the
 // cards at either end.
 func Number(s string) (n, of int) {

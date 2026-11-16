@@ -64,6 +64,10 @@ func (f *Feature) firstRunSave(w http.ResponseWriter, r *http.Request, token str
 	switch r.PostFormValue("what") {
 	case "next":
 		firstrun.Go(firstrun.After(step))
+	case "back":
+		if firstrun.HasBack(step) {
+			firstrun.Go(firstrun.Before(step))
+		}
 	case "language":
 		if problem = saveLanguage(r.PostFormValue("language"), r.PostFormValue("clock") == "24"); problem == "" {
 			firstrun.Go(firstrun.After(step))
@@ -156,6 +160,10 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		 <button type="submit"%s>%s</button></form>`, firstRunPath, html.EscapeString(token), what, fields, class, html.EscapeString(label))
 	}
 	next := func(label string) { form("next", label, true, "") }
+	if firstrun.HasBack(step) {
+		// Last, under the step's own forms; the browser's back button only shows the step the device is on.
+		defer form("back", "Back", false, "")
+	}
 
 	switch step {
 	case firstrun.Hello:

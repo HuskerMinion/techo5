@@ -134,6 +134,56 @@ func TestSpotFirstRunGoesThrough(t *testing.T) {
 	}
 }
 
+// Back, over the step's count, walks the steps the other way, down to the first counted one, which
+// has none; it is not there while the key is up.
+func TestSpotFirstRunBack(t *testing.T) {
+	d, _ := spotFirstRun(t, true, true)
+	back := func() {
+		c := spotBackRect.Min.Add(spotBackRect.Size().Div(2))
+		d.gesture(touch.Gesture{Kind: touch.Tap, X: c.X, Y: c.Y})
+	}
+	spotSetStep(t, frSound)
+	for _, want := range []string{frUpdates, frHome, frName, frZone, frWifi, frLanguage, frLanguage} {
+		back()
+		if got := firstRunStep(); got != want {
+			t.Fatalf("after Back: %q, want %q", got, want)
+		}
+	}
+	if spotShowsBack(firstRunView{step: frHome, showKey: true, key: "a key"}) {
+		t.Fatal("Back shows over the key")
+	}
+}
+
+// Back from Wi-Fi to the language step after the setup page's first run left it shows what was saved
+// there, not a pick the Spot made before.
+func TestSpotFirstRunBackShowsNoStalePick(t *testing.T) {
+	d, _ := spotFirstRun(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	setClock24(nil, false)
+	spotSetStep(t, frLanguage)
+	if !spotFRTap(d, "lang") {
+		t.Fatal("no language button")
+	}
+	phone := "fr"
+	if d.firstRunView(time.Now()).lang == phone {
+		phone = "it"
+	}
+	if err := firstrun.SaveLanguage(phone, false); err != nil {
+		t.Fatal(err)
+	}
+	spotSetStep(t, frWifi)
+	d.firstRunView(time.Now())
+	c := spotBackRect.Min.Add(spotBackRect.Size().Div(2))
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: c.X, Y: c.Y})
+	if got := firstRunStep(); got != frLanguage {
+		t.Fatalf("Back from Wi-Fi went to %q", got)
+	}
+	if v := d.firstRunView(time.Now()); v.lang != phone || v.clock24 {
+		t.Fatalf("after Back: %q, 24 hours %v; want the saved %q, 12 hours", v.lang, v.clock24, phone)
+	}
+}
+
 // The room button goes round the rooms; Add it opens the window; Show the key shows it, and a tap
 // puts it away.
 func TestSpotFirstRunRoomAndHome(t *testing.T) {
