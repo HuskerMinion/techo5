@@ -647,6 +647,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
 			 is not one this page can change.</p></fieldset>`)
 		}
+		haAccessSection(w, token)
 		homeAssistantSection(w, token)
 		fmt.Fprint(w, `<h3>Away from home</h3>`)
 		tailscaleSection(w, token)

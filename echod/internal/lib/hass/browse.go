@@ -43,9 +43,10 @@ type wsSession struct {
 
 // wsOpen dials and authenticates. The caller closes the connection.
 func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
-	c.mu.Lock()
-	acc := c.acc
-	c.mu.Unlock()
+	acc, err := c.token(ctx, false) // a sign-in's renewed when it is about to run out (signin.go)
+	if err != nil {
+		return nil, err
+	}
 	if acc.URL == "" || acc.Token == "" {
 		return nil, errors.New("hass: no access configured")
 	}

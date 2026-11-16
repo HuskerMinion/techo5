@@ -30,12 +30,21 @@ var Path = filepath.Join(filepath.Dir(layout.KeyPath), "hass.json")
 type access struct {
 	URL   string `json:"url"`
 	Token string `json:"token"`
+	// A sign-in's (signin.go): the refresh token the access token is renewed with, the client id it
+	// was given to, and when the access token runs out. All empty for a long-lived token.
+	Refresh  string    `json:"refresh_token,omitempty"`
+	ClientID string    `json:"client_id,omitempty"`
+	Expires  time.Time `json:"expires,omitzero"`
 }
 
 type Client struct {
-	mu   sync.Mutex
-	acc  access
-	http *http.Client
+	mu  sync.Mutex
+	acc access
+	// renew is held while a sign-in's token is renewed, so callers that find it running out renew it
+	// once between them (signin.go); signedOut is Home Assistant having refused to.
+	renew     sync.Mutex
+	signedOut bool
+	http      *http.Client
 	// outside fetches addresses on hosts that are not Home Assistant: its dialer refuses the device's
 	// own addresses. Nil (a Client made by hand) falls back to http.
 	outside *http.Client
@@ -100,10 +109,25 @@ func (c *Client) Set(url, token string) error {
 	// As it was parsed: "HTTP://ha:8123" is a working address, and the websocket, which swaps the
 	// scheme's "http" for "ws", needs it written the way url.Parse writes it.
 	url = normalURL(u)
+	c.renew.Lock()
+	defer c.renew.Unlock()
 	c.mu.Lock()
+	was := c.acc
 	c.acc = access{URL: url, Token: token}
+	c.signedOut = false
 	c.mu.Unlock()
+	if err := c.save(); err != nil {
+		return err
+	}
+	c.revokeLater(was) // a sign-in this token replaces leaves the user's profile
+	return nil
+}
+
+// save writes the access as it is now.
+func (c *Client) save() error {
+	c.mu.Lock()
 	b, _ := json.Marshal(c.acc)
+	c.mu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(Path), 0o755); err != nil {
 		return err
 	}
@@ -145,34 +169,28 @@ func (c *Client) do(method, path string, body any) ([]byte, error) {
 
 // doContext is do that gives up when ctx is done.
 func (c *Client) doContext(ctx context.Context, method, path string, body any) ([]byte, error) {
-	c.mu.Lock()
-	acc := c.acc
-	c.mu.Unlock()
+	acc, err := c.token(ctx, false)
+	if err != nil {
+		return nil, err
+	}
 	if acc.URL == "" || acc.Token == "" {
 		return nil, errors.New("hass: no access configured")
 	}
-	var rd io.Reader
+	var payload []byte
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
+		if payload, err = json.Marshal(body); err != nil {
 			return nil, err
 		}
-		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, acc.URL+path, rd)
-	if err != nil {
-		return nil, err
+	resp, out, err := c.send(ctx, method, acc, path, payload)
+	if err == nil && resp.StatusCode == http.StatusUnauthorized && acc.Refresh != "" {
+		// A sign-in's token refused before its time (Home Assistant restarted with its clock off, say):
+		// renewed, and asked once more.
+		if acc, err = c.token(ctx, true); err != nil {
+			return nil, err
+		}
+		resp, out, err = c.send(ctx, method, acc, path, payload)
 	}
-	req.Header.Set("Authorization", "Bearer "+acc.Token)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	out, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +201,29 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 		return nil, fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
 	}
 	return out, nil
+}
+
+// send is one request with acc's token, and the reply read whole.
+func (c *Client) send(ctx context.Context, method string, acc access, path string, payload []byte) (*http.Response, []byte, error) {
+	var rd io.Reader
+	if payload != nil {
+		rd = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, acc.URL+path, rd)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+acc.Token)
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	return resp, out, err
 }
 
 // ErrNotFound is Home Assistant saying there is no such thing: for a state, an entity it does not have.
@@ -437,8 +478,8 @@ func (c *Client) Address() string {
 	return u.Scheme + "://" + u.Host
 }
 
-// Token is the long-lived token itself, for taking it out of what is shared (diag's bundle), never for
-// showing.
+// Token is the token itself (a sign-in's access token as it was last renewed), for taking it out of
+// what is shared, never for showing; Secrets has a sign-in's refresh token too.
 func (c *Client) Token() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()

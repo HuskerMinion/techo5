@@ -832,12 +832,13 @@ type onScreen string
 
 func (s onScreen) Error() string { return string(s) }
 
-// noAccess is what a drawn dashboard says before the device has Home Assistant's address and a token.
-// The dashboard is read with the device's own token, which only the home_assistant action gives it;
-// "the home_assistant action" alone left people looking for a token field on the setup page and in
-// ESPHome (#551), so the action is named in full, ready to paste into Developer Tools.
+// noAccess is what a drawn dashboard says before the device has access to Home Assistant. The setup
+// page's Connect to Home Assistant gives it, by signing in (#567); the home_assistant action still
+// does too, and "the home_assistant action" alone left people looking for a token field on the setup
+// page and in ESPHome (#551), so it is named in full, ready to paste into Developer Tools.
 func noAccess(name, mac string) string {
-	return "A drawn dashboard needs a Home Assistant token. In Home Assistant, run the action " +
+	return "A drawn dashboard needs this device connected to Home Assistant. On its setup page, choose " +
+		"Connect to Home Assistant on the Network tab, or in Home Assistant run the action " +
 		layout.ActionName(name, mac, "home_assistant") + " once, with url and token."
 }
 

@@ -5,6 +5,8 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // clients counts the connections open on the server now, for what wants to know whether anything it
@@ -22,6 +24,7 @@ func (l countListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	l.n.Add(1)
+	hass.Saw(c.RemoteAddr()) // for the setup page to suggest Home Assistant's address
 	return &countConn{Conn: c, n: l.n}, nil
 }
 

@@ -29,6 +29,14 @@ lets the device fetch things on its own — a weather forecast, a camera snapsho
 listing — rather than only reporting sensors and taking commands. It's normally set once, by
 whatever paired the device, and isn't something you call from an automation afterwards.
 
+The easier way to give the device this access is **Connect to Home Assistant** on its setup page
+(**Network** tab, **Home Assistant access**). It opens Home Assistant's own sign-in page, the same one
+the mobile apps use; once you sign in and approve, the device gets its own token. That token is
+listed in the profile of the user who signed in, under **Security, Refresh tokens**, by the device's
+address, and removing it there disconnects the device. Sign in as a user made for the devices,
+without administrator rights, rather than your own. The device renews that access by itself, and
+**Disconnect** on the same page takes it back. Calling this action instead replaces a sign-in.
+
 > **Good to know**
 >
 > Several other actions depend on this being set first: `home_show_camera` and

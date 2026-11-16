@@ -84,6 +84,9 @@ var leaveEntry = func() {
 	} else {
 		slog.Info("left Home Assistant and deleted its entry there", "entries", n)
 	}
+	// Last, as it ends the access the deletion above used: a sign-in is taken back, so it leaves the
+	// profile it was listed in.
+	hass.Get().Revoke(ctx)
 }
 
 // leave forgets the access first and changes the key second: stopped between the two, the device

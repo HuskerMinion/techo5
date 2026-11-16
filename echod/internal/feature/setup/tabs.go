@@ -207,7 +207,7 @@ var tabFor = map[string]string{
 	"go2rtc": "cameras", "cameralist": "cameras", "camerabuttons": "cameras", "talkback": "cameras",
 	"camstream": "cameras",
 
-	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "timeserver": "network",
+	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "haaccess": "network", "timeserver": "network",
 	"tailscale": "network", "netbird": "network", "wallclock": "network",
 
 	"lock": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",

@@ -99,8 +99,8 @@ func Redactor() *redact.Redactor {
 		}
 	}
 	// The secrets themselves, in case a line ever carries one: the patterns only catch a secret that
-	// says what it is. Home Assistant's token too, which the panel's whole log could carry bare.
-	for _, s := range append(secrets(c), hass.Get().Token()) {
+	// says what it is. Home Assistant's tokens too, which the panel's whole log could carry bare.
+	for _, s := range append(secrets(c), hass.Get().Secrets()...) {
 		if len([]rune(strings.TrimSpace(s))) >= shortestSecret {
 			r.Known("secret", s)
 		}
