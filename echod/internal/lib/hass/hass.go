@@ -44,7 +44,10 @@ type Client struct {
 	// once between them (signin.go); signedOut is Home Assistant having refused to.
 	renew     sync.Mutex
 	signedOut bool
-	http      *http.Client
+	// closed: the access is being left (api's leave, a reset), so nothing is written back to the file
+	// that leaving removes, though what is in memory serves until the restart (Close).
+	closed bool
+	http   *http.Client
 	// outside fetches addresses on hosts that are not Home Assistant: its dialer refuses the device's
 	// own addresses. Nil (a Client made by hand) falls back to http.
 	outside *http.Client
@@ -127,11 +130,33 @@ func (c *Client) Set(url, token string) error {
 func (c *Client) save() error {
 	c.mu.Lock()
 	b, _ := json.Marshal(c.acc)
+	closed := c.closed
 	c.mu.Unlock()
+	if closed {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(Path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(Path, b, 0o600)
+	// Written beside it and renamed over it, so a power cut mid-write leaves the old file, not half of
+	// one: a sign-in's refresh token is in it, and there is no getting that back without a new sign-in.
+	tmp := Path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(b)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, Path)
 }
 
 // clean takes out what a copy and paste carries along without anyone seeing it: spaces and line ends,

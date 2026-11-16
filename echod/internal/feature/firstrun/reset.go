@@ -88,9 +88,12 @@ var forgetHome = func(ctx context.Context) {
 	n, err := hass.Get().RemoveOwnEntry(ctx, mac)
 	if err != nil {
 		slog.Warn("reset: could not delete this device from Home Assistant; delete it there by hand", "err", err)
-		return
+	} else {
+		slog.Info("reset: deleted this device from Home Assistant", "entries", n)
 	}
-	slog.Info("reset: deleted this device from Home Assistant", "entries", n)
+	// Last, as it ends the access the deletion above used: a sign-in is taken back, so it leaves the
+	// giver's profile too, as leaving does (api/leave.go).
+	hass.Get().Revoke(ctx)
 }
 
 // restart is the daemon restarting into first run (a variable for the tests).

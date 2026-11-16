@@ -123,9 +123,20 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	return c.save()
 }
 
-// Revoke takes a sign-in back at Home Assistant and keeps the rest, for leaving it (api's leave),
-// where the file is removed anyway. A long-lived token is not the device's to take back.
+// Close is the access being left (api's leave, a reset): what is in memory still serves until the
+// restart, for deleting the device's entry, but nothing is written to the file any more, so a renewal
+// in the meantime cannot put back what leaving removed.
+func (c *Client) Close() {
+	c.mu.Lock()
+	c.closed = true
+	c.mu.Unlock()
+}
+
+// Revoke takes a sign-in back at Home Assistant and keeps the rest, for leaving it (api's leave, a
+// reset), where the file is removed anyway; it closes the access too (Close). A long-lived token is not
+// the device's to take back.
 func (c *Client) Revoke(ctx context.Context) {
+	c.Close()
 	c.mu.Lock()
 	acc := c.acc
 	c.mu.Unlock()
@@ -204,6 +215,12 @@ func (c *Client) token(ctx context.Context, force bool) (access, error) {
 		return access{}, ErrSignedOut
 	}
 	if err != nil {
+		// Not answered, or not a refusal: the token in hand may still have minutes left (the renewal
+		// starts ahead of its end), and a hiccup at /auth/token alone need not fail what it is for.
+		if !force && time.Until(now.Expires) > 0 {
+			slog.Warn("hass: renewing the sign-in failed; using the token until it runs out", "err", err)
+			return now, nil
+		}
 		return access{}, err
 	}
 	c.mu.Lock()
@@ -212,11 +229,20 @@ func (c *Client) token(ctx context.Context, force bool) (access, error) {
 	}
 	now = c.acc
 	c.mu.Unlock()
-	return now, c.save()
+	if err := c.save(); err != nil {
+		slog.Warn("hass: saving the renewed sign-in failed; it serves until the next restart", "err", err)
+	}
+	return now, nil
 }
 
 // errRefused is /auth/token turning the grant down, rather than not answering.
 var errRefused = errors.New("hass: the grant was refused")
+
+// refusals are the OAuth errors /auth/token answers when the grant itself is no good.
+var refusals = map[string]bool{
+	"invalid_grant": true, "invalid_request": true, "invalid_client": true,
+	"unauthorized_client": true, "access_denied": true,
+}
 
 // askToken posts form to base's /auth/token.
 func (c *Client) askToken(ctx context.Context, base string, form neturl.Values) (tokenAnswer, error) {
@@ -236,9 +262,11 @@ func (c *Client) askToken(ctx context.Context, base string, form neturl.Values) 
 		return t, err
 	}
 	_ = json.Unmarshal(b, &t)
-	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusForbidden ||
-		resp.StatusCode == http.StatusUnauthorized {
+	if (resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusForbidden ||
+		resp.StatusCode == http.StatusUnauthorized) && refusals[t.Error] {
 		// invalid_grant, invalid_request: the code or refresh token is not one Home Assistant takes.
+		// Only Home Assistant's own word for it: a bare 401 or 403 is as likely a proxy in front of it
+		// while it restarts, and taken as a refusal it would sign the device out for good.
 		return t, fmt.Errorf("%w (%s %s)", errRefused, resp.Status, t.Error)
 	}
 	if resp.StatusCode/100 != 2 {

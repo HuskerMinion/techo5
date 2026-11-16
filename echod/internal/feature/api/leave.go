@@ -48,6 +48,7 @@ func (a *API) Actions() []*esphome.Action {
 			if err := leave(layout.KeyPath, hass.Path); err != nil {
 				return nil, err
 			}
+			hass.Get().Close() // a renewal before the restart must not write the access back
 			slog.Warn("left Home Assistant: its access forgotten and a new key made; restarting")
 			safe.Go("leave home assistant", func() {
 				time.Sleep(leaveDelay)
