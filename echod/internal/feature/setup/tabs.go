@@ -208,7 +208,7 @@ var tabFor = map[string]string{
 	"camstream": "cameras",
 
 	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "haaccess": "network", "timeserver": "network",
-	"tailscale": "network", "netbird": "network", "wallclock": "network",
+	"tailscale": "network", "netbird": "network", "netbirdroutes": "network", "wallclock": "network",
 
 	"lock": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
 

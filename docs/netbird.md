@@ -21,7 +21,9 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
   8181 and 22, and ping. NetBird's access policies narrow that further, per peer: which peers see the
   device, and which of those ports and protocols each of them reaches. A policy can never open more:
   see [Access policies](#access-policies).
-- **The device takes nothing from the network.** No DNS, no routes, no IPv6, no NetBird SSH server. The
+- **The device takes nothing from the network** unless you say so. No DNS, no IPv6, no NetBird SSH
+  server, and no routes, until you list networks to take them to: see
+  [Routes from the mesh](#routes-from-the-mesh). The
   client sends NetBird no metrics. It does talk to your management server, and to NetBird's signal and relay servers, which is
   how peers find each other.
 - **Announcements, Drop In and shared settings stay in each house.**
@@ -65,6 +67,32 @@ never open more. A device joined before the client did this turns it on when it 
 A new NetBird network lets every peer reach every other. Let only your Home Assistant host's group
 reach the `techo5` group on TCP 6053, and only your own devices reach TCP 8181 and 22, and keep the
 setup page and SSH off unless you need them.
+
+## Routes from the mesh
+
+A device in another house can reach networks your NetBird network routes, such as your LAN at home
+behind a routing peer: then it plays from a Music Assistant at home, shows its cameras or reaches a
+media server, without each of them being a peer. It is off until you list networks:
+
+1. In your NetBird dashboard, under **Networks**, add the network as a resource with a routing peer, and
+   a policy from the device's group to that resource with the ports it needs.
+2. On the device's setup page, **Network → Routes from NetBird**: one network a line, such as
+   `192.168.1.0/24`, and **Save**. NetBird restarts, which takes a few seconds.
+
+The device then takes the routes your network offers it to those networks, and no others: a route to
+anything not listed is deselected (`netbird networks deselect`), whatever the dashboard hands it, within
+the 15 seconds it takes the device to notice a new one. Which routes it is offered at all is still up to
+your dashboard's policies, and what answers on the far side up to the routing peer.
+
+- **IPv4 networks, /8 or narrower.** No default route and no exit node, and none that overlaps the
+  device's own Wi-Fi or NetBird's own addresses. No domain routes either: the device takes no DNS from
+  NetBird.
+- **The device only uses the routes itself.** It routes nothing of its own into NetBird, forwards
+  nothing, and is no exit node.
+- **What comes back** is let in as a reply, as for any connection the device makes. Something on the far
+  network opening a connection to the device is held to the same as any peer: ports 6053, 8181 and 22,
+  and ping, and your policies.
+- Clearing the box turns routes off again, and NetBird restarts once more.
 
 ## Leaving the mesh
 

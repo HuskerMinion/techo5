@@ -131,6 +131,7 @@ func (st *Store) Get() Config {
 	c.Timers.Local = slices.Clone(st.c.Timers.Local)
 	c.Screen.WorldClocks = slices.Clone(st.c.Screen.WorldClocks)
 	c.BookPlaces.List = slices.Clone(st.c.BookPlaces.List)
+	c.Netbird.Routes = slices.Clone(st.c.Netbird.Routes)
 	c.Deck = st.c.Deck.clone()
 	c.Video = st.c.Video.clone()
 	c.Share = st.c.Share.clone()

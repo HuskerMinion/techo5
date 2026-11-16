@@ -12,7 +12,8 @@
 // device's identity on the network in its state directory, so a device joined once rejoins by itself;
 // what is kept here is whether it runs, and the management server it was joined to.
 //
-// It is started to take nothing from the network: no DNS, no routes, no SSH server. Its own firewall is
+// It is started to take nothing from the network: no DNS, no SSH server, and no routes unless its owner
+// lists networks to take them to (routes.go). Its own firewall is
 // on, so the owner's access policies decide which ports each peer reaches, under ours: the firewall's
 // tailnet chain stays the ceiling (firewallOn). WireGuard runs in the client rather than the kernel, and
 // routing the old way, which every one of these kernels has.
@@ -33,6 +34,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -86,14 +88,15 @@ const (
 
 // Status is where the device stands.
 type Status struct {
-	On          bool    // meant to run
-	Downloading bool    // fetching the client
-	Got         float32 // how much of it, 0 to 1
-	Running     bool    // the daemon is running
-	State       string  // the daemon's own: NeedsLogin, Connecting, Connected, and so on
-	Name        string  // this device's name on the network
-	IP          string  // its address there
-	Problem     string  // why it is not on the network, when it is not
+	On          bool     // meant to run
+	Downloading bool     // fetching the client
+	Got         float32  // how much of it, 0 to 1
+	Running     bool     // the daemon is running
+	State       string   // the daemon's own: NeedsLogin, Connecting, Connected, and so on
+	Name        string   // this device's name on the network
+	IP          string   // its address there
+	Routes      []string // the mesh's routes in use, while it takes any (routes.go)
+	Problem     string   // why it is not on the network, when it is not
 }
 
 type Feature struct {
@@ -107,6 +110,9 @@ type Feature struct {
 	pub    sync.Mutex // held while a change is made and published
 	st     Status
 	reload chan struct{}
+
+	routesOn bool // whether the running daemon was started to take routes (clientRoutes)
+	reselect bool // the routes from the mesh are to be selected again (selectRoutes)
 }
 
 var (
@@ -222,11 +228,14 @@ func (f *Feature) Login(ctx context.Context, setupKey, management string) error 
 		}
 	}
 	name := tailscale.Hostname(config.Get().Device.Name)
-	// Everything the network could give the device is refused, and its own firewall kept on for the access
-	// policies (firewallOn). Each is said outright: the client keeps only what it is told.
+	// Everything the network could give the device is refused, but for routes to the networks listed
+	// (routes.go), and its own firewall kept on for the access policies (firewallOn). Each is said
+	// outright: the client keeps only what it is told.
+	routes := len(config.Get().Netbird.Routes) > 0
 	out, err := cli(ctx, []string{"NB_SETUP_KEY=" + setupKey}, "up",
 		"--management-url="+mgmt, "--hostname="+name, "--interface-name="+web.NetbirdTun,
-		"--disable-dns", "--disable-client-routes", "--disable-server-routes", "--disable-firewall=false", "--disable-ipv6",
+		"--disable-dns", "--disable-client-routes="+strconv.FormatBool(!routes), "--disable-server-routes",
+		"--disable-firewall=false", "--disable-ipv6",
 		"--allow-server-ssh=false", "--enable-rosenpass=false", "--disable-auto-connect=false")
 	if err != nil {
 		return fmt.Errorf("netbird: joining: %s", cmpOr(lastLine(scrub(out, setupKey)), err.Error()))
@@ -504,7 +513,12 @@ type daemonStatus struct {
 	DaemonStatus string `json:"daemonStatus"`
 	IP           string `json:"netbirdIp"`
 	FQDN         string `json:"fqdn"`
-	Management   struct {
+	Peers        struct {
+		Details []struct {
+			Networks []string `json:"networks"` // the routes in use through this peer
+		} `json:"details"`
+	} `json:"peers"`
+	Management struct {
 		Connected bool   `json:"connected"`
 		Error     string `json:"error"`
 	} `json:"management"`
@@ -535,6 +549,21 @@ func parseStatus(out []byte) (daemonStatus, error) {
 	return st, nil
 }
 
+// routesInUse are the routes the device uses, through whichever peers route them. (The status's own
+// "networks" are the routes it offers, which it never does here.)
+func (st daemonStatus) routesInUse() []string {
+	var out []string
+	for _, p := range st.Peers.Details {
+		for _, n := range p.Networks {
+			if !slices.Contains(out, n) {
+				out = append(out, n)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 func needsKey(s string) bool {
 	return s == needsLogin || s == "LoginFailed" || s == "SessionExpired"
 }
@@ -551,9 +580,17 @@ func (f *Feature) runOnce(ctx context.Context) error {
 	// socket: it goes first.
 	stopLeftovers()
 	_ = os.Remove(sockPath)
-	if err := firewallOn(filepath.Join(stateDir, "state", "default.json")); err != nil {
+	profile := filepath.Join(stateDir, "state", "default.json")
+	if err := firewallOn(profile); err != nil {
 		slog.Warn("netbird: turning its firewall on", "err", err)
 	}
+	routesOn := len(config.Get().Netbird.Routes) > 0
+	if err := clientRoutes(profile, routesOn); err != nil {
+		slog.Warn("netbird: routes from the mesh", "err", err)
+	}
+	f.mu.Lock()
+	f.routesOn, f.reselect = routesOn, routesOn
+	f.mu.Unlock()
 
 	// The daemon is told to stop when the thread that started it ends, and that thread is kept for as
 	// long as it runs, so an echod that crashes or is killed does not leave it behind.
@@ -602,6 +639,16 @@ func (f *Feature) runOnce(ctx context.Context) error {
 				slog.Info("netbird: stopped")
 				return nil
 			}
+			// Routes turned on or off: the client reads that when it starts, so it starts again.
+			f.mu.Lock()
+			restart := f.routesOn != (len(config.Get().Netbird.Routes) > 0)
+			f.mu.Unlock()
+			if restart {
+				stop()
+				<-exited
+				slog.Info("netbird: restarting, for the routes from the mesh")
+				return nil
+			}
 			f.poll(ctx)
 		case <-quick.C:
 			if time.Now().Before(quickUntil) && f.State().State != connected {
@@ -646,18 +693,42 @@ func firewallOn(profile string) error {
 	return writeWhole(profile, 0o600, bytes.NewReader(out))
 }
 
+// routes keeps the routes from the mesh to the listed networks, while the client takes any and is
+// connected: when the list or the daemon is new, and when a route in use is to a network not listed
+// (one the mesh offered since: the client takes those until told otherwise).
+func (f *Feature) routes(ctx context.Context, st daemonStatus) {
+	f.mu.Lock()
+	on, again := f.routesOn, f.reselect
+	f.mu.Unlock()
+	wanted := wantedRoutes()
+	if !on || len(wanted) == 0 || st.DaemonStatus != connected || (!again && !unlisted(st.routesInUse(), wanted)) {
+		return
+	}
+	done, err := selectRoutes(ctx, wanted)
+	if err != nil {
+		slog.Warn("netbird: routes from the mesh", "err", err)
+	}
+	if done {
+		f.mu.Lock()
+		f.reselect = false
+		f.mu.Unlock()
+	}
+}
+
 // poll reads the status and says what it found.
 func (f *Feature) poll(ctx context.Context) {
 	st, err := status(ctx)
 	if err != nil {
-		f.set(func(s *Status) { s.State, s.Name, s.IP, s.Problem = "", "", "", "" })
+		f.set(func(s *Status) { s.State, s.Name, s.IP, s.Routes, s.Problem = "", "", "", nil, "" })
 		return
 	}
+	f.routes(ctx, st)
 	f.set(func(s *Status) {
-		s.State, s.Name, s.IP, s.Problem = st.DaemonStatus, "", "", ""
+		s.State, s.Name, s.IP, s.Routes, s.Problem = st.DaemonStatus, "", "", nil, ""
 		if st.DaemonStatus == connected {
 			s.Name = strings.TrimSuffix(strings.SplitN(st.FQDN, ".", 2)[0], ".")
 			s.IP = st.IP
+			s.Routes = st.routesInUse()
 		}
 		switch {
 		case needsKey(st.DaemonStatus):

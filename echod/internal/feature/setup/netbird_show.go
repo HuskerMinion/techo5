@@ -34,6 +34,7 @@ func netbirdSection(w http.ResponseWriter, token string) {
 		where = "Starting."
 	}
 	netbirdForm(w, token, where)
+	netbirdRoutesForm(w, token, st)
 }
 
 // netbirdForm is the section's form, with where the device stands said above it (as HTML). Joining
@@ -65,6 +66,47 @@ func saveNetbird(r *http.Request) string {
 	defer cancel()
 	if err := netbird.Get().Login(ctx, key, r.PostFormValue("management")); err != nil {
 		return "could not join: " + err.Error()
+	}
+	return ""
+}
+
+// netbirdRoutesForm lists the networks the device may reach through the mesh's routes (feature/netbird,
+// routes.go), once it has joined: none at first, and then it takes no routes at all.
+func netbirdRoutesForm(w http.ResponseWriter, token string, st netbird.Status) {
+	c := config.Get().Netbird
+	if !c.Joined {
+		return
+	}
+	inUse := "None in use."
+	if len(st.Routes) > 0 {
+		inUse = "In use: " + html.EscapeString(strings.Join(st.Routes, ", ")) + "."
+	}
+	text := strings.Join(c.Routes, "\n")
+	fieldsetOpen(w, "netbirdroutes", "Routes from NetBird")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "netbirdroutes")
+	fmt.Fprintf(w, `<label for="nbroutes">Networks</label>
+	 <textarea id="nbroutes" name="routes" rows="3" maxlength="1000" placeholder="192.168.1.0/24">%s</textarea>
+	 <p class="note">%s Networks this device may reach through routes your NetBird network offers it, such
+	  as the LAN at home behind a routing peer, one a line. Empty, as it starts, takes no routes at all. Only
+	  routes to these networks are used, whatever else the network offers; which routes it offers is up to
+	  your NetBird dashboard. The device only uses them itself: it routes nothing into NetBird and is no exit
+	  node. Turning routes on or off restarts NetBird, which takes a few seconds.</p>
+	 <p><button type="submit">Save</button></p></form></fieldset>`,
+		html.EscapeString(text), inUse)
+}
+
+// saveNetbirdRoutes keeps the networks typed.
+func saveNetbirdRoutes(r *http.Request) string {
+	routes, err := netbird.ParseRoutes(r.PostFormValue("routes"))
+	if err != nil {
+		return err.Error()
+	}
+	if strings.Join(routes, " ") == strings.Join(config.Get().Netbird.Routes, " ") {
+		return "" // nothing changed
+	}
+	if err := netbird.Get().SetRoutes(routes); err != nil {
+		return err.Error()
 	}
 	return ""
 }

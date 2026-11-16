@@ -16,4 +16,6 @@ func statusTailnet(http.ResponseWriter) {}
 
 func saveNetbird(*http.Request) string { return "this device has no NetBird" }
 
+func saveNetbirdRoutes(*http.Request) string { return "this device has no NetBird" }
+
 func saveTailscale(*http.Request) string { return "this device has no Tailscale" }

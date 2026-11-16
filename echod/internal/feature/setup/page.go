@@ -411,6 +411,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveTailscale(r)
 	case "netbird":
 		problem = saveNetbird(r)
+	case "netbirdroutes":
+		problem = saveNetbirdRoutes(r)
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {
