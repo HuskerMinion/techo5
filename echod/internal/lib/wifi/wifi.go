@@ -174,6 +174,14 @@ func Scan(ctx context.Context) ([]Network, error) {
 // the association and an address. The previous configuration is kept as Conf.prev and put back
 // if the new network never completes, so a typo does not leave the device off the air.
 func Join(ctx context.Context, ssid, passphrase string) error {
+	if err := checkJoin(ssid, passphrase); err != nil {
+		return err
+	}
+	return join(ctx, ssid, block(ssid, passphrase))
+}
+
+// checkJoin is what a network name and a passphrase have to be before anything is written for them.
+func checkJoin(ssid, passphrase string) error {
 	if err := checkName(ssid); err != nil {
 		return err
 	}
@@ -183,7 +191,7 @@ func Join(ctx context.Context, ssid, passphrase string) error {
 	if !oneLine(passphrase) {
 		return errors.New("wifi: a passphrase cannot hold a line ending")
 	}
-	return join(ctx, ssid, block(ssid, passphrase))
+	return nil
 }
 
 // checkName is what a network name has to be before anything is written for it.

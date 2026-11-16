@@ -54,10 +54,11 @@ func qrPictureOf(t *testing.T, text string) *image.RGBA {
 // every few milliseconds, and records whether it was let go.
 func standInScanCamera(t *testing.T, pic func() *image.RGBA) (released func() bool) {
 	t.Helper()
-	acquire, listen, empty, picture, every := qrScanAcquire, qrScanListen, qrEmpty, qrPicture, qrScanEvery
+	acquire, listen, empty, picture, every, after := qrScanAcquire, qrScanListen, qrEmpty, qrPicture, qrScanEvery, qrCancelAfter
 	t.Cleanup(func() {
-		qrScanAcquire, qrScanListen, qrEmpty, qrPicture, qrScanEvery = acquire, listen, empty, picture, every
+		qrScanAcquire, qrScanListen, qrEmpty, qrPicture, qrScanEvery, qrCancelAfter = acquire, listen, empty, picture, every, after
 	})
+	qrCancelAfter = 0
 	var mu sync.Mutex
 	let := false
 	qrScanAcquire = func() (func(), error) {
@@ -164,6 +165,8 @@ func TestTheQRScanPageDraws(t *testing.T) {
 			"scanning": {left: 12 * time.Second, started: true, w: 1280, h: 720, preview: pic},
 			"read":     {started: true, w: 1280, h: 720, preview: pic, code: "MT:Y.K9042C00KA0648G00"},
 			"muted":    {left: 20 * time.Second, empty: true, started: true},
+			"covered":  {left: 20 * time.Second, blocked: "cover"},
+			"mute":     {left: 20 * time.Second, blocked: "mute"},
 		} {
 			img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
 			newRenderer(img).draw(scene{now: at, phase: "idle", qrscan: &v})

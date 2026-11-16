@@ -34,6 +34,7 @@ type wifiState struct {
 	busy    string    // "Connecting to X…" while a join runs
 	err     string    // why the last join failed
 	addr    *addrForm // the network address page (address_page.go), when it is the one open
+	camera  bool      // the bar has Scan QR code between Rescan and Done (wifi_qr.go)
 }
 
 // The sizes below are the ones this page was drawn at on a Show 5. Everything that is a length goes
@@ -73,17 +74,21 @@ var (
 type wifiHit struct {
 	row    int // a network row, or -1
 	rescan bool
+	qr     bool
 	done   bool
 }
 
-func (r *renderer) wifiListHit(x, y int) wifiHit {
+func (r *renderer) wifiListHit(x, y int, camera bool) wifiHit {
 	h := wifiHit{row: -1}
 	top, rowH := r.wifiRowTop(), r.wifiRowHeight()
 	switch {
 	case y >= r.h-r.wifiDoneBar():
-		if x < r.w/2 {
+		switch r.wifiBarCell(x, camera) {
+		case 0:
 			h.rescan = true
-		} else {
+		case 1:
+			h.qr = true
+		default:
 			h.done = true
 		}
 	case y >= top && (y-top)/rowH < wifiRows:
@@ -213,12 +218,37 @@ func (r *renderer) wifiPage(s scene) {
 		r.text(r.tiny, tr("next"), r.w-r.margin-btnW+(btnW-r.width(r.tiny, tr("next")))/2, top+r.s(29), cream)
 	}
 
-	// The bar: rescan on the left, done on the right.
+	// The bar: rescan on the left, done on the right, and on a device with a camera, scanning a Wi-Fi
+	// QR code between them.
 	top := r.h - r.wifiDoneBar()
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(ember), image.Point{}, draw.Src)
-	draw.Draw(r.dst, image.Rect(r.w/2-r.s(1), top+r.s(10), r.w/2+r.s(1), r.h-r.s(10)), image.NewUniform(dim), image.Point{}, draw.Src)
-	r.text(r.body, tr("ui_rescan"), (r.w/2-r.width(r.body, tr("ui_rescan")))/2, top+r.s(45), cream)
-	r.text(r.body, tr("done"), r.w/2+(r.w/2-r.width(r.body, tr("done")))/2, top+r.s(45), cream)
+	labels := []string{tr("ui_rescan"), tr("done")}
+	if w.camera {
+		labels = []string{tr("ui_rescan"), tr("wifi_qr_button"), tr("done")}
+	}
+	cell := r.w / len(labels)
+	for i, l := range labels {
+		if i > 0 {
+			draw.Draw(r.dst, image.Rect(i*cell-r.s(1), top+r.s(10), i*cell+r.s(1), r.h-r.s(10)), image.NewUniform(dim), image.Point{}, draw.Src)
+		}
+		f := r.body
+		if r.width(f, l) > cell-r.s(16) {
+			f = r.small // a long word in a third of the bar
+		}
+		r.text(f, l, i*cell+(cell-r.width(f, l))/2, top+r.s(45), cream)
+	}
+}
+
+// wifiBarCell is which of the bar's buttons x is on: 0 Rescan, 1 Scan QR code where there is one, and
+// 2 Done; without a camera the bar is Rescan and Done, halves.
+func (r *renderer) wifiBarCell(x int, camera bool) int {
+	if !camera {
+		if x < r.w/2 {
+			return 0
+		}
+		return 2
+	}
+	return min(max(x*3/r.w, 0), 2)
 }
 
 // pageWith is pageOf for a page of rows rows: the list's slice, and whether a More row is needed.

@@ -106,7 +106,10 @@ Before the one question it saves the unit's small partitions (bootloader chain, 
 `backups/<serial>/partitions/`, each checked against its size. After it, it formats userdata (Fire OS's
 data), installs the zip from TWRP, checks that its Wi-Fi driver is built for the kernel TECHO5 uses, and
 goes on as above. `--wifi` asks for the network's passphrase and sends the unit only the WPA key made
-from it. Without `--wifi`, the Show opens its Wi-Fi page by itself a little after it starts.
+from it. Without `--wifi`, the Show opens its Wi-Fi page by itself a little after it starts. On a Show
+with a camera, that page and first run's Wi-Fi step have **Scan QR code**: hold up the Wi-Fi QR code a
+phone shares its network with, or the one on a router's sticker, and the Show joins that network with
+nothing typed (open and WPA/WPA2 networks; not yet WPA3-only or school and work networks).
 
 On a Show 5 2nd gen or a Show 8 it also puts the TECHO5 logo in place of Amazon's at boot. The logo lives in the
 unlock's bootloader (kaeru, in `expdb`), so it is only written over the kaeru it was made for, and read

@@ -263,3 +263,7 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 	}
 	return "", nil
 }
+
+// firstRunCanScan is whether the Wi-Fi step offers to scan a Wi-Fi QR code: not on the Spot, whose
+// Wi-Fi step is done on a phone.
+func firstRunCanScan() bool { return false }

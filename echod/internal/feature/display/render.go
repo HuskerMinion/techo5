@@ -716,6 +716,14 @@ func (r *renderer) draw(s scene) {
 		}
 		return
 	}
+	// A QR scan opened over the Wi-Fi page (its Scan QR code, wifi_qr.go) is drawn over it.
+	if s.showWifi && s.qrscan != nil {
+		r.qrScanPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.showWifi {
 		r.wifiPage(s)
 		if s.showVolume {

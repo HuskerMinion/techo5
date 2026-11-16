@@ -64,6 +64,7 @@ type firstRunView struct {
 	number   int // the step's place, 1 for the first counted step; 0 for the hello and done cards
 	of       int
 	wifi     wifi.Status
+	camera   bool // on the Wi-Fi step: a Wi-Fi QR code can be scanned (firstRunCanScan)
 	home     bool // Home Assistant is connected
 	homeJust bool // and it connected while the step waited: it says so and goes on
 	key      string
@@ -105,6 +106,7 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 		return v
 	}
 	v.home = firstrun.HomeConnected()
+	v.camera = v.step == frWifi && firstRunCanScan()
 	read := false
 	d.mu.Lock()
 	fr := &d.firstRun

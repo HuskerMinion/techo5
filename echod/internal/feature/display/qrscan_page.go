@@ -18,6 +18,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/lenscover"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -43,7 +44,17 @@ var (
 	qrRead        = readQR
 	qrEmpty       = func(fr *camera.Frame) bool { w, _ := fr.Dims(); return w == 0 }
 	qrPicture     = func(fr *camera.Frame) *image.RGBA { return fr.Full() }
+	qrCovered     = func() bool { return lenscover.Get().Covered() }
+	qrMuted       = func() bool { muted, _ := mute.Get().Muted(); return muted }
 )
+
+// qrBlockedEvery is how often a scan that waits for the camera looks again whether the shutter has
+// been opened, or the privacy mute turned off.
+var qrBlockedEvery = 300 * time.Millisecond
+
+// qrCancelAfter is how soon after the page opens Cancel takes a tap. Cancel is where the button that
+// opened it was, so a second tap on that button while the page comes up does not close it again.
+var qrCancelAfter = 800 * time.Millisecond
 
 // ErrNothingScanned is a scan that ran out of time, or was canceled on the screen, without a code.
 var ErrNothingScanned = errors.New("qr scan: no code was read")
@@ -51,10 +62,11 @@ var ErrNothingScanned = errors.New("qr scan: no code was read")
 // qrScan is one opening of the page. The frames arrive on the camera's goroutine and are read on one
 // of their own, so what they write is under mu, not the display's lock.
 type qrScan struct {
-	until time.Time
-	done  chan struct{} // closed when the page is taken down
-	once  sync.Once
-	found chan string // the code, once
+	opened time.Time
+	until  time.Time
+	done   chan struct{} // closed when the page is taken down
+	once   sync.Once
+	found  chan string // the code, once
 
 	// What the frames are read with, taken when the scan starts: a frame still being read after it
 	// ended uses what it began with.
@@ -62,25 +74,52 @@ type qrScan struct {
 	isEmpty func(*camera.Frame) bool
 	picture func(*camera.Frame) *image.RGBA
 	read    func(image.Image) (string, bool)
+	look    qrLook
 
 	mu      sync.Mutex
-	started bool // a frame has come
-	empty   bool // the last frame had nothing in it: the camera is held off
-	reading bool // a frame is being read
+	blocked string // while the scan waits for the camera: "cover" (the shutter is closed) or "mute"
+	started bool   // a frame has come
+	empty   bool   // the last frame had nothing in it: the camera is held off
+	reading bool   // a frame is being read
 	readAt  time.Time
 	w, h    int
 	preview *image.RGBA
-	code    string // what was read, shown until the page closes
+	code    string // what was read
+	said    string // what the page says of it until it closes
+}
+
+// qrLook is what a scan opened for something on the device itself looks for and says: the Wi-Fi page's
+// scan reads only a Wi-Fi code, and never shows the passphrase in it. The zero qrLook is Home
+// Assistant's scan, which takes any code and shows it.
+type qrLook struct {
+	title  string                 // the page's title; empty is "Scan a QR code"
+	accept func(code string) bool // whether a code read ends the scan; nil takes any
+	say    func(code string) string
+	// wait is a scan that waits, saying why on the page, while the shutter is closed or the privacy
+	// mute is on, and starts once the camera can be had; without it the scan ends at once with the
+	// camera's refusal.
+	wait bool
+}
+
+// saying is what the page says of a code read.
+func (l qrLook) saying(code string) string {
+	if l.say != nil {
+		return l.say(code)
+	}
+	return fmt.Sprintf(tr("qr_scan_read"), code)
 }
 
 // qrScanView is the page as one frame draws it.
 type qrScanView struct {
+	title   string
+	blocked string
 	left    time.Duration
 	started bool
 	empty   bool
 	w, h    int
 	preview *image.RGBA
 	code    string
+	said    string
 }
 
 func (q *qrScan) stop() { q.once.Do(func() { close(q.done) }) }
@@ -109,6 +148,13 @@ func (q *qrScan) frame(fr *camera.Frame, wake func()) {
 		if img != nil {
 			code, _ = q.read(img)
 		}
+		if code != "" && q.look.accept != nil && !q.look.accept(code) {
+			code = "" // not the code this scan is for: keep looking
+		}
+		said := ""
+		if code != "" {
+			said = q.look.saying(code)
+		}
 		q.mu.Lock()
 		if img != nil {
 			q.preview = img
@@ -116,7 +162,7 @@ func (q *qrScan) frame(fr *camera.Frame, wake func()) {
 		}
 		first := code != "" && q.code == ""
 		if first {
-			q.code = code
+			q.code, q.said = code, said
 		}
 		q.mu.Unlock()
 		if first {
@@ -130,6 +176,7 @@ func (q *qrScan) view(now time.Time) qrScanView {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return qrScanView{
+		title: q.look.title, said: q.said, blocked: q.blocked,
 		left: q.until.Sub(now), started: q.started, empty: q.empty,
 		w: q.w, h: q.h, preview: q.preview, code: q.code,
 	}
@@ -178,9 +225,15 @@ func luminance(img image.Image) gozxing.LuminanceSource {
 // It answers ErrNothingScanned when the time runs out, or Cancel is pressed, first; and the camera's
 // own refusal (the privacy mute, a closed shutter) at once. One scan at a time.
 func (d *Display) ScanQR(ctx context.Context, within time.Duration) (string, error) {
+	return d.scanQR(ctx, within, qrLook{})
+}
+
+// scanQR is ScanQR looking for, and saying, what look says.
+func (d *Display) scanQR(ctx context.Context, within time.Duration, look qrLook) (string, error) {
+	now := time.Now()
 	q := &qrScan{
-		until: time.Now().Add(within), done: make(chan struct{}), found: make(chan string, 1),
-		every: qrScanEvery, isEmpty: qrEmpty, picture: qrPicture, read: qrRead,
+		opened: now, until: now.Add(within), done: make(chan struct{}), found: make(chan string, 1),
+		every: qrScanEvery, isEmpty: qrEmpty, picture: qrPicture, read: qrRead, look: look,
 	}
 	d.mu.Lock()
 	if d.qrscan != nil {
@@ -193,20 +246,16 @@ func (d *Display) ScanQR(ctx context.Context, within time.Duration) (string, err
 	slog.Info("qr scan", "open", true, "for", within)
 	d.wake()
 
-	release, err := qrScanAcquire()
+	ctx, stop := context.WithDeadline(ctx, q.until)
+	defer stop()
+	release, err := d.qrScanCamera(ctx, q)
 	if err != nil {
-		if muted, _ := mute.Get().Muted(); muted {
-			err = errors.New("qr scan: the privacy mute holds the camera off")
-		}
-		slog.Info("qr scan: no camera", "err", err)
 		return "", err
 	}
 	defer release()
 	cancel := qrScanListen(func(fr *camera.Frame) { q.frame(fr, d.wake) })
 	defer cancel()
 
-	ctx, stop := context.WithDeadline(ctx, q.until)
-	defer stop()
 	tick := time.NewTicker(time.Second) // the countdown
 	defer tick.Stop()
 	for {
@@ -228,6 +277,52 @@ func (d *Display) ScanQR(ctx context.Context, within time.Duration) (string, err
 			d.wake()
 		}
 	}
+}
+
+// qrScanCamera holds the camera for q. A scan that waits (qrLook.wait) says on the page that the
+// shutter is closed, or the privacy mute on, and tries again until the camera can be had, the time
+// runs out, or Cancel is pressed; any other scan has the camera's refusal at once.
+func (d *Display) qrScanCamera(ctx context.Context, q *qrScan) (func(), error) {
+	for {
+		release, err := qrScanAcquire()
+		blocked := ""
+		switch {
+		case err == nil:
+		case qrMuted():
+			blocked, err = "mute", errors.New("qr scan: the privacy mute holds the camera off")
+		case qrCovered():
+			blocked = "cover"
+		}
+		if err == nil || blocked == "" || !q.look.wait {
+			if err != nil {
+				slog.Info("qr scan: no camera", "err", err)
+			}
+			q.setBlocked("")
+			return release, err
+		}
+		if q.setBlocked(blocked) {
+			slog.Info("qr scan: waiting for the camera", "blocked", blocked)
+			d.wake()
+		}
+		select {
+		case <-q.done:
+			slog.Info("qr scan: canceled on the screen")
+			return nil, ErrNothingScanned
+		case <-ctx.Done():
+			slog.Info("qr scan: the camera was not opened", "blocked", blocked)
+			return nil, ErrNothingScanned
+		case <-time.After(qrBlockedEvery):
+		}
+	}
+}
+
+// setBlocked says what the scan waits on, "" for nothing, and whether that changed.
+func (q *qrScan) setBlocked(b string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	changed := q.blocked != b
+	q.blocked = b
+	return changed
 }
 
 // endQRScan takes the page down if q is still the one up.
@@ -268,7 +363,7 @@ func (d *Display) qrScanTap(x, y int) {
 	d.mu.Lock()
 	q := d.qrscan
 	d.mu.Unlock()
-	if q != nil {
+	if q != nil && time.Since(q.opened) >= qrCancelAfter {
 		q.stop()
 	}
 }
@@ -284,7 +379,11 @@ func (r *renderer) qrCancelRect() image.Rectangle {
 // do, or what was read, over its foot.
 func (r *renderer) qrScanPage(s scene) {
 	v := s.qrscan
-	r.text(r.body, tr("qr_scan_title"), r.margin, r.s(52), amber)
+	title := v.title
+	if title == "" {
+		title = tr("qr_scan_title")
+	}
+	r.text(r.body, title, r.margin, r.s(52), amber)
 	right := clockHM(s.now)
 	if v.left > 0 && v.code == "" {
 		right = fmt.Sprintf("%d s  ·  %s", int(v.left.Round(time.Second).Seconds()), right)
@@ -298,7 +397,27 @@ func (r *renderer) qrScanPage(s scene) {
 	msg := tr("qr_scan_hint")
 	switch {
 	case v.code != "":
-		msg = fmt.Sprintf(tr("qr_scan_read"), v.code)
+		msg = v.said
+		if msg == "" {
+			msg = qrLook{}.saying(v.code)
+		}
+	case v.blocked != "":
+		// Waiting for the camera: said large in the middle of the picture's place, as it stays so
+		// until somebody opens the shutter or turns the mute off.
+		r.bevel(pic, shift(walnut, 8), false)
+		why := tr("qr_scan_covered")
+		if v.blocked == "mute" {
+			why = tr("qr_scan_muted")
+		}
+		lines := r.wrap(r.body, why, pic.Dx()-r.s(48))
+		lh := r.body.Metrics().Height.Ceil()
+		y := pic.Min.Y + (pic.Dy()-len(lines)*lh)/2 + r.body.Metrics().Ascent.Ceil()
+		for _, l := range lines {
+			r.text(r.body, l, pic.Min.X+(pic.Dx()-r.width(r.body, l))/2, y, amber)
+			y += lh
+		}
+		r.labelButton(r.qrCancelRect(), tr("cancel"), btnSecondary)
+		return
 	case v.empty:
 		msg = tr("qr_scan_muted")
 	case v.preview == nil:

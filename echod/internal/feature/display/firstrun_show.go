@@ -39,6 +39,9 @@ func firstRunButtons(v firstRunView) []frButton {
 		if v.wifi.Connected {
 			return []frButton{{tr("firstrun_change"), "wifi"}, {tr("firstrun_next"), "next"}}
 		}
+		if v.camera {
+			return []frButton{{tr("firstrun_not_now"), "next"}, {tr("wifi_qr_button"), "wifiqr"}, {tr("firstrun_choose_wifi"), "wifi"}}
+		}
 		return []frButton{{tr("firstrun_not_now"), "next"}, {tr("firstrun_choose_wifi"), "wifi"}}
 	case frZone:
 		return []frButton{{tr("firstrun_change"), "zone"}, {tr("firstrun_next"), "next"}}
@@ -219,6 +222,10 @@ func (d *Display) firstRunDo(step, act string) {
 		d.firstRunGo(stepAfter(step))
 	case "wifi":
 		d.openWifi()
+	case "wifiqr":
+		// Over the Wi-Fi page, which says how the join went and comes back here when closed.
+		d.openWifi()
+		go d.wifiScanQR()
 	case "zone":
 		// The settings' own time zone list, over first run: closing it comes back here.
 		d.mu.Lock()
@@ -252,3 +259,6 @@ func (d *Display) firstRunDo(step, act string) {
 		go firstrun.Chime()
 	}
 }
+
+// firstRunCanScan is whether the Wi-Fi step offers to scan a Wi-Fi QR code: on a device with a camera.
+func firstRunCanScan() bool { return wifiQRCamera() }

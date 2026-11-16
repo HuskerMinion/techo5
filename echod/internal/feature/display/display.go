@@ -2160,7 +2160,7 @@ func (d *Display) CloseWifi() { d.closeWifi() }
 func (d *Display) openWifi() {
 	d.mu.Lock()
 	d.wifiOpen = true
-	d.wifi = wifiState{scanning: true}
+	d.wifi = wifiState{scanning: true, camera: wifiQRCamera()}
 	glowing, dark := d.nightGlow, d.nightDark
 	d.nightGlow, d.nightDark = false, false
 	d.mu.Unlock()
@@ -2224,10 +2224,15 @@ func (d *Display) wifiTap(x, y int) {
 		d.wifiKey(d.r.keyAt(x, y, w.symbols))
 		return
 	}
-	h := d.r.wifiListHit(x, y)
+	h := d.r.wifiListHit(x, y, w.camera)
 	switch {
 	case h.done:
 		d.closeWifi()
+	case h.qr:
+		if w.busy == "" {
+			d.wifiSay("")
+			go d.wifiScanQR()
+		}
 	case h.rescan:
 		d.mu.Lock()
 		d.wifi.scanning, d.wifi.err = true, ""
