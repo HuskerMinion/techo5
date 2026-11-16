@@ -893,3 +893,6 @@ func clockDuration(d time.Duration) string {
 func fade(c color.RGBA, k float64) color.RGBA {
 	return color.RGBA{c.R, c.G, c.B, uint8(float64(c.A) * math.Min(math.Max(k, 0), 1))}
 }
+
+// rowsCard is the card the settings rows are drawn on: the round panel's, which plans them.
+func (p *paint) rowsCard() image.Rectangle { return p.rowCard }

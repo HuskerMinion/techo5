@@ -152,3 +152,6 @@ func (r *renderer) settingsShell() {
 	copy(r.shell.Pix, r.dst.Pix)
 	r.shellKey = key
 }
+
+// rowsCard is the card the settings rows are drawn on.
+func (p *paint) rowsCard() image.Rectangle { return p.nextCard(p.w, p.h) }

@@ -141,7 +141,75 @@ func (p *paint) rowHeight(row settingRow) int {
 	if p.planned() {
 		return p.planRow(p.rowCard, row).h
 	}
-	return p.rowH()
+	h := p.rowH()
+	if p.stacked(row) {
+		h += p.s(stackStep)
+	}
+	labels, subs := p.wordLines(p.rowsCard(), row)
+	return h + p.extraLines(row, labels, subs)
+}
+
+// extraLines is how much taller a Show row is for the lines its words take past one each.
+func (p *paint) extraLines(row settingRow, labels, subs []string) int {
+	fc := p.faces()
+	h := 0
+	if n := len(labels); n > 1 {
+		h += (n - 1) * p.labelFace(row).Metrics().Height.Ceil()
+	}
+	if n := len(subs); n > 1 {
+		h += (n - 1) * fc.sub.Metrics().Height.Ceil()
+	}
+	return h
+}
+
+// labelFace is the face a row's name is drawn in.
+func (p *paint) labelFace(row settingRow) font.Face {
+	if row.bold {
+		return p.faces().labelBold
+	}
+	return p.faces().label
+}
+
+// wordLines is a Show row's name on up to two lines and the line under it on up to three, in the room
+// beside its control, for words in a longer language than the row was drawn for; each is nil when it
+// fits on one line, and both on a planned row, which lays its own out.
+func (p *paint) wordLines(card image.Rectangle, row settingRow) (labels, subs []string) {
+	if p.planned() || row.kind == ctlHeading || row.kind == ctlSwatches || row.kind == ctlDays {
+		return nil, nil
+	}
+	fc := p.faces()
+	room := card.Max.X - p.s(26) - p.controlWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	if row.locked {
+		room -= p.s(lockGap + lockW)
+	}
+	if face := p.labelFace(row); p.width(face, row.label) > room {
+		labels = p.wrapClip(face, row.label, room, 2)
+	}
+	if row.sub != "" && p.width(fc.sub, row.sub) > room {
+		subs = p.wrapClip(fc.sub, row.sub, room, 3)
+	}
+	return labels, subs
+}
+
+// stackStep is how much taller a row is when its button stands over its value's chip.
+const stackStep = 48
+
+// stacked says whether a Show row's button stands over its value's chip instead of beside it: only a
+// choice with a button, and only when its words would not fit beside the two.
+func (p *paint) stacked(row settingRow) bool {
+	if p.planned() || row.kind != ctlChoice || row.button == "" {
+		return false
+	}
+	fc := p.faces()
+	card := p.rowsCard()
+	room := card.Max.X - p.s(26) - p.sideBySideWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	return max(p.width(fc.label, row.label), p.width(fc.sub, row.sub)) > room
+}
+
+// sideBySideWidth is a choice row's chip and button beside each other.
+func (p *paint) sideBySideWidth(row settingRow) int {
+	fc := p.faces()
+	return p.width(fc.value, row.value) + p.s(58) + p.width(fc.button, row.button) + p.s(44+12)
 }
 
 // rowsHeight is how tall rows are, one under another.
@@ -670,6 +738,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	right, cy := card.Max.X-r.s(26), top+rh/2
 	var labelEnd int
 	var plan rowPlan
+	var labels, subs []string
 	planned := r.planned()
 	fullLabel := row.label
 	if planned {
@@ -680,12 +749,13 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			row.sub = plan.sub[0]
 		}
 	} else {
+		labels, subs = r.wordLines(card, row)
 		row.label, row.sub, labelEnd = r.rowWords(card, row, face)
 	}
 	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
 	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
 	// A row grown for large text keeps them in its middle.
-	mid := top + (r.rowH()-r.s(rowHBase))/2
+	mid := top + (rh-r.s(rowHBase))/2
 	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
 	base := line(40, 30)
 	lastLabel := row.label
@@ -701,6 +771,28 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		base, lastLabel = top+plan.baseL[len(plan.baseL)-1], plan.label[len(plan.label)-1]
 	case row.sub == "":
 		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
+	case len(labels) > 1 || len(subs) > 1:
+		// Words on more than one line: the row grew for them, and they stay in its middle.
+		if labels == nil {
+			labels = []string{row.label}
+		}
+		if subs == nil && row.sub != "" {
+			subs = []string{row.sub}
+		}
+		lhL, lhS := face.Metrics().Height.Ceil(), fc.sub.Metrics().Height.Ceil()
+		up := r.extraLines(row, labels, subs) / 2
+		base = line(30, 40) - up
+		if len(subs) == 0 {
+			base = line(40, 30) - up
+		}
+		for i, l := range labels {
+			r.text(face, l, card.Min.X+r.rowIn(), base+i*lhL, cream)
+		}
+		base += (len(labels) - 1) * lhL
+		lastLabel = labels[len(labels)-1]
+		for i, l := range subs {
+			r.text(fc.sub, l, card.Min.X+r.rowIn(), line(53, 40)-up+(len(labels)-1)*lhL+i*lhS, dim)
+		}
 	default:
 		base = line(30, 40)
 		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
@@ -766,6 +858,14 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		add(minus.Inset(-r.s(6)), partMinus)
 		add(plus.Inset(-r.s(6)), partPlus)
 	case ctlChoice:
+		if r.stacked(row) {
+			half := r.s(stackStep) / 2
+			bx := r.pillButton(right, cy-half, row.button, btnSecondary)
+			r.choice(right, cy+half, fit(row.value, right-r.s(58)))
+			add(whole, partMain)
+			add(image.Rect(bx-r.s(6), top, card.Max.X-r.s(8), cy), partExtra)
+			break
+		}
 		extra := 0
 		if row.button != "" {
 			extra = r.width(fc.button, row.button) + r.s(44+12)
@@ -856,6 +956,9 @@ func (r *paint) controlWidth(row settingRow) int {
 		return r.s(44) + max(r.width(fc.value, row.value), r.s(80)) + r.s(24+44)
 	case ctlChoice:
 		w := r.width(fc.value, row.value) + r.s(58)
+		if r.stacked(row) {
+			return max(w, r.width(fc.button, row.button)+r.s(44))
+		}
 		if row.button != "" {
 			w += r.width(fc.button, row.button) + r.s(44+12)
 		}
