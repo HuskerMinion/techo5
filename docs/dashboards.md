@@ -214,7 +214,7 @@ Mealie server. The Echo Dot and the Echo Spot don't have it.
 **Setting it up**
 
 On the setup page, under **Screen**, **Mealie**: the server's address, like
-`http://192.168.1.20:9000`, and a long-lived API token. It is never shown again once saved. Leave the token empty
+`http://192.168.1.20:9925`, and a long-lived API token. It is never shown again once saved. Leave the token empty
 only if your server accepts requests without one.
 
 **Opening it**

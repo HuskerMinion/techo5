@@ -264,13 +264,13 @@ func TestImageURL(t *testing.T) {
 		recipe     RecipeEntry
 		want       string
 	}{
-		{"a picture", "http://mealie:9000", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
-			"http://mealie:9000/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
-		{"a slash at the end", "http://mealie:9000/", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
-			"http://mealie:9000/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
-		{"odd characters", "http://mealie:9000", RecipeEntry{ID: "a/b c", ImageVersion: "x&y=z"},
-			"http://mealie:9000/api/media/recipes/a%2Fb%20c/images/tiny-original.webp?version=x%26y%3Dz"},
-		{"no picture", "http://mealie:9000", RecipeEntry{ID: "id-1"}, ""},
+		{"a picture", "http://mealie:9925", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
+			"http://mealie:9925/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
+		{"a slash at the end", "http://mealie:9925/", RecipeEntry{ID: "id-1", ImageVersion: "bTDV"},
+			"http://mealie:9925/api/media/recipes/id-1/images/tiny-original.webp?version=bTDV"},
+		{"odd characters", "http://mealie:9925", RecipeEntry{ID: "a/b c", ImageVersion: "x&y=z"},
+			"http://mealie:9925/api/media/recipes/a%2Fb%20c/images/tiny-original.webp?version=x%26y%3Dz"},
+		{"no picture", "http://mealie:9925", RecipeEntry{ID: "id-1"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := (Client{URL: tc.base}).ImageURL(tc.recipe); got != tc.want {
