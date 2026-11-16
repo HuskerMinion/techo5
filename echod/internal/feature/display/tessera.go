@@ -203,9 +203,9 @@ func (r *paint) tesseraPage(v tessera.View, on bool, page int, adj dashAdjusting
 	fillCanvas(r.dst, pal.bg)
 	fc := r.faces()
 	if !on || len(v.Pages) == 0 {
-		msg := "Waiting for a layout from Tessera. Add tiles for this screen in the Tessera add-on."
+		msg := tr("ui_tess_waiting")
 		if !on {
-			msg = "Turn on Tessera screen in Home Assistant to show the layout the Tessera add-on sends."
+			msg = tr("ui_tess_turn_on")
 		}
 		lines := r.wrapLines(fc.label, msg, r.w*2/3)
 		y := r.h/2 - len(lines)*r.s(36)/2
@@ -354,13 +354,13 @@ func (r *paint) barItem(it tessera.BarItem, right, base int, pal dashPal, now ti
 func agoText(d time.Duration) string {
 	switch {
 	case d < time.Minute:
-		return "just now"
+		return tr("ui_ago_just_now")
 	case d < time.Hour:
-		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+		return fmt.Sprintf(tr("ui_ago_min"), int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%d h ago", int(d.Hours()))
+		return fmt.Sprintf(tr("ui_ago_h"), int(d.Hours()))
 	}
-	return fmt.Sprintf("%d d ago", int(d.Hours()/24))
+	return fmt.Sprintf(tr("ui_ago_d"), int(d.Hours()/24))
 }
 
 // tessTile draws one tile in its cells: the badge with its icon at the top, and the name and what it is
@@ -458,10 +458,10 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 	// A switch at the top right, for something a tap turns on and off; a lock asking to be sure says
 	// what the second tap does there.
 	// The button where it fits beside the badge: the tint and the words say it on a narrow tile.
-	pill := t.Confirm && b.Max.X-pad-r.width(r.faces().button, "Unlock")-r.s(44) > ring.Max.X+r.s(8)
+	pill := t.Confirm && b.Max.X-pad-r.width(r.faces().button, tr("ui_unlock"))-r.s(44) > ring.Max.X+r.s(8)
 	switch {
 	case pill:
-		r.pillButton(b.Max.X-pad, ring.Min.Y+badge/2, "Unlock", btnDanger)
+		r.pillButton(b.Max.X-pad, ring.Min.Y+badge/2, tr("ui_unlock"), btnDanger)
 	case t.Confirm:
 	case t.Taps && toggles(t.Entity) && !t.Gone:
 		sw := image.Rect(b.Max.X-pad-r.s(sc(46)), ring.Min.Y+(badge-r.s(sc(26)))/2, b.Max.X-pad, ring.Min.Y+(badge+r.s(sc(26)))/2)
@@ -532,7 +532,7 @@ func (r *paint) tessTile(b image.Rectangle, t tessera.Placed, pal dashPal, adj d
 		right := b.Min.X + pad + room
 		switch {
 		case pill:
-			right = min(right, b.Max.X-pad-r.width(r.faces().button, "Unlock")-r.s(52))
+			right = min(right, b.Max.X-pad-r.width(r.faces().button, tr("ui_unlock"))-r.s(52))
 		case t.Taps && toggles(t.Entity) && !t.Gone:
 			right = min(right, b.Max.X-pad-r.s(sc(46))-r.s(8))
 		}
