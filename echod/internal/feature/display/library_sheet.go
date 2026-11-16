@@ -1344,7 +1344,9 @@ func (d *Display) libLeave(target, from string) {
 	slog.Info("dashboard music library leaves", "own", own)
 	switch {
 	case own:
-		// The dashboard goes, and the idle screen is Now Playing as the stream comes.
+		// The dashboard goes, and the idle screen is Now Playing as the stream comes: held up for it
+		// (musicPending), so the clock does not show for the half second to a second the stream takes.
+		d.musicPendingStart(true)
 		d.closeDashboard()
 	case strings.HasPrefix(from, "media_player."):
 		libOpenSheet(d, from)

@@ -345,6 +345,10 @@ type Display struct {
 	// radioTapped is when a station was last tapped on the list: the now-playing page is up from then
 	// while the station is starting (radioStarting), for radioCueFor at the most.
 	radioTapped time.Time
+	// musicPendingAt is when music was last asked for from here (a play in the library, a resume) and
+	// the page is held up for it (musicPending); musicPendingFresh is for one just chosen.
+	musicPendingAt    time.Time
+	musicPendingFresh bool
 
 	// weatherArmed is a weather question in progress; weatherUntil is how long the forecast page
 	// stays once the turn is over.
@@ -1821,6 +1825,7 @@ func (d *Display) endMusic() {
 	// page. It comes back for the next track, and after a stop the next start counts as one, so the
 	// music just ended is not playing however the page went.
 	rd := home.Get().Radio()
+	d.musicPendingEnd()
 	d.mu.Lock()
 	d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, false, false
 	d.mu.Unlock()
@@ -1882,9 +1887,12 @@ func (d *Display) nowPlaying() bool {
 	if _, _, _, ok := media.Get().Held(); ok {
 		return true
 	}
+	// Music asked for here (a play in the library, a resume) and not heard yet: the page stays up for it
+	// rather than the clock showing for the second or two the stream takes (musicPending).
+	pending, _ := d.musicPending()
 	rd := home.Get().Radio()
 	if !rd.Configured {
-		return false
+		return pending
 	}
 	playing, paused := media.Get().Playing()
 	if playing || paused {
@@ -1897,7 +1905,7 @@ func (d *Display) nowPlaying() bool {
 	cued := time.Since(d.radioCue) < radioCueFor
 	tapped := time.Since(d.radioTapped) < radioCueFor
 	d.mu.Unlock()
-	return cued || (tapped && radioStarting(rd) != "")
+	return cued || (tapped && radioStarting(rd) != "") || pending
 }
 
 // radioStarting is the station that was asked for and is not playing yet, the one the station list
@@ -2947,6 +2955,13 @@ func (d *Display) frame() (next time.Duration) {
 		if s.radio.Followed {
 			s.playing, s.paused = s.radio.Playing, s.radio.Paused
 		}
+	}
+	if pending, fresh := d.musicPending(); wants && pending && fresh && !musicAudible() {
+		// Music just chosen in the library and not yet playing: the page says it is starting, not the
+		// song that was playing before.
+		s.radio.Title, s.radio.Artist, s.radio.Now, s.radio.Chosen = "", "", "", tr("music")
+		s.radio.Art, s.radio.Thumb, s.radio.Logo, s.radio.Followed = nil, nil, false, false
+		s.playing, s.paused = false, false
 	}
 	d.quietAway(now, s.radio, music, wants, s.playing)
 	s.nowPlaying = wants && !d.putAway(s.radio, wants, s.playing)

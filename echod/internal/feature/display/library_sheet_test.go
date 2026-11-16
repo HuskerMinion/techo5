@@ -483,6 +483,10 @@ func TestTheLibraryLeavesAfterAPlay(t *testing.T) {
 		if d.dash == c.own || d.away == c.own {
 			t.Errorf("%s: dashboard up %v, Now Playing put away %v", c.name, d.dash, d.away)
 		}
+		// The page is held up for the stream when it plays here, so the clock does not show first.
+		if pending, fresh := d.musicPending(); pending != c.own || fresh != c.own {
+			t.Errorf("%s: page held for the stream %v (fresh %v), want %v", c.name, pending, fresh, c.own)
+		}
 		if got := strings.Join(sheetFor, ","); got != c.wantSheet {
 			t.Errorf("%s: media sheet opened for %q, want %q", c.name, got, c.wantSheet)
 		}
