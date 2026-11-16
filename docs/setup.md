@@ -1258,13 +1258,13 @@ speaking detection** to **Relaxed**, 1.25 seconds. In a quiet room nothing longe
 effect with Home Assistant. With realtime voice and voice without Home Assistant it applies to every
 turn.
 
-**Microphone pre-roll with wake sound** (off by default; the device's microphone settings in Home
-Assistant) is for a request said in one breath with the wake word. With a wake sound, a request starts
+**Microphone pre-roll with wake sound** is a switch in Home Assistant (the device's microphone
+settings), off by default, for a request said in one breath with the wake word. With a wake sound, a request starts
 where the wake word was heard, so the end of the word stays out of it. The device hears the word a
 moment after it ends, though, and the first syllables of a request said without any break can fall
 before that moment and be lost. Turn this on to reach back a quarter of a second further, as a request
-with no wake sound does. It needs **Microphone echo cancellation**, and the end of the wake word then
-reaches speech-to-text with the request.
+with no wake sound does. It only takes effect with **Microphone echo cancellation** on, and the end of
+the wake word then reaches speech-to-text with the request.
 
 On the setup page (Sound) or in Home Assistant, **Night volume** turns the device down to that
 level as quiet hours start, if it is louder, and back to where it was as they end. Turned up or down
@@ -1688,8 +1688,9 @@ off; keep them on your own machine.
 
 Instead of copying clips off by hand, the device can upload each new one to a wake word trainer on
 your home network or your Tailscale network. It is off by default. Choose where under **Voice**,
-**Send wake clips to** on the setup page (or with the **Send wake clips to** select in Home Assistant once an address is saved
-there). It only works while **Keep wake clips** is on.
+**Send wake clips to** on the setup page. Home Assistant can turn sending on or off with the **Send wake
+clips to** select once an address is saved on the setup page, but it can't set the address or the token.
+It only works while **Keep wake clips** is on.
 
 - **Off**: nothing is sent.
 - **Tater Trainer**: run its Docker image
@@ -1714,6 +1715,8 @@ What is sent, and when:
   (or changed; a device whose clock isn't set yet asks you to try again in a minute), so what the device
   kept before is never uploaded, and neither is what it kept while
   sending was off. A device that has sent nothing yet but has clips from last week sends none of them.
+  Clips kept before the device's clock was set can be dated earlier than the moment you turned sending
+  on, and are then not sent.
 - One clip at a time, the oldest first, no faster than one every two seconds. A clip that has gone is
   marked in its `.json` with `sent_at`. If the trainer can't be reached or answers with an error that
   may pass (a 5xx, 408 or 429), the device waits 5 seconds, then 10, doubling up to 10 minutes, and
@@ -1733,13 +1736,15 @@ What is sent, and when:
   `100.127.x.y` or `fd7a:115c:a1e0::`, or another link-local address or `fc00::/7`), or a name, like a
   `.local` one, that resolves to one. An IPv6 address with a zone (`fe80::1%eth0`) is not supported. That is checked when you save, and again before every clip, and the connection
   is made only to such an address. Redirects are not followed. `http` and `https` both work. `https`
-  is checked as usual; a self-signed certificate (wakesmith with `--https`, for example) is refused until
+  is checked as usual; with an `http://` address the token and the clips cross the network unencrypted,
+  so use `https` (and **Trust this certificate**) where your trainer supports it. A self-signed certificate (wakesmith with `--https`, for example) is refused until
   you press **Test**, check the SHA-256 fingerprint the page shows against your trainer's, and press
   **Trust this certificate**. The device then sends only to a trainer showing exactly that certificate,
   and says "certificate changed" if it ever shows another. Changing the address forgets the trust.
 - The token stays on the device. The setup page never shows it again, a settings file and the
-  diagnostic bundle leave it out, and Home Assistant and the remote API can read where clips go but not
-  change it (the select can be changed from Home Assistant only once an address is saved).
+  diagnostic bundle leave it out, and the remote API can only read where clips go. Home Assistant can
+  turn sending on or off once an address is saved on the setup page, and can't set the address or the
+  token.
 - **Turning Keep wake clips off deletes every clip on the device, the ones not yet sent with them.**
 
 **The format a custom receiver gets**, for anyone building one. For each clip:
@@ -1753,7 +1758,7 @@ Content-Type: multipart/form-data
 with two parts:
 
 - `meta`: `application/json`, for example
-  `{"name":"20261012-213301-123-s1-p0.79-c0.90","device":"Office","kind":"wake","at":"2026-10-12T21:33:01Z","slot":1,"model":"hey_jarvis","score":0.79,"cutoff":0.9}`.
+  `{"name":"20261012-213301-123-s1-p0.79-c0.90","device":"office","kind":"wake","at":"2026-10-12T21:33:01Z","slot":1,"model":"hey_jarvis","score":0.79,"cutoff":0.9}`.
   `name` is the file's name without `.wav`, `device` the device's node name as Home Assistant spells it in its actions (`esphome.living_room_wake_clips` is `living_room`), the same in `X-Source-Device`, `kind` is
   `wake`, `mistake`, `noise` or `nearmiss`, and `at` is UTC.
 - `audio`: `audio/wav`, 16 kHz mono 16-bit, about four seconds, with the filename `<name>.wav`.
@@ -1765,8 +1770,8 @@ again. The test is `GET {url}/api/clips/ping` with the same header: answer 2xx.
 
 Tater Trainer gets its own format instead: `POST {url}/api/upload_captured_audio_raw` with the WAV as the
 body, and the details in `X-Audio-Format`, `X-Original-Name`, `X-Source-Device`, `X-Wake-Word`,
-`X-Event-Type`, `X-Captured-At`, `X-Max-Probability`, `X-Probability-Cutoff` (these last two in whole
-percent, which is what it reads) and `X-Notes` headers.
+`X-Event-Type`, `X-Captured-At`, `X-Max-Probability`, `X-Probability-Cutoff` (these last two on
+microWakeWord's own 0 to 255 scale, which is what it reads) and `X-Notes` headers.
 
 ### Watching the wake word scores
 
