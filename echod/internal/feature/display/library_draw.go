@@ -30,6 +30,9 @@ const libPartGoSearch = libPartRow + 1
 // libPartSort is the audiobooks' order on their row, which a tap moves to the next.
 const libPartSort = libPartRow + 2
 
+// libPartNowPlaying is the bar's way back to the Now Playing page, while something plays.
+const libPartNowPlaying = libPartRow + 4
+
 // libPartMenu is a choice on the action sheet (index: its place among the sheet's choices), and
 // libPartMenuOut is anywhere else while the sheet is up, which puts it away.
 const (
@@ -93,7 +96,7 @@ func libPartActs(l *librarySheet, z mediaZone) bool {
 		return z.kind == libPartMenu && z.index >= 0 && z.index < len(l.menu.choices)
 	}
 	switch z.kind {
-	case libPartDone, libPartBack, libPartTab, libPartSort, libPartGoSearch, libPartField, libPartPlay, libPartShuffle:
+	case libPartDone, libPartNowPlaying, libPartBack, libPartTab, libPartSort, libPartGoSearch, libPartField, libPartPlay, libPartShuffle:
 		return true
 	case libPartItem:
 		p := l.current()
@@ -435,6 +438,12 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 	doneW := pillW(libWord(libWordDone), false)
 	pill(image.Rect(bar.Max.X-doneW, bar.Min.Y, bar.Max.X, bar.Max.Y), "", libWord(libWordDone), lit, pal.bg, false, libPartDone, 0)
 	right := bar.Max.X - doneW - r.s(10)
+	if l.playing {
+		// Back to what is playing: the note alone, as the search tab has its magnifier, beside Done.
+		nw := r.s(64)
+		pill(image.Rect(right-nw, bar.Min.Y, right, bar.Max.Y), "music-note", "", plain, pal.text, false, libPartNowPlaying, 0)
+		right -= nw + r.s(10)
+	}
 	switch {
 	case !l.set:
 		r.text(fc.labelBold, r.fit(fc.labelBold, libWord(libWordLibrary), right-bar.Min.X), bar.Min.X, bar.Min.Y+r.s(33), pal.text)

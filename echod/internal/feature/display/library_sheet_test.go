@@ -287,6 +287,9 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 	epHeld := podSheet
 	epHeld.menu = libMenu{open: true, entry: episodes[0], kind: "podcast_episode", item: 0, choices: libMenuFor(episodes[0], "podcast_episode", false, 0)}
 
+	playingSheet := libSheetWith(libArtists, libEntries("artist", 40), "media_player.ma_kitchen")
+	playingSheet.playing = true
+
 	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
 		for _, c := range []struct {
 			name  string
@@ -294,6 +297,7 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 			want  map[int]int // at least as many of each part
 		}{
 			{"artists", libSheetWith(libArtists, libEntries("artist", 40), "media_player.ma_kitchen"), map[int]int{libPartTab: libTabs, libPartDone: 1, libPartItem: 4, libPartContent: 1}},
+			{"artists-playing", playingSheet, map[int]int{libPartTab: libTabs, libPartDone: 1, libPartNowPlaying: 1}},
 			{"albums", libSheetWith(libAlbums, libEntries("album", 40), "media_player.ma_kitchen"), map[int]int{libPartTab: libTabs, libPartItem: 4}},
 			{"playlists", libSheetWith(libPlaylists, libEntries("playlist", 9), "media_player.ma_kitchen"), map[int]int{libPartItem: 4}},
 			{"tracks", libSheetWith(libTracks, tracks, "media_player.ma_kitchen"), map[int]int{libPartItem: 4}},
@@ -329,6 +333,9 @@ func TestTheLibraryPageLaysOutItsParts(t *testing.T) {
 				if count[kind] < n {
 					t.Errorf("%s: %d of part %d, want %d or more (%v)", name, count[kind], kind, n, count)
 				}
+			}
+			if c.name != "artists-playing" && count[libPartNowPlaying] != 0 {
+				t.Errorf("%s: a button for Now Playing with nothing playing", name)
 			}
 			if c.name == "artist-no-player" && (count[libPartPlay] != 0 || count[libPartShuffle] != 0) {
 				t.Errorf("%s: Play or Shuffle can be tapped with nothing to play on", name)
@@ -440,6 +447,32 @@ func TestTheLibrarysTaps(t *testing.T) {
 	tap(libFind(t, zones, libPartDone, -1))
 	if d.libraryViewNow() != nil {
 		t.Error("Done left the library up")
+	}
+}
+
+// With something playing, the library's bar has a button back to Now Playing: it puts the library and the
+// dashboard away and brings the page back, even one put away for the track.
+func TestTheLibraryGoesBackToNowPlaying(t *testing.T) {
+	noLibrary(t)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	d.dash, d.away, d.awayTrack = true, true, "Take It Easy"
+	d.musicPendingStart(false) // something is playing, as nowPlaying sees it
+	sheet := libSheetWith(libArtists, libEntries("artist", 8), "media_player.ma_kitchen")
+	setLibUp(d, &sheet)
+	if v := d.libraryViewNow(); v == nil || !v.sheet.playing {
+		t.Fatalf("the library does not know music is playing: %+v", v)
+	}
+	zones, _ := libDraw(r, d.libraryViewNow().sheet)
+	d.libraryTap(libMiddle(libFind(t, zones, libPartNowPlaying, -1)))
+	if d.libraryViewNow() != nil {
+		t.Error("the library is still up")
+	}
+	d.mu.Lock()
+	dash, away := d.dash, d.away
+	d.mu.Unlock()
+	if dash || away {
+		t.Errorf("dashboard up %v, Now Playing put away %v", dash, away)
 	}
 }
 

@@ -176,7 +176,10 @@ type librarySheet struct {
 	base string
 	// from is the media player the library was opened for, a media sheet's or a card's; empty for none.
 	from string
-	tab  int
+	// playing is whether this device has Now Playing to go back to, read afresh for each frame
+	// (libraryViewNow): the bar then has a button for it.
+	playing bool
+	tab     int
 	// audiobookSort is the audiobooks' order: by author, title or newest (musicassistant.AudiobookByAuthor ...).
 	audiobookSort int
 	// roots are the tabs as they were left, and stack the pages opened from the one shown, the last on
@@ -536,6 +539,7 @@ func (d *Display) libraryViewNow() *libraryView {
 	}
 	v := &libraryView{sheet: *d.dashLibrary}
 	d.mu.Unlock()
+	v.sheet.playing = d.nowPlaying()
 	if p := v.sheet.current(); p.more && !p.loading && d.libNearEnd() {
 		d.libLoad(p.id)
 	}
@@ -920,6 +924,9 @@ func (d *Display) libraryTap(x, y int) bool {
 		d.mu.Lock()
 		d.dashLibrary = nil
 		d.mu.Unlock()
+	case libPartNowPlaying:
+		// The library and the dashboard under it go, and Now Playing is the idle screen again.
+		d.showMusicPage()
 	case libPartBack:
 		var back int64
 		d.editLibrary(func(n *librarySheet) {
