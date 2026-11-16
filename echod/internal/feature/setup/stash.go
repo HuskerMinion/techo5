@@ -26,7 +26,7 @@ const stashFor = 10 * time.Minute
 // boxes that say a danger is understood, which are ticked again on purpose.
 var stashSecret = map[string]bool{
 	"token": true, "what": true, "understood": true, "nocheck": true,
-	"key": true, "pass": true, "password": true, "passphrase": true, "pin": true, "matoken": true, "mcp": true,
+	"key": true, "pass": true, "password": true, "passphrase": true, "pin": true, "matoken": true, "mcp": true, "bearer": true,
 }
 
 // stashSecretIn are fields that are secret in one form only: a calendar's address is a private link to

@@ -460,6 +460,8 @@ var doneSaid = map[string]string{
 	"installing": "Installing the update.",
 	"forgotten":  "Forgotten.",
 	"removed":    "Removed.",
+	"reached":    "The trainer answered.",
+	"trusted":    "Trusted. Test it again.",
 }
 
 // doneWords is what the page says for a redirect's code; anything else is a save.
@@ -492,6 +494,10 @@ func doneCode(what string, r *http.Request) string {
 		return "forgotten"
 	case "font-remove", "sound-remove", "wakeword-remove":
 		return "removed"
+	case "wakeclips-test":
+		return "reached"
+	case "wakeclips-trust":
+		return "trusted"
 	}
 	return "1"
 }
@@ -609,6 +615,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		wakeWordsSection(w, token)
 		scoresSection(w)
 		takesSection(w, token)
+		wakeClipsSendSection(w, token)
 		historySection(w, token)
 	case "screen":
 		screenSection(w, token)

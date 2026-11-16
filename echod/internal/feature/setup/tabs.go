@@ -192,7 +192,7 @@ var tabFor = map[string]string{
 
 	"brain": "voice", "replyplayer": "voice", "realtime": "voice", "listening": "voice",
 	"house": "voice", "phonebook": "voice", "wakecall": "voice", "wakeword-remove": "voice",
-	"wakewords": "voice", "takes": "voice", "history": "voice",
+	"wakewords": "voice", "takes": "voice", "history": "voice", "wakeclips": "voice", "wakeclips-test": "voice", "wakeclips-trust": "voice",
 
 	"alarm_add": "alarms", "alarm_edit": "alarms", "alarm_prefs": "alarms",
 	"timer_cancel": "alarms", "snoozes_cancel": "alarms",

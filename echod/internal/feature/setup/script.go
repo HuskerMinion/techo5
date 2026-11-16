@@ -29,6 +29,7 @@ const (
 	busyReolink   = "Looking for the cameras, up to half a minute…"
 	busyImmich    = "Asking Immich, a few seconds…"
 	busyLook      = "Reading the file…"
+	busyTrainer   = "Asking the trainer, a few seconds…"
 	busyRestore   = "Restoring, then restarting…"
 )
 

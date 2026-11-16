@@ -60,6 +60,7 @@ var fakeSecrets = map[string]string{
 	"the dashboard server's key":    "walnut-fake-dash-key",
 	"the OBS password":              "walnut-fake-obs-pass",
 	"the Immich key":                "walnut-fake-immich-key",
+	"the wake clip token":           "walnut-fake-clip-token",
 	"the go2rtc address's password": "walnut-fake-rtc-pass",
 }
 
@@ -79,7 +80,10 @@ func saveFakeSecrets(t *testing.T) {
 		"dashboard": config.Set().Dashboard().Server("192.168.1.20:9555", fakeSecrets["the dashboard server's key"]),
 		"deck":      config.Set().Deck().OBS("192.168.1.20", fakeSecrets["the OBS password"]),
 		"immich":    config.Set().Home().Immich(config.Immich{Server: nowhere, Key: fakeSecrets["the Immich key"]}),
-		"go2rtc":    config.Set().Home().Go2RTC(config.Go2RTC{Base: "http://viewer:" + fakeSecrets["the go2rtc address's password"] + "@192.168.1.20:1984"}),
+		"wakeclips": config.Set().SendUpdate(func(w *config.WakeSend) {
+			*w = config.WakeSend{Target: config.SendCustom, URL: nowhere, Token: fakeSecrets["the wake clip token"]}
+		}),
+		"go2rtc": config.Set().Home().Go2RTC(config.Go2RTC{Base: "http://viewer:" + fakeSecrets["the go2rtc address's password"] + "@192.168.1.20:1984"}),
 	} {
 		if err != nil {
 			t.Fatalf("saving the %s secret: %v", what, err)
@@ -98,6 +102,7 @@ func TestNoSectionShowsASavedSecret(t *testing.T) {
 		"Music Assistant's token": c.MusicAssistant.Token, "the Reolink password": c.Home.Reolink.Pass,
 		"the cameras' talk password": c.TalkBack.Pass, "the camera stream's password": c.CamStream.Pass,
 		"the dashboard server's key": c.Dashboard.Key, "the OBS password": c.Deck.OBS.Password, "the Immich key": c.Home.Immich.Key,
+		"the wake clip token": c.Wake.Send.Token,
 	} {
 		if got != fakeSecrets[what] {
 			t.Fatalf("%s was not saved for the test: %q", what, got)
@@ -114,6 +119,7 @@ func TestNoSectionShowsASavedSecret(t *testing.T) {
 		"dashboard server":     func(w http.ResponseWriter) { dashboardSection(w, "tok") },
 		"deck":                 func(w http.ResponseWriter) { deckSection(w, "tok") },
 		"Immich":               func(w http.ResponseWriter) { immichSection(w, "tok") },
+		"wake clips":           func(w http.ResponseWriter) { wakeClipsSendSection(w, "tok") },
 		"go2rtc":               func(w http.ResponseWriter) { go2rtcSection(w, "tok") },
 	}
 	drawn := 0
