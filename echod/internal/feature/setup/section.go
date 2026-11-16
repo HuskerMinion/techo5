@@ -30,7 +30,7 @@ var sectionFor = map[string]string{
 	"update-install": "updates", "update-check": "updates", "update-auto": "updates",
 	"sound-play": "sounds", "sound-remove": "sounds",
 	"wakeword-remove": "wakewords",
-	"wakeclips-test":  "wakeclips", "wakeclips-trust": "wakeclips",
+	"wakeclips-test":  "wakeclips", "wakeclips-trust": "wakeclips", "wakeclips-keep": "wakeclips",
 }
 
 // sectionOf is the section a form's answer is shown in.

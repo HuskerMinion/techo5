@@ -189,3 +189,57 @@ func TestACertificateTheTestRefusedCanBeTrustedFromThePage(t *testing.T) {
 		t.Fatalf("trusted %q: %v", trusted, to.Query())
 	}
 }
+
+func TestKeepWakeClipsIsOnThePageAndOffNeedsTheBoxTicked(t *testing.T) {
+	f, c := in(t)
+	fk := fakeSender(t)
+	fk.kept = false
+	var calls []bool
+	was := setKeepClips
+	setKeepClips = func(on bool) error { calls = append(calls, on); fk.kept = on; return nil }
+	t.Cleanup(func() { setKeepClips = was })
+
+	body := get(f, "/setup?tab=voice", c).Body.String()
+	for _, want := range []string{`name="keep"`, "Delete every clip on this device", "deletes every kept clip", "Tailscale network"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the section has no %q", want)
+		}
+	}
+	if strings.Contains(body, "in Home Assistant, under this device") {
+		t.Error("the section still sends people to Home Assistant for the switch")
+	}
+
+	if p := post(t, f, c, url.Values{"what": {"wakeclips-keep"}, "keep": {"on"}}).Query().Get("problem"); p != "" || !fk.kept {
+		t.Fatalf("on: %q kept=%v", p, fk.kept)
+	}
+	// Off without the box: refused, and nothing changes.
+	p := post(t, f, c, url.Values{"what": {"wakeclips-keep"}, "keep": {"off"}}).Query().Get("problem")
+	if !strings.Contains(p, "tick Delete every clip") || !fk.kept || len(calls) != 1 {
+		t.Fatalf("off without the box: %q kept=%v calls=%v", p, fk.kept, calls)
+	}
+	// Off with it: done.
+	if p := post(t, f, c, url.Values{"what": {"wakeclips-keep"}, "keep": {"off"}, "confirm": {"yes"}}).Query().Get("problem"); p != "" || fk.kept || len(calls) != 2 || calls[1] {
+		t.Fatalf("off with the box: %q kept=%v calls=%v", p, fk.kept, calls)
+	}
+	// Off when it is off already needs nothing.
+	if p := post(t, f, c, url.Values{"what": {"wakeclips-keep"}, "keep": {"off"}}).Query().Get("problem"); p != "" || len(calls) != 2 {
+		t.Fatalf("off again: %q %v", p, calls)
+	}
+}
+
+func TestTheAddressIsComparedAsItWillBeKept(t *testing.T) {
+	f, c := in(t)
+	fakeSender(t)
+	save := func(u, tok string) {
+		v := url.Values{"what": {"wakeclips"}, "target": {"wakesmith"}, "url": {u}, "kind": {"wake"}}
+		if tok != "" {
+			v.Set("bearer", tok)
+		}
+		post(t, f, c, v)
+	}
+	save("http://192.168.1.20:8765/", "walnut")
+	save(" http://192.168.1.20:8765 ", "")
+	if got := config.Get().Wake.Send; got.Token != "walnut" || got.URL != "http://192.168.1.20:8765" {
+		t.Fatalf("%+v", got)
+	}
+}

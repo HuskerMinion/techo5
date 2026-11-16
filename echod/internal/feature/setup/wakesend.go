@@ -30,6 +30,7 @@ var (
 		return detect.Get().Sender().Ping(ctx, w)
 	}
 	wakeClipsKept   = func() bool { return detect.Get().KeepOn() }
+	setKeepClips    = func(on bool) error { return detect.Get().SetKeepClips(on) }
 	wakeClipsUnsent = func() (int, string) { return detect.Get().Sender().Unsent() }
 	wakeCertSeen    = func() string { return detect.Get().Sender().Untrusted() }
 	trustCert       = func(ctx context.Context, fp string) error { return detect.Get().Trust(ctx, fp) }
@@ -39,6 +40,7 @@ func init() {
 	saves["wakeclips"] = saveWakeSend
 	saves["wakeclips-test"] = testWakeSend
 	saves["wakeclips-trust"] = trustWakeCert
+	saves["wakeclips-keep"] = saveKeepWake
 }
 
 // wakeSendPlaceholder is what the address field shows before one is typed.
@@ -47,10 +49,24 @@ const wakeSendPlaceholder = "http://192.168.1.20:8765"
 func wakeClipsSendSection(w http.ResponseWriter, token string) {
 	cur := config.Get().Wake.Send
 	fieldsetOpen(w, "wakeclips", "Send wake clips to")
-	fmt.Fprint(w, `<p style="margin:0">Upload each wake clip the device keeps to a wake word trainer on your home
-	 network, to train on what this room really says and hears. Nothing is sent unless you choose where, and
-	 only clips kept after you do. It works while <strong>Keep wake clips</strong> is on (in Home Assistant,
-	 under this device's microphone), and only to an address on your home network.</p>
+	keeping := wakeClipsKept()
+	on, off := "", ` selected`
+	if keeping {
+		on, off = ` selected`, ""
+	}
+	fmt.Fprint(w, `<p style="margin:0">Keep short clips of the wake word on the device, and upload each one to a wake word
+	 trainer on your home network, to train on what this room really says and hears.</p>
+	 <form method="post" action="/setup/save">`)
+	hidden(w, token, "wakeclips-keep")
+	fmt.Fprintf(w, `<label for="wckeep">Keep wake clips</label>
+	 <select id="wckeep" name="keep"><option value="on"%s>On</option><option value="off"%s>Off</option></select>
+	 <p class="note">While it is on the device keeps the four seconds around each wake, each near miss and each
+	  wake that looks like a mistake, the newest 100 of each kind. <strong>Turning it off deletes every kept clip on this device</strong>, the ones not yet sent with them.</p>
+	 <p><label><input type="checkbox" name="confirm" value="yes" style="width:auto"> Delete every clip on this device (tick this to turn it off)</label></p>
+	 <p><button type="submit">Save</button></p></form>`, on, off)
+	fmt.Fprint(w, `<p style="margin-bottom:0">Nothing is sent unless you choose where below, and only clips kept after
+	 you do. It works while Keep wake clips is on, and only to an address on your home network or your
+	 Tailscale network.</p>
 	 <form method="post" action="/setup/save"`+busy(busyTrainer)+`>`)
 	hidden(w, token, "wakeclips")
 	fmt.Fprint(w, `<label for="wcto">Send to</label><select id="wcto" name="target">`)
@@ -141,11 +157,10 @@ func saveWakeSend(r *http.Request) string {
 	if next.Target != config.SendOff && next.URL == "" {
 		return "enter the trainer's address"
 	}
-	// The address is kept as it is typed when nothing is sent, so that it is not typed again.
-	if next.Target == config.SendOff && next.URL != "" {
-		if u, err := detect.CheckSendURL(next.URL); err == nil {
-			next.URL = u
-		}
+	// The address as it is kept, so it is compared as it will be saved. One that does not pass is left as
+	// typed for the save to say why, or, with nothing sent, kept so that it is not typed again.
+	if u, err := detect.CheckSendURL(next.URL); err == nil {
+		next.URL = u
 	}
 	for _, k := range config.SendKinds {
 		if !slices.Contains(r.PostForm["kind"], k) {
@@ -182,6 +197,23 @@ func saveWakeSend(r *http.Request) string {
 
 func sameAddress(a, b string) bool {
 	return a != "" && strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
+// saveKeepWake turns Keep wake clips on or off. Off deletes every clip on the device, so it is refused
+// unless the box that says so is ticked, and then nothing changes.
+func saveKeepWake(r *http.Request) string {
+	on := r.PostFormValue("keep") == "on"
+	if !on && wakeClipsKept() && r.PostFormValue("confirm") != "yes" {
+		return "to turn Keep wake clips off, tick Delete every clip on this device: it deletes every clip that was kept, the ones not yet sent too"
+	}
+	if on == wakeClipsKept() {
+		return ""
+	}
+	if err := setKeepClips(on); err != nil {
+		return err.Error()
+	}
+	slog.Info("setup page: keep wake clips was set", "on", on)
+	return ""
 }
 
 // trustWakeCert pins the certificate the last Test was shown, once the trainer shows it again.
