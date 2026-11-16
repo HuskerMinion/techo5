@@ -18,7 +18,8 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
 - **The setup page, only with Remote setup.** Over NetBird the web port answers nothing else.
 - **SSH, if you turned it on.**
 - **Nothing else gets in.** The device's own firewall lets NetBird's interface reach only ports 6053,
-  8181 and 22, and ping. NetBird's access policies apply on top, from your dashboard.
+  8181 and 22, and ping. NetBird's access policies decide which peers can see the device, not which
+  ports they reach: see [Access policies](#access-policies).
 - **The device takes nothing from the network.** No DNS, no routes, no IPv6, no NetBird SSH server. NetBird's
   own firewall on the device is off: the device's firewall does that job. The client sends NetBird no
   metrics. It does talk to your management server, and to NetBird's signal and relay servers, which is
@@ -41,10 +42,12 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
 
    The key is used once, to join, and isn't kept. The **NetBird status** sensor then says
    *Connected as kitchen (100.x.y.z)*.
-4. **Add the device to Home Assistant by its NetBird address or name.** The Home Assistant host has
-   to be on the same NetBird network. In **Settings → Devices & services → ESPHome**, add the device by
-   its NetBird address, with the same encryption key, and remove the old entry that used its home
-   address.
+4. **Add the device to Home Assistant by its NetBird name.** The Home Assistant host has to be on the
+   same NetBird network. In **Settings → Devices & services → ESPHome**, add the device as
+   `<name>.<your peer domain>` (the name is on the dashboard's **Peers** page, the domain under **DNS → Settings**),
+   with the same encryption key, and remove the old entry that used its home
+   address. Prefer the name to the mesh address: the address changes when the peer registers again,
+   and the name keeps working.
 5. **Take it where it goes,** and set up the Wi-Fi there. It rejoins by itself.
 
 The **NetBird** switch, in Home Assistant and on the screen, stops it and starts it again; stopped,
@@ -53,9 +56,18 @@ NetBird the same way as over Tailscale: see [Remote setup](tailscale.md#remote-s
 
 ## Access policies
 
-A new NetBird network lets every peer reach every other. Narrow it in **Access Control → Policies**:
-let only your Home Assistant host's group reach the `techo5` group on TCP 6053, and only your own
-devices reach TCP 8181 and 22.
+The device's own firewall decides which ports can be reached over NetBird: only 6053, 8181 and 22, and
+ping, on the NetBird interface. The NetBird client on the device runs with its own firewall off, so the
+policies in **Access Control → Policies** decide which peers can see the device, not which ports they
+reach, and they can't narrow the ports per peer. A new NetBird network lets every peer reach every
+other, so give the `techo5` group a policy for only the peers that should see it (your Home Assistant
+host's group, say), and keep the setup page and SSH off unless you need them.
+
+## Leaving the mesh
+
+Turning **NetBird** off, on the screen or in Home Assistant, stops it but keeps the peer: the device
+stays on your network and rejoins when turned back on. To leave for good, turn NetBird off, then remove
+the device under **Peers** in your NetBird dashboard.
 
 ## Good to know
 
