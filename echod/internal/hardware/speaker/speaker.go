@@ -424,7 +424,8 @@ func init() {
 	component.Register(component.Hardware, Get(), component.Order(6),
 		component.Supervise(service.Restart(time.Second, 30*time.Second)))
 
-	// A speaker on the jack is across the room: its echo needs the canceller's longer filter.
+	// A speaker on the jack is across the room: its echo needs the canceller's longer filter, which mic
+	// gives it on the Dot and Spot builds (longJack).
 	mic.LongEchoPath = func() bool { return Get().Output() == OutputHeadphone }
 }
 

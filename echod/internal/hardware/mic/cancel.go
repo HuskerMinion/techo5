@@ -24,7 +24,7 @@ const cancelTaps = 1024
 // short, not too late. The capture replayed through this filter, six seconds of noise, gave 8.6, 14.5
 // and 15.4 dB, the last still rising. On the device, replies and sounds had 6-8 dB taken off before,
 // and a song 20.8 after. The filter's cost grows with its length, so this is about four times
-// cancelTaps' 6.4% of a core, and only while the jack plays.
+// cancelTaps' 6.4% of a core, and only while the jack plays, on the builds where longJack is set.
 const cancelTapsJack = 4096
 
 // LongEchoPath reports whether playback currently leaves by a path whose echo needs cancelTapsJack:
@@ -34,7 +34,7 @@ var LongEchoPath func() bool
 
 // tapsWanted is the filter length for the run about to start.
 func tapsWanted() int {
-	if LongEchoPath != nil && LongEchoPath() {
+	if longJack && LongEchoPath != nil && LongEchoPath() {
 		return cancelTapsJack
 	}
 	return cancelTaps
@@ -208,8 +208,11 @@ func (c *canceller) apply(raw []byte, mic []int16) []int16 {
 
 	if !c.active.Swap(true) {
 		c.fitTaps(tapsWanted())
-		slog.Info("echo cancellation running", "engine", c.engine, "taps", c.filter.Load().Taps(),
-			"ref_dbfs", blockDBFS(c.ref), "mic_dbfs", blockDBFS(mic))
+		attrs := []any{"engine", c.engine, "ref_dbfs", blockDBFS(c.ref), "mic_dbfs", blockDBFS(mic)}
+		if c.engine == "builtin" {
+			attrs = append(attrs, "taps", c.filter.Load().Taps()) // WebRTC's canceller has its own
+		}
+		slog.Info("echo cancellation running", attrs...)
 	}
 
 	out, erleDB, err := c.process(mic, c.ref)

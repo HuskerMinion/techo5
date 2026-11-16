@@ -3,9 +3,15 @@ package mic
 import "testing"
 
 // The filter is as long as the output asks for when a run starts, and stays that long until the next
-// run: the jack's long path gets cancelTapsJack, the speaker cancelTaps, and a filter told to stop
-// learning is still told so after it is rebuilt.
+// run: the jack's long path gets cancelTapsJack on the builds with longJack and cancelTaps on the
+// others, the speaker cancelTaps, and a filter told to stop learning is still told so after it is
+// rebuilt.
 func TestCancellerLengthFollowsTheOutput(t *testing.T) {
+	jackTaps := cancelTaps
+	if longJack {
+		jackTaps = cancelTapsJack
+	}
+
 	jack := false
 	LongEchoPath = func() bool { return jack }
 	t.Cleanup(func() { LongEchoPath = nil })
@@ -41,8 +47,8 @@ func TestCancellerLengthFollowsTheOutput(t *testing.T) {
 	feed(false, quiet)
 	feed(true, 3)
 	f := c.filter.Load()
-	if got := f.Taps(); got != cancelTapsJack {
-		t.Fatalf("jack: %d taps, want %d", got, cancelTapsJack)
+	if got := f.Taps(); got != jackTaps {
+		t.Fatalf("jack: %d taps, want %d", got, jackTaps)
 	}
 	if f.Adapting() {
 		t.Error("the rebuilt filter learns, but learning was off")
