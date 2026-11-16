@@ -1640,8 +1640,10 @@ speaker muted, no allowance while the speaker plays), and is off until you choos
 
 For training a wake word model of your own on what your room really says and hears, the device can
 keep short clips of the wake word itself ([wakesmith](https://github.com/HuskerMinion/wakesmith) takes a
-folder of them as real voices). Turn on **Keep wake clips** in Home Assistant, on the
-device's microphone (for example "Office microphone"). It is off by default, and set for each device.
+folder of them as real voices). Turn on **Keep wake clips** on the setup page, under **Voice**, or in
+Home Assistant, on the device's microphone (for example "Office microphone"). It is off by default, and
+set for each device. Turning it off on the setup page asks you to tick **Delete every clip on this
+device** first, since it deletes them.
 
 While it is on, the device keeps the four seconds of audio up to each of these, sorted by kind:
 
@@ -1677,8 +1679,8 @@ off; keep them on your own machine.
 #### Sending clips to a trainer
 
 Instead of copying clips off by hand, the device can upload each new one to a wake word trainer on
-your home network. It is off by default. Choose where under **Voice**, **Send wake clips to** on the
-setup page (or with the **Send wake clips to** select in Home Assistant once an address is saved
+your home network or your Tailscale network. It is off by default. Choose where under **Voice**,
+**Send wake clips to** on the setup page (or with the **Send wake clips to** select in Home Assistant once an address is saved
 there). It only works while **Keep wake clips** is on.
 
 - **Off**: nothing is sent.
@@ -1701,21 +1703,27 @@ there). It only works while **Keep wake clips** is on.
 What is sent, and when:
 
 - Only clips kept **after** you chose where to send them. The moment is saved when the target is set
-  (or changed), so what the device kept before is never uploaded, and neither is what it kept while
+  (or changed; a device whose clock isn't set yet asks you to try again in a minute), so what the device
+  kept before is never uploaded, and neither is what it kept while
   sending was off. A device that has sent nothing yet but has clips from last week sends none of them.
 - One clip at a time, the oldest first, no faster than one every two seconds. A clip that has gone is
   marked in its `.json` with `sent_at`. If the trainer can't be reached or answers with an error that
   may pass (a 5xx, 408 or 429), the device waits 5 seconds, then 10, doubling up to 10 minutes, and
-  tries again; it starts over once a clip goes through. A clip the trainer refuses for good (any other
-  4xx) is marked `send_failed` with the status and not tried again, so one bad file never holds the
-  rest. If the trainer answers 401, the token was refused: sending stops and says so until you change
-  the settings.
+  tries again; it starts over once a clip goes through. A clip the trainer refuses for good (400, 415 or
+  422) is marked `send_failed` with the status and not tried again, so one bad file never holds the
+  rest; five in a row stop sending, since that is more likely the settings. A 401 (the token was
+  refused), a redirect, 403, 404, 405, 413 or any other answer that is about the address and not the
+  clip stops sending too, with the answer shown in **Wake clip sending**, and the clips are kept: it
+  starts again when you save the settings. Tater Trainer answering without `"ok": true` stops it the same
+  way. If a clip goes through but the device can't write that down, it is not sent again until the
+  device restarts, and the status says so.
 - The newest 100 clips of each kind are still all the device keeps, so a clip that has not been sent by
   the time it is pushed out is gone, and sending never uses more disk. **Wake clips unsent** shows how
   many are waiting, and **Wake clip sending** the last problem.
-- Only to the home network. The address has to be a private one (`192.168.x.y`, `10.x.y.z`,
-  `172.16.x.y` to `172.31.x.y`, a link-local address or `fc00::/7`), or a name, like a `.local` one,
-  that resolves to one. That is checked when you save, and again before every clip, and the connection
+- Only to your home network or your Tailscale network. The address has to be a private one
+  (`192.168.x.y`, `10.x.y.z`, `172.16.x.y` to `172.31.x.y`, a Tailscale address, `100.64.x.y` to
+  `100.127.x.y` or `fd7a:115c:a1e0::`, or another link-local address or `fc00::/7`), or a name, like a
+  `.local` one, that resolves to one. An IPv6 address with a zone (`fe80::1%eth0`) is not supported. That is checked when you save, and again before every clip, and the connection
   is made only to such an address. Redirects are not followed. `http` and `https` both work. `https`
   is checked as usual; a self-signed certificate (wakesmith with `--https`, for example) is refused until
   you press **Test**, check the SHA-256 fingerprint the page shows against your trainer's, and press
@@ -1743,8 +1751,9 @@ with two parts:
 - `audio`: `audio/wav`, 16 kHz mono 16-bit, about four seconds, with the filename `<name>.wav`.
 
 Errors are best answered as JSON, `{"ok": false, "error": "..."}`: the `error` text is shown in **Wake clip sending** and by Test. Answer with any 2xx when you have it (`{"duplicate": true}` for one you already had counts as sent), 401
-for a token you refuse, another 4xx for a clip you will never take, and 5xx, 408 or 429 for a try
-later. The test is `GET {url}/api/clips/ping` with the same header: answer 2xx.
+for a token you refuse, 400, 415 or 422 for a clip you will never take, and 5xx, 408 or 429 for a try
+later. Any other answer, a redirect included, stops the device from sending until its settings are saved
+again. The test is `GET {url}/api/clips/ping` with the same header: answer 2xx.
 
 Tater Trainer gets its own format instead: `POST {url}/api/upload_captured_audio_raw` with the WAV as the
 body, and the details in `X-Audio-Format`, `X-Original-Name`, `X-Source-Device`, `X-Wake-Word`,
