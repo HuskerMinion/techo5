@@ -341,7 +341,13 @@ func (r *renderer) wordsStyle(s scene, box image.Rectangle) {
 	if lead != "" {
 		f := fit(true, at(104), lead, room)
 		y += capHeight(f) + r.s(at(34))
-		r.text(f, lead, x, y, cream)
+		// Each part in its role's color: how far off quiet, the count in the accent, the link
+		// between the accent and the text (wordsRoles).
+		lx, gap := x, r.width(f, "a a")-r.width(f, "aa")
+		for _, p := range wordsRoles(said, dim, amber, cream) {
+			r.text(f, p.text, lx, y, p.col)
+			lx += r.width(f, p.text) + gap
+		}
 	}
 	hf := fit(true, at(124), hour, room*3/5)
 	y += capHeight(hf) + r.s(at(34))

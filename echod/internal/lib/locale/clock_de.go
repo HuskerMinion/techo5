@@ -112,11 +112,8 @@ func sayGerman(t time.Time, o SayOptions) SaidTime {
 		if kurz != "" && strings.HasPrefix(s.Link+" ", kurz+" ") {
 			kurz = ""
 		}
-		switch {
-		case kurz != "" && five == 0:
-			s.Count, s.Link = "kurz", kurz
-		case kurz != "":
-			s.Count = strings.TrimSpace("kurz " + kurz + " " + s.Count)
+		if kurz != "" {
+			s.Approx = "kurz " + kurz
 		}
 	}
 	hour := h

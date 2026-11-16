@@ -144,6 +144,10 @@ type Screen struct {
 	WordsRegional    bool `json:"words_regional,omitempty"`
 	WordsEveryMinute bool `json:"words_every_minute,omitempty"`
 	WordsNoPeriod    bool `json:"words_no_period,omitempty"`
+	// WordsColors colors the Words style's line before the hour by role (display/words_roles.go):
+	// "kurz vor" quiet, the count in the accent, the link between. Set on the setup page only; off
+	// until somebody wants it.
+	WordsColors bool `json:"words_colors,omitempty"`
 
 	// IdleScreen is the custom screen that stands in for the clock while nothing else is on the
 	// screen: empty for the clock itself, or a custom screen's name (display/custom_screens.go). A name
@@ -450,6 +454,10 @@ func (w ScreenWriter) WordsRegional(v bool) error {
 
 func (w ScreenWriter) WordsEveryMinute(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.WordsEveryMinute = v })
+}
+
+func (w ScreenWriter) WordsColors(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.WordsColors = v })
 }
 
 func (w ScreenWriter) WordsNoPeriod(v bool) error {

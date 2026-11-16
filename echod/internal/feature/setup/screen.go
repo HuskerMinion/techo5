@@ -54,6 +54,9 @@ type ScreenChoices struct {
 	Swipe func(bool)
 	// VolumeSwipe sets Swipe for volume, telling Home Assistant (#243).
 	VolumeSwipe func(bool)
+	// WordsColors sets the Words style's colors by role, telling Home Assistant; nil leaves the box off
+	// the page.
+	WordsColors func(bool)
 
 	// IgnoreRoomLights sets Screen ignores room light commands, telling Home Assistant (#179); nil
 	// leaves the box off the page.
@@ -83,6 +86,9 @@ type CalendarChoice struct {
 
 // worldStyle is the clock style the World clock places are for, as the screen names it.
 const worldStyle = "World"
+
+// wordsStyle is the Words style's name, for the page to show its colors only while it is chosen.
+const wordsStyle = "Words"
 
 // maxWorldPlaces is how many World places the page takes: the most any screen shows.
 const maxWorldPlaces = 3
@@ -126,11 +132,14 @@ func screenSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<label for="clockstyle">Clock style</label><select id="clockstyle" name="clockstyle">`)
 	cur := s.Current()
 	for i, l := range s.Styles {
-		// The World style is marked, for the page to show its places only while it is the one chosen
-		// (.worldonly, tabs.go).
+		// The World and Words styles are marked, for the page to show their own boxes only while they
+		// are the one chosen (.worldonly, .wordsonly, tabs.go).
 		world := ""
-		if l == worldStyle {
+		switch l {
+		case worldStyle:
 			world = ` class="world"`
+		case wordsStyle:
+			world = ` class="words"`
 		}
 		fmt.Fprintf(w, `<option value="%d"%s%s>%s</option>`, i, world, selected(i == cur), html.EscapeString(l))
 	}
@@ -150,6 +159,16 @@ func screenSection(w http.ResponseWriter, token string) {
 	 <input id="world" name="world" value="%s" placeholder="America/New_York, Europe/London, Asia/Tokyo">
 	 <p class="note">For the World clock style: up to %d time zone names, with commas between them. Leave it
 	  empty for New York, London and Tokyo.%s</p></div>`, html.EscapeString(places), maxWorldPlaces, fewerPlaces(s.Places))
+	if s.WordsColors != nil {
+		colors := ""
+		if config.Get().Screen.WordsColors {
+			colors = " checked"
+		}
+		fmt.Fprintf(w, `<div class="wordsonly"><p><label><input type="checkbox" name="wordscolors" value="yes" style="width:auto"%s>
+	 Words: colors by role</label></p>
+	 <p class="note">For the Words style: the minutes and the link ("past", "nach", "vor halb") in the accent like
+	  the hour, and "kurz vor" quiet. Off draws the line before the hour in one color, as it always was.</p></div>`, colors)
+	}
 	swipe := ""
 	if !config.Get().Screen.NoStyleSwipe {
 		swipe = " checked"
@@ -294,6 +313,11 @@ func saveScreen(r *http.Request) string {
 			s.VolumeSwipe(on)
 		} else if err := config.Set().Screen().NoVolumeSwipe(!on); err != nil {
 			return "the volume swipe setting could not be saved"
+		}
+	}
+	if s.WordsColors != nil {
+		if on := r.PostFormValue("wordscolors") == "yes"; on != config.Get().Screen.WordsColors {
+			s.WordsColors(on)
 		}
 	}
 	if s.IgnoreRoomLights != nil {

@@ -153,6 +153,7 @@ func head(w http.ResponseWriter) {
  form:has(input[name=spotify]:not(:checked)) .spotifyonly{display:none}
  form:has(select[name=slideshow] option:not([value=screensaver]):checked) .saveronly{display:none}
  form:has(select[name=clockstyle] option:not(.world):checked) .worldonly{display:none}
+ form:has(select[name=clockstyle] option:not(.words):checked) .wordsonly{display:none}
  form:has(input[name=mode][value=dhcp]:checked) .fixedonly{display:none}
  form:has(input[name=mode][value=none]:checked) .theseonly,form:has(input[name=mode][value=all]:checked) .theseonly{display:none}
  .btns{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem;align-items:center}

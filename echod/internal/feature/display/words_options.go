@@ -20,8 +20,10 @@ type wordsOption struct {
 	// german is set for a switch only German has a use for: its row shows only while the screen
 	// speaks German. The switch in Home Assistant is always there.
 	german bool
-	get    func(config.Screen) bool
-	set    func(on bool) error
+	// noRow keeps a switch off the settings sheet: it is set in Home Assistant and on the setup page.
+	noRow bool
+	get   func(config.Screen) bool
+	set   func(on bool) error
 }
 
 // wordsOptionList are the switches, in the order the settings sheet lists them. Each is on when the
@@ -43,6 +45,14 @@ var wordsOptionList = []wordsOption{
 		id: "wordsperiod", objectID: "screen_words_part_of_the_day", name: "Words: part of the day", icon: "mdi:weather-sunset",
 		get: func(s config.Screen) bool { return !s.WordsNoPeriod },
 		set: func(on bool) error { return config.Set().Screen().WordsNoPeriod(!on) },
+	},
+	{
+		// The colors are a look rather than a way of saying the time: kept off the sheet, which has
+		// enough rows under the style already (words_roles.go).
+		id: "wordscolors", objectID: "screen_words_colors_by_role", name: "Words: colors by role", icon: "mdi:palette-outline",
+		noRow: true,
+		get:   func(s config.Screen) bool { return s.WordsColors },
+		set:   func(on bool) error { return config.Set().Screen().WordsColors(on) },
 	},
 }
 
@@ -97,13 +107,23 @@ func wordsRows() []settingRow {
 	s := config.Get().Screen
 	var rows []settingRow
 	for _, o := range wordsOptionList {
-		if o.german && screenLang() != "de" {
+		if o.noRow || (o.german && screenLang() != "de") {
 			continue
 		}
 		label, sub := wordsRowWords(o.id)
 		rows = append(rows, settingRow{id: o.id, label: label, sub: sub, kind: ctlToggle, on: o.get(s)})
 	}
 	return rows
+}
+
+// setWordsColors turns the colors by role on or off from the setup page, telling Home Assistant.
+func setWordsColors(sw []*esphome.Switch, on bool, wake func()) {
+	for i, o := range wordsOptionList {
+		if o.id == "wordscolors" && i < len(sw) {
+			setWordsOption(sw[i], o, on)
+		}
+	}
+	wake()
 }
 
 // wordsRowWords are an option's row's label and line under it, in the screen's language.

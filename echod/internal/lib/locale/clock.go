@@ -5,15 +5,18 @@ import (
 	"time"
 )
 
-// SaidTime is the time as the words clock style says it, in parts so a face can lay them out:
-// "it's" (Intro), "twenty" (Count), "past" (Link), "seven" (Hour), "in the evening" (Period). On the
-// hour Count and Link are empty; at noon and midnight Period is too.
+// SaidTime is the time as the words clock style says it, in parts so a face can lay them out and
+// color each by its role: "it's" (Intro), "twenty" (Count), "past" (Link), "seven" (Hour), "in the
+// evening" (Period), and in a language that rounds, how far off the time is ("kurz vor", Approx). On
+// the hour Count and Link are empty; at noon and midnight Period is too.
 type SaidTime struct {
-	Intro, Count, Link, Hour, Period string
+	Intro, Approx, Count, Link, Hour, Period string
 }
 
-// Lead is what comes before the hour: "twenty past", "fünf vor halb"; empty on the hour.
-func (s SaidTime) Lead() string { return strings.TrimSpace(s.Count + " " + s.Link) }
+// Lead is what comes before the hour: "twenty past", "kurz vor fünf vor halb"; empty on the hour.
+func (s SaidTime) Lead() string {
+	return strings.Join(strings.Fields(s.Approx+" "+s.Count+" "+s.Link), " ")
+}
 
 // SayOptions are the Words style's choices. Regional and EveryMinute are a language's own: one
 // without a regional way, or that says every minute anyway (English), ignores them. NoPeriod leaves

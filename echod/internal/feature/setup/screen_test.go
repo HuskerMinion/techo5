@@ -242,3 +242,40 @@ func TestTheSwipeNoteOnlyWithATapOnTheClock(t *testing.T) {
 		}
 	}
 }
+
+// The Words style's colors by role on the setup page: only where the screen offers them, under a box the
+// page shows only while Words is chosen; off on a new device, saved ticked through the screen (which
+// tells Home Assistant), and off again unticked.
+func TestTheWordsColorsOnTheSetupPage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	SetScreen(&ScreenChoices{Styles: []string{"Classic"}, Current: func() int { return 0 }, Choose: func(int) {}})
+	t.Cleanup(func() { SetScreen(nil) })
+	w := httptest.NewRecorder()
+	screenSection(w, "tok")
+	if strings.Contains(w.Body.String(), `name="wordscolors"`) {
+		t.Error("the box is on a page whose screen has no colors to set")
+	}
+
+	calls := 0
+	SetScreen(&ScreenChoices{Styles: []string{"Classic", "Words"}, Current: func() int { return 0 }, Choose: func(int) {},
+		WordsColors: func(on bool) { calls++; _ = config.Set().Screen().WordsColors(on) }})
+	w = httptest.NewRecorder()
+	screenSection(w, "tok")
+	needs(t, `form:has(select[name=clockstyle] option:not(.words):checked) .wordsonly{display:none}`, w.Body.String(),
+		`<option value="1" class="words">Words</option>`, `<div class="wordsonly">`,
+		`name="wordscolors" value="yes" style="width:auto">`)
+	v := screenForm("1", "", false)
+	v.Set("wordscolors", "yes")
+	if p := saveScreen(form(v)); p != "" {
+		t.Fatal(p)
+	}
+	if calls != 1 || !config.Get().Screen.WordsColors {
+		t.Errorf("ticking it did not turn the colors on (%d calls)", calls)
+	}
+	if p := saveScreen(form(screenForm("1", "", false))); p != "" {
+		t.Fatal(p)
+	}
+	if calls != 2 || config.Get().Screen.WordsColors {
+		t.Errorf("unticking it did not turn them off (%d calls)", calls)
+	}
+}

@@ -380,10 +380,10 @@ func (r *roundRenderer) analogFace(s roundScene) {
 func (r *roundRenderer) wordsFace(s roundScene) {
 	said := clockWords(s.now)
 	lead, hour, period := said.Lead(), said.Hour, said.Period
-	number, link := said.Count, said.Link
-	if number == "" {
-		// "halb sieben": the link stands where the count would.
-		number, link = link, ""
+	number, link := strings.TrimSpace(said.Approx+" "+said.Count), said.Link
+	if said.Count == "" {
+		// "halb sieben", "kurz vor sieben Uhr": the link stands where the count would.
+		number, link = strings.TrimSpace(said.Approx+" "+said.Link), ""
 	}
 	room := func(y int) int { return chord(y) - 60 }
 	if lead == "" {
@@ -396,8 +396,19 @@ func (r *roundRenderer) wordsFace(s roundScene) {
 		return
 	}
 	r.centered(r.styleFace(false, 28), said.Intro, 110, colDim)
-	r.centered(r.fitted(true, 64, number, room(168)), number, 168, colText)
-	r.centered(r.styleFace(false, 30), link, 214, colDim)
+	// Each part in its role's color, as on the Show (wordsRoles): the count's line, then the link.
+	nf := r.fitted(true, 64, number, room(168))
+	top := locale.SaidTime{Approx: said.Approx, Count: said.Count}
+	if said.Count == "" {
+		top.Count = said.Link
+	}
+	gap := r.width(nf, "a a") - r.width(nf, "aa")
+	nx := center - r.width(nf, number)/2
+	for _, p := range wordsRoles(top, colDim, colAccent, colText) {
+		r.text(nf, p.text, nx, 168, p.col)
+		nx += r.width(nf, p.text) + gap
+	}
+	r.centered(r.styleFace(false, 30), link, 214, lerpRGB(colAccent, colText, wordsLinkMix))
 	r.centered(r.fitted(true, 84, hour, room(298)), hour, 298, colAccent)
 	if period != "" {
 		r.centered(r.styleFace(false, 22), period, 344, colDim)

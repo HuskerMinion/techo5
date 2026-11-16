@@ -9,7 +9,7 @@ import (
 // said is a SaidTime as one line, its empty parts left out.
 func said(s SaidTime) string {
 	var parts []string
-	for _, p := range []string{s.Intro, s.Count, s.Link, s.Hour, s.Period} {
+	for _, p := range []string{s.Intro, s.Approx, s.Count, s.Link, s.Hour, s.Period} {
 		if p != "" {
 			parts = append(parts, p)
 		}

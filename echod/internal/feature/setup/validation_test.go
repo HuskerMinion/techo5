@@ -49,7 +49,7 @@ func TestTheBrowserAsksForWhatTheDeviceWouldRefuse(t *testing.T) {
 	}
 	// A box the page can leave out (TestDirectFieldsAreLeftOutForHomeAssistant and the rest) is never one
 	// the browser checks: it would stop the form for a box nobody can see, and not say why.
-	for _, hides := range []string{"directonly", "spotifyonly", "saveronly", "worldonly", "fixedonly", "theseonly"} {
+	for _, hides := range []string{"directonly", "spotifyonly", "saveronly", "worldonly", "wordsonly", "fixedonly", "theseonly"} {
 		at := strings.Index(body, `<div class="`+hides+`">`)
 		if at < 0 {
 			continue

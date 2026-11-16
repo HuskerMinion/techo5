@@ -329,6 +329,7 @@ var registered = []string{
 	"screen_words_regional",
 	"screen_words_every_minute",
 	"screen_words_part_of_the_day",
+	"screen_words_colors_by_role",
 	"calendar_opens_on",
 	"calendar_day_timeline",
 	"calendar_coming_up_refined",

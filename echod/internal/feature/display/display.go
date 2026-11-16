@@ -551,6 +551,7 @@ func build() *Display {
 		OwnFonts: ownFonts, AddFont: d.addOwnFont, RemoveFont: d.removeOwnFont, MaxFont: fonts.MaxOwnFile,
 		Taps: clockTapOptions(), TapNow: clockTapIndex, ChooseTap: func(i int) { setClockTap(d.clockTap, i) }, Places: maxWorld,
 		Swipe: func(on bool) { setStyleSwipe(d.styleSwipeSw, on) }, VolumeSwipe: func(on bool) { setVolumeSwipe(d.volumeSwipeSw, on) },
+		WordsColors:      func(on bool) { setWordsColors(d.wordsSw, on, d.wake) },
 		IgnoreRoomLights: d.setRoomLightsIgnored, Calendar: d.lookChoices(),
 		Themes: &setup.ThemeChoices{LightNow: lightThemeShown, Changed: d.themesChanged, Auto: hasLightSensor()}})
 	d.camTime = cameraTimeSelect()

@@ -411,6 +411,7 @@ func build() *Display {
 		Fonts: fonts.Names(), FontNow: fontIndex, ChooseFont: d.setFont,
 		OwnFonts: ownFonts, AddFont: d.addOwnFont, RemoveFont: d.removeOwnFont, MaxFont: fonts.MaxOwnFile,
 		Places: spotWorld, Swipe: func(on bool) { setStyleSwipe(d.styleSwipeSw, on) }, VolumeSwipe: func(on bool) { setVolumeSwipe(d.volumeSwipeSw, on) },
+		WordsColors:      func(on bool) { setWordsColors(d.wordsSw, on, d.wake) },
 		IgnoreRoomLights: d.setRoomLightsIgnored})
 	d.camTime = cameraTimeSelect()
 	d.answerTime = answerTimeSelect()
