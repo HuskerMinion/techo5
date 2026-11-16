@@ -437,12 +437,12 @@ func (r *renderer) sunStyle(s scene, box image.Rectangle) bool {
 func sunWords(now, rise, set time.Time) string {
 	switch {
 	case now.Before(rise):
-		return "Sunrise at " + clockText(rise)
+		return fmt.Sprintf(tr("ui_sunrise_at_s"), clockText(rise))
 	case now.Before(set):
 		left := set.Sub(now).Round(time.Minute)
-		return fmt.Sprintf("%d h %d m of daylight left", int(left.Hours()), int(left.Minutes())%60)
+		return fmt.Sprintf(tr("ui_daylight_left"), int(left.Hours()), int(left.Minutes())%60)
 	}
-	return "Sunset was at " + clockText(set)
+	return fmt.Sprintf(tr("ui_sunset_was_at_s"), clockText(set))
 }
 
 // dashboardStyle is the time with the day's next events beside it and the coming days' weather along
