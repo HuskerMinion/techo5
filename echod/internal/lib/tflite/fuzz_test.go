@@ -10,7 +10,7 @@ import (
 // FuzzQuantizedModel feeds damaged copies of a quantized model (the person detector) through Parse, New
 // and Invoke: whatever the file says, the answer is an error, never a panic or a hang.
 func FuzzQuantizedModel(f *testing.F) {
-	raw, err := os.ReadFile("../../feature/person/assets/person_detect.tflite")
+	raw, err := os.ReadFile("../../feature/person/testdata/person_detect.tflite")
 	if err != nil {
 		f.Skip(err)
 	}
@@ -49,7 +49,7 @@ const fuzzWithin = 3 * time.Second
 // TestDamagedQuantizedModels is a sweep of single-byte damage across the whole file, every few
 // kilobytes, run as an ordinary test; the fuzz target goes further.
 func TestDamagedQuantizedModels(t *testing.T) {
-	raw, err := os.ReadFile("../../feature/person/assets/person_detect.tflite")
+	raw, err := os.ReadFile("../../feature/person/testdata/person_detect.tflite")
 	if err != nil {
 		t.Skip(err)
 	}

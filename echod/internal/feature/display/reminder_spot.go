@@ -17,10 +17,13 @@ import (
 // reminderLineH is one line of a reminder's words.
 const reminderLineH = 46
 
+// reminderHintRoom is the width the glass leaves the hint under the words.
+const reminderHintRoom = 380
+
 // reminderFace draws a reminder with its words scrolled up by scroll pixels, and records how far they
 // can scroll, for the drag.
 func (r *roundRenderer) reminderFace(s roundScene) {
-	r.centered(r.label, "REMINDER", 150, colAccent)
+	r.centered(r.label, tr("card_reminder"), 150, colAccent)
 	top := 210
 	if s.reminderFrom != "" {
 		r.centered(r.small, clip(r.small, r, s.reminderFrom, 300), 196, colDim)
@@ -42,14 +45,21 @@ func (r *roundRenderer) reminderFace(s roundScene) {
 		}
 		r.centered(r.title, line, y+32, colText)
 	}
-	hint := "tap to dismiss"
+	// The way out in the announcement's words and capitals; a face with more to read says how to
+	// reach it, on a line of its own where the two do not fit the glass side by side.
+	hint := tr("drawer_dismiss")
 	if maxScroll > 0 {
 		r.restore(under, image.Rect(0, 0, side, box.Min.Y))
 		r.restore(under, image.Rect(0, box.Max.Y, side, side))
 		r.scrollHints(box, scroll, maxScroll, colBackground)
-		hint = "tap to dismiss · drag for more"
+		more := tr("card_drag_for_more")
+		if both := hint + " · " + more; r.width(r.small, both) <= reminderHintRoom {
+			hint = both
+		} else {
+			r.centered(r.small, clip(r.small, r, more, reminderHintRoom-40), box.Max.Y+56, colDim)
+		}
 	}
-	r.centered(r.small, hint, box.Max.Y+30, colDim)
+	r.centered(r.small, clip(r.small, r, hint, reminderHintRoom), box.Max.Y+30, colDim)
 
 	r.zmu.Lock()
 	r.reminderMax = maxScroll

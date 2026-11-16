@@ -104,7 +104,7 @@ func TestDashboardNameBelowTileIsCentered(t *testing.T) {
 	rad := int(pal.rad) + 1
 	for y := box.Min.Y; y < box.Max.Y; y++ {
 		for x := box.Min.X + rad; x < box.Max.X-rad; x++ {
-			if img.RGBAAt(x, y) != pal.card {
+			if img.RGBAAt(x, y) != tileCard(tile, pal) {
 				if first < 0 {
 					first = y
 				}

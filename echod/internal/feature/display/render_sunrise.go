@@ -38,11 +38,8 @@ func (r *renderer) sunrisePage(s scene, p float64, face bool) {
 // sunriseSky fills the screen, dark red at the start and pale gold by the end, with the horizon
 // lighter than the top so the light seems to come from below.
 func (r *renderer) sunriseSky(p float64) {
-	top := lerpRGB(color.RGBA{26, 8, 6, 255}, color.RGBA{232, 158, 78, 255}, p)
-	bottom := lerpRGB(color.RGBA{74, 16, 8, 255}, color.RGBA{255, 214, 140, 255}, p)
 	for y := 0; y < r.h; y++ {
-		f := float64(y) / float64(r.h-1)
-		row := lerpRGB(top, bottom, f)
+		row := sunriseSkyAt(p, float64(y)/float64(r.h-1))
 		draw.Draw(r.dst, image.Rect(0, y, r.w, y+1), image.NewUniform(row), image.Point{}, draw.Src)
 	}
 }
@@ -84,7 +81,6 @@ func (r *renderer) sunriseSun(p float64, face bool) {
 // sunriseClock is the time over the sky: dark ink once the sky is light, pale while it is still dim,
 // so it can be read at either end.
 func (r *renderer) sunriseClock(s scene, p float64) {
-	ink := lerpRGB(color.RGBA{255, 236, 214, 255}, color.RGBA{58, 22, 10, 255}, math.Min(p*1.6, 1))
 	hour := clockHM(s.now)
 	ampm := clockSuffix(s.now)
 	hw := r.width(r.clock, hour)
@@ -93,8 +89,10 @@ func (r *renderer) sunriseClock(s scene, p float64) {
 	if ampm == "" {
 		gap = 0
 	}
-	x := (r.w - hw - gap - aw) / 2
+	x := r.clockLeft(hw, gap, aw) // the digits over the date, as on the clock page
 	base := r.h/2 - r.s(56)
+	// The sky behind the digits' middle decides the ink, for the time and the date under it alike.
+	ink := sunriseInk(p, float64(base-capHeight(r.clock)/2)/float64(r.h-1))
 	r.text(r.clock, hour, x, base, ink)
 	r.text(r.ampm, ampm, x+hw+gap, base, ink)
 	date := s.now.Format("Monday, January 2")

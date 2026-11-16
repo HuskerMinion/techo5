@@ -24,6 +24,19 @@ func TestReadingAnEntry(t *testing.T) {
 	}
 }
 
+// A name with letters outside ASCII arrives escaped the way a zone file writes it, and is shown, called
+// and matched as its owner typed it (#557).
+func TestANameWithAnUmlaut(t *testing.T) {
+	e := &zeroconf.ServiceEntry{Text: []string{`name=Echo Show 8 K\195\188che`}}
+	if got := nameOf(e); got != "Echo Show 8 Küche" {
+		t.Errorf("name %q, want Echo Show 8 Küche", got)
+	}
+	e = &zeroconf.ServiceEntry{ServiceRecord: zeroconf.ServiceRecord{Instance: `Echo\ Show\ K\195\188che`}}
+	if got := nameOf(e); got != "Echo Show Küche" {
+		t.Errorf("instance %q, want Echo Show Küche", got)
+	}
+}
+
 // Without a record of ours it is still a device, under whatever the responder called it.
 func TestAnEntryWithoutOurRecord(t *testing.T) {
 	e := &zeroconf.ServiceEntry{ServiceRecord: zeroconf.ServiceRecord{Instance: "kitchen"}}

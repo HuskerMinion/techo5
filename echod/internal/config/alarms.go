@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Alarms are the device's own alarms, and the Home Assistant helpers it follows as alarms.
@@ -231,7 +232,8 @@ const (
 
 var dayNames = [7]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 
-// ParseDays reads "daily", "weekdays", "weekends", "once" or a list such as "mon,wed,fri".
+// ParseDays reads "daily", "weekdays", "weekends", "once" or a list such as "mon,wed,fri" or
+// "Mo,We,Fr".
 func ParseDays(s string) (uint8, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	switch s {
@@ -246,7 +248,20 @@ func ParseDays(s string) (uint8, error) {
 	}
 	var days uint8
 	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
-		i := slices.IndexFunc(dayNames[:], func(d string) bool { return strings.HasPrefix(part, d) })
+		// A period or semicolon a sentence left behind it ("Mon, Wed, Fri.") is not part of the name.
+		part = strings.TrimRight(part, ".;")
+		if part == "" {
+			continue
+		}
+		// A name and its longer forms ("tue", "tues", "tuesday"), or its first two letters ("tu"), which
+		// are enough to tell the seven apart: Home Assistant's own day lists are written that way (#38).
+		i := slices.IndexFunc(dayNames[:], func(d string) bool {
+			return strings.HasPrefix(part, d) || (len(part) == 2 && strings.HasPrefix(d, part))
+		})
+		// Letters only: "mon-fri" is not Monday, and a range is not something this reads.
+		if strings.ContainsFunc(part, func(r rune) bool { return !unicode.IsLetter(r) }) {
+			i = -1
+		}
 		if i < 0 {
 			return 0, fmt.Errorf("alarms: %q is not a day", part)
 		}

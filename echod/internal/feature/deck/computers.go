@@ -18,6 +18,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/deckwire"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/dnstext"
 )
 
 // The computers a deck is paired with, each running the TECHO5 Deck agent. A button press dials the
@@ -211,7 +212,8 @@ func FindComputers(ctx context.Context) []Found {
 			if e.Port != deckwire.Port {
 				addr = net.JoinHostPort(addr, strconv.Itoa(e.Port))
 			}
-			name := strings.ReplaceAll(e.Instance, `\ `, " ")
+			// The instance name arrives zone-file escaped: "\ " for a space, \DDD for a letter outside ASCII.
+			name := dnstext.Unescape(e.Instance)
 			if !slices.ContainsFunc(out, func(f Found) bool { return f.Addr == addr }) {
 				out = append(out, Found{Name: name, Addr: addr})
 			}
@@ -239,7 +241,7 @@ func closeQuietly(ch chan *zeroconf.ServiceEntry) {
 func (f *Feature) pcDo(b config.DeckButton) error {
 	c, ok := config.Get().Deck.Computer(b.Computer)
 	if !ok {
-		return fmt.Errorf("deck: no computer called %q is paired", b.Computer)
+		return unpairedError{b.Computer}
 	}
 	op := map[config.DeckAction]string{config.DeckPCKeys: deckwire.OpKeys, config.DeckPCType: deckwire.OpType,
 		config.DeckPCOpen: deckwire.OpOpen, config.DeckPCRun: deckwire.OpRun}[b.Action]

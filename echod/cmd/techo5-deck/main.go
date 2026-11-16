@@ -99,7 +99,7 @@ func main() {
   Scripts:      %s (%d)
   Keys:         %s
 
-On the Show's setup page, Screen & Photos -> Deck -> Computers: pick this computer and type the key.
+On the Show's setup page, Screen -> Deck -> Computers: pick this computer and type the key.
 Leave this window open while you use the deck.
 
 `, version, *name, key, *port, scripts, len(a.hello().Scripts), keysNote())

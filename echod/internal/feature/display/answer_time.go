@@ -101,7 +101,7 @@ func (d *Display) answerUp(now time.Time) bool {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.view.Phase == "idle" && (d.view.Heard != "" || d.view.Reply != "") && !d.quiet &&
+	return d.view.Phase == "idle" && (d.view.Heard != "" || d.view.Reply != "" || d.view.Failed != "") && !d.quiet &&
 		now.Sub(d.viewAt) < linger()
 }
 

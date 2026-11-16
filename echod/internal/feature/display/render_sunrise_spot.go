@@ -47,7 +47,8 @@ func (r *roundRenderer) sunriseFace(s roundScene, p float64, face bool) {
 		}
 	}
 
-	ink := lerpRGB(color.RGBA{255, 236, 214, 255}, color.RGBA{58, 22, 10, 255}, math.Min(p*1.6, 1))
+	// Whichever ink stands off the sky behind the digits (sunriseInk), for the time and the date.
+	ink := sunriseInk(p, 170/float64(h-1))
 	hm := clockHM(s.now)
 	r.centered(r.clock, hm, 200, ink)
 	if suffix := clockSuffix(s.now); suffix != "" {

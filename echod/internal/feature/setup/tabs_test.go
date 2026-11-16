@@ -1,10 +1,15 @@
 package setup
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,30 +57,73 @@ func TestEveryTabDrawsAndMarksItself(t *testing.T) {
 			t.Errorf("tab %s is not marked as the one shown", tb.id)
 		}
 	}
-	if body := get(f, "/setup?tab=nonsense", c).Body.String(); !strings.Contains(body, `tab=alarms" class="on"`) {
-		t.Error("a tab that is not one did not fall back to Alarms & Timers")
+	if body := get(f, "/setup?tab=nonsense", c).Body.String(); !strings.Contains(body, `tab=status" class="on"`) {
+		t.Error("a tab that is not one did not fall back to Status")
 	}
-	if body := get(f, "/setup?tab=general", c).Body.String(); !strings.Contains(body, "Time zone") ||
-		!strings.Contains(body, "Download diagnostics") {
-		t.Error("General lost the time zone or the diagnostics")
+	if body := get(f, "/setup?tab=system", c).Body.String(); !strings.Contains(body, "Time zone") {
+		t.Error("System lost the time zone")
+	}
+	if body := get(f, "/setup?tab=status", c).Body.String(); !strings.Contains(body, "Download diagnostics") {
+		t.Error("Status lost the diagnostics")
 	}
 }
 
-// A save comes back to the tab it was made on, or every save would throw the page back to the first.
+// A save comes back to the tab it was made on, or every save would throw the page back to the first,
+// and to the section it was made in, where what happened is said.
 func TestASaveComesBackToItsTab(t *testing.T) {
 	f, c := in(t)
-	to := post(t, f, c, url.Values{"what": {"house"}, "tab": {"sound"}, "word": {"bluebird"}})
-	if to.Query().Get("tab") != "sound" || to.Query().Get("saved") != "1" {
+	to := post(t, f, c, url.Values{"what": {"house"}, "word": {"bluebird"}})
+	if to.Query().Get("tab") != formTab("house") || to.Query().Get("saved") != "1" || to.Query().Get("at") != "house" ||
+		to.Fragment != "sec-house" {
 		t.Errorf("sent back to %s", to)
 	}
-	to = post(t, f, c, url.Values{"what": {"alarm_add"}, "tab": {"alarms"}, "kind": {"alarm"}, "at": {""}})
-	if to.Query().Get("tab") != "alarms" || to.Query().Get("problem") == "" {
+	body := get(f, to.RequestURI(), c).Body.String()
+	if !strings.Contains(body, `<fieldset id="sec-house"><legend>Announcements</legend><div class="banner ok" role="status">Saved.</div>`) {
+		t.Error("Saved is not said in the section the save was made in")
+	}
+	if strings.Count(body, `class="banner ok"`) != 1 {
+		t.Error("Saved is said more than once")
+	}
+
+	to = post(t, f, c, url.Values{"what": {"alarm_add"}, "kind": {"alarm"}, "at": {""}})
+	if to.Query().Get("tab") != "alarms" || to.Query().Get("problem") == "" || to.Fragment != "sec-alarm_add" {
 		t.Errorf("a refused save was sent back to %s", to)
 	}
-	// What went wrong arrives as words and is shown escaped.
-	body := get(f, to.String(), c).Body.String()
-	if !strings.Contains(body, `banner bad">that needs a time`) {
+	// What went wrong arrives as words and is shown escaped, in the drawer it was typed in, left open.
+	body = get(f, to.RequestURI(), c).Body.String()
+	if !strings.Contains(body, `banner bad" role="alert">an alarm needs a time, in the At box`) {
 		t.Errorf("the problem is not on the page: %s", first(body))
+	}
+	drawer := strings.Index(body, `<details id="sec-alarm_add" open>`)
+	if said := strings.Index(body, `banner bad`); drawer < 0 || said < drawer {
+		t.Error("the problem is not said in the drawer it was made in, or the drawer is shut")
+	}
+
+	// A form that shares a section with others comes back to that section.
+	to = post(t, f, c, url.Values{"what": {"update-auto"}, "auto": {"yes"}})
+	if to.Query().Get("at") != "updates" || to.Fragment != "sec-updates" {
+		t.Errorf("a form in a shared section was sent back to %s", to)
+	}
+}
+
+// What happened is said above the sections, as it used to be, when the section named is not on the
+// page or is not a section at all; and a name from the address is never written into the page.
+func TestWhatHappenedIsSaidAboveWhenItsSectionIsNotThere(t *testing.T) {
+	f, c := in(t)
+	for _, at := range []string{"", "house", "nonsense", `%22%3E%3Cb%3Ehello`} {
+		body := get(f, "/setup?tab=system&saved=1&at="+at, c).Body.String()
+		top := strings.Index(body, `</h2><div class="banner ok" role="status">Saved.</div>`)
+		if top < 0 || strings.Count(body, `class="banner ok"`) != 1 {
+			t.Errorf("at=%q: Saved is not said once, above the sections", at)
+		}
+		if strings.Contains(body, "hello") {
+			t.Errorf("at=%q was written into the page", at)
+		}
+	}
+	body := get(f, "/setup?tab=system&problem=no&at=timezone", c).Body.String()
+	if !strings.Contains(body, `<fieldset id="sec-timezone"><legend>Time zone</legend><div class="banner bad" role="alert">no</div>`) ||
+		strings.Count(body, `class="banner bad" role="alert"`) != 1 {
+		t.Error("a problem is not said once, in its section")
 	}
 }
 
@@ -159,5 +207,220 @@ func TestAlarmsRemindersAndTimersFromThePage(t *testing.T) {
 	v := url.Values{"what": {"alarm_add"}, "tab": {"alarms"}, "kind": {"reminder"}, "at": {"14:30"}}
 	if post(t, f, c, v).Query().Get("problem") == "" {
 		t.Error("a reminder with no words was accepted")
+	}
+}
+
+// What was done is said as what it was: a form that only plays something, looks for an update or forgets
+// a network does not come back as "Saved.", and a code the page does not know is shown as a save, never
+// as itself.
+func TestWhatWasDoneIsSaidAsItWas(t *testing.T) {
+	f, c := in(t)
+	to := post(t, f, c, url.Values{"what": {"update-check"}, "tab": {"general"}})
+	if got := to.Query().Get("saved"); to.Query().Get("problem") == "" && got != "checked" {
+		t.Errorf("checking for an update came back as %q", got)
+	}
+	body := get(f, "/setup?tab=system&saved=checked", c).Body.String()
+	if !strings.Contains(body, "Checked for an update.") || strings.Contains(body, ">Saved.<") {
+		t.Errorf("the page does not say an update was checked for: %s", first(body))
+	}
+	body = get(f, "/setup?tab=system&saved=%3Cb%3Ehello", c).Body.String()
+	if !strings.Contains(body, ">Saved.<") || strings.Contains(body, "hello") {
+		t.Error("a code the page does not know was not shown as a plain save")
+	}
+	for code, said := range doneSaid {
+		if said == "" || doneWords(code) != said {
+			t.Errorf("code %q says %q", code, doneWords(code))
+		}
+	}
+}
+
+// The page opens on Status, which says whether Home Assistant is connected, what software runs, and
+// when the page closes; and says so plainly when Home Assistant is not there.
+func TestThePageOpensOnWhatIsConnected(t *testing.T) {
+	f, c := in(t)
+	was := statusHome
+	t.Cleanup(func() { statusHome = was })
+
+	statusHome = func() bool { return true }
+	body := get(f, "/setup", c).Body.String()
+	if !strings.Contains(body, `tab=status" class="on"`) {
+		t.Fatal("the page did not open on Status")
+	}
+	for _, want := range []string{"Home Assistant</strong> is connected.", "Software</strong>", "This page</strong>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Status does not say %q", want)
+		}
+	}
+	statusHome = func() bool { return false }
+	if body := get(f, "/setup?tab=status", c).Body.String(); !strings.Contains(body, "is not connected") ||
+		!strings.Contains(body, `class="dot bad"`) {
+		t.Error("with Home Assistant away, Status does not say so")
+	}
+}
+
+// formsInTheCode reads this package's own source for every name a form goes by: what the save handler
+// and the alarms' part of it have a case for, what a section's form is written with (hidden), and what
+// a page of its own comes back as (back). Reading the source finds the ones another build leaves out.
+func formsInTheCode(t *testing.T) map[string]string {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]string{}
+	lit := func(e ast.Expr, where string) {
+		if b, ok := e.(*ast.BasicLit); ok && b.Kind == token.STRING {
+			if s, err := strconv.Unquote(b.Value); err == nil {
+				found[s] = where
+			}
+		}
+	}
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			switch n := n.(type) {
+			case *ast.FuncDecl:
+				if n.Body == nil || (n.Name.Name != "save" && n.Name.Name != "alarmSave") {
+					break
+				}
+				ast.Inspect(n.Body, func(n ast.Node) bool {
+					if c, ok := n.(*ast.CaseClause); ok {
+						for _, e := range c.List {
+							lit(e, name+": a case in the save handler")
+						}
+					}
+					return true
+				})
+			case *ast.CallExpr:
+				fn, ok := n.Fun.(*ast.Ident)
+				switch {
+				case ok && fn.Name == "hidden" && len(n.Args) == 3:
+					lit(n.Args[2], name+": a form")
+				case ok && fn.Name == "back" && len(n.Args) == 3:
+					lit(n.Args[0], name+": a page that comes back")
+				case ok && (fn.Name == "fieldsetOpen" || fn.Name == "sayHere" || fn.Name == "cameBackTo") && len(n.Args) >= 2:
+					lit(n.Args[1], name+": a section")
+				}
+			}
+			return true
+		})
+	}
+	for what := range saves {
+		found[what] = "a form added to saves"
+	}
+	return found
+}
+
+// Every form has a tab to come back to, and it is one of the page's tabs: a form the map does not
+// know would come back to Status, far from where it was sent.
+func TestEveryFormHasATab(t *testing.T) {
+	// Every tab, the ones this device leaves out too (shownTabs): the map names their forms for the
+	// devices that have them.
+	real := map[string]bool{}
+	for _, tb := range tabs {
+		real[tb.id] = true
+	}
+	forms := formsInTheCode(t)
+	for _, must := range []string{"wifi", "forget", "house", "alarm_add", "timer_cancel", "camstream", "sounds", "share"} {
+		if forms[must] == "" {
+			t.Errorf("the source was read without finding the form %q", must)
+		}
+	}
+	for what, where := range forms {
+		if tab, ok := tabFor[what]; !ok {
+			t.Errorf("%q (%s) has no tab in tabFor", what, where)
+		} else if !real[tab] {
+			t.Errorf("%q is on %q, which is not a tab", what, tab)
+		}
+	}
+	for what, tab := range tabFor {
+		if !real[tab] {
+			t.Errorf("tabFor puts %q on %q, which is not a tab", what, tab)
+		}
+	}
+	// A form drawn in another's section is on that section's tab, or its save would come back to a tab
+	// the section is not on.
+	for what, section := range sectionFor {
+		if tabFor[what] == "" || tabFor[what] != tabFor[section] {
+			t.Errorf("%q is on %q and its section %q on %q", what, tabFor[what], section, tabFor[section])
+		}
+	}
+}
+
+// Every form, and every section, a tab draws is one whose save comes back to that tab: what tabFor says
+// and where settingsPage draws it agree, on every build. A form moved to another tab in one place and
+// not the other would come back to a tab it is not on.
+func TestEveryFormIsDrawnOnTheTabItComesBackTo(t *testing.T) {
+	saveFakeSecrets(t)
+	f := build()
+	f.Open()
+	c := ask(t, f)
+	f.press()
+	forms := regexp.MustCompile(`name="what" value="([^"]+)"`)
+	sections := regexp.MustCompile(`id="sec-([^"]+)"`)
+	seen := map[string]string{}
+	for _, tb := range shownTabs() {
+		page := get(f, "/setup?tab="+tb.id, c).Body.String()
+		for _, m := range forms.FindAllStringSubmatch(page, -1) {
+			if got := formTab(m[1]); got != tb.id {
+				t.Errorf("the form %q is drawn on %s and comes back to %s", m[1], tb.id, got)
+			}
+			if was, ok := seen[m[1]]; ok && was != tb.id {
+				t.Errorf("the form %q is drawn on %s and on %s", m[1], was, tb.id)
+			}
+			seen[m[1]] = tb.id
+		}
+		for _, m := range sections.FindAllStringSubmatch(page, -1) {
+			if _, form := tabFor[m[1]]; form && formTab(m[1]) != tb.id {
+				t.Errorf("the section %q is drawn on %s and its saves come back to %s", m[1], tb.id, formTab(m[1]))
+			}
+		}
+	}
+	for _, must := range []string{"adopt", "house", "alarm_add", "name", "lock", "reolink", "speaker", "timezone"} {
+		if _, ok := seen[must]; !ok && (must != "lock" || hasScreen) {
+			t.Errorf("no tab draws the form %q", must)
+		}
+	}
+}
+
+// A link to a tab from before the tabs were regrouped opens where most of it went, not on Status.
+func TestTheOldTabsOpenWhereTheyWent(t *testing.T) {
+	f, c := in(t)
+	for old, now := range movedTabs {
+		if now == "screen" && !hasScreen {
+			now = defaultTab
+		}
+		body := get(f, "/setup?tab="+old, c).Body.String()
+		if !strings.Contains(body, `href="/setup?tab=`+now+`" class="on"`) {
+			t.Errorf("?tab=%s does not open %s", old, now)
+		}
+	}
+}
+
+// Status says what goes off next, and with nothing set says so.
+func TestStatusSaysWhatGoesOffNext(t *testing.T) {
+	f, c := in(t)
+	if body := get(f, "/setup?tab=status", c).Body.String(); !strings.Contains(body, "No alarm</strong> is set.") {
+		t.Error("with no alarm set, Status does not say so")
+	}
+	now := time.Date(2026, 11, 15, 9, 0, 0, 0, time.Local)
+	for _, c := range []struct {
+		at   time.Time
+		want string
+	}{
+		{now.Add(2 * time.Hour), "Today"},
+		{time.Date(2026, 11, 16, 6, 30, 0, 0, time.Local), "Tomorrow"},
+		{time.Date(2026, 11, 19, 6, 30, 0, 0, time.Local), "Thursday"},
+		{time.Date(2026, 11, 30, 6, 30, 0, 0, time.Local), "Monday, November 30"},
+	} {
+		if got := dayWord(c.at, now); got != c.want {
+			t.Errorf("dayWord(%v) = %q, want %q", c.at, got, c.want)
+		}
 	}
 }

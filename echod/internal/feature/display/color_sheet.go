@@ -56,9 +56,11 @@ func colorWord(i int) string {
 	return w[i]
 }
 
-// longPress is a finger that came down on a tile and lifted without moving, held long enough to be a
-// hold. On a light with whites or colors it opens the color sheet. Anything else does what a tap does,
-// as such a press did before the dashboard asked for holds.
+// longPress is a finger that came down on a tile and stayed put until it was a hold (tileHeld). It
+// opens the tile's sheet: a player's music, a thermostat's or a fan's controls, the colors of a light
+// with whites or colors. On a tile with no sheet it does nothing. It used to do what a tap does there,
+// so a lock or a cover held to see more was unlocked or opened: a hold asks for more, and a tile with
+// no more to show is not being told to act.
 func (d *Display) longPress(t *dashTile) {
 	if t == nil {
 		return
@@ -81,9 +83,6 @@ func (d *Display) longPress(t *dashTile) {
 			d.wake()
 			return
 		}
-	}
-	if t.action != nil {
-		d.tileAction(t)
 	}
 }
 
@@ -571,6 +570,13 @@ func (r *renderer) colorSheet(c *dashboard.LightColor, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, colorZone{r: btn, kind: colorPartDone})
+	// Done shows a finger on it as its tap finds it (colorHit). The bands do not: the light's mark
+	// follows a finger on them, which is the press there.
+	if r.press.on {
+		if z, in := colorHit(zones, card, r.press.at.X, r.press.at.Y); in && z.kind == colorPartDone {
+			r.pressOnPart(z.r, pal)
+		}
+	}
 	r.setColor(zones, card)
 }
 

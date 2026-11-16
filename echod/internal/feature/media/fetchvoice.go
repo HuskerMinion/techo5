@@ -22,11 +22,29 @@ const voiceTimeout = 2 * time.Minute
 // a reply over the API in.
 const voiceChunk = 1024
 
+// speechStall is how long a streamed announcement may go without a byte, once its body has begun,
+// before it is given up on (#559). An engine that speaks sentence by sentence pauses between them,
+// but not for this long; one that has gone quiet for good would otherwise hold the speaker until
+// voiceTimeout. A variable so the tests need not wait for it.
+var speechStall = 20 * time.Second
+
+// errStalled is a body that stopped arriving part way.
+var errStalled = errors.New("the audio stopped arriving")
+
 // FetchVoice fetches speech Home Assistant is still generating and hands it on as it arrives, as
 // 16-bit mono samples at speaker.VoiceRate in little-endian bytes: the form a reply streamed over
 // the API takes. A WAVE body plays as it comes. Anything else (MP3) is read whole and decoded as
 // Fetch would, then handed on at once.
 func FetchVoice(ctx context.Context, url string, each func([]byte)) error {
+	return fetchVoice(ctx, url, 0, each)
+}
+
+// fetchVoice is FetchVoice, given up on once the body has gone stall without a byte; zero is never.
+// A reply fetched early is not given one: it starts before the agent has written anything, and a
+// slow agent is not a broken stream.
+func fetchVoice(ctx context.Context, url string, stall time.Duration, each func([]byte)) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -41,12 +59,22 @@ func FetchVoice(ctx context.Context, url string, each func([]byte)) error {
 		return fmt.Errorf("%s: %s", url, resp.Status)
 	}
 
-	body := bufio.NewReaderSize(io.LimitReader(resp.Body, mostAudio+1), 4096)
+	var in io.Reader = resp.Body
+	if stall > 0 {
+		w := &stallReader{r: resp.Body, stall: stall, cancel: cancel}
+		defer w.stop()
+		in = w
+	}
+
+	body := bufio.NewReaderSize(io.LimitReader(in, mostAudio+1), 4096)
 	head, err := body.Peek(12)
 	if err != nil || string(head[0:4]) != "RIFF" || string(head[8:12]) != "WAVE" {
 		whole, err := io.ReadAll(body)
 		if err != nil {
-			return err
+			return stalled(ctx, err, url)
+		}
+		if len(whole) > mostAudio {
+			return fmt.Errorf("%s: more than %d bytes of audio for one announcement", url, mostAudio)
 		}
 		samples, err := decode(whole, resp.Header.Get("Content-Type"), url)
 		if err != nil {
@@ -56,9 +84,51 @@ func FetchVoice(ctx context.Context, url string, each func([]byte)) error {
 		return nil
 	}
 	if err := streamWAV(body, each); err != nil {
-		return fmt.Errorf("%w (from %s)", err, url)
+		return stalled(ctx, err, url)
 	}
 	return nil
+}
+
+// stalled is err as the stall it was, when the read failed because the body stopped arriving.
+func stalled(ctx context.Context, err error, url string) error {
+	if errors.Is(context.Cause(ctx), errStalled) {
+		return fmt.Errorf("%w (from %s)", errStalled, url)
+	}
+	return fmt.Errorf("%w (from %s)", err, url)
+}
+
+// stallReader cancels the fetch once its body has gone stall without a byte. The clock starts once
+// audio has begun (stallAfter bytes in), not with the first byte: a server can send the WAV header at
+// once and the first sentence only when the engine has made it, and that wait is the engine starting,
+// which voiceTimeout bounds.
+type stallReader struct {
+	r      io.Reader
+	stall  time.Duration
+	cancel context.CancelCauseFunc
+	timer  *time.Timer
+	read   int
+}
+
+// stallAfter is how far into the body the stall clock starts: past any WAV header, into the audio.
+const stallAfter = 1024
+
+func (s *stallReader) Read(b []byte) (int, error) {
+	n, err := s.r.Read(b)
+	s.read += n
+	if n > 0 && s.read > stallAfter {
+		if s.timer == nil {
+			s.timer = time.AfterFunc(s.stall, func() { s.cancel(errStalled) })
+		} else {
+			s.timer.Reset(s.stall)
+		}
+	}
+	return n, err
+}
+
+func (s *stallReader) stop() {
+	if s.timer != nil {
+		s.timer.Stop()
+	}
 }
 
 // streamWAV reads a WAVE body chunk by chunk to its data, then hands the data on as it arrives. The

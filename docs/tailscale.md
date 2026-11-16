@@ -43,7 +43,7 @@ Do this while the device is still at home, where you can stand at it.
    (add the tag to your access rules first, below). A tagged device doesn't expire off the tailnet, so
    it stays on until you remove it in the admin console.
 3. **Give the device the key.** Either:
-   - the setup page: **Connections → Tailscale**, paste the key, **Join**. The setup page is plain
+   - the setup page: **Network → Tailscale**, paste the key, **Join**. The setup page is plain
      HTTP on your home network, which is one more reason for a single-use key; or
    - Home Assistant: the [`tailscale_login` action](actions.md#join-a-tailnet).
 
@@ -80,7 +80,7 @@ with these differences:
    Keys from Headscale 0.28 and later start `hskey-auth-`; older ones are a long run of letters and
    digits. Both work.
 3. **Give the device the key and the server's address.** Either:
-   - the setup page: **Connections → Tailscale**, paste the key, type the server's address
+   - the setup page: **Network → Tailscale**, paste the key, type the server's address
      (`https://headscale.example.com`) in **Headscale server**, **Join**; or
    - Home Assistant: the [`headscale_login` action](actions.md#join-a-headscale-tailnet).
 

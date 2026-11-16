@@ -27,8 +27,9 @@ var providerNames = map[string]string{"openai": "OpenAI", "xai": "xAI (Grok)", "
 func realtimeSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	rt := c.Realtime
-	fmt.Fprint(w, `<fieldset><legend>Realtime voice</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "realtime", "sound")
+	fieldsetOpen(w, "realtime", "Realtime voice")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "realtime")
 	who := "the provider chosen"
 	if n, ok := providerNames[rt.Provider]; ok {
 		who = n
@@ -42,9 +43,7 @@ func realtimeSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, p, selected(rt.Provider == p), html.EscapeString(providerNames[p]))
 	}
 	fmt.Fprintf(w, `</select>
-	 <label for="rtkey">Key</label>
-	 <input id="rtkey" name="key" type="password" value="" placeholder="%s" autocomplete="off">
-	 <p><label><input type="checkbox" name="nokey" value="yes" style="width:auto"> Remove the key</label></p>
+	 %s
 	 <label for="rtend">Relay (optional)</label>
 	 <input id="rtend" name="endpoint" value="%s" placeholder="wss://relay.home.arpa/realtime" autocomplete="off">
 	 <p class="note">A relay on your network in place of the provider's own address, which can hold the key
@@ -56,15 +55,15 @@ func realtimeSection(w http.ResponseWriter, token string) {
 	 <label for="rtmin">Minutes a day, at most</label>
 	 <input id="rtmin" name="minutes" type="number" min="1" max="%d" value="%d">
 	 <p class="note">Used today: %d of %d minutes.</p>
-	 <label for="rtmcp">Home Assistant token for its MCP server (optional)</label>
-	 <input id="rtmcp" name="mcp" type="password" value="" placeholder="%s" autocomplete="off">
-	 <p><label><input type="checkbox" name="nomcp" value="yes" style="width:auto"> Remove the token</label></p>
+	 %s
 	 <p class="note">With Home Assistant's Model Context Protocol Server integration added, and a long-lived
 	  token from a Home Assistant user of its own with no administrator rights, the model can do in the house
 	  what Assist can. Without it, it has this device's own abilities only. Either way, once a turn has read
 	  the web or a calendar, nothing that changes anything runs in it.</p>`,
-		keyHint(rt.Key != ""), html.EscapeString(rt.Endpoint), html.EscapeString(rt.Model), html.EscapeString(rt.Voice),
-		config.MaxDailyMinutes, rt.Daily(), usedMinutes(rt), rt.Daily(), keyHint(rt.MCPToken != ""))
+		secretField("rtkey", "Key", "key", rt.Key != "", "nokey"),
+		html.EscapeString(rt.Endpoint), html.EscapeString(rt.Model), html.EscapeString(rt.Voice),
+		config.MaxDailyMinutes, rt.Daily(), usedMinutes(rt), rt.Daily(),
+		secretField("rtmcp", "Home Assistant token for its MCP server (optional)", "mcp", rt.MCPToken != "", "nomcp"))
 	fmt.Fprint(w, `<p>Answer with realtime voice:</p>`)
 	for _, i := range realtimeChoices(c) {
 		on, name := false, fmt.Sprintf("wake word %d", i+1)

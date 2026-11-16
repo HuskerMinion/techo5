@@ -41,7 +41,16 @@ func (r *renderer) eqWords(s scene, room, maxW int) []eqLine {
 		}
 		out[len(out)-1].lineH += r.s(10) // a breath between the question and the answer
 	}
-	if s.reply == "" || (s.phase != "replying" && s.phase != "lingering") {
+	reply, said := s.reply, s.said
+	if line := failedLine(s.failed); line != "" {
+		// A request that failed: why, in the answer's place and in the accent rather than the answer's
+		// ink (turn_failed.go). At night the accent is the night's.
+		reply, said, replyCol = line, 1, amber
+		if s.eq.night {
+			replyCol = accent
+		}
+	}
+	if reply == "" || (s.phase != "replying" && s.phase != "lingering") {
 		return out
 	}
 	used := 0
@@ -49,17 +58,17 @@ func (r *renderer) eqWords(s scene, room, maxW int) []eqLine {
 		used += l.lineH
 	}
 	face, lineH := r.body, r.s(52)
-	lines := r.wrap(face, s.reply, maxW)
+	lines := r.wrap(face, reply, maxW)
 	if used+len(lines)*lineH > room {
 		face, lineH = r.small, r.s(42)
-		lines = r.wrap(face, s.reply, maxW)
+		lines = r.wrap(face, reply, maxW)
 	}
 	fit := (room - used) / lineH
 	if len(lines) > fit {
 		// Paged: room at the end of each line for the "…" a page with more after it ends in.
-		lines = r.wrap(face, s.reply, maxW-r.width(face, " …"))
+		lines = r.wrap(face, reply, maxW-r.width(face, " …"))
 	}
-	for _, l := range replyPage(lines, fit, s.said) {
+	for _, l := range replyPage(lines, fit, said) {
 		out = append(out, eqLine{face, l, replyCol, lineH})
 	}
 	return out

@@ -143,8 +143,12 @@ func TestDashboardTemperatureStaysPut(t *testing.T) {
 			var first image.Rectangle
 			for _, hm := range [][2]int{{21, 48}, {22, 48}, {1, 0}, {12, 59}} {
 				for _, temp := range []string{"72°", "104°", "-5°"} {
-					r.draw(dashScene(time.Date(2026, 10, 6, hm[0], hm[1], 0, 0, time.Local), temp, true, nil))
+					now := time.Date(2026, 10, 6, hm[0], hm[1], 0, 0, time.Local)
+					r.draw(dashScene(now, temp, true, nil))
 					at, _, _ := dashTaps(r)
+					// The clock's drift against image retention aside (clock_drift.go), which is the whole
+					// face moving and not the temperature on its own.
+					at = at.Sub(r.clockDrift(now))
 					switch {
 					case at.Empty():
 						t.Fatalf("%v 24h %v %02d:%02d %s: no temperature drawn", size, h24, hm[0], hm[1], temp)

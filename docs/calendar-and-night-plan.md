@@ -82,9 +82,10 @@ Settings, on the screen, the setup page and in Home Assistant:
 - **At night:** a pop-up during night hours shows but makes no sound and does not light a dark
   screen; it is waiting when the screen next wakes.
 
-A pop-up stays up until tapped or until the event has started and 10 minutes have passed. Home
-Assistant gets an event (`esphome.techo5_calendar`) when one shows, for anyone who wants to add to
-it.
+A pop-up stays up until tapped or until the event has started and 10 minutes have passed. A tap
+takes it down on the other Shows in the house as well, over the same link reminders use: the one up
+there, or waiting its turn, or still to come where its lead time is shorter. Home Assistant gets an
+event (`esphome.techo5_calendar`) when one shows, for anyone who wants to add to it.
 
 **Optional, off by default:** a "Next:" line under the date on the home screen, with the next event
 of the day.
@@ -125,7 +126,7 @@ and is easy on eyes adjusted to it.
 ## 6. The calendar's look
 
 Added after the rest, as switches, each on the screen (Settings, Display, Calendar), on the setup
-page (Weather & Calendar) and in Home Assistant. Shared settings can keep them the same on every
+page (Screen) and in Home Assistant. Shared settings can keep them the same on every
 screen. The Spot keeps its own Today and Next.
 
 - **Opens on** (Month): the view the clock's date, a voice request and `calendar_show` open: Month,

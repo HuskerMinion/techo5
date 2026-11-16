@@ -21,8 +21,9 @@ import (
 // where there is a Home Assistant; this is what a device without one goes by.
 func placeSection(w http.ResponseWriter, token string) {
 	h := config.Get().Home
-	fmt.Fprint(w, `<fieldset><legend>Where this device is</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "place", "weather")
+	fieldsetOpen(w, "place", "Where this device is")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "place")
 	if h.Place.Set() {
 		fmt.Fprintf(w, `<p style="margin:0">Now: <strong>%s</strong> (%.3f, %.3f)</p>`,
 			html.EscapeString(h.Place.Name), h.Place.Lat, h.Place.Lon)

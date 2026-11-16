@@ -353,7 +353,7 @@ python3 tools/install-show.py --for-someone-else
 4. **Updates** from then on come from Home Assistant's update card: signed releases install into the
    spare slot and roll back on their own if they don't come up healthy. **Update channel** in Home
    Assistant is *stable* unless you change it; *dev* follows test builds, for a device being worked
-   on. **Install updates automatically** (in Home Assistant, or on the setup page's General tab,
+   on. **Install updates automatically** (in Home Assistant, or on the setup page's System tab,
    under Updates) installs a new release by itself between 2 and 5 AM, while nothing is playing. It
    is off until you turn it on.
 5. **Optional:**
@@ -413,7 +413,7 @@ pipeline rather than the device: Home Assistant is replying in text only.
    the device's media player entity in Media player entity, type a message and press Perform action.
    - If it speaks, the pipeline is what is wrong: back to step 2.
    - If it stays silent, the device's own log says whether any audio arrived. On the device's setup
-     page, **General → Download diagnostics** gives the last of it, and that file can go straight
+     page, **Status → Download diagnostics** gives the last of it, and that file can go straight
      into an issue. With SSH on, the whole log is `/data/techo5-linux/techo5.log` (`echod.log` on
      the Dot).
 4. **Reply delivery.** The device has a Reply delivery setting: *Whole file* fetches the reply and

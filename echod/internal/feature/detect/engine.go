@@ -65,6 +65,9 @@ type Engine struct {
 	// board is what the words have scored lately, for the setup page (board.go).
 	board board
 
+	// peaks is each slot's highest score since MarkPeaks, nil when nothing asked (callscores.go).
+	peaks []Peak
+
 	// Threshold is asked for every score, so a change in Home Assistant takes effect at once. It is
 	// per slot because the models disagree on scale.
 	Threshold func(slot int) float64
@@ -481,6 +484,16 @@ func (e *Engine) score(frame []int16, source *mic.Source) {
 		if !ok {
 			continue
 		}
+		if e.peaks != nil {
+			p := &e.peaks[i]
+			if p.ID != s.model.ID {
+				// A word swapped in since the mark starts its own peak.
+				*p = Peak{Slot: i, ID: s.model.ID}
+			}
+			if score > p.Peak || p.At.IsZero() {
+				p.Peak, p.At = score, now
+			}
+		}
 		if !s.scored {
 			s.scored = true
 			slog.Info("wake word ready", "slot", i+1, "id", s.model.ID)
@@ -642,6 +655,43 @@ func (e *Engine) Settle(d time.Duration, spared ...int) {
 	}
 }
 
+// MarkPeaks starts each slot's highest score over again, the held back ones included, for Peaks.
+func (e *Engine) MarkPeaks() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.peaks = make([]Peak, len(e.slots))
+}
+
+// Peak is a slot's highest score since MarkPeaks, with the word that scored it.
+type Peak struct {
+	Slot int
+	ID   string
+	Peak float64
+	At   time.Time // when it scored that
+}
+
+// Peaks is the highest score of each slot that scored anything since MarkPeaks, a word taken out
+// since included, and stops keeping them. Nothing when MarkPeaks was not called.
+func (e *Engine) Peaks() []Peak {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []Peak
+	for _, p := range e.peaks {
+		if p.ID != "" {
+			out = append(out, p)
+		}
+	}
+	e.peaks = nil
+	return out
+}
+
+// Quieted is whether the engines are down for a cut microphone (Quiet).
+func (e *Engine) Quieted() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.quiet
+}
+
 // Quiet drops the engines while the microphones are cut, and builds them again when they come back.
 //
 // A cut microphone hands on silence, so nothing can be detected in it — but the models were still
@@ -652,13 +702,6 @@ func (e *Engine) Settle(d time.Duration, spared ...int) {
 // The slots are kept. What is dropped is the engines under them, which is where both the work and
 // the streaming state live, so coming back is the same cold start as a wake word freshly chosen
 // rather than a window holding audio from before the mute and audio from after it, spliced.
-// Quieted is whether the engines are down for a cut microphone (Quiet).
-func (e *Engine) Quieted() bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.quiet
-}
-
 func (e *Engine) Quiet(on bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -10,7 +10,7 @@ matches what you want before you set anything up.
 | Custom cards, card-mod, button-card's JavaScript | Not drawn: a placeholder tile says which card it is | All of them |
 | Taps | Instant | About a fifth of a second |
 | Scrolling | Smooth | Soft while moving, sharp when it stops |
-| Needs | Nothing else | A small server, dashcast, running next to Home Assistant |
+| Needs | The device's Home Assistant token ([below](#drawn-the-home-assistant-token)) | A small server, dashcast, running next to Home Assistant |
 | Built-in pages (Energy, History, Logbook…) | No | Yes |
 
 **Drawn is not a copy of your dashboard.** It reads the dashboard's cards and draws the kinds it
@@ -18,11 +18,37 @@ knows. For drawn mode, build a dashboard for the screen out of those cards. Don'
 like a dashboard built for a browser. If you want your dashboard exactly as you made it, use
 Streamed.
 
+## Drawn: the Home Assistant token
+
+A drawn dashboard needs no server, but the device reads your dashboards from Home Assistant itself,
+so it needs Home Assistant's address and a long-lived access token. Without them the screen says *A
+drawn dashboard needs a Home Assistant token*. The token is not a field on the setup page or in
+ESPHome: the device's `home_assistant` action gives it, once. If photos, cameras or the forecast
+already work on the device, this is done and there's nothing to do.
+
+1. In Home Assistant, open your profile (bottom left), then **Security**, and under **Long-lived
+   access tokens** create one. Copy it; it is shown only once.
+2. In **Developer Tools → Actions**, switch to YAML mode and run the action, with your device's node
+   name in place of `office` (start typing `home_assistant` and pick yours from the list), Home
+   Assistant's local address, and the token:
+
+   ```yaml
+   action: esphome.office_home_assistant
+   data:
+     url: "http://192.168.1.10:8123"
+     token: "paste the token here"
+   ```
+
+The device keeps both from then on. The setup page's **Screen** tab says whether the device has a
+token, and with none, shows the action with this device's own name in it. More on the address (a
+`.local` name, `https://`) is in [setup step 1](setup.md#1-give-the-device-access-to-home-assistant)
+and under [the action itself](actions.md#connect-the-device-to-home-assistant).
+
 ## Turning it on
 
 Everything is on the device's page in Home Assistant: **Settings → Devices & services → Devices →**
 your device. In the **Configuration** card (expand it if it ends in "+ N entities not shown"). The
-setup page's **Screen & Photos** tab has the same settings, except which dashboard to show:
+setup page's **Screen** tab has the same settings, except which dashboard to show:
 
 - **Dashboard**: *Off*, *Drawn on the device* or *Streamed*, and on the Show, the Skylight and the Panel app *Tessera*
   ([Tessera screens](#tessera-screens-preview)).
@@ -99,13 +125,15 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
   - on a light that has whites or colors, for a sheet of them. The light follows your finger.
   - on a fan, for a sheet with an on/off switch, its speed (a slider, in the steps the fan takes), its
     direction (forward or reverse) when it can turn either way, and its preset modes when it has any.
-    Each control is there only when the fan has it. A fan tile whose card sets a tap of its own keeps
-    that tap on a long press.
+    Each control is there only when the fan has it. A fan tile whose card sets a tap of its own has
+    no sheet.
   - on a media player, for a sheet with its controls, its volume, the speakers it can be grouped
     with, and, with Music Assistant, your favorite playlists and radio stations. The favorites need
     the device's token to belong to a Home Assistant administrator; with any other token the sheet
     says so and shows the rest. Its **Library** button opens the whole music library (see
     [Music library](#music-library)).
+  - The sheet opens while your finger is still down. On a tile that has no sheet (a lock, a cover, a
+    switch) a long press does nothing: only a tap works the tile.
 - **Drag** up and down to scroll.
 
 **Streamed dashboards** work as the page itself does: tap, and drag to scroll. On the Echo Show (and the
@@ -175,7 +203,7 @@ grayed out, and a line at the top says so.
 **What it needs**
 
 The library is read from Music Assistant directly, with the address and token set on the setup page
-(**Sound & Voice**, under **Music Assistant**). Without them, the library says so and shows nothing
+(**Sound**, under **Music Assistant**). Without them, the library says so and shows nothing
 else. The music plays through Home Assistant, as the media sheet's favorites do.
 
 ## Mealie Recipes
@@ -185,7 +213,7 @@ Mealie server. The Echo Dot and the Echo Spot don't have it.
 
 **Setting it up**
 
-On the setup page, under **Connections**, **Mealie**: the server's address, like
+On the setup page, under **Screen**, **Mealie**: the server's address, like
 `http://192.168.1.20:9000`, and a long-lived API token. It is never shown again once saved. Leave the token empty
 only if your server accepts requests without one.
 
@@ -318,7 +346,7 @@ admin pages are refused. See
 
 Then tell the device where it is, either:
 
-- on the device's **setup page**, **Connections** tab, **Dashboard server**: the address
+- on the device's **setup page**, **Screen** tab, **Dashboard server**: the address
   (`host:9555`) and the key; or
 - with the action **`esphome.<node>_dashboard_server`**, `address` and `key`.
 

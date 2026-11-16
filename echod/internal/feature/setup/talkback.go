@@ -22,8 +22,9 @@ func talkBackSection(w http.ResponseWriter, token string) {
 		return
 	}
 	c := config.Get()
-	fmt.Fprint(w, `<fieldset><legend>Talk through cameras</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "talkback", "connections")
+	fieldsetOpen(w, "talkback", "Talk through cameras")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "talkback")
 	state := "off: turn on Talk through cameras under Privacy &amp; Security, on the device or in Home Assistant"
 	if c.Security.TalkBack {
 		state = "on"
@@ -40,15 +41,11 @@ func talkBackSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<p class="note">From the Reolink recorder, with nothing to set: %s.</p>`, strings.Join(found, ", "))
 	}
 
-	hint := "the cameras' password"
-	if c.TalkBack.Pass != "" {
-		hint = "set; leave empty to keep it"
-	}
 	fmt.Fprintf(w, `<label for="tbuser">User</label>
 	 <input id="tbuser" name="user" value="%s" placeholder="admin" autocomplete="off">
-	 <label for="tbpass">Password</label>
-	 <input id="tbpass" name="pass" type="password" value="" placeholder="%s" autocomplete="new-password">`,
-		html.EscapeString(c.TalkBack.User), hint)
+	 %s`,
+		html.EscapeString(c.TalkBack.User),
+		secretField("tbpass", "Password", "pass", c.TalkBack.Pass != "", "nopass"))
 
 	cams := talkBackCameras()
 	for i, cam := range cams {
@@ -160,8 +157,13 @@ func saveTalkBack(r *http.Request) string {
 			kept[e] = a
 		}
 	}
+	// Left empty, the saved password stays; the box takes it away, and wins over one typed beside it.
 	var p *string
-	if pass != "" {
+	switch {
+	case r.PostFormValue("nopass") == "yes":
+		none := ""
+		p = &none
+	case pass != "":
 		p = &pass
 	}
 	save := func() error { return config.Set().TalkBack().Save(user, p, kept) }

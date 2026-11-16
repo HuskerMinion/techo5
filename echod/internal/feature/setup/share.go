@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/share"
 )
 
-// Shared settings, on the General tab (feature/share): whether this device takes part, and for each
+// Shared settings, on the System tab (feature/share): whether this device takes part, and for each
 // setting that can be shared, the devices it is kept in step with and whether this device keeps its own.
 // Below it, a copy of chosen settings to chosen devices, once. Both have routes of their own, for a form
 // with a box for every setting and every device.
@@ -56,7 +56,7 @@ func shareDevices() []string {
 func shareSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	s := c.Share
-	fmt.Fprint(w, `<fieldset><legend>Shared settings</legend>`)
+	fieldsetOpen(w, "share", "Shared settings")
 	devices := shareDevices()
 	// Requests first, each a form of its own, ahead of the settings' form.
 	if s.On && len(s.Requests) > 0 {
@@ -80,7 +80,7 @@ func shareSection(w http.ResponseWriter, token string) {
 	  there, a change to that setting on either reaches the other, the latest change winning; another device can
 	  ask, never link this one by itself. Keep mine: nothing another device sends changes it. What opens the
 	  device to the network, uses or shows the use of its microphones or camera, holds a password or says where
-	  its voice goes is never shared. Every device needs the same house word (Connections).</p>`,
+	  its voice goes is never shared. Every device needs the same house word (Voice).</p>`,
 		html.EscapeString(token), checked(s.On))
 	if c.Home.HouseWord == "" {
 		fmt.Fprint(w, `<p class="note"><strong>This device has no house word set</strong>, so it can neither send nor take
@@ -159,7 +159,7 @@ func checked(b bool) string {
 func (f *Feature) shareForm(w http.ResponseWriter, r *http.Request) bool {
 	token, in := f.session(r)
 	if !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return false
 	}
 	if r.Method != http.MethodPost {
@@ -183,7 +183,7 @@ func (f *Feature) saveShare(w http.ResponseWriter, r *http.Request) {
 	}
 	on := r.PostFormValue("on") == "1"
 	if err := config.Set().Share().On(on); err != nil {
-		http.Redirect(w, r, back("general", "problem", "could not be saved: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "could not be saved: "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	share.Get().Restore(config.Get())
@@ -250,9 +250,9 @@ func (f *Feature) saveShare(w http.ResponseWriter, r *http.Request) {
 		sort.Strings(problems)
 	}
 	slog.Info("setup page: shared settings saved", "on", on)
-	to := back("general", "saved", "1")
+	to := back("share", "saved", "1")
 	if len(problems) > 0 {
-		to = back("general", "problem", strings.Join(problems, "; "))
+		to = back("share", "problem", strings.Join(problems, "; "))
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
@@ -283,12 +283,12 @@ func (f *Feature) copyShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !config.Get().Share.On {
-		http.Redirect(w, r, back("general", "problem", "turn settings sharing on first"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "turn settings sharing on first"), http.StatusSeeOther)
 		return
 	}
 	ids, devices := r.PostForm["copy"], r.PostForm["to"]
 	if len(ids) == 0 || len(devices) == 0 {
-		http.Redirect(w, r, back("general", "problem", "tick the settings to copy and the devices to copy them to"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "tick the settings to copy and the devices to copy them to"), http.StatusSeeOther)
 		return
 	}
 	results := share.Get().Copy(context.WithoutCancel(r.Context()), ids, devices)
@@ -312,7 +312,7 @@ func (f *Feature) copyShare(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprint(w, `</ul>`)
 	}
-	fmt.Fprint(w, `<p><a href="/setup?tab=general">Back to the setup page</a></p></fieldset></div>`)
+	fmt.Fprint(w, `<p><a href="/setup?tab=system">Back to the setup page</a></p></fieldset></div>`)
 }
 
 // shareName is a setting's name as the page shows it.
@@ -336,22 +336,22 @@ func (f *Feature) answerShare(w http.ResponseWriter, r *http.Request) {
 	if !slices.ContainsFunc(config.Get().Share.Requests, func(q config.ShareRequest) bool {
 		return q.ID == id && strings.EqualFold(q.Device, device)
 	}) {
-		http.Redirect(w, r, back("general", "problem", "that request is not waiting any more"), http.StatusSeeOther)
+		http.Redirect(w, r, back("share", "problem", "that request is not waiting any more"), http.StatusSeeOther)
 		return
 	}
 	ctx := context.WithoutCancel(r.Context())
-	to := back("general", "saved", "1")
+	to := back("share", "saved", "1")
 	switch r.PostFormValue("op") {
 	case "accept":
 		if outcome, err := share.Get().Accept(ctx, id, device); err != nil {
-			to = back("general", "problem", err.Error())
+			to = back("share", "problem", err.Error())
 		} else if outcome != share.Linked {
-			to = back("general", "problem", fmt.Sprintf("linked here; %s answered %s", device, orUnreachable(outcome)))
+			to = back("share", "problem", fmt.Sprintf("linked here; %s answered %s", device, orUnreachable(outcome)))
 		}
 	case "decline":
 		share.Get().Decline(ctx, id, device)
 	default:
-		to = back("general", "problem", "accept or decline")
+		to = back("share", "problem", "accept or decline")
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }

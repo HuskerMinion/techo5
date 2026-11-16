@@ -51,11 +51,15 @@ type scene struct {
 	cue     string  // a turn's phase, when turns are a cue over the page and phase is idle (turn_cue.go)
 	heard   string
 	reply   string
+	failed  string  // why the request failed, while its line lingers in the answer's place (turn_failed.go)
 	said    float64 // how much of the reply the voice has said, 0 to 1 (voice.Spoken)
 	since   time.Time
 	playing bool
 	paused  bool
 	muted   bool
+	// linkDown is what the device has lost, for the header to say: its Wi-Fi or Home Assistant
+	// (link_status.go). Empty while it has both.
+	linkDown string
 
 	// glance is the glance strip's chips (feature/home/glance.go), drawn at the foot of the clock page.
 	glance []home.Chip
@@ -158,6 +162,8 @@ type scene struct {
 
 	// popup is an event popped up over the screen (calendar_popup.go).
 	popup *hass.Event
+	// popupWaiting is how many more events' pop-ups are due and waiting for the one up to go.
+	popupWaiting int
 
 	// nextUp is the clock's next event, when one is coming up and the switch is on (render_nextup.go).
 	nextUp *nextUpCard
@@ -248,6 +254,9 @@ type scene struct {
 	// is the star having been pressed for what is playing.
 	strip bool
 	faved bool
+	// musicAway is the music's page put away, so that the footer's word for it is the way back to it
+	// (Display.gesture): a press shows on the word only then.
+	musicAway bool
 	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
 	// empty for no button (no Music Assistant set up).
 	libraryWord string
@@ -308,6 +317,9 @@ type scene struct {
 	videoControls bool
 	showVideoAsk  bool
 	videoAsk      videoAsk
+
+	// press is the finger a press is shown under, while there is one (press.go).
+	press pressView
 }
 
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
@@ -340,6 +352,9 @@ type renderer struct {
 	// deckZones are the deck's buttons where they were last drawn, in order, read by the touch
 	// goroutine under zmu (render_deck.go).
 	deckZones []image.Rectangle
+	// deckClose is the deck's way back to the clock where it was last drawn, as wide as the foot is
+	// tall and more: a tap there puts the deck away.
+	deckClose image.Rectangle
 
 	// videoZones are the video page's controls where they were last drawn, under zmu, and videoOver
 	// what of the canvas goes over the picture (render_video.go).
@@ -354,6 +369,10 @@ type renderer struct {
 
 	// styleFaces are the clock styles' faces, made as they are first needed (render_styles.go).
 	styleFaces map[styleFaceKey]font.Face
+	// calCapped are the faces the month and the week are drawn in above calendarMost, made for the
+	// font calCappedFor (calendar_cap.go).
+	calCapped    *faceSet
+	calCappedFor fontKey
 
 	// washed is the weather art with its wash on, kept for the frames drawn in the same second;
 	// artDrawn is weather moving over the art in the frame last drawn, which wants the next one soon.
@@ -444,6 +463,9 @@ type renderer struct {
 	dateAt   image.Rectangle // the date under the clock, the same way: a tap there opens the calendar
 	nextAt   image.Rectangle // the Dashboard's next events, the same way: a tap there opens the agenda
 	popupAt  image.Rectangle // an event's pop-up, the same way: a tap on it takes it down
+	// cardsUnder is how many cards wait under the one this frame draws (cardsUnder), for its heading
+	// row to say; set by the frame before it draws the card.
+	cardsUnder int
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu         sync.Mutex
@@ -530,17 +552,28 @@ func newRenderer(dst *image.RGBA) *renderer {
 	return r
 }
 
+// headlineMost is the text size the large faces stop growing at, in percent (makeFaces).
+const headlineMost = 125
+
 // makeFaces makes the renderer's faces in the font named (font.go). Sizes are points at 72 DPI, which
 // makes them pixels, so they scale with everything else.
 func (r *renderer) makeFaces(k fontKey) {
 	face := func(bold bool, size int) font.Face { return k.face(bold, float64(r.s(size))) }
 	r.font, r.fontGen, r.textSize, r.styleFaces = k.name, k.gen, k.size, nil
-	r.clock = face(true, 230)
-	r.big = face(true, 100)
-	r.ampm = face(true, 56)
+	// The large faces (the clock, a reading, a page's title) stop growing at 125%: past it they are
+	// already read across a room, and a title as large as 150% makes it was cut to its first letters
+	// beside its page's buttons. The words under them keep growing.
+	headline := k
+	if headline.size > headlineMost {
+		headline.size = headlineMost
+	}
+	head := func(bold bool, size int) font.Face { return headline.face(bold, float64(r.s(size))) }
+	r.clock = head(true, 230)
+	r.big = head(true, 100)
+	r.ampm = head(true, 56)
 	at100 := fontKey{k.name, k.gen, 0}
 	r.ringClock, r.ringAmpm = at100.face(true, float64(r.s(230))), at100.face(true, float64(r.s(56)))
-	r.title = face(true, 48)
+	r.title = head(true, 48)
 	r.body = face(false, 42)
 	r.small = face(false, 34)
 	r.tiny = face(false, 26)
@@ -564,6 +597,7 @@ func (r *renderer) useFont() {
 func (r *renderer) draw(s scene) {
 	r.useFont()
 	r.marked, r.footAt, r.lcarsDrawn = false, 0, false
+	r.press = s.press
 	// The button offered by the frame before is not this frame's, whatever this one does: every return
 	// below, the early ones of a video and of Rainbow's kept page alike, publishes the frame as it was
 	// drawn (publishSkip, registered before the overlays' own defers so it runs after them).
@@ -582,6 +616,7 @@ func (r *renderer) draw(s scene) {
 		// Where the deck's buttons were is nothing to tap once something else is drawn there.
 		r.zmu.Lock()
 		r.deckZones = nil
+		r.deckClose = image.Rectangle{}
 		r.zmu.Unlock()
 	}
 	if !s.showRadar {
@@ -692,7 +727,8 @@ func (r *renderer) draw(s scene) {
 		}
 		// The card is in the middle and the strips along the bottom, so a reminder and an
 		// announcement can both be up at once. One card at a time: a reminder over a notification
-		// over an event's pop-up.
+		// over an event's pop-up. The one drawn says how many wait under it.
+		r.cardsUnder = cardsUnder(s)
 		if s.showReminder {
 			r.reminderCard(s)
 		} else if s.showNotification {
@@ -802,7 +838,13 @@ func (r *renderer) draw(s scene) {
 		return
 	}
 
+	if s.showDrawer {
+		// The drawer is over the page from here down: a finger on it is not on the strip or the button
+		// it covers (drawer takes the press back).
+		r.press.on = false
+	}
 	var behind *image.RGBA // the photo behind the idle page, when it has one
+	clock := false         // the clock's own page, whose places to tap show a press (pressClock)
 	switch s.phase {
 	case "listening":
 		r.status(s, tr("ui_listening_turn"), true)
@@ -811,7 +853,11 @@ func (r *renderer) draw(s scene) {
 		r.words(s.heard, "", 0, r.s(200))
 	case "replying", "lingering":
 		r.cornerClock(s)
-		r.words(s.heard, s.reply, s.said, r.s(70))
+		if line := failedLine(s.failed); line != "" {
+			r.wordsIn(s.heard, line, 1, r.s(70), amber)
+		} else {
+			r.words(s.heard, s.reply, s.said, r.s(70))
+		}
 	default:
 		if s.sunrise > 0 {
 			// The light before an alarm takes the whole screen: the panel is the lamp in the room, and
@@ -838,6 +884,7 @@ func (r *renderer) draw(s scene) {
 			if s.callButton {
 				r.callButtonDraw()
 			}
+			clock = true
 		}
 	}
 	// The footer's words sit on the photo too, when there is one.
@@ -845,6 +892,9 @@ func (r *renderer) draw(s scene) {
 		onPhoto(func() { r.readableOver(behind, walnut, slideshowWash, func() { r.footer(s) }) })
 	} else {
 		r.footer(s)
+	}
+	if clock {
+		r.pressClock(s)
 	}
 	if s.strip && s.phase == "idle" && s.sunrise == 0 {
 		r.musicStrip(s)
@@ -861,7 +911,7 @@ func (r *renderer) draw(s scene) {
 func (r *renderer) volumeBar(s scene) {
 	top := r.h - r.s(volumeBarH)
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(walnut), image.Point{}, draw.Src)
-	label := "Volume"
+	label := tr("volume")
 	r.text(r.small, label, r.margin, top+r.s(38), dim)
 	full := r.w - 2*r.margin
 	y0, thick := top+r.s(56), r.s(14)
@@ -879,19 +929,29 @@ const volumeBarH = 110
 // optional suffix appended to the date line (an alarm note, on the ordinary idle page). Shared by
 // bigClock and the screensaver's normal-size overlay, which wants the clock alone.
 func (r *renderer) timeAndDate(now time.Time, base int, dateSuffix string) image.Rectangle {
-	return r.timeAndDateAt(now, base, dateSuffix, 0, 0, false)
+	return r.timeAndDateAt(now, base, dateSuffix, 0, 0, false, 0)
 }
 
 // timeAndDateAt is timeAndDate lined up across as align says: -1 against left (a left edge), 0
 // centered, 1 against the right margin. Off center it is the compact clock, for a corner: the time at
-// the size of the weather's reading, the date close under it.
-func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, align, left int, compact bool) image.Rectangle {
+// the size of the weather's reading, the date close under it. Centered, it is the digits that are in
+// the middle, over the middle of the date, and the AM/PM hangs off their right (clockLeft). roof, when
+// not 0, is as high as the digits may stand: the foot of what is over them (clockFaces).
+func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, align, left int, compact bool, roof int) image.Rectangle {
 	clock, ampmFace, dateGap := r.clock, r.ampm, r.s(70)
 	if compact {
 		clock, ampmFace, dateGap = r.big, r.small, r.s(48)
 	}
 	hour := clockHM(now)
 	ampm := clockSuffix(now)
+	drift := r.clockDrift(now) // a few pixels, against the panel keeping a shadow of the digits (clock_drift.go)
+	if !compact {
+		room := base // no roof: as high as the panel
+		if roof > 0 {
+			room = base - roof
+		}
+		clock, ampmFace = r.clockFaces(room, hour, ampm)
+	}
 	hw := r.width(clock, hour)
 	aw := r.width(ampmFace, ampm)
 	gap := r.s(18)
@@ -911,8 +971,12 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 		return (r.w - w) / 2
 	}
 	x := across(hw + gap + aw)
+	if align == 0 {
+		x = r.clockLeft(hw, gap, aw)
+	}
+	x, base = x+drift.X, base+drift.Y
 	r.text(clock, hour, x, base, cream)
-	r.text(ampmFace, ampm, x+hw+gap, base, dateColor(amber)) // a chosen date color takes the AM/PM with it
+	r.text(ampmFace, ampm, x+hw+gap, base, r.ampmInk())
 
 	date := locale.LongDate(now, screenLang()) + dateSuffix
 	if room := r.w * cornerPct / 100; compact && r.width(r.small, date) > room {
@@ -920,9 +984,53 @@ func (r *renderer) timeAndDateAt(now time.Time, base int, dateSuffix string, ali
 		// short first, so the alarm still fits, and cut only if that is not enough.
 		date = r.clipTo(r.small, locale.ShortDate(now, screenLang())+dateSuffix, room)
 	}
-	x = across(r.width(r.small, date))
+	x = across(r.width(r.small, date)) + drift.X
 	r.text(r.small, date, x, base+dateGap, dateColor(dim))
 	return image.Rect(x, base+dateGap-r.s(30), x+r.width(r.small, date), base+dateGap+r.s(10))
+}
+
+// clockFaces are the classic clock's digits and AM/PM for hour and ampm, as large as the text size
+// makes them where their figures have room (that tall at most, and the panel's width inside its
+// margins); else the size the ringing page keeps (100%); else smaller still, to fit. At 150% the
+// digits stood up into the weather's line, and ran past the panel's sides.
+func (r *renderer) clockFaces(room int, hour, ampm string) (clock, ampmFace font.Face) {
+	fits := func(c, a font.Face) bool {
+		w := r.width(c, hour)
+		if ampm != "" {
+			w += r.s(18) + r.width(a, ampm)
+		}
+		return capHeight(c) <= room && w <= r.w-2*r.margin
+	}
+	if fits(r.clock, r.ampm) {
+		return r.clock, r.ampm
+	}
+	if fits(r.ringClock, r.ringAmpm) {
+		return r.ringClock, r.ringAmpm
+	}
+	k := float64(max(room, 1)) / float64(capHeight(r.ringClock))
+	return r.pxFace(true, int(float64(r.s(230))*k)), r.pxFace(true, int(float64(r.s(56))*k))
+}
+
+// clockRoof is as high as the classic clock's digits may stand: under the weather's line at the top
+// with a little room, or under the top margin where there is none.
+func (r *renderer) clockRoof(s scene) int {
+	if s.weather.Temp == "" && s.weather.Condition == "" {
+		return r.margin
+	}
+	mid := r.weatherMid()
+	return max(mid+r.s(weatherMark)/2, mid+r.s(11)+r.small.Metrics().Descent.Ceil()) + r.s(4)
+}
+
+// clockLeft is where a centered clock's digits start, hw wide with an AM/PM aw wide a gap after them.
+// The digits are centered on the screen and the AM/PM hangs to their right, so the time stands on the
+// same axis as the date centered under it: with the two centered as one group the digits sat some
+// fifty pixels left of it on a Show 5. Where the AM/PM would then pass the margin (a wide time at a
+// large text size), the group is centered as before.
+func (r *renderer) clockLeft(hw, gap, aw int) int {
+	if x := (r.w - hw) / 2; x >= gap+aw+r.margin {
+		return x
+	}
+	return (r.w - hw - gap - aw) / 2
 }
 
 // bigClock is the idle screen: the time across the middle, the date beneath, and under that the running
@@ -1007,7 +1115,7 @@ func (r *renderer) bigClock(s scene) {
 	if s.callButton && foot && align < 0 {
 		left = r.callButtonRect().Max.X + r.s(24)
 	}
-	r.setDateAt(r.timeAndDateAt(s.now, base, suffix, align, left, foot).Inset(-r.s(16)))
+	r.setDateAt(r.timeAndDateAt(s.now, base, suffix, align, left, foot, r.clockRoof(s)).Inset(-r.s(16)))
 	if timers {
 		r.timersFoot(s, base+timersAt)
 	}
@@ -1075,7 +1183,7 @@ func (r *renderer) weatherCornerAt(s scene, right bool) {
 		}
 		// Muted, the header's "microphone off" pill is on this row too: the temperature alone when the
 		// whole line would run under it.
-		if right && s.muted && !short && w.Temp != "" && left < r.micPillRight()+r.s(12) {
+		if right && headerLine(s) != "" && !short && w.Temp != "" && left < r.micPillRight(s)+r.s(12) {
 			short = true
 			continue
 		}
@@ -1208,7 +1316,8 @@ func (r *renderer) cornerClock(s scene) {
 func (r *renderer) cornerClockDated(s scene) {
 	r.cornerClock(s)
 	d := locale.ShortDate(s.now, screenLang())
-	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+r.s(54), dim)
+	// A line of the date's words under the clock's, so larger words keep the two apart.
+	r.text(r.tiny, d, r.w-r.margin-r.width(r.tiny, d), r.margin+r.s(26)+r.grownForText(r.s(28)), dim)
 }
 
 // status is a phase title with an indicator that breathes while the device waits.
@@ -1229,6 +1338,11 @@ func (r *renderer) status(s scene, title string, breathe bool) {
 // pixels) and stopping at the footer. A long reply is shrunk one step, and one still too long is shown a
 // page at a time as the voice gets to it, said being how much of it has been said (replyPage).
 func (r *renderer) words(heard, reply string, said float64, top int) {
+	r.wordsIn(heard, reply, said, top, cream)
+}
+
+// wordsIn is words with the reply in ink: the accent for the line a failed request leaves in its place.
+func (r *renderer) wordsIn(heard, reply string, said float64, top int, ink color.RGBA) {
 	y := top
 	maxW := r.w - 2*r.margin
 	bottom := r.h - r.s(70)
@@ -1257,7 +1371,7 @@ func (r *renderer) words(heard, reply string, said float64, top int) {
 		lines = r.wrap(face, reply, maxW-r.width(face, " …"))
 	}
 	for _, line := range replyPage(lines, fit, said) {
-		r.text(face, line, r.margin, y+lineH-r.s(12), cream)
+		r.text(face, line, r.margin, y+lineH-r.s(12), ink)
 		y += lineH
 	}
 }
@@ -1278,7 +1392,10 @@ const headerH = 36
 //
 // The strip is filled before the words are drawn, so the line stays readable over a photo, a camera
 // view or a sunrise. On an ordinary page that fill is the background and nothing shows but the words.
-func (r *renderer) header(s scene) {
+func (r *renderer) header(s scene) { r.headerAt(s, r.s(4)) }
+
+// headerAt is the header's pill with its top at y.
+func (r *renderer) headerAt(s scene, y int) {
 	// The settings sheet is the one page that says this better itself: it has a Microphone row,
 	// reading "Muted" or "Listening", with the switch that changes it. A strip over the top of the
 	// sheet would say the same thing worse and cut the top off its card.
@@ -1286,13 +1403,10 @@ func (r *renderer) header(s scene) {
 		return
 	}
 
-	// The microphone is the only thing here so far. It is a switch so the next one has somewhere
-	// obvious to go, and so two of them can never overprint each other.
-	var line string
-	switch {
-	case s.muted:
-		line = tr("microphone_off")
-	default:
+	// The microphone off, and what the device has lost (link_status.go): one pill for both, so two
+	// of them can never overprint each other.
+	line := headerLine(s)
+	if line == "" {
 		return
 	}
 
@@ -1302,8 +1416,8 @@ func (r *renderer) header(s scene) {
 	w := r.width(r.tiny, line)
 	pad := r.s(14)
 	x := (r.w - w) / 2
-	r.roundButton(image.Rect(x-pad, r.s(4), x+w+pad, r.s(32)), float64(r.s(14)), walnut)
-	r.text(r.tiny, line, x, r.s(25), amber)
+	r.roundButton(image.Rect(x-pad, y, x+w+pad, y+r.s(28)), float64(r.s(14)), walnut)
+	r.text(r.tiny, line, x, y+r.s(21), amber)
 	r.marked = true
 }
 
@@ -1313,9 +1427,9 @@ func playingWord(s scene) string {
 	case s.strip:
 		return "" // the strip says it, and the footer is under it
 	case s.playing:
-		return "♪ playing"
+		return tr("music_playing")
 	case s.paused:
-		return "♪ paused"
+		return tr("music_paused")
 	}
 	return ""
 }
@@ -1333,9 +1447,10 @@ func (r *renderer) callButtonRect() image.Rectangle {
 func (r *renderer) callButtonDraw() {
 	b := r.callButtonRect()
 	rad := float64(b.Dx()) / 2
-	green := color.RGBA{0x2e, 0xa0, 0x4f, 0xff}
 	r.roundShadow(b, rad, r.sf(10), r.s(3), shadowAlpha())
-	r.roundFill(b, rad, shift(green, 16), shift(green, -12))
+	// Pressed as far round it as a tap on it reaches (Display.gesture).
+	on := r.press.on && r.press.at.In(b.Inset(-r.s(12)))
+	r.roundFill(b, rad, r.pressTinted(on, shift(answerGreen, 16), cream), r.pressTinted(on, shift(answerGreen, -12), cream))
 	r.roundHighlight(b, rad)
 	icon := r.s(32)
 	r.mdiIcon("phone", b.Min.X+(b.Dx()-icon)/2, b.Min.Y+(b.Dy()-icon)/2, 32, cream)

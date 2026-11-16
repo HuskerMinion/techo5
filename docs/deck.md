@@ -23,7 +23,7 @@ listens; answer **Allow** for private networks.
 
 ## Set up the deck
 
-On the device's setup page, **Screen & Photos → Deck**:
+On the device's setup page, **Screen → Deck**:
 
 1. **OBS address**: your computer's address, like `192.168.1.20` (add `:4456` if you changed the
    port). Then the password, and **Save**. The line under it says **Connected** once OBS answers.
@@ -44,7 +44,7 @@ On the device's setup page, **Screen & Photos → Deck**:
 - **Open it** with a swipe up from the bottom edge of the clock: start right at the bottom of the
   screen. Once a deck has buttons, a swipe up that starts there opens it; anywhere else, and on the
   now-playing and weather pages, a swipe up is still the volume (unless **Swipe for volume** is off).
-  You can also set **Tap on the clock** to **Deck** (setup page, Screen & Photos, or Settings →
+  You can also set **Tap on the clock** to **Deck** (setup page, Screen, or Settings →
   Display on the device).
 - **Press** a button. It lights up and sinks while the press goes out, and turns red for a moment if
   it failed.
@@ -80,7 +80,7 @@ for Windows, macOS and Linux.
 
    Each file is built by GitHub from the release's own source; check one with
    `gh attestation verify <file> --repo HuskerMinion/techo5`.
-2. On the Show's setup page, **Screen & Photos → Deck → Computers**: **Look for computers**, pick
+2. On the Show's setup page, **Screen → Deck → Computers**: **Look for computers**, pick
    yours (or type its address), type the key, and **Pair**. It says **Connected** with how many
    apps and scripts it found.
 3. On a page, give a button a **Computer** action and pick the computer:

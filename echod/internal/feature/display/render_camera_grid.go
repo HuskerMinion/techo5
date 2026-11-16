@@ -20,8 +20,19 @@ func (r *renderer) gridCells(n int) []image.Rectangle {
 	return gridRects(n, image.Rect(0, r.gridTop(), r.w, r.h-r.cameraStrip()), r.s(4))
 }
 
-// gridTop is where the cells start, under the strip with the name and the time.
-func (r *renderer) gridTop() int { return 44 }
+// gridTop is where the cells start, under the strip with the name and the time: as tall as its words
+// need in r.small with room above and below them, and never less than the 44 it was at 100%. A fixed 44
+// put the title against the top of the panel once the text was larger.
+func (r *renderer) gridTop() int {
+	m := r.small.Metrics()
+	return max(44, (m.Ascent+m.Descent).Ceil()+2*r.s(8))
+}
+
+// gridTopLine is the baseline of the strip's words, centered in it.
+func (r *renderer) gridTopLine() int {
+	m := r.small.Metrics()
+	return (r.gridTop()-(m.Ascent+m.Descent).Ceil())/2 + m.Ascent.Ceil()
+}
 
 // gridRects lays n cells out in area, cols by rows as home.GridLayout says, gap apart.
 func gridRects(n int, area image.Rectangle, gap int) []image.Rectangle {
@@ -119,7 +130,7 @@ func (r *renderer) cameraGrid(s scene, v home.CameraView) {
 		} else {
 			msg := tr("drawer_connecting")
 			if c.Error != "" {
-				msg = c.Error
+				msg = tr("drawer_no_picture") // fixed words, as the single camera's (cameraView)
 			}
 			msg = r.clipTo(r.tiny, msg, box.Dx()-2*r.s(8))
 			r.text(r.tiny, msg, box.Min.X+(box.Dx()-r.width(r.tiny, msg))/2, box.Min.Y+box.Dy()/2, dim)
@@ -131,16 +142,20 @@ func (r *renderer) cameraGrid(s scene, v home.CameraView) {
 	}
 
 	draw.Draw(r.dst, image.Rect(0, 0, r.w, r.gridTop()), image.NewUniform(shade), image.Point{}, draw.Over)
-	r.text(r.small, tr("cameras"), r.margin, 32, captionText)
+	r.text(r.small, tr("cameras"), r.margin, r.gridTopLine(), captionText)
 	t := clockHM(s.now)
-	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), 32, captionDim)
+	r.text(r.small, t, r.w-r.margin-r.width(r.small, t), r.gridTopLine(), captionDim)
 
 	hint := tr("drawer_grid_close")
 	if left := time.Until(v.Until).Round(time.Second); left > 0 && left < 24*time.Hour {
 		hint += "  ·  " + left.String()
 	}
 	draw.Draw(r.dst, image.Rect(0, r.h-r.cameraStrip(), r.w, r.h), image.NewUniform(shade), image.Point{}, draw.Over)
-	r.text(r.tiny, r.clipTo(r.tiny, hint, r.w-2*r.margin), r.margin, r.h-11, captionDim)
+	// Centered in the strip, which grows with the sound button beside it (cameraStrip) as the title's
+	// does with its words: 11 pixels off the foot left it low on a large panel.
+	m := r.tiny.Metrics()
+	foot := r.h - r.cameraStrip() + (r.cameraStrip()-(m.Ascent+m.Descent).Ceil())/2 + m.Ascent.Ceil()
+	r.text(r.tiny, r.clipTo(r.tiny, hint, r.w-2*r.margin), r.margin, foot, captionDim)
 }
 
 // gridCellAt is the grid cell a tap at p landed on, of a grid of n, or -1.

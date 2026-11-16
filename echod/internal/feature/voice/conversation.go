@@ -236,7 +236,9 @@ type conversation struct {
 
 	// closing says what was heard was only a way of ending the conversation ("thank you", "that's
 	// all"), so the reply to it is the last thing said: no follow-up listens after it (#510).
-	closing bool
+	// closingExact is that it was the phrase alone, with no filler before it or name after it (#532).
+	closing      bool
+	closingExact bool
 
 	// turn measures the one that is open and reports it when it closes. Nil while idle, and every
 	// method on it tolerates that, so the phases do not each have to check.
@@ -312,6 +314,10 @@ type conversation struct {
 	// busyAt is the last time the microphones were seen to be somebody else's, while confirming is on.
 	// What is asked about includes the two seconds before the wake, which must not be a call's.
 	busyAt time.Time
+
+	// audioDropped counts the audio messages sendAudio dropped because the queue to Home Assistant was
+	// full, for the turn's "sent audio" line. Written by the streamers, read by them.
+	audioDropped atomic.Uint64
 }
 
 // graceStart is how long to wait for a stopped run to close before starting the next one anyway.
@@ -430,7 +436,32 @@ func (c *conversation) sendAudio(be backend, b []byte) {
 	select {
 	case c.out <- func() error { return be.Audio(frame) }:
 	default:
+		c.audioDropped.Add(1)
 	}
+}
+
+// historyWait is how long a turn's history may wait for room in the queue to Home Assistant. Unlike a
+// frame it is the start of the request, said before the turn opened and nowhere else (#477).
+//
+// It is kept under what the microphone holds for a listener (eight frames, 160 ms; mic.listenLocked):
+// the turn reads no frames while it waits, and a longer wait would trade the end of the history for
+// the speech right after it.
+const historyWait = 120 * time.Millisecond
+
+// sendHistory queues a turn's history as sendAudio does a frame, but waits up to historyWait for room
+// rather than dropping it at once.
+func (c *conversation) sendHistory(ctx context.Context, be backend, b []byte) {
+	frame := append([]byte(nil), b...)
+	t := time.NewTimer(historyWait)
+	defer t.Stop()
+	select {
+	case c.out <- func() error { return be.Audio(frame) }:
+		return
+	case <-ctx.Done():
+	case <-t.C:
+	}
+	c.audioDropped.Add(1)
+	slog.Warn("a turn's history was not sent: the queue to home assistant stayed full", "ms", len(b)*1000/(2*mic.Rate))
 }
 
 // sends drains the queue. A failure ends the turn through the same path a pipeline error takes, and
@@ -601,7 +632,7 @@ func (c *conversation) turnEvent(e event) {
 		// The last words heard decide (#510): realtime voice can hear more than once in a turn, and
 		// "thanks... and turn on the lights" is not a goodbye.
 		if e.text != "" {
-			c.closing = closingPhrase(e.text)
+			c.closing, c.closingExact = closingPhrase(e.text), closingExact(e.text)
 		}
 		if e.text != "" {
 			slog.Info("heard", "slot", c.slot+1, "text", activity.Said(e.text))
@@ -828,6 +859,7 @@ func (c *conversation) turnEvent(e event) {
 
 		slog.Error("pipeline error", "slot", c.slot+1, "code", e.code, "message", e.msg)
 		c.clearPending()
+		c.fails(failureFor(e.code))
 		c.turn.Fails(e.code)
 		c.idle("failed", activity.Failed)
 		c.trouble()
@@ -876,6 +908,7 @@ func (c *conversation) turnEvent(e event) {
 		case phaseThinking:
 			slog.Warn("gave up waiting for an answer", "slot", c.slot+1, "after", wakeword.MaxThink(c.slot))
 		}
+		c.fails(FailedTimeout)
 		c.turn.TimesOut()
 		c.idle("timed out", activity.Failed)
 		c.trouble()
@@ -987,6 +1020,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if !c.be.Ready() {
 		slog.Warn("no voice pipeline ready, ignoring wake", "slot", slot+1, "backend", c.be.Name())
 		wakeword.Chime(slot, n.followUp)
+		why := FailedNoAssistant
+		if _, home := c.be.(ha); home {
+			why = FailedNotReady
+		}
+		c.refuses(n, why)
 		c.trouble()
 		return false
 	}
@@ -998,6 +1036,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	phrase, ok := c.phraseFor(slot)
 	if slot > 0 && !ok {
 		slog.Warn("no wake word in that slot, nothing to reach its pipeline with", "slot", slot+1)
+		c.refuses(n, FailedNoAssistant)
 		c.trouble()
 		return false
 	}
@@ -1011,7 +1050,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 		c.opened = time.Now()
 	}
 	c.lookHere = false
-	c.closing = false
+	c.closing, c.closingExact = false, false
 	// Counted from the wake word: a turn it opens starts again, a follow-up is one more in a row.
 	if n.followUp {
 		c.followUps++
@@ -1127,10 +1166,12 @@ func endpointSettings() endpoint.Settings {
 // slot's follow-ups allow it, unless a turn is already owed or the answer put a page on the screen.
 //
 // A closing phrase ("thank you", "that's all") ends it, even a question Home Assistant asked: "never
-// mind" is the answer to that too (#510).
+// mind" is the answer to that too (#510). With a filler before it or a word after it (#532) it may
+// have been an answer ("yes, thank you"), so a question asked back is still listened for.
 func (c *conversation) followsReply(slot int) bool {
-	if c.closing {
-		if c.pending != nil && c.pending.followUp {
+	asked := c.pending != nil && c.pending.followUp
+	if c.closing && (c.closingExact || !asked) {
+		if asked {
 			c.pending = nil
 		}
 		slog.Info("heard a closing phrase; not listening again", "slot", slot+1)
@@ -1256,7 +1297,7 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	was := c.phase
 	c.stopStreaming()
 	c.disarm()
-	c.closing = false
+	c.closing, c.closingExact = false, false
 
 	if was != phaseIdle {
 		if rt, ok := c.be.(*rtBackend); ok {
@@ -1361,6 +1402,28 @@ func (c *conversation) enter(p phase) {
 	c.visible.Store(int32(p))
 	c.shown.Phase = p.String()
 	Changed.Emit(c.shown)
+	// Said once, with the idle that ends the request: the state is told again for other reasons (a
+	// sound canceled with no turn open), and that is not the request failing again.
+	c.shown.Failed = ""
+}
+
+// fails notes why the open turn is about to end with nothing, for the idle that ends it to say. With
+// no turn open there is no request to have failed: an error that arrives late is only logged.
+func (c *conversation) fails(why string) {
+	if c.phase != phaseIdle {
+		c.shown.Failed = why
+	}
+}
+
+// refuses says a turn somebody asked for could not open at all. Not one nobody asked for: a follow-up
+// that cannot open leaves the answer before it on the screen.
+func (c *conversation) refuses(n nextTurn, why string) {
+	if n.followUp {
+		return
+	}
+	c.shown = State{Phase: phaseIdle.String(), Failed: why}
+	Changed.Emit(c.shown)
+	c.shown.Failed = ""
 }
 
 // startPending opens the turn that was held back, if there is one.
@@ -1672,8 +1735,9 @@ func (s *saidCheck) watch(frame []int16) bool {
 }
 
 // toneEnds is how long after a turn opens its wake sound is loud enough to matter to the microphones.
+// A headphone jack asleep when the turn opens plays it that much later (#537).
 func toneEnds(slot int, followUp bool) time.Duration {
-	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail
+	return wakeword.ChimeLength(slot, followUp) + speaker.HardwareTail + speaker.Get().WakeDelay()
 }
 
 // pump sends the history and then the frames to the backend until it is told to stop. hold is
@@ -1770,13 +1834,18 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 		pre = nil
 	}
 
+	// What went up before the frames, and what the queue dropped from here on, for the log below: the
+	// seconds it gives are the frames' alone, which on a turn with history are fewer than were heard.
+	historyS := float64(len(pre)) / float64(mic.Rate)
+	droppedAt := c.audioDropped.Load()
+
 	if len(pre) > 0 {
 		for _, s := range pre {
 			buf = append(buf, byte(s), byte(s>>8))
 		}
 		recording.Get().Frame(buf)
 
-		c.sendAudio(be, buf)
+		c.sendHistory(ctx, be, buf)
 		slog.Debug("sent audio history", "ms", len(pre)*1000/mic.Rate)
 	}
 
@@ -1801,6 +1870,8 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 		slog.Info("sent audio",
 			"slot", slot+1,
 			"seconds", float64(samples)/float64(mic.Rate),
+			"history_s", math.Round(historyS*100)/100,
+			"dropped", c.audioDropped.Load()-droppedAt,
 			"endpoint_s", math.Round(endpointAt*10)/10,
 			"peak", peak,
 			"peakdbfs", math.Round(20*math.Log10(max(float64(peak), 1)/32768)*10)/10,

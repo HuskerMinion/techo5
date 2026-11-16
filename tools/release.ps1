@@ -558,10 +558,12 @@ try {
     }
 
     # Files no image carries, which a device downloads from the release its daemon pins them to, by size
-    # and SHA-256: NetBird's client (feature/netbird, pinned.go) and the Japanese font (feature/cjkfont).
+    # and SHA-256: NetBird's client (feature/netbird, pinned.go), the Japanese font (feature/cjkfont) and
+    # the person detection model (feature/person, pinned.go).
     # The release a pin names publishes the file, the same bytes; a later one checks it is still there.
     foreach ($p in @(@{ Pin = 'feature/netbird/pinned.go'; Asset = 'netbird-arm64.tar.gz'; Build = 'tools/linux/build-netbird.sh' },
-                     @{ Pin = 'feature/cjkfont/cjkfont.go'; Asset = 'techo5-noto-sans-jp.tar.gz'; Build = 'tools/fonts/make_cjk_font.py' })) {
+                     @{ Pin = 'feature/cjkfont/cjkfont.go'; Asset = 'techo5-noto-sans-jp.tar.gz'; Build = 'tools/fonts/make_cjk_font.py' },
+                     @{ Pin = 'feature/person/pinned.go'; Asset = 'techo5-person-detect.tflite'; Build = 'a copy of echod/internal/feature/person/testdata/person_detect.tflite' })) {
         $pin = Get-Content -Raw (Join-Path $PSScriptRoot "../echod/internal/$($p.Pin)")
         if ($pin -notmatch ('releases/download/([^/"]+)/' + [regex]::Escape($p.Asset) + '"')) { throw "$($p.Pin) names no $($p.Asset)" }
         $pinTag = $Matches[1]
@@ -577,8 +579,12 @@ try {
             Write-Host "== $($p.Asset): sha256 $got"
             $bootAssets += $file
         } else {
-            $there = @(& gh release view $pinTag --repo $repo --json assets -q '.assets[].name')
-            if ($there -notcontains $p.Asset) { throw "$($p.Pin)'s $($p.Asset) is not in release $pinTag" }
+            # By the checksum GitHub keeps for the file, so a replaced upload is caught as well as a missing one.
+            $there = @(& gh release view $pinTag --repo $repo --json assets -q (".assets[] | select(.name==`"" + $p.Asset + "`") | .digest + `" `" + (.size|tostring)"))
+            if ($there.Count -eq 0) { throw "$($p.Pin)'s $($p.Asset) is not in release $pinTag" }
+            if ($there[0] -ne "sha256:$pinSha $pinSize") {
+                throw "$($p.Pin)'s $($p.Asset) in release $pinTag is not the file it pins ($($there[0]), want sha256:$pinSha $pinSize)"
+            }
         }
     }
 

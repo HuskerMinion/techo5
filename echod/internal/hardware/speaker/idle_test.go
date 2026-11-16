@@ -226,3 +226,24 @@ func TestAmpWakeFails(t *testing.T) {
 		t.Error("the audio was held for good")
 	}
 }
+
+// The Echo 2nd gen's gate (paths_dot.go) is its amplifier's enumerated mute alone: sleeping holds it,
+// waking on the speaker lets it go, and no enable is written either way.
+var radarTestGate = &ampGate{mute: "MFP Gpio Mute", muted: "On", unmuted: "Off"}
+
+func TestAmpGateMuteOnly(t *testing.T) {
+	sleep := radarTestGate.sleep()
+	if len(sleep) != 1 || sleep[0].name != "MFP Gpio Mute" || sleep[0].value != "On" {
+		t.Errorf("sleep: %+v", sleep)
+	}
+	on, unmute := radarTestGate.wake(true)
+	if len(on) != 0 {
+		t.Errorf("wake wrote an enable: %+v", on)
+	}
+	if len(unmute) != 1 || unmute[0].name != "MFP Gpio Mute" || unmute[0].value != "Off" {
+		t.Errorf("wake, unmute: %+v", unmute)
+	}
+	if on, unmute := radarTestGate.wake(false); len(on) != 0 || len(unmute) != 0 {
+		t.Errorf("wake on the jack: on %+v, unmute %+v", on, unmute)
+	}
+}

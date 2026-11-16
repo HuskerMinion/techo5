@@ -3,8 +3,10 @@
 package display
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"golang.org/x/image/font"
@@ -21,25 +23,26 @@ func TestChoosingTheTextSize(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	d := &Display{}
 	d.textSizeSel = textSizeSelect(d)
-	if textSize() != layout.DefaultTextSize() || textSteps[textSizeIndex()] != layout.DefaultTextSize() {
+	steps := offeredSteps()
+	if textSize() != layout.DefaultTextSize() || steps[textSizeIndex()] != layout.DefaultTextSize() {
 		t.Fatalf("a new device draws at %d%% (step %d), want the board's %d%%", textSize(), textSizeIndex(), layout.DefaultTextSize())
 	}
-	if len(textSizeOptions()) != len(textSteps) || textSizeOptions()[0] != "70%" {
+	if len(textSizeOptions()) != len(steps) || textSizeOptions()[0] != "70%" {
 		t.Errorf("the options are %q", textSizeOptions())
 	}
-	last := len(textSteps) - 1
+	last := len(steps) - 1
 	d.setTextSize(last)
-	if got := config.Get().Screen.TextSize; got != 125 {
+	if got := config.Get().Screen.TextSize; got != layout.MostTextSize() {
 		t.Errorf("saved %d", got)
 	}
-	if textSizeRow().value != "125%" || textSizeRow().id != "textsize" {
+	if textSizeRow().value != fmt.Sprintf("%d%%", layout.MostTextSize()) || textSizeRow().id != "textsize" {
 		t.Errorf("the row is %+v", textSizeRow())
 	}
-	if p, ok := textSizePicker(); !ok || p.cur != last || len(p.opts) != len(textSteps) {
+	if p, ok := textSizePicker(); !ok || p.cur != last || len(p.opts) != len(steps) {
 		t.Errorf("the picker is %+v", p)
 	}
-	d.setTextSize(len(textSteps))
-	if textSize() != 125 {
+	d.setTextSize(len(steps))
+	if textSize() != layout.MostTextSize() {
 		t.Error("an index past the list changed the text size")
 	}
 	// From Home Assistant, by the option's name.
@@ -91,5 +94,17 @@ func TestAHandEditedTextSizeIsHeld(t *testing.T) {
 	config.Use(path)
 	if got := textSize(); got != config.TextSizeMost {
 		t.Errorf("drawn at %d%%, want %d%%", got, config.TextSizeMost)
+	}
+}
+
+// 150% is a step the Skylight offers, and no other board: past 125% the Show 5's pages do not hold.
+func TestOnlyTheSkylightOffers150(t *testing.T) {
+	steps := offeredSteps()
+	last := steps[len(steps)-1]
+	if layout.Skylight() != (last == 150) || last != layout.MostTextSize() {
+		t.Errorf("this board offers up to %d%%", last)
+	}
+	if !slices.Contains(textSteps, 150) {
+		t.Error("150% is not a step")
 	}
 }

@@ -141,6 +141,7 @@ func (f *Feature) remoteOff() {
 	f.mu.Lock()
 	for token := range f.remote.sessions {
 		delete(f.live, token)
+		f.rejected.drop(token)
 	}
 	gone := len(f.remote.sessions)
 	f.remote.sessions = nil

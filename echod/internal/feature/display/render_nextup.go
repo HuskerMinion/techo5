@@ -112,19 +112,44 @@ func (r *renderer) drawNextUp(s scene) {
 	r.roundRect(image.Rect(box.Min.X+r.s(18), stripeTop, box.Min.X+r.s(24), stripeTop+r.s(36)), r.s(3), col)
 
 	right := box.Max.X - r.s(20)
+	chip := false
 	if !config.Get().Calendar.NoCountdowns {
 		if t := countdownText(s.now, c.ev.Start, c.ev.End); t != "" {
 			right = r.countChip(t, right, base-r.s(11), !s.nightDim, r.tiny) - r.s(16)
+			chip = true
 		}
 	}
+	// The title comes first. Where the line leaves it less than a few words' room (at 150% it was cut to
+	// "Pu…"), the time after it gives way when the chip already says how soon, and then "Next:", which the
+	// card says by being there.
 	x := box.Min.X + r.s(40)
-	r.text(r.small, "Next:", x, base, amber)
-	x += r.width(r.small, "Next:") + r.s(12)
+	label := tr("nextup_label")
 	when := "  ·  " + nextWhen(c.ev, s.now)
-	title := clipText(r, r.small, c.ev.Summary, right-x-r.width(r.small, when))
+	need := min(r.width(r.small, c.ev.Summary), r.atTextSize(r.s(220)))
+	room := func() int {
+		w := right - x - r.width(r.small, when)
+		if label != "" {
+			w -= r.width(r.small, label) + r.s(12)
+		}
+		return w
+	}
+	// What the title shows in the room is measured, not the room: a cut is made back to a whole word.
+	short := func() bool { return r.width(r.small, clipText(r, r.small, c.ev.Summary, room())) < need }
+	if short() && chip {
+		when = ""
+	}
+	if short() {
+		label = ""
+	}
+	titleRoom := room()
+	if label != "" {
+		r.text(r.small, label, x, base, amber)
+		x += r.width(r.small, label) + r.s(12)
+	}
+	title := clipText(r, r.small, c.ev.Summary, titleRoom)
 	r.text(r.small, title, x, base, cream)
 	x += r.width(r.small, title)
-	if x+r.width(r.small, when) <= right {
+	if when != "" && x+r.width(r.small, when) <= right {
 		r.text(r.small, when, x, base, dim)
 	}
 

@@ -66,6 +66,8 @@ func (f *Feature) ended(url string) {
 	if tries >= resumeTries {
 		slog.Warn("radio: the stream keeps dropping, leaving it off",
 			"station", station, "tries", tries, "within", resumeWindow)
+		// Somebody was listening to it: why it went quiet is said, once, where it was only logged.
+		f.startFailed(DroppingHint)
 		return
 	}
 

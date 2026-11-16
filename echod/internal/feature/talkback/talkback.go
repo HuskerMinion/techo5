@@ -35,6 +35,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/halfrate"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/onvifback"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -227,7 +228,8 @@ func (f *Feature) start(entity string) {
 			if f.gen == gen {
 				f.state.Phase, f.state.Left = Idle, 0
 				if err != nil {
-					f.state.Error, f.failAt = clip(err.Error()), time.Now()
+					// Shown on the camera page: no login or token of an address the error names.
+					f.state.Error, f.failAt = clip(redact.URLSecrets(err.Error())), time.Now()
 				}
 			}
 			f.mu.Unlock()

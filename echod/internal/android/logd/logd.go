@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
@@ -174,7 +175,7 @@ func appendAttr(b *strings.Builder, group string, a slog.Attr) {
 // message with an embedded error stays one readable field.
 func value(v slog.Value) string {
 	s := v.String()
-	if strings.ContainsAny(s, " \t=\"") {
+	if strings.ContainsAny(s, " \t=\"") || strings.ContainsFunc(s, unicode.IsControl) {
 		return strconv.Quote(s)
 	}
 	return s

@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
-// The settings as a file, from the General tab: saved, and given back to this device after a reinstall,
+// The settings as a file, from the System tab: saved, and given back to this device after a reinstall,
 // or to another to start it off the same way (config.Export, config.Restored). Restoring asks first,
 // with what it would change, and then restarts the daemon, since everything reads its settings as it
 // starts.
@@ -51,28 +51,28 @@ func forgetWaiting() {
 
 // settingsFileSection offers the file and takes one back.
 func settingsFileSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Settings</legend>
-	 <p><a href="/setup/settings.json">Download settings</a> — everything this device is set to, as a file.</p>
+	fieldsetOpen(w, "settingsfile", "Settings")
+	fmt.Fprint(w, `<p><a href="/setup/settings.json">Download settings</a> — everything this device is set to, as a file.</p>
 	 <p class="note">Keys, passwords, the settings lock's PIN, the house word, calendars' private addresses
 	  and cameras' addresses are left out of it, and so are this device's privacy switches, what it lets in
 	  over the network (Sendspin, AirPlay, Spotify Connect, DLNA, video, the Bluetooth proxy), what its
 	  microphones and camera may do (drop-in, sending the room to Home Assistant, keeping clips, presence,
 	  no wake word), its paired speaker and what it is in the middle of. It still says where the device is and holds addresses on
 	  your network: keep it, don't post it.</p>`)
-	fmt.Fprintf(w, `<form method="post" action="/setup/restore" enctype="multipart/form-data">
+	fmt.Fprintf(w, `<form method="post" action="/setup/restore" enctype="multipart/form-data"%s>
 	 <input type="hidden" name="token" value="%s">
 	 <label for="settingsfile">Restore settings from a file</label>
 	 <input id="settingsfile" name="file" type="file" accept=".json,application/json" required>
 	 <p class="note">You are shown what would change before anything does. Restoring keeps this device's
 	  own keys, passwords and privacy switches, then restarts it.</p>
 	 <div class="btns"><button type="submit">Look at this file</button></div></form></fieldset>`,
-		html.EscapeString(token))
+		busy(busyLook), html.EscapeString(token))
 }
 
 // settingsFile hands over the settings as a file.
 func (f *Feature) settingsFile(w http.ResponseWriter, r *http.Request) {
 	if _, in := f.session(r); !in {
-		http.Error(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	b, err := config.Export(config.Get(), layout.Model, layout.Version)
@@ -91,7 +91,7 @@ func (f *Feature) settingsFile(w http.ResponseWriter, r *http.Request) {
 func (f *Feature) restore(w http.ResponseWriter, r *http.Request) {
 	token, in := f.session(r)
 	if !in {
-		web.Refuse(w, "not let in", http.StatusForbidden)
+		notLetIn(w)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -123,22 +123,22 @@ func (f *Feature) restore(w http.ResponseWriter, r *http.Request) {
 
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "choose a settings file first"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "choose a settings file first"), http.StatusSeeOther)
 		return
 	}
 	defer file.Close()
 	b, err := io.ReadAll(io.LimitReader(file, maxSettings))
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "the file did not arrive whole"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "the file did not arrive whole"), http.StatusSeeOther)
 		return
 	}
 	rs, err := config.Restored(config.Get(), b, layout.Model)
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", err.Error()), http.StatusSeeOther)
 		return
 	}
 	if len(rs.Changed) == 0 {
-		http.Redirect(w, r, back("general", "problem", "that file is this device's settings already; nothing to change"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "that file is this device's settings already; nothing to change"), http.StatusSeeOther)
 		return
 	}
 	waiting.Lock()
@@ -182,10 +182,11 @@ func restorePage(w http.ResponseWriter, token string, rs config.Restoration) {
 	 <p class="note">Everything in those parts is replaced with what the file says. This device keeps its own
 	  keys, passwords, house word, privacy switches and paired speaker, and restarts to use the rest: back
 	  in about a minute.</p>
-	 <form method="post" action="/setup/restore"><input type="hidden" name="token" value="%s">
+	 <form method="post" action="/setup/restore"%s><input type="hidden" name="token" value="%s">
 	  <input type="hidden" name="apply" value="yes">
 	  <div class="btns"><button type="submit">Restore and restart</button>
-	  <a href="/setup?tab=general">Cancel</a></div></form></fieldset></div>`, html.EscapeString(token))
+	  <a href="/setup?tab=system">Cancel</a></div></form></fieldset></div>`, busy(busyRestore), html.EscapeString(token))
+	pageScript(w) // the busy line above (script.go)
 }
 
 // applyRestore applies the file this browser looked at, and restarts.
@@ -196,12 +197,12 @@ func (f *Feature) applyRestore(w http.ResponseWriter, r *http.Request, token str
 	waiting.Unlock()
 	forgetWaiting()
 	if !ok {
-		http.Redirect(w, r, back("general", "problem", "that file was not looked at here, or it was too long ago; send it again"), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "that file was not looked at here, or it was too long ago; send it again"), http.StatusSeeOther)
 		return
 	}
 	rs, err := config.Set().Restore(file, layout.Model)
 	if err != nil {
-		http.Redirect(w, r, back("general", "problem", "the settings could not be restored: "+err.Error()), http.StatusSeeOther)
+		http.Redirect(w, r, back("settingsfile", "problem", "the settings could not be restored: "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	slog.Warn("settings restored from a file on the setup page; restarting to use them", "changes", rs.Changed, "reenter", rs.Reenter)
@@ -211,7 +212,7 @@ func (f *Feature) applyRestore(w http.ResponseWriter, r *http.Request, token str
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Restore settings</p>
 	 <div class="banner ok">Restored. The device is restarting to use them and will be back in about a minute.</div>
-	 <p><a href="/setup?tab=general">Back to the setup page</a></p></div>`, html.EscapeString(deviceName()))
+	 <p><a href="/setup?tab=system">Back to the setup page</a></p></div>`, html.EscapeString(deviceName()))
 
 	restartAfterRestore()
 }

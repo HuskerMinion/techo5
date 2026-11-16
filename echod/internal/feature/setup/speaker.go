@@ -17,7 +17,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
-// speakerSection is what is changed most on Sound & Voice: the volume, the wake word, quiet hours, do
+// speakerSection is what is changed most on Sound: the volume, the wake word, quiet hours, do
 // not disturb, and on a device with a jack where the sound goes. The Dot has no screen to set these on.
 //
 // Each field carries what the page showed beside it, and a save changes only what was changed on the
@@ -25,8 +25,9 @@ import (
 func speakerSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	p := media.Get()
-	fmt.Fprint(w, `<fieldset><legend>Speaker and voice</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "speaker", "sound")
+	fieldsetOpen(w, "speaker", "Speaker and voice")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "speaker")
 	vol := p.Volume()
 	fmt.Fprintf(w, `<label for="volume">Volume, 0 to %d</label>
 	 <input id="volume" name="volume" type="number" min="0" max="%d" value="%d"><input type="hidden" name="was_volume" value="%d">`,
@@ -42,6 +43,11 @@ func speakerSection(w http.ResponseWriter, token string) {
 		top := p.LouderTop()
 		fmt.Fprintf(w, `<p><label><input type="checkbox" name="top" value="yes" style="width:auto"%s> Louder top volume:
 	  the steps above 16 go up to 8 dB hotter into the tuning, for music that stays too quiet at full volume; can distort with Speaker gain raised</label><input type="hidden" name="was_top" value="%t"></p>`, checkedIf(top), top)
+	}
+	if p.JackSleepAvailable() {
+		js := p.JackSleep()
+		fmt.Fprintf(w, `<p><label><input type="checkbox" name="jack_sleep" value="yes" style="width:auto"%s> Headphone jack sleeps when idle:
+	  the jack's output switches off after 10 seconds of silence, so powered speakers on it don't hiss; a small pop when it switches off and on</label><input type="hidden" name="was_jack_sleep" value="%t"></p>`, checkedIf(js), js)
 	}
 	louder := c.Speaker.LouderSpeech
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="louder" value="yes" style="width:auto"%s> Louder speech:
@@ -224,6 +230,11 @@ func saveSpeaker(r *http.Request) string {
 	if was := r.PostFormValue("was_top"); was != "" && p.LouderTopAvailable() {
 		if on := r.PostFormValue("top") == "yes"; strconv.FormatBool(on) != was {
 			p.SetLouderTop(on)
+		}
+	}
+	if was := r.PostFormValue("was_jack_sleep"); was != "" && p.JackSleepAvailable() {
+		if on := r.PostFormValue("jack_sleep") == "yes"; strconv.FormatBool(on) != was {
+			p.SetJackSleep(on)
 		}
 	}
 	if was := r.PostFormValue("was_louder"); was != "" {

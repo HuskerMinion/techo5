@@ -77,14 +77,26 @@ func stopMusic() {
 	home.Get().Stop()
 }
 
-// doneAt is the face's Done: left of play and pause, at the same height, where a thumb finds it.
-const doneX, doneY, doneR = center - 88.0, 420.0, 25.0
+// doneAt is the face's Done: left of play and pause and a little higher, where a thumb finds it and the
+// circle still has room for it. Level with play it reached 234 px from the center, into the ring at the
+// rim (222 to 236) that shows a timer or the microphone off, and hid some 15 degrees of it.
+const doneX, doneY, doneR = center - 84.0, 408.0, 25.0
 
 // onDone reports whether a tap at x, y is on Done.
 func onDone(x, y int) bool {
 	dx, dy := float64(x)-doneX, float64(y)-doneY
 	// The pill is two discs and the band between them; a little slack round it for a thumb.
 	return dx >= -(18+doneR+8) && dx <= 18+doneR+8 && dy >= -(doneR+8) && dy <= doneR+8
+}
+
+// playY is the height of the face's play and pause.
+const playY = 420.0
+
+// onPlay is whether a finger at x, y is on the play button itself, with Done's slack round it: a tap
+// anywhere but Done and the star plays or pauses, but only the button shows the finger.
+func onPlay(x, y int) bool {
+	dx, dy := float64(x)-center, float64(y)-playY
+	return !onDone(x, y) && !onStar(x, y) && dx*dx+dy*dy <= (25+8)*(25+8)
 }
 
 // togglePlay is a tap on now playing. It goes the way the Show's tap goes, which is the only way it can
@@ -214,20 +226,24 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	}
 	// Done on the left: the music ends and the face goes back to the clock. A pause keeps this face up
 	// with play on it, and so does a stop from Music Assistant, which looks the same from here.
-	r.discAt(doneX-18, doneY, doneR, color.RGBA{36, 42, 52, 255})
-	r.discAt(doneX+18, doneY, doneR, color.RGBA{36, 42, 52, 255})
-	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, color.RGBA{36, 42, 52, 255})
-	r.centered2(r.small, tr("done"), int(doneX), int(doneY)+6, colText)
+	// Each of the three shows a finger on it as a tap finds it (onDone, onStar, and the rest is play).
+	at := r.press.at
+	button := color.RGBA{36, 42, 52, 255}
+	done := r.pressTinted(r.press.on && onDone(at.X, at.Y), button, colText)
+	r.discAt(doneX-18, doneY, doneR, done)
+	r.discAt(doneX+18, doneY, doneR, done)
+	r.line(doneX-18, doneY, doneX+18, doneY, 2*doneR, done)
+	r.centered2(r.small, clip(r.small, r, musicEndWord(), 2*18+2*doneR-12), int(doneX), int(doneY)+6, colText)
 	// The star on the right saves what is playing to favorites, and fills in once it has.
-	r.discAt(starX, starY, starR, color.RGBA{36, 42, 52, 255})
+	r.discAt(starX, starY, starR, r.pressTinted(r.press.on && onStar(at.X, at.Y), button, colText))
 	starColor := color.RGBA{150, 158, 170, 255}
 	if spotStarFilled(rd) {
 		starColor = colMusic
 	}
 	r.starMark(starX, starY, 14, starColor)
 	// Play or pause at the bottom; a tap anywhere else does the same.
-	const by = 420.0
-	r.discAt(center, by, 25, color.RGBA{36, 42, 52, 255})
+	const by = playY
+	r.discAt(center, by, 25, r.pressTinted(r.press.on && onPlay(at.X, at.Y), button, colText))
 	if s.paused {
 		r.triangle(center-8, by-13, center-8, by+13, center+14, by, colText)
 	} else {
@@ -321,15 +337,19 @@ func (r *roundRenderer) sourceButtons(rd home.Radio) {
 		r.centered(r.label, upper(home.SourceLabel(rd.Source)), 118, colMusic)
 		return
 	}
+	pressed := ""
+	if r.press.on {
+		pressed = sourceAt(r.press.at.X, r.press.at.Y) // the one a tap at the finger shows
+	}
 	for i, src := range sources {
 		x0, x1 := sourceButton(i, len(sources))
 		name := clip(r.label, r, shortSource(src), x1-x0-32)
 		cx := (x0 + x1) / 2
 		if src == rd.Source {
-			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, colMusic)
+			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, r.pressTinted(src == pressed, colMusic, colBackground))
 			r.centered2(r.label, name, cx, sourceY+7, colBackground)
 		} else {
-			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, color.RGBA{36, 42, 52, 255})
+			r.line(float64(x0+14), sourceY, float64(x1-14), sourceY, 30, r.pressTinted(src == pressed, color.RGBA{36, 42, 52, 255}, colText))
 			r.centered2(r.label, name, cx, sourceY+7, colText)
 		}
 	}

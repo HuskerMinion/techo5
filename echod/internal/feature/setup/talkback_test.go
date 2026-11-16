@@ -64,7 +64,7 @@ func TestTalkBackForm(t *testing.T) {
 	rec := httptest.NewRecorder()
 	talkBackSection(rec, "tok")
 	page := rec.Body.String()
-	for _, want := range []string{`autocomplete="new-password"`, "Front &lt;door&gt;", "rtsp://192.168.1.40:554/h264Preview_01_main", "set; leave empty to keep it", "The switch is off"} {
+	for _, want := range []string{`autocomplete="new-password"`, "Front &lt;door&gt;", "rtsp://192.168.1.40:554/h264Preview_01_main", secretSaved, "The switch is off"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the section does not say %q", want)
 		}

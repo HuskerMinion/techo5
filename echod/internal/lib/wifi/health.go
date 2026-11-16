@@ -75,6 +75,12 @@ type Group struct {
 	// can lose its multicast filter while broadcasts still arrive (TECHO5 #458).
 	McastIn, McastOut uint64
 
+	// BcastIn and BcastOut are the IPv4 broadcast part alone. A router that hands multicast to each
+	// device as its own (multicast to unicast) has no such way with broadcasts, so they are what shows
+	// a radio that has stopped taking in what is sent to everyone (techo5-dot#45). The device's own
+	// broadcasts loop back, as its multicast does.
+	BcastIn, BcastOut uint64
+
 	// From is which files the counts were read from, FromIPv4 and FromIPv6: two readings from different
 	// files cannot be compared, since the one that was missed would read as a jump.
 	From uint8
@@ -93,6 +99,7 @@ func GroupPackets() (g Group, ok bool) {
 		if g4, found := group4(string(b)); found {
 			g.In, g.Out, g.From, ok = g.In+g4.In, g.Out+g4.Out, g.From|FromIPv4, true
 			g.McastIn, g.McastOut = g.McastIn+g4.McastIn, g.McastOut+g4.McastOut
+			g.BcastIn, g.BcastOut = g4.BcastIn, g4.BcastOut
 		}
 	}
 	if b, err := os.ReadFile("/proc/net/snmp6"); err == nil {
@@ -132,6 +139,10 @@ func group4(netstat string) (g Group, ok bool) {
 				g.McastIn += v
 			case "OutMcastPkts":
 				g.McastOut += v
+			case "InBcastPkts":
+				g.BcastIn += v
+			case "OutBcastPkts":
+				g.BcastOut += v
 			}
 		}
 		break

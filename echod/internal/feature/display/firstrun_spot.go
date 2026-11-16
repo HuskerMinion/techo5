@@ -26,40 +26,40 @@ func (d *Display) firstRunActive() bool { return firstrun.Pending() }
 func spotFirstRunButtons(v firstRunView) []frButton {
 	switch v.step {
 	case frWifi:
-		return []frButton{{"Next", "next"}}
+		return []frButton{{tr("firstrun_next"), "next"}}
 	case frZone:
-		return []frButton{{"On a phone", "phone"}, {"Next", "next"}}
+		return []frButton{{tr("firstrun_on_a_phone"), "phone"}, {tr("firstrun_next"), "next"}}
 	case frName:
 		switch {
 		case v.renaming:
 			return nil
 		case v.home:
-			return []frButton{{"On a phone", "phone"}, {"Next", "next"}}
+			return []frButton{{tr("firstrun_on_a_phone"), "phone"}, {tr("firstrun_next"), "next"}}
 		}
-		room := "Choose a room"
+		room := tr("firstrun_choose_a_room")
 		if v.room != "" {
-			room = "Room: " + v.room
+			room = fmt.Sprintf(tr("firstrun_room_s"), v.room)
 		}
-		return []frButton{{room, "room"}, {"On a phone", "phone"}, {"Next", "next"}}
+		return []frButton{{room, "room"}, {tr("firstrun_on_a_phone"), "phone"}, {tr("firstrun_next"), "next"}}
 	case frHome:
 		switch {
 		case v.showKey && v.key != "":
 			return nil // a tap anywhere puts the key away
 		case v.home:
-			return []frButton{{"Next", "next"}}
+			return []frButton{{tr("firstrun_next"), "next"}}
 		case v.wifi.Address == "":
-			return []frButton{{"Use it on its own", "next"}}
+			return []frButton{{tr("firstrun_use_it_on_its_own"), "next"}}
 		case !v.adopt.IsZero() || v.unkeyed:
-			return []frButton{{"Skip for now", "next"}}
+			return []frButton{{tr("firstrun_skip_for_now"), "next"}}
 		}
-		return []frButton{{"On its own", "next"}, {"Show the key", "key"}, {"Add it", "adopt"}}
+		return []frButton{{tr("firstrun_on_its_own"), "next"}, {tr("firstrun_show_the_key"), "key"}, {tr("firstrun_add_it"), "adopt"}}
 	case frUpdates:
 		if v.auto {
-			return []frButton{{"Leave them off", "auto"}, {"Next", "next"}}
+			return []frButton{{tr("firstrun_leave_them_off"), "auto"}, {tr("firstrun_next"), "next"}}
 		}
-		return []frButton{{"Turn them on", "auto"}, {"Next", "next"}}
+		return []frButton{{tr("firstrun_turn_them_on"), "auto"}, {tr("firstrun_next"), "next"}}
 	case frSound:
-		return []frButton{{"Play again", "again"}, {"Yes", "next"}}
+		return []frButton{{tr("firstrun_play_again"), "again"}, {tr("firstrun_yes"), "next"}}
 	}
 	return nil
 }
@@ -147,7 +147,7 @@ func nextRoom(room string) string {
 // firstRunFaceSpot draws the step.
 func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
 	if n, of := v.number, v.of; n > 0 {
-		r.centered(r.tiny, fmt.Sprintf("Step %d of %d", n, of), 74, colDim)
+		r.centered(r.tiny, fmt.Sprintf(tr("firstrun_step_d_of_d"), n, of), 74, colDim)
 	}
 	title, lines := spotFirstRunText(v, now)
 	r.centered(r.title, title, 126, colText)
@@ -158,7 +158,7 @@ func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
 		half := (len(v.key) + 1) / 2
 		r.centered(r.tiny, v.key[:half], 352, colText)
 		r.centered(r.tiny, v.key[half:], 378, colText)
-		r.centered(r.tiny, "Tap to go back", 412, colDim)
+		r.centered(r.tiny, tr("firstrun_tap_to_go_back"), 412, colDim)
 		return
 	}
 	buttons := spotFirstRunButtons(v)
@@ -169,7 +169,7 @@ func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
 	}
 	y := 170
 	for _, para := range lines {
-		for _, line := range r.wrap(r.small, para, 340) {
+		for _, line := range r.wrapLines(r.small, para, 340) { // Japanese has no spaces to break on
 			if y > limit {
 				break
 			}
@@ -186,11 +186,12 @@ func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
 	}
 }
 
-// spotFirstRunText is a step's title and lines on the Spot: shorter than a Show's, for the circle.
+// spotFirstRunText is a step's title and lines on the Spot: shorter than a Show's, for the circle, and
+// in the screen's language.
 func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 	phone := ""
 	if v.phone && v.wifi.Address != "" {
-		phone = fmt.Sprintf("On a phone: %s:%d/setup", v.wifi.Address, web.Port)
+		phone = fmt.Sprintf(tr("firstrun_phone_at"), v.wifi.Address, web.Port)
 	}
 	with := func(lines ...string) []string {
 		if phone != "" {
@@ -200,62 +201,65 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 	}
 	switch v.step {
 	case frHello:
-		return "Hello", []string{"This is " + v.name + ".", "A few steps set it up.", "Tap to begin."}
+		return tr("firstrun_hello"), []string{
+			fmt.Sprintf(tr("firstrun_this_is_s"), v.name), tr("firstrun_spot_steps"), tr("firstrun_spot_tap_to_begin"),
+		}
 	case frDone:
-		return "All set", []string{v.name + " is set up.", "Swipe down for settings.", "Tap to finish."}
+		return tr("firstrun_title_done"), []string{
+			fmt.Sprintf(tr("firstrun_spot_done"), v.name), tr("firstrun_spot_menu"), tr("firstrun_spot_tap_to_finish"),
+		}
 	case frWifi:
 		if v.wifi.Connected {
-			return "Wi-Fi", []string{"On " + v.wifi.SSID + ".", "At " + v.wifi.Address + "."}
+			return tr("firstrun_title_wifi"), []string{
+				fmt.Sprintf(tr("firstrun_spot_on"), v.wifi.SSID), fmt.Sprintf(tr("firstrun_spot_at"), v.wifi.Address),
+			}
 		}
-		return "Wi-Fi", []string{"Not on a network.", "Install again with your Wi-Fi to put it on one."}
+		return tr("firstrun_title_wifi"), []string{tr("firstrun_spot_no_network"), tr("firstrun_spot_install_again")}
 	case frZone:
 		at := now.Format("3:04 PM")
 		if clock24.Load() {
 			at = now.Format("15:04")
 		}
-		return "Time zone", with(zoneValue()+".", "The clock says "+at+".")
+		return tr("firstrun_title_zone"), with(fmt.Sprintf(tr("firstrun_spot_zone"), zoneValue()), fmt.Sprintf(tr("firstrun_spot_clock"), at))
 	case frName:
 		if v.renaming {
-			return "Name", []string{"Restarting to use", "the new name…"}
+			return tr("firstrun_title_name_only"), []string{tr("firstrun_spot_restarting"), tr("firstrun_spot_new_name")}
 		}
-		return "Name and room", with("Name: " + v.name)
+		return tr("firstrun_title_name"), with(fmt.Sprintf(tr("firstrun_spot_name"), v.name))
 	case frHome:
 		switch {
 		case v.homeJust:
-			return "Home Assistant", []string{"Home Assistant has added it.", "Going on…"}
+			return "Home Assistant", []string{tr("firstrun_home_added"), tr("firstrun_going_on")}
 		case v.home:
-			return "Home Assistant", []string{"Home Assistant has added it."}
+			return "Home Assistant", []string{tr("firstrun_home_added")}
 		case v.wifi.Address == "":
-			return "Home Assistant", []string{"Not on a network yet."}
+			return "Home Assistant", []string{tr("firstrun_spot_home_no_network")}
 		case v.unkeyed:
-			return "Home Assistant", []string{"Add it in Home Assistant: Devices & services. Nothing to type.", "Only on a network you trust."}
+			return "Home Assistant", []string{tr("firstrun_spot_home_add"), tr("firstrun_spot_trust")}
 		case !v.adopt.IsZero():
 			left := max(1, int(v.adopt.Sub(now).Minutes()+0.999))
-			return "Home Assistant", []string{
-				"Add it in Home Assistant: Devices & services. Nothing to type.",
-				fmt.Sprintf("Open %d more minutes. Only on a network you trust.", left),
-			}
+			return "Home Assistant", []string{tr("firstrun_spot_home_add"), fmt.Sprintf(tr("firstrun_spot_open_d"), left)}
 		}
-		return "Home Assistant", []string{"Add it with nothing to type,", "or with its key."}
+		return "Home Assistant", []string{tr("firstrun_spot_home_choose"), tr("firstrun_spot_home_choose_key")}
 	case frUpdates:
 		var line string
 		switch {
 		case !v.checked:
-			line = "Looking for an update…"
+			line = tr("firstrun_updates_looking")
 		case v.offered == "":
-			line = "It is up to date."
+			line = tr("firstrun_updates_current")
 		case v.auto:
-			line = v.offered + " installs tonight."
+			line = fmt.Sprintf(tr("firstrun_spot_tonight"), v.offered)
 		default:
-			line = v.offered + " is ready."
+			line = fmt.Sprintf(tr("firstrun_spot_ready"), v.offered)
 		}
-		auto := "Updates wait for you."
+		auto := tr("firstrun_spot_manual")
 		if v.auto {
-			auto = "Updates install overnight."
+			auto = tr("firstrun_spot_auto")
 		}
-		return "Updates", []string{line, auto}
+		return tr("firstrun_title_updates"), []string{line, auto}
 	case frSound:
-		return "Sound check", []string{"Did you hear that?"}
+		return tr("firstrun_title_sound"), []string{tr("firstrun_spot_hear")}
 	}
 	return "", nil
 }

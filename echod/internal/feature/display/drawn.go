@@ -40,8 +40,11 @@ type drawnDrag struct {
 	scrolling   bool
 	value       float64 // the slid level, while sliding
 	// down is a finger that came down on the page; moved is one that has gone further than a hold
-	// allows, so lifting it is not a long press.
+	// allows, so it is not a long press.
 	down, moved bool
+	// held is a finger that stayed put until it was a long press, which acted then (tileHeld): where it
+	// lifts does nothing more.
+	held bool
 	// onSheet is a finger that came down on the color sheet: only one of those that moves chooses
 	// where it lifts, so a drag from the page under the sheet does not set what it ends over.
 	onSheet bool
@@ -87,10 +90,26 @@ func (s sheetSlider) at(x int) float64 {
 	return s.lo + min(max(f, 0), 1)*(s.hi-s.lo)
 }
 
-// holdStill is how far a finger may wander and still be a long press when it lifts: the touchscreen's
-// own followMove, so a finger it began to follow never is, and one it did not always is. Any less left
-// a slow press that drifted between the two as neither a long press nor a tap.
+// holdStill is how far a finger may wander and still be a long press: the touchscreen's own
+// followMove, so a finger it began to follow never is, and one it did not always is. Any less left a
+// slow press that drifted between the two as neither a long press nor a tap.
 const holdStill = 12
+
+// tapWander is how far a finger may travel on a tile and still have tapped it, in the Show 5's pixels:
+// the touchscreen's own allowance for a tap everywhere else (tapMove). On a dashboard a finger is
+// followed as soon as it moves (followMove), and one that rolled a little further than that as it
+// pressed was neither a tap nor a long press, and did nothing.
+const tapWander = 24
+
+// wanderedTap is whether the finger of dr, lifting at x, y, was a tap that wandered: it moved, but not
+// far, slid nothing, and lifted on the tile it came down on.
+func (d *Display) wanderedTap(dr drawnDrag, x, y int) bool {
+	if !dr.moved || dr.sliding || dr.tile == nil || d.r == nil {
+		return false
+	}
+	w := d.r.s(tapWander)
+	return abs(x-dr.at.X) <= w && abs(y-dr.at.Y) <= w && image.Pt(x, y).In(dr.tile.r)
+}
 
 // dashAdjusting is the level a finger is sliding, for the tile to draw it.
 type dashAdjusting struct {
@@ -125,9 +144,12 @@ func (r *paint) textFace(bold bool, size int) font.Face {
 		return nil
 	}
 	// The faces of a font no longer in use go: they keep the owner's own font files they were made
-	// from open (lib/fonts), a removed one's space not freed, a replaced one read as it was.
+	// from open (lib/fonts), a removed one's space not freed, a replaced one read as it was. Only the
+	// font's: the same font at another text size stays, since the month and the week are drawn at
+	// 125% in the same frame as a card at the size chosen (calendar_cap.go), and dropping one size to
+	// make the other made both again every frame.
 	textFaces.Range(func(k, _ any) bool {
-		if k.(textKey).font != key.font {
+		if f := k.(textKey).font; f.name != key.font.name || f.gen != key.font.gen {
 			textFaces.Delete(k)
 		}
 		return true
@@ -168,6 +190,16 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 	for _, word := range strings.Fields(text) {
 		if parts := r.characterLines(face, word, w); len(parts) > 0 {
 			if line != "" {
+				// The Japanese run goes on from the words before it as far as the line has room
+				// ("Home" is not left alone on a line before "Assistantで…").
+				if n := r.runOn(face, line, word, w); n > 0 {
+					line, word = line+" "+word[:n], word[n:]
+					if parts = r.characterLines(face, word, w); len(parts) == 0 {
+						lines = append(lines, line)
+						line = word
+						continue
+					}
+				}
 				lines = append(lines, line)
 			}
 			lines = append(lines, parts[:len(parts)-1]...)
@@ -179,6 +211,10 @@ func (r *paint) wrapLines(face font.Face, text string, w int) []string {
 			try = line + " " + word
 		}
 		if line != "" && r.width(face, try) > w {
+			// A Japanese run is cut between its characters rather than at the space before it.
+			if n := r.runOn(face, line, word, w); n > 0 {
+				line, word = line+" "+word[:n], word[n:]
+			}
 			lines = append(lines, line)
 			line = word
 			continue
@@ -196,7 +232,12 @@ func (d *Display) drawnTap(x, y int) {
 	if d.colorTap(x, y) {
 		return
 	}
-	t := d.tileAt(x, y)
+	d.tileTap(d.tileAt(x, y), x)
+}
+
+// tileTap does what tile t says to a tap at x across it. A tap that wandered names its tile as it was
+// when the finger came down: the page may have scrolled under it since (drawnRelease).
+func (d *Display) tileTap(t *dashTile, x int) {
 	switch {
 	case t == nil:
 	case t.action != nil:
@@ -290,6 +331,12 @@ func (d *Display) drawnMove(x, y int) {
 		case abs(dy) > d.r.s(slideStart):
 			dr.scrolling = true
 		}
+		if dr.sliding || dr.scrolling {
+			// A hold that opened no sheet (one did, and this would be the sheet's) is a slide or a
+			// scroll now, and its lift sets the level or ends the scroll; nor is the tile pressed.
+			dr.held = false
+			d.dropPressLocked()
+		}
 	}
 	switch {
 	case dr.scrolling:
@@ -303,14 +350,17 @@ func (d *Display) drawnMove(x, y int) {
 	}
 }
 
-// drawnRelease is the finger lifting at x, y: a slide sets its level, and a finger that stayed put
-// until it was a hold is a long press (longPress). With the color sheet up, it is the sheet's.
+// drawnRelease is the finger lifting at x, y: a slide sets its level. A finger that stayed put until
+// it was a long press has acted already (tileHeld). With the color sheet up, it is the sheet's.
 func (d *Display) drawnRelease(x, y int) {
 	d.mu.Lock()
 	dr := d.dashDrag
 	d.dashDrag = drawnDrag{}
 	d.dashAdjust = dashAdjusting{}
 	d.mu.Unlock()
+	if dr.held {
+		return // the long press opened what it opens: the lift is not a tap on that, nor beside it
+	}
 	if dr.moved && !dr.onSheet && d.colorOpen() {
 		return // a drag from the page under the sheet: nothing on the sheet was chosen
 	}
@@ -335,8 +385,16 @@ func (d *Display) drawnRelease(x, y int) {
 	case dr.sliding && dr.tile != nil && dr.tile.adjust != nil:
 		slog.Info("dashboard slide", "entity", dr.tile.adjust.Entity, "to", dr.value)
 		dashboard.Get().SetLevel(*dr.tile.adjust, dr.value)
-	case dr.down && !dr.moved && !dr.scrolling && dr.tile != nil:
-		d.longPress(dr.tile)
+	case d.wanderedTap(dr, x, y):
+		// The little it scrolled on the way is put back: it was a tap.
+		if dr.scrolling {
+			d.mu.Lock()
+			d.dashScroll = dr.startScroll
+			d.mu.Unlock()
+		}
+		// The tile it came down on, not what is under that point now: the last frame was drawn
+		// scrolled, and a press near a tile's edge would land on its neighbor.
+		d.tileTap(dr.tile, dr.at.X)
 	}
 }
 

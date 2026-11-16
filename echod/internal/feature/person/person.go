@@ -12,12 +12,15 @@
 //
 // The model is TensorFlow's person detection example (MobileNet v1, int8, 96x96 grayscale): small
 // enough for these processors, and a modest judge. A person far from the camera, or half out of the
-// picture, is often missed, which is why the sensor holds a sighting for a while.
+// picture, is often missed, which is why the sensor holds a sighting for a while. It is not in the
+// daemon: the first time person detection is turned on, the model (about 300 KB) is downloaded from
+// the release pinned in pinned.go, checked by size and SHA-256, and kept in the state folder (model.go).
+// Until it is here the Person sensor stays off, as for a room with nobody seen, and nothing else
+// waits on it: the screen goes by presence's own motion, never by this sensor.
 package person
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"log/slog"
 	"math"
@@ -31,14 +34,14 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/camera"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/tflite"
+	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
-
-//go:embed assets/person_detect.tflite
-var model []byte
 
 func init() {
 	if camera.Available() {
-		component.Register(component.Device, Get(), component.Order(84))
+		// A model download that failed is tried again by the supervisor, a little later each time.
+		component.Register(component.Device, Get(), component.Order(84),
+			component.Supervise(service.Restart(time.Minute, time.Hour)))
 	}
 }
 
@@ -73,6 +76,9 @@ type Feature struct {
 
 	// failedAt is when the model last failed to load, so it is not tried every few seconds; only Run's.
 	failedAt time.Time
+	// fetchSaid is whether the download has been logged, so a device offline says so once, not on
+	// every try; only Run's.
+	fetchSaid bool
 }
 
 var (
@@ -138,13 +144,19 @@ func wanted() bool {
 	return p.Person && p.On && presence.On()
 }
 
-// Run looks while the switch is on, and loads the model only then.
+// Run looks while the switch is on, and loads the model only then, downloading it the first time. A
+// download that failed is returned, for the supervisor to try again later.
 func (f *Feature) Run(ctx context.Context) error {
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	for {
 		if wanted() {
-			f.look(ctx)
+			if err := f.look(ctx); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -158,18 +170,24 @@ func (f *Feature) Run(ctx context.Context) error {
 // loadAgain is how long after the model failed to load it is tried again.
 const loadAgain = time.Hour
 
-// look runs the model on the camera's frames while it is wanted, and lets the model go after.
-func (f *Feature) look(ctx context.Context) {
+// look runs the model on the camera's frames while it is wanted, and lets the model go after. Its
+// error is only a download that failed: until the model is here nothing is looked at, and the Person
+// sensor stays off.
+func (f *Feature) look(ctx context.Context) error {
 	score := f.score
 	if score == nil {
 		if !f.failedAt.IsZero() && time.Since(f.failedAt) < loadAgain {
-			return // said once, and tried again later rather than every few seconds
+			return nil // said once, and tried again later rather than every few seconds
 		}
-		m, err := load()
+		b, err := f.modelBytes(ctx, wanted)
+		if err != nil || b == nil {
+			return err
+		}
+		m, err := load(b)
 		if err != nil {
 			f.failedAt = time.Now()
 			slog.Error("person detection: the model could not be loaded; tried again in an hour", "err", err)
-			return
+			return nil
 		}
 		f.failedAt = time.Time{}
 		score = m.score
@@ -198,14 +216,14 @@ func (f *Feature) look(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case <-f.wake:
 			if !wanted() {
-				return
+				return nil
 			}
 		case now := <-tick.C:
 			if !wanted() {
-				return
+				return nil
 			}
 			f.update(now)
 		case fr := <-frames:
@@ -336,8 +354,9 @@ type detector struct {
 	in *tflite.Interpreter
 }
 
-func load() (*detector, error) {
-	m, err := tflite.Parse(model)
+// load is the model in b ready to run.
+func load(b []byte) (*detector, error) {
+	m, err := tflite.Parse(b)
 	if err != nil {
 		return nil, err
 	}

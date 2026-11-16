@@ -20,6 +20,13 @@ func TestEntitySlugMatchesHomeAssistant(t *testing.T) {
 	}
 }
 
+// An action is named the way Home Assistant lists it, the node's dashes made underscores.
+func TestActionName(t *testing.T) {
+	if got := ActionName("Guest's Desk", "", "home_assistant"); got != "esphome.guest_s_desk_home_assistant" {
+		t.Errorf("ActionName = %q", got)
+	}
+}
+
 // The node name keeps its dashes: it is an mDNS host, not an entity id.
 func TestSlugIsStillTheNodeName(t *testing.T) {
 	if got := Slug("Guest's Desk"); got != "guest-s-desk" {

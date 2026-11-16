@@ -286,6 +286,13 @@ func NodeName(name, mac string) string {
 	return strings.TrimRight(CutName(SlugOr(name, mac), LabelMax), "-")
 }
 
+// ActionName is what Home Assistant calls one of the device's actions: esphome.<node>_<action>, the
+// node's dashes made underscores. A message that tells someone to run an action names it this way, so
+// it can be pasted into Developer Tools as it is.
+func ActionName(name, mac, action string) string {
+	return "esphome." + strings.ReplaceAll(NodeName(name, mac), "-", "_") + "_" + action
+}
+
 // SlugOr is name's Slug, or, for a name with nothing in it a slug keeps (one in Greek, Cyrillic or
 // Chinese, say), the slug of the name the device has with none set (NameFromMAC), which carries the end
 // of its MAC address: never empty, and two such devices still differ.

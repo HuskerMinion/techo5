@@ -70,7 +70,7 @@ func (r *renderer) libraryAt(x, y int) (mediaZone, float64, bool) {
 	r.zmu.Lock()
 	zones, card := slices.Clone(r.libZones), r.libCard
 	r.zmu.Unlock()
-	return mediaHit(zones, card, x, y)
+	return mediaHit(zones, card, x, y, r.s(sheetSlop))
 }
 
 // libRowAt is the section shown as a row under x, y, or -1.
@@ -83,6 +83,27 @@ func (r *renderer) libRowAt(x, y int) int {
 		}
 	}
 	return -1
+}
+
+// libPartActs is whether a tap on z does something on the library l (libraryTap): a choice of the action
+// sheet while it is up; else a button, a tab, or an item that opens or plays, which the playing first
+// of the queue does not. What scrolls, and a row that scrolls along, are only dragged.
+func libPartActs(l *librarySheet, z mediaZone) bool {
+	if l.menu.open {
+		return z.kind == libPartMenu && z.index >= 0 && z.index < len(l.menu.choices)
+	}
+	switch z.kind {
+	case libPartDone, libPartBack, libPartTab, libPartSort, libPartGoSearch, libPartField, libPartPlay, libPartShuffle:
+		return true
+	case libPartItem:
+		p := l.current()
+		sec, i := z.index/libSecStride, z.index%libSecStride
+		if sec >= len(p.sections) || i >= len(p.sections[sec].entries) {
+			return false
+		}
+		return p.what != libQueue || i > 0 && p.sections[sec].entries[i].QueueItemID != ""
+	}
+	return false
 }
 
 // libDragStart is a finger coming down on the library: where, and on which row.
@@ -512,6 +533,9 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 		r.libMenuSheet(&l, g, pal, fc, pill)
 		zones = append(zones, mediaZone{r: whole, kind: libPartMenuOut})
 	}
+	if z, ok := r.pressPart(zones, whole); ok && libPartActs(&l, z) {
+		r.pressOnPart(z.r, pal)
+	}
 	r.setLibrary(zones, whole)
 	r.setLibraryScroll(contentH, viewH, scroll, visible, rowMax)
 }
@@ -520,7 +544,7 @@ func (r *renderer) librarySheet(v *libraryView, th dashboard.Theme) {
 // item's name, then its choices (libMenuFor) as wide pills, a first Play lit as the library's Play is.
 func (r *renderer) libMenuSheet(l *librarySheet, g libGeom, pal dashPal, fc sheetFaces,
 	pill func(image.Rectangle, string, string, color.RGBA, color.RGBA, bool, int, int)) {
-	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 110})
+	washOver(r.dst, r.dst.Rect, color.RGBA{0, 0, 0, 150})
 	choices := l.menu.choices
 	n := len(choices)
 	pad, rowH, gap, titleH := r.s(24), r.s(64), r.s(12), r.s(56)

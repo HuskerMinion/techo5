@@ -14,26 +14,21 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// mealieSection writes the form for the Mealie server the recipe page reads (config.Mealie) to w. The
-// token is optional and never shown: it is written, or left alone.
+// mealieSection writes the form for the Mealie server the recipe sheet reads (config.Mealie) to w. The
+// token is never shown: it is written, or left alone.
 func mealieSection(w http.ResponseWriter, token string) {
 	mealieConfig := config.Get().Mealie
-	held := "an API token from Mealie, usually needed"
-	if mealieConfig.Token != "" {
-		held = "saved: leave empty to keep it"
-	}
-	fmt.Fprint(w, `<fieldset><legend>Mealie</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "mealie", "connections")
+	fieldsetOpen(w, "mealie", "Mealie")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "mealie")
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">The recipes this screen shows, with their steps, from your
 	  Mealie server. Mealie asks for an API token to list recipes: create one in Mealie under your user
 	  profile's API tokens. Leave it empty only if your server lets requests through without one.</p>
 	 <label for="mealieurl">Address</label>
 	 <input id="mealieurl" name="url" value="%s" placeholder="http://192.168.1.20:9000" autocomplete="off">
-	 <label for="mealietoken">Token</label>
-	 <input id="mealietoken" name="mealietoken" type="password" value="" placeholder="%s" autocomplete="off">
-	 <p><label><input type="checkbox" name="notoken" value="yes" style="width:auto"> Remove the token</label></p>
+	 %s
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(mealieConfig.URL), html.EscapeString(held))
+		html.EscapeString(mealieConfig.URL), secretField("mealietoken", "Token", "mealietoken", mealieConfig.Token != "", "notoken"))
 }
 
 // saveMealie saves the Mealie form: the address, and the token as the form says (a new one, none, or

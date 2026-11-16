@@ -17,22 +17,22 @@ import (
 // addresses are secrets, so what is kept is listed by name only.
 func calendarLinksSection(w http.ResponseWriter, token string) {
 	links := config.Get().Calendar.Links
-	fmt.Fprint(w, `<fieldset><legend>Calendars from a link</legend>`)
+	fieldsetOpen(w, "calendar", "Calendars from a link")
 	if len(links) == 0 {
 		fmt.Fprint(w, `<p style="margin:0">None yet.</p>`)
 	}
 	for _, l := range links {
 		fmt.Fprintf(w, `<form method="post" action="/setup/save" style="display:flex;gap:.5rem;align-items:center;margin:.3rem 0">`)
-		hidden(w, token, "calendar-remove", "weather")
+		hidden(w, token, "calendar-remove")
 		fmt.Fprintf(w, `<input type="hidden" name="id" value="%s"><span style="flex:1">%s</span>
-		 <button type="submit">Remove</button></form>`, html.EscapeString(l.ID), html.EscapeString(l.Name))
+		 <button type="submit" class="danger">Remove</button></form>`, html.EscapeString(l.ID), html.EscapeString(l.Name))
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "calendar", "weather")
+	hidden(w, token, "calendar")
 	fmt.Fprint(w, `<label for="calname">Name</label>
 	 <input id="calname" name="name" maxlength="40" placeholder="Family" autocomplete="off">
 	 <label for="calurl">The calendar's iCal address</label>
-	 <input id="calurl" name="url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" autocomplete="off">
+	 <input id="calurl" name="url" type="url" inputmode="url" required placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" autocomplete="off">
 	 <p class="note">Google Calendar: Settings, the calendar, <strong>Secret address in iCal format</strong>.
 	  iCloud: share the calendar as a <strong>Public Calendar</strong> and copy the link. Outlook: Settings,
 	  Calendar, Shared calendars, <strong>Publish a calendar</strong>, the ICS link. Anyone with the address
@@ -51,7 +51,7 @@ func saveCalendarLink(r *http.Request) string {
 	}
 	u, err := url.Parse(addr)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http" && u.Scheme != "webcal") {
-		return "that is not a calendar address: it starts with https:// or webcal://"
+		return "the calendar's iCal address is not one: it starts with https:// or webcal://"
 	}
 	n, err := home.CheckCalendarLink(addr)
 	if err != nil {
@@ -79,8 +79,9 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 	if s == nil || len(s.Calendar) == 0 {
 		return
 	}
-	fmt.Fprint(w, `<fieldset><legend>The calendar's look</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "calendar-look", "weather")
+	fieldsetOpen(w, "calendar-look", "The calendar's look")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "calendar-look")
 	for _, c := range s.Calendar {
 		fmt.Fprintf(w, `<label for="look-%s">%s</label><select id="look-%s" name="look-%s">`,
 			c.Key, html.EscapeString(c.Label), c.Key, c.Key)

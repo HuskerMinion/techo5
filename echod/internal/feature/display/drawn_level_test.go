@@ -106,15 +106,16 @@ func TestDashboardLevelTrackIsClearAndScales(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, show8Wide, show8High))
 	r := newRenderer(img)
 	pal := r.palette(dashboard.Theme{})
+	card := tileCard(levelLight("Kitchen", true, 60), pal) // a light that is on: its card leans to its color
 
 	usual := image.Rect(100, 100, 100+r.s(220), 100+r.s(tileH))
 	r.tile(usual, levelLight("Kitchen", true, 60), pal, dashAdjusting{})
-	usualRows, bottom := trackRows(img, usual, usual.Min.X+usual.Dx()/2, pal.card)
+	usualRows, bottom := trackRows(img, usual, usual.Min.X+usual.Dx()/2, card)
 	// The two rows over the track hold nothing: no word runs into it.
 	for dy := 1; dy <= 2; dy++ {
 		y := usual.Max.Y - bottom - usualRows - dy
 		for x := usual.Min.X + r.s(14); x < usual.Max.X-r.s(14); x++ {
-			if img.RGBAAt(x, y) != pal.card {
+			if img.RGBAAt(x, y) != card {
 				t.Fatalf("a word runs into the track: pixel %d,%d is not the tile's own", x, y)
 			}
 		}
@@ -122,8 +123,35 @@ func TestDashboardLevelTrackIsClearAndScales(t *testing.T) {
 
 	large := image.Rect(100, 300, 100+r.s(330), 300+r.s(tileH)*3/2)
 	r.tile(large, levelLight("Kitchen", true, 60), pal, dashAdjusting{})
-	largeRows, _ := trackRows(img, large, large.Min.X+large.Dx()/2, pal.card)
+	largeRows, _ := trackRows(img, large, large.Min.X+large.Dx()/2, card)
 	if largeRows <= usualRows {
 		t.Errorf("track is %d rows on a larger tile, %d on the usual one: not growing", largeRows, usualRows)
+	}
+}
+
+// A tile that is on has a card that leans to its color, and says what it is doing nearly as strongly as
+// its name; one that is off keeps the theme's card, and one that is gone has its name dimmed.
+func TestATileThatIsOnLooksIt(t *testing.T) {
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	pal := r.palette(dashboard.Theme{})
+	on := dashboard.Tile{Name: "Lamp", Value: "On", On: true}
+	off := dashboard.Tile{Name: "Lamp", Value: "Off"}
+	gone := dashboard.Tile{Name: "Lamp", Value: "Unavailable", Gone: true, On: true}
+	if tileCard(off, pal) != pal.card || tileCard(gone, pal) != pal.card {
+		t.Error("a tile that is off, or gone, does not have the theme's card")
+	}
+	if c := tileCard(on, pal); c == pal.card || colorContrast(c, pal.card) > 1.6 {
+		t.Errorf("a tile that is on has the card %v beside the theme's %v", c, pal.card)
+	}
+	_, onValue := tileInks(on, pal)
+	_, offValue := tileInks(off, pal)
+	if colorContrast(onValue, tileCard(on, pal)) <= colorContrast(offValue, pal.card) {
+		t.Error("what a tile that is on is doing is drawn no stronger than one that is off")
+	}
+	if name, _ := tileInks(on, pal); colorContrast(name, tileCard(on, pal)) < 7 {
+		t.Errorf("a name on a tinted card has a contrast of %.1f", colorContrast(name, tileCard(on, pal)))
+	}
+	if name, _ := tileInks(gone, pal); name == pal.text {
+		t.Error("a tile that is gone has its name as strong as one that works")
 	}
 }

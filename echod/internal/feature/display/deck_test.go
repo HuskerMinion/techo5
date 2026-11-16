@@ -75,6 +75,18 @@ func TestDeckPageDrawsTheGrid(t *testing.T) {
 			if _, ok := r.deckHit(image.Pt(zones[0].Max.X+1, zones[0].Min.Y+5)); ok {
 				t.Errorf("%s: a tap in the gap found a button", panel.name)
 			}
+			// The way back to the clock is on the page, in the foot's corner, and is no button's place.
+			r.zmu.Lock()
+			closeAt := r.deckClose
+			r.zmu.Unlock()
+			if !r.deckCloseHit(image.Pt(panel.wide-8, panel.high-8)) || closeAt.Dy() < r.s(40) || closeAt.Dx() < r.s(80) {
+				t.Errorf("%s: the way back to the clock is %v", panel.name, closeAt)
+			}
+			for i, z := range zones {
+				if z.Overlaps(closeAt) {
+					t.Errorf("%s: button %d at %v is under the way back %v", panel.name, i, z, closeAt)
+				}
+			}
 			if dir != "" {
 				name := "deck" + panel.name + map[bool]string{true: "", false: "-away"}[connected] + ".png"
 				f, err := os.Create(filepath.Join(dir, name))

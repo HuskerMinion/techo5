@@ -1,5 +1,10 @@
 package config
 
+import (
+	"slices"
+	"time"
+)
+
 // Calendar is which of Home Assistant's calendars this device shows (docs/calendar-and-night-plan.md).
 // Each device keeps its own: one on a desk shows its owner's, one in a kitchen the family's.
 type Calendar struct {
@@ -31,6 +36,11 @@ type Calendar struct {
 	// PopupShown are the events already popped up, so a restart does not pop them up again: the
 	// calendar, start and title of each, for two days.
 	PopupShown []string `json:"popup_shown,omitempty"`
+
+	// PopupGone are the events whose pop-ups were tapped away on another device, and when this one
+	// heard, so a restart before one is due here does not pop it up all the same. Kept as long as the
+	// caller asks (a day), and the newest PopupGoneMax at most (PopupGoneAdd).
+	PopupGone []PopupGone `json:"popup_gone,omitempty"`
 
 	// How the calendar page and the clock show the events (display/calendar_look.go). Each is on unless
 	// somebody turns it off, so a saved file without them has them all: DayList draws a day as the list
@@ -173,6 +183,37 @@ func (w CalendarWriter) PopupSilent(v bool) error {
 
 func (w CalendarWriter) PopupShown(v []string) error {
 	return w.st.Update(func(c *Config) { c.Calendar.PopupShown = v })
+}
+
+// PopupGone is one event's pop-up tapped away on another device: the name the devices share for the
+// event, and when this device heard.
+type PopupGone struct {
+	ID string    `json:"id"`
+	At time.Time `json:"at"`
+}
+
+// PopupGoneMax is how many pop-ups tapped away elsewhere are kept at most: far more than a day's events,
+// so only a flood of them is cut, and then the oldest.
+const PopupGoneMax = 64
+
+// PopupGoneAdd keeps id as tapped away elsewhere at at, and forgets in the same write those heard more
+// than keep before it and the oldest past PopupGoneMax. One read and write under the store's lock, so
+// two heard at once are both kept.
+func (w CalendarWriter) PopupGoneAdd(id string, at time.Time, keep time.Duration) error {
+	return w.st.Update(func(c *Config) {
+		list := make([]PopupGone, 0, len(c.Calendar.PopupGone)+1)
+		for _, g := range c.Calendar.PopupGone {
+			if g.ID != id && at.Sub(g.At) <= keep {
+				list = append(list, g)
+			}
+		}
+		list = append(list, PopupGone{ID: id, At: at})
+		slices.SortStableFunc(list, func(a, b PopupGone) int { return a.At.Compare(b.At) })
+		if len(list) > PopupGoneMax {
+			list = list[len(list)-PopupGoneMax:]
+		}
+		c.Calendar.PopupGone = list
+	})
 }
 
 func (w CalendarWriter) PopupAllDayNever(v bool) error {

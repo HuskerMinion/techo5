@@ -23,9 +23,9 @@ func streamingSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	legend := "Play to this device"
-	fmt.Fprintf(w, `<fieldset><legend>%s</legend><form method="post" action="/setup/save">`, legend)
-	hidden(w, token, "streaming", "sound")
+	fieldsetOpen(w, "streaming", "Play to this device")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "streaming")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play to this device from other apps. It shows up under its
 	  own name, on the same network.</p>`)
 	if streaming.Here {
@@ -33,8 +33,10 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="airplay" value="yes" style="width:auto"%s> AirPlay: from an iPhone, iPad or Mac</label></p>
 	 <p><label><input type="checkbox" name="spotify" value="yes" style="width:auto"%s> Spotify Connect: from the Spotify app (needs Spotify Premium)</label></p>`,
 			checked(c.AirPlay), checked(c.Spotify))
+		// Quality and Normalize do nothing without Spotify Connect: the page leaves them out while its
+		// box is not ticked (.spotifyonly, tabs.go).
 		fmt.Fprint(w, `
-	 <p><label for="spotifybitrate">Spotify Connect quality</label><select id="spotifybitrate" name="spotifybitrate">`)
+	 <div class="spotifyonly"><p><label for="spotifybitrate">Spotify Connect quality</label><select id="spotifybitrate" name="spotifybitrate">`)
 		for _, b := range []int{96, 160, 320} {
 			sel := ""
 			if b == c.SpotifyKbps() {
@@ -46,7 +48,7 @@ func streamingSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="spotifynormalize" value="yes" style="width:auto"%s> Spotify Connect evens
 	  out the volume between songs</label></p>
 	 <p class="note">As the Spotify app's own Normalize volume: quiet and loud songs play at about the same loudness,
-	  and an album played in order keeps its own. Changing either starts Spotify Connect again for a moment.</p>`,
+	  and an album played in order keeps its own. Changing either starts Spotify Connect again for a moment.</p></div>`,
 			checked(c.SpotifyNormalize))
 		if streaming.Has2() {
 			fmt.Fprintf(w, `

@@ -57,7 +57,7 @@ func (r *renderer) mealieAt(x, y int) (mediaZone, bool) {
 	r.zmu.Lock()
 	zones, card := r.mealieZones, r.mealieCard
 	r.zmu.Unlock()
-	z, _, on := mediaHit(zones, card, x, y)
+	z, _, on := mediaHit(zones, card, x, y, r.s(sheetSlop))
 	return z, on
 }
 
@@ -117,6 +117,9 @@ func (r *renderer) mealieSheet(s *mealieSheet, th dashboard.Theme) {
 		var content []mediaZone
 		content, contentH = r.mealieContent(s, g, pal, fc)
 		zones, viewH = append([]mediaZone{{r: done, kind: mealiePartDone}}, content...), g.view.Dy()
+	}
+	if z, ok := r.pressPart(zones, whole); ok { // every part of it is a button or a recipe (mealieTap)
+		r.pressOnPart(z.r, pal)
 	}
 	// The whole screen is the sheet's: a tap beside the card is not a tap on the dashboard under it.
 	r.setMealie(zones, whole, contentH, viewH)

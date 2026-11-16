@@ -30,10 +30,11 @@ const (
 	// ellipsis marks a message that did not fit, so a sentence that stops reads as one that was cut
 	// rather than one that ended there.
 	ellipsis = "…"
-
-	// dismissHint is the way out, said on the strip that owns it.
-	dismissHint = "TAP TO DISMISS"
 )
+
+// dismissHint is the way out of a card or a strip, said on the one that owns it: the same words in
+// the same capitals on every card of every device, in the screen's language.
+func dismissHint() string { return tr("drawer_dismiss") }
 
 // announcementStrip is the arriving announcement, along the bottom where it covers least.
 func (r *renderer) announcementStrip(s scene) {
@@ -51,7 +52,7 @@ func (r *renderer) announcementStrip(s scene) {
 
 	// The way out, on the right of the heading rather than on a line of its own: the strip is a
 	// hundred and thirty pixels and the message has first claim on them.
-	r.rightText(r.tiny, tr("drawer_dismiss"), box.Max.X-r.rowIn(), box.Min.Y+in.s(40), dim)
+	r.rightText(r.tiny, dismissHint(), box.Max.X-r.rowIn(), box.Min.Y+in.s(40), dim)
 
 	if m.Text == "" {
 		// Nothing to read, so the room is the whole of it and is set large.
@@ -68,7 +69,7 @@ func (r *renderer) announcementStrip(s scene) {
 	// is the part that has to be read, so the message keeps the large face and the width.
 	head := tr("drawer_announcement") + "  ·  " + upper(who)
 	// The heading stops short of the hint on its right.
-	room := box.Dx() - 2*r.rowIn() - r.width(r.tiny, tr("drawer_dismiss")) - r.s(24)
+	room := box.Dx() - 2*r.rowIn() - r.width(r.tiny, dismissHint()) - r.s(24)
 	r.text(r.tiny, clipText(r, r.tiny, head, room), box.Min.X+r.rowIn(), box.Min.Y+in.s(44), amber)
 	r.text(r.body, clipText(r, r.body, m.Text, box.Dx()-2*r.rowIn()), box.Min.X+r.rowIn(), box.Min.Y+in.s(100), cream)
 }

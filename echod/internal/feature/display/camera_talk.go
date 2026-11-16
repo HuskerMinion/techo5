@@ -5,25 +5,21 @@ package display
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 )
 
-// talkLive is the Talk control while the microphones are going to a camera: red, as a recording
-// light is, since the room is being heard outside it.
-var talkLive = color.RGBA{0xb0, 0x30, 0x28, 0xff}
-
 // cameraControl draws one of the camera pages' bar controls in b: the program's button, its words in
 // the sheet's button face and centered in the box the caller measured from them. live fills it in
-// talkLive, the red that says the room is being heard outside it; the rest take the quiet button.
+// declineRed, the red that says the room is being heard outside it and that a tap ends that; the rest
+// take the quiet button.
 func (r *paint) cameraControl(b image.Rectangle, label string, live bool) {
 	if !live {
 		r.labelButton(b, label, btnSecondary)
 		return
 	}
-	r.roundButton(b, float64(b.Dy())/2, talkLive)
+	r.roundButton(b, float64(b.Dy())/2, r.pressFill(b, declineRed, cream))
 	r.buttonLabel(b, label, cream)
 	r.marked = true
 }

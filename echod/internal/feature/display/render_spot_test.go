@@ -21,6 +21,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -80,6 +81,13 @@ func TestRoundScenesDraw(t *testing.T) {
 		week = append(week, hass.Day{When: at.AddDate(0, 0, i), Condition: c, High: float64(78 - 3*i), Low: float64(55 - 2*i), Rain: 10 * i})
 	}
 	scenes := map[string]roundScene{
+		"lost-home-spot":       {now: at, phase: "idle", weather: sky, linkDown: linkNoHome},
+		"lost-wifi-muted-spot": {now: at, phase: "idle", weather: sky, muted: true, linkDown: linkNoWifi},
+		"lost-home-night-spot": {now: at, phase: "idle", redClock: true, linkDown: linkNoHome},
+		"failed-spot":          {now: at, phase: "lingering", heard: "Turn off the porch light", failed: voice.FailedNoHome},
+		"failed-spot-alone":    {now: at, phase: "lingering", failed: voice.FailedNoAssistant},
+		"failed-spot-bars":     {now: at, phase: "lingering", heard: "Turn off the porch light", failed: voice.FailedTimeout, eq: &eqView{level: make([]float64, eqBands), peak: make([]float64, eqBands), quiet: true}},
+		"failed-spot-captions": {now: at, phase: "idle", weather: sky, cue: "lingering", failed: voice.FailedError},
 		"clock-weather":        {now: at, phase: "idle", weather: sky, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"menu-weather":         {now: at, phase: "idle", weather: sky, menuOpen: true, menuMode: modeMain, menuSel: 4, menuRot: restFor(4, len(mainItems))},
 		"weather":              {now: at, phase: "idle", weather: sky, forecast: week, menuOpen: true, menuMode: modeWeather},
@@ -134,9 +142,9 @@ func TestRoundScenesDraw(t *testing.T) {
 			showNotification: true, notification: notify.Notification{Kind: notify.Text, Title: "Washer", Message: "The washing machine is done"}},
 		// The device's own notes (home/hint.go): a station Home Assistant never started, the star refused.
 		"notification-radio-hint": {now: at, phase: "idle", weather: sky, showNotification: true,
-			notification: notify.Notification{Kind: notify.Text, Title: "Radio", Message: home.NoStartHint, Own: true}},
+			notification: notify.Notification{Kind: notify.Text, Title: "Radio", Message: home.HintText(home.NoStartHint), Own: true}},
 		"notification-favorite-hint": {now: at, phase: "idle", weather: sky, showNotification: true,
-			notification: notify.Notification{Kind: notify.Text, Title: "Favorites", Message: home.FavoriteHint, Own: true}},
+			notification: notify.Notification{Kind: notify.Text, Title: "Favorites", Message: home.HintText(home.FavoriteHint), Own: true}},
 		"notification-bare": {now: at, phase: "idle", showNotification: true,
 			notification: notify.Notification{Kind: notify.Text, Message: "Done"}},
 		"notification-longest": {now: at, phase: "idle", showNotification: true,

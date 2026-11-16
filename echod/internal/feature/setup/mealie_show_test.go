@@ -85,7 +85,7 @@ func TestMealieSectionNeverShowsTheToken(t *testing.T) {
 	if strings.Contains(body, "mealie-secret") {
 		t.Error("the saved token is in the page")
 	}
-	if !strings.Contains(body, "saved: leave empty to keep it") {
+	if !strings.Contains(body, secretSaved) {
 		t.Error("the page does not say a token is saved")
 	}
 	if !strings.Contains(body, `value="http://192.168.1.20:9000"`) {

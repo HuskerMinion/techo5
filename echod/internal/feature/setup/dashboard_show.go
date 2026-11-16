@@ -13,6 +13,8 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // dashboardSection is where a streamed dashboard comes from: the dashcast server's address and the key
@@ -20,22 +22,17 @@ import (
 // an action by hand. The key once saved is never shown again, only whether there is one.
 func dashboardSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	keyNote := "No key saved yet."
-	if d.Key != "" {
-		keyNote = "A key is saved. Leave this empty to keep it."
-	}
-	fmt.Fprint(w, `<fieldset><legend>Dashboard server</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "dashboard", "connections")
+	fieldsetOpen(w, "dashboard", "Dashboard server")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "dashboard")
 	fmt.Fprintf(w, `<label for="dashaddr">Address</label>
 	 <input id="dashaddr" name="address" value="%s" placeholder="192.168.1.20:9555" autocomplete="off">
-	 <label for="dashkey">Key</label>
-	 <input id="dashkey" name="key" type="password" autocomplete="off">
-	 <p class="note">%s</p>%s
+	 %s%s
 	 <p class="note">Only for a <strong>streamed</strong> dashboard, which a dashcast server draws: set
-	  <strong>Dashboard</strong> to <strong>Streamed</strong> under Screen &amp; Photos or in Home Assistant.
+	  <strong>Dashboard</strong> to <strong>Streamed</strong> above, or in Home Assistant.
 	  A dashboard drawn on the device needs no server.</p>
 	 <p><button type="submit">Save</button></p></form></fieldset>`,
-		html.EscapeString(d.Server), html.EscapeString(keyNote), checkNote(d.Server))
+		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
 }
 
 // serverCheck is the dashboard server as the last save found it (dashboard.Check).
@@ -63,14 +60,15 @@ func checkNote(server string) string {
 	 <p class="note"><strong>%s</strong> (checked at %s, on Save): %s</p>`, mark, c.at.Format("3:04 PM"), html.EscapeString(c.said))
 }
 
-// dashboardPanelSection is the dashboard as a panel by a door wants it, on the Screen & Photos tab:
+// dashboardPanelSection is the dashboard as a panel by a door wants it, on the Screen tab:
 // whether there is one and how it is shown, whether it stands in for the clock, how big its tiles are
 // and how they are laid out on the Show, and how long one opened by hand stays up. The same settings are in Home Assistant;
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fmt.Fprint(w, `<fieldset><legend>Dashboard</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "dashpanel", "photos")
+	fieldsetOpen(w, "dashpanel", "Dashboard")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "dashpanel")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
 	for _, m := range dashboard.Modes() {
 		// The mode in force, as the dashboard reads it: one this device does not have is Off here too.
@@ -107,10 +105,34 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprintf(w, `</select>
 	 <p><label><input type="checkbox" name="idle" value="yes" style="width:auto"%s> Show it in place of the clock when idle</label></p>
-	 <p class="note"><strong>Drawn on the device</strong> needs nothing else. <strong>Streamed</strong> needs a
-	  dashcast server, set under Connections.%s <strong>Back to the clock after</strong> is for a dashboard
+	 <p class="note"><strong>Drawn on the device</strong> needs no server: it reads your dashboards with this
+	  device's Home Assistant token. <strong>Streamed</strong> needs a
+	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote)
+	 %s
+	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, tesseraNote, tokenNote())
+}
+
+// tokenNote says whether the device has the Home Assistant token a drawn dashboard is read with, and
+// if not, how it gets one. The token is not a field on this page: it is given by the home_assistant
+// action, and people who went looking for a field found none (#551), so the action is shown in full,
+// named for this device, ready to paste into Developer Tools.
+func tokenNote() string {
+	if hass.Get().Ready() {
+		return `<p class="note">This device has a Home Assistant token. To change it, run the
+	  <code>home_assistant</code> action again.</p>`
+	}
+	mac, _ := layout.FactoryMAC()
+	action := layout.ActionName(config.Get().Device.Name, mac, "home_assistant")
+	return `<p class="bad"><strong>This device has no Home Assistant token yet</strong>, so a drawn dashboard
+	  can't be shown.</p>
+	 <p class="note">In Home Assistant, open your profile, then <strong>Security</strong>, and create a
+	  <strong>long-lived access token</strong>. Then, in <strong>Developer Tools, Actions</strong>, switch to
+	  YAML mode and run this once, with Home Assistant's local address and the token:</p>
+	 <p><code style="white-space:pre;display:block">action: ` + html.EscapeString(action) + `
+data:
+  url: "http://192.168.1.10:8123"
+  token: "paste the token here"</code></p>`
 }
 
 // saveDashboardPanel keeps what dashboardPanelSection asked, refusing a choice the page did not offer.

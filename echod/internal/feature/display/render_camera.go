@@ -41,8 +41,10 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		home.ReadFrame(func() { draw.Draw(r.dst, image.Rect(x, y, x+b.Dx(), y+b.Dy()), v.Frame, b.Min, draw.Src) })
 	} else {
 		msg := fmt.Sprintf(tr("drawer_camera_connect"), name)
+		// Fixed words: an error can name the address it failed at, with a token in its query, and the
+		// screen is seen by everyone in the room. The log has what went wrong (home.cameraTrouble).
 		if v.Error != "" {
-			msg = name + ": " + v.Error
+			msg = name + ": " + tr("drawer_no_picture")
 		}
 		r.text(r.small, msg, (r.w-r.width(r.small, msg))/2, r.h/2, dim)
 	}
@@ -75,6 +77,14 @@ func (r *renderer) cameraView(s scene, v home.CameraView) {
 		r.text(r.small, name, side, nameBase, captionText)
 		t := clockHM(s.now)
 		r.text(r.small, t, r.w-side-r.width(r.small, t), nameBase, captionDim)
+	}
+	if cameraStale(v) {
+		// The picture is the last that came: under the name, or in its corner on a picture with no words.
+		top := r.s(12)
+		if !wordless {
+			top = nameBase + r.s(24)
+		}
+		r.staleChip(image.Pt(side, top), false)
 	}
 	left := time.Until(v.Until).Round(time.Second)
 	hint := tr("drawer_camera_close")

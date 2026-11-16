@@ -67,7 +67,7 @@ waits and pulses teal once it offers Improv, 45 seconds after it starts. Press a
 then, and send it the network.
 
 To pass on a device that is already set up, use **Reset for someone else**: on the setup page under
-**General**, on a screen under **Settings → General** (tap it twice), from Home Assistant with the
+**System**, on a screen under **Settings → General** (tap it twice), from Home Assistant with the
 `reset_for_someone_else` action (`confirm: reset`), or on a Dot or an Echo 2nd gen by holding the
 action button and volume down together for 10 seconds (the ring turns orange). Holding them also
 does what each does alone on the way: the setup page opens, Bluetooth pairing starts and the volume
@@ -99,8 +99,16 @@ Many steps here mention the setup page. It's the device's own web page, at
 `http://<device address>:8181/setup` in a browser on the same network. It's off until you open it:
 turn on the device's **Setup page** switch in Home Assistant, open it from the device's settings
 screen, or on a Dot hold the action button. It turns itself off again after seven minutes with nothing
-asked of it, or an hour after it opened. To let a browser in, press the action button on the device
-when the page asks: there's no password, the press is what proves you are at the device.
+asked of it, or an hour after it opened. To let a browser in, choose **Ask to be let in** on the page,
+then answer at the device within a minute: tap **Allow** on a device with a screen, or press the action
+button on one without. There's no password, the answer at the device is what proves you are there. If
+nobody answers, the page says so and offers to ask again.
+**Done**, at the top of the page, lets go of that browser at once, without waiting for the page to close.
+
+Passwords, keys and tokens all work one way on the page. A saved one is never shown: its field is
+empty, and the page says whether one is saved. Leave the field empty to keep it, type a new one to
+replace it, and tick **Show** to see what you are typing. Where one can be taken away on its own,
+**Remove the saved one** does that.
 
 SSH works only with a key: the device's **SSH** switch turns the server on, and the
 [ssh_keys action](actions.md#set-the-ssh-authorized-keys) puts your public key on it. Log in as `root`.
@@ -158,7 +166,7 @@ usual one, and the steps below start with it.
    Anything else the Media page can browse works too, such as an Immich album or a network share.
 
    **Immich without Home Assistant.** The device can read an Immich server itself. On the setup page,
-   **Screen & Photos**, **Photos from Immich**: the server's address (like `http://192.168.1.20:2283`)
+   **Screen**, **Photos from Immich**: the server's address (like `http://192.168.1.20:2283`)
    and an API key made in Immich under **Account Settings > API Keys**, then **Save**. Pick **The whole
    library** or an album under **Photos to show**, then **Show these photos**. The key stays on the
    device and the page never shows it again; **Forget this server** removes it. Once set up, Immich and
@@ -172,7 +180,7 @@ usual one, and the steps below start with it.
    until set, and are also entities in Home Assistant (**Immich favorites only**, **Immich first day**,
    **Immich last day**, **Immich person**, **Slideshow date and place**).
 
-   **Photos on this device.** On the setup page, **Screen & Photos**, **Photos on this device**,
+   **Photos on this device.** On the setup page, **Screen**, **Photos on this device**,
    **Add photos** takes pictures from a phone or computer. They are made screen-sized there before
    they are sent, and the device keeps up to 1,000. The slideshow shows them when it has no Home
    Assistant photos to show. **Remove all photos** deletes them.
@@ -216,12 +224,12 @@ National Weather Service).
 
 With access set up, the Cameras drawer (swipe in from the right edge) lists every camera Home
 Assistant has. That is the default (All) for a device never set. To show only some, with friendlier
-names (These), or none of them (None), use the setup page (Connections → Home Assistant cameras) or
+names (These), or none of them (None), use the setup page (Cameras → Home Assistant cameras) or
 [`home_cameras`](actions.md#choose-which-cameras-the-device-shows). A device that shares a Home
 Assistant with other homes should be set to None or a list, so it does not offer the other homes'
 cameras. An automation calling `home_show_camera` can still show any camera.
 
-The setup page's **Camera list** (Connections) sets the order of the drawer and the grid: the
+The setup page's **Camera list** (Cameras) sets the order of the drawer and the grid: the
 cameras by name, one a line, the first at the top. Cameras not in the box go after the others, and an
 empty box puts them back in the usual order. It also has **List this device's own camera**, on by
 default. Turned off, the device's own camera is not in the drawer or the grid, and "show" does not
@@ -294,7 +302,7 @@ with cameras that have a speaker and take G.711 audio, which includes most Reoli
 
 1. Turn on **Talk through cameras** under Settings → Privacy & Security (**Talk to cameras** on the
    Spot), or its switch in Home Assistant. It is off on a new device.
-2. Cameras on a Reolink recorder set up on the device (setup page → Connections → Reolink cameras)
+2. Cameras on a Reolink recorder set up on the device (setup page → Cameras → Reolink cameras)
    need nothing more, as long as RTSP is turned on in the recorder's network settings. For any other
    camera, give its RTSP address under **Talk through cameras** on the same tab, with the cameras'
    login. For a Reolink camera that is `rtsp://<address>:554/h264Preview_01_main`. A camera left
@@ -324,7 +332,7 @@ every one asks first: the first tap lights it up with "Tap again: Open gate", an
 4 seconds runs it. The button says **Sent** for a moment once it has gone to Home Assistant, or why it
 could not. A tap on a button never closes the view.
 
-Set them on the setup page under **Connections** → **Camera buttons**, one camera a line: the camera's
+Set them on the setup page under **Cameras** → **Camera buttons**, one camera a line: the camera's
 entity as the camera list has it (the section lists them), a colon, then the buttons split by commas,
 each `Label=domain.service`, or `Label=domain.service:domain.object` for an action on an entity:
 
@@ -343,7 +351,7 @@ log. The buttons stay on the device: a settings file neither carries them nor br
 
 A [go2rtc](https://github.com/AlexxIT/go2rtc) server, which many homes run beside Home Assistant (or
 inside Frigate), turns cameras of every kind into streams anything can read. Give the device its
-address on the setup page (**Connections**, **go2rtc cameras**, like `192.168.x.y:1984`) or with
+address on the setup page (**Cameras**, **go2rtc cameras**, like `192.168.x.y:1984`) or with
 the [`home_go2rtc`](actions.md#cameras-from-go2rtc) action, and every stream it has is a camera on
 the device, by its name in go2rtc: on the Cameras drawer, and by voice ("show the porch"). Its
 picture comes from go2rtc, and with **Live camera video** on, live video from go2rtc's RTSP port
@@ -373,7 +381,7 @@ does not ring it.
    report its button to anything but the Reolink app; through a Hub it does.
 2. In the Reolink app, on the Hub or NVR (not the doorbell), turn on **ONVIF** under
    `Settings > Network > Advanced > Server Settings`, and note its port (8000 unless changed).
-3. On the device's setup page, under **Connections**, set up the Hub or NVR in **Reolink cameras**,
+3. On the device's setup page, under **Cameras**, set up the Hub or NVR in **Reolink cameras**,
    then choose the doorbell's camera under **Doorbell**. If the Hub's ONVIF port is not 8000, enter
    it there too. Save.
 
@@ -398,7 +406,7 @@ automation that wants to know too.
 The camera of a Show or a Spot can be recorded like any other camera, by Frigate, go2rtc or an NVR, from
 `rtsp://<device address>:8554/camera`. It is off on a new device.
 
-1. On the setup page, under **Privacy & Security** → **Camera streaming**, set a password (12
+1. On the setup page, under **Cameras** → **Camera streaming**, set a password (12
    characters or more) and, if you like, a user name (`camera` unless changed). Save. The password is
    never shown again; leave the field empty to keep it. Home Assistant can set the same login with the
    device's `camera_credentials` action (`username`, `password`), by the same rules, once you turn on
@@ -493,7 +501,7 @@ captured login to the same page for a few minutes, and could see the pictures an
 - **AirPlay and Spotify Connect.** On every device but the Panel app, two switches make the device a
   speaker other apps play to, under its own name: **AirPlay** from an iPhone, iPad or Mac, and
   **Spotify Connect** from the Spotify app (Spotify Premium). Both are off until turned on, under
-  Settings → Sound, on the setup page (Sound & Voice), or in Home Assistant. What they play shows as
+  Settings → Sound, on the setup page (Sound), or in Home Assistant. What they play shows as
   now playing, with the song's cover from Spotify. The Spotify app's volume slider and the device's
   volume are one: the slider sets the device to where it is, and the device's buttons, Home Assistant
   and night volume move the slider. With AirPlay, play, pause, next and previous on the device's
@@ -598,7 +606,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   Connections** (it asks twice), or the **Bluetooth forget** button in Home Assistant on any device,
   forgets them, so new ones can be paired.
 - **Bluetooth sets the volume.** On the Show, the Spot and the Dot, the **Bluetooth sets the
-  volume** switch (the setup page's Connections tab, or Home Assistant) is on by default, as it
+  volume** switch (the setup page's Sound tab, or Home Assistant) is on by default, as it
   always was: a phone's or a computer's volume slider is the device's volume. **The device jumps to
   full volume when a computer plays to it: turn it off.** A Linux computer (PipeWire or PulseAudio)
   often reports full volume once and then turns its own sound down itself, which took the device to
@@ -610,7 +618,7 @@ captured login to the same page for a few minutes, and could see the pictures an
   and now turns its own sound down from there; turned on, the phone's slider jumps to the device's
   volume. Shared with the other devices like the rest of the speaker settings, when sharing is on.
 - **Bluetooth Secure Connections.** On the Show, the Spot and the Dot, the **Bluetooth Secure
-  Connections** switch (Settings > Connections, the setup page's Connections tab, or Home Assistant)
+  Connections** switch (Settings > Connections, the setup page's Sound tab, or Home Assistant)
   is on by default, as it always was. **A phone pairs, then drops after a second or two: turn off
   Bluetooth Secure Connections.** Some newer phones do that with it on (a POCO F8 Pro on Android 16,
   #183); with it off they pair the older way and stay. What it costs: a phone set to pair
@@ -647,7 +655,8 @@ captured login to the same page for a few minutes, and could see the pictures an
   screen; the select in Home Assistant picks one and shows the first one ticked. While this device
   plays nothing of its own, Now Playing shows a followed player's song and cover, and its buttons
   control it. With several playing, it shows the one that started last, and when that one stops,
-  another that is still playing. **Done** puts it away until the next song without stopping it. Needs
+  another that is still playing. **Done** puts it away until the next song without stopping it (over
+  this device's own music the same button says **Stop**, and ends the music). Needs
   the home_assistant action (address and token).
   On the Spot, a swipe across a followed player's page skips to the next or previous song. **Stop**
   on a followed page puts it away and leaves the other player playing.
@@ -706,7 +715,7 @@ There are two ways to keep the screen out of them:
   the entity's own **Voice assistants** settings). Assist then leaves the screen alone, and nothing
   else about the light changes.
 - **Turn on Screen ignores room light commands** (off at first; on the Show and the Spot under
-  Settings → **Display** as **Ignore room lights**, on the setup page's **Screen & Photos** tab, and in
+  Settings → **Display** as **Ignore room lights**, on the setup page's **Screen** tab, and in
   Home Assistant). The screen's light keeps its entity ID and does what it always did, but Home
   Assistant shows it under the device's **Configuration**, and does not expose a configuration entity
   to Assist when it first sees it. Home Assistant also leaves a configuration entity out of what an
@@ -814,7 +823,7 @@ other Shows don't have the switches.
   large) and *Overlap* (very large figures, each laid a little over the next). Swipe left or right
   across the clock for the next style or the one before; its name shows for a moment, and a swipe
   the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
-  and on the setup page's Screen & Photos tab.
+  and on the setup page's Screen tab.
 - **Brightness** (Settings > Display): on the screen it moves in steps of 5 from 5 to 30, then in
   steps of 10 up to 100. With auto-brightness on, it is the most the screen goes to. In Home
   Assistant it is the brightness of the **Screen** light.
@@ -832,7 +841,7 @@ other Shows don't have the switches.
   *Exo*, *Overpass*, *Saira*, *Comic Neue*, *Open Sans*, *Google Sans Flex* or *Go Mono*. Each is sized so a line
   takes about the room it takes in Go, and a new choice shows at once. A character a font doesn't
   have, like the ♪ in "♪ playing", is drawn in Go. Under Look, also **Screen font** in Home Assistant
-  and on the setup page's Screen & Photos tab.
+  and on the setup page's Screen tab.
 - **Text size** (70% to 125%, 100% by default): how large every word the screen draws is, in every
   font and skin. Buttons and dashboard tiles keep their size, and settings rows grow a little above
   100%; a word too long for its place is cut short with an ellipsis, as it is in a language with
@@ -871,14 +880,14 @@ other Shows don't have the switches.
   Pip-Boy, Amber terminal, Matrix, Blueprint and Game Boy were taken out in v1.6.9, being hard to read
   on some screens: a screen that wore Pip-Boy, Amber terminal or Matrix wears Control room, Blueprint
   Prairie, and Game Boy Big and plain.
-- **Swipe between clock styles**: on by default. Turn it off (setup page, Screen & Photos, or the
+- **Swipe between clock styles**: on by default. Turn it off (setup page, Screen, or the
   switch in Home Assistant) so a swipe across the clock leaves its style alone. It's off whenever
   **Tap on the clock** is *Nothing*, too.
-- **Swipe for volume**: on by default. Turn it off (setup page, Screen & Photos, or the switch in Home
+- **Swipe for volume**: on by default. Turn it off (setup page, Screen, or the switch in Home
   Assistant) so a swipe up or down on the clock, now playing, the weather or the Bluetooth page leaves
   the volume alone, for a screen that hands keep brushing. The volume buttons still work, and so do
   the swipe down from the top for Settings and the swipe up from the bottom for the Deck.
-- **World clock places** (setup page, Screen & Photos tab): the World style's places, as time zone
+- **World clock places** (setup page, Screen tab): the World style's places, as time zone
   names with commas between them, like `America/Chicago, Europe/Paris, Asia/Tokyo`. Up to three; the
   Spot shows the first two. Leave it empty for New York, London and Tokyo.
 - **Answer time** (Settings > Display > Pop-ups, or **Answer time on screen** in Home Assistant): how
@@ -897,7 +906,7 @@ other Shows don't have the switches.
   for half an hour, so play picks it up again and the page comes back. A page you bring back while it
   is paused, with the clock's word for the music or a tap on the strip's song, stays another 30 seconds.
 - **Theme** (Show): a preset, or **Custom colors** of your own. On the screen, tap a color for each part.
-  On the setup page's Screen & Photos tab, **Themes**, each of the five colors has a color picker and a
+  On the setup page's Screen tab, **Themes**, each of the five colors has a color picker and a
   `#rrggbb` box; they start from the theme the screen wears now. **Match the accent** fills in the
   ground, text, dim text and rules from the accent's hue, for a dark or a light theme, and you can
   change any of them after. The dark and light themes each keep a Custom of their own.
@@ -911,12 +920,12 @@ other Shows don't have the switches.
 - **Tap on the clock** (Show): *Assist*, as it always was, *Dashboard* to open the dashboard, *Deck*
   to open TECHO5 Deck (until a deck has buttons, a tap still starts Assist), or *Nothing*, for a panel
   you only talk to. A voice request under way still
-  takes the tap. Also on the setup page's Screen & Photos tab. See [Dashboards](dashboards.md) for the
+  takes the tap. Also on the setup page's Screen tab. See [Dashboards](dashboards.md) for the
   rest of a panel setup.
 - **TECHO5 Deck** (Show): pages of buttons for OBS Studio, opened with a swipe up from the bottom
-  edge of the clock. Set up on the setup page's Screen & Photos tab. See [TECHO5 Deck](deck.md).
+  edge of the clock. Set up on the setup page's Screen tab. See [TECHO5 Deck](deck.md).
 - **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
-  video** on, from DLNA apps. Off on a new device. On the setup page's Screen & Photos tab. See
+  video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
 - **Screen language** (Settings → General): the language of the screen. German, French, Galician,
   Italian, Japanese and Turkish translate the whole screen, settings included; Spanish translates part
@@ -969,7 +978,7 @@ other Shows don't have the switches.
 ### Calendar
 
 The calendar page opens from the date under the clock. Under Settings → **Display** → **Calendar**,
-once a calendar is shown, and on the setup page's Weather & Calendar tab. Each is also in Home
+once a calendar is shown, and on the setup page's Screen tab. Each is also in Home
 Assistant.
 
 - **Opens on**: the view the date opens, and the voice assistant and `calendar_show` too: *Month*
@@ -1010,7 +1019,7 @@ desk can show one person's calendar and the kitchen the family's. The device rea
 token from [step 1](#1-give-the-device-access-to-home-assistant); no calendar password is ever on it.
 
 **Calendars from a link.** A calendar that isn't in Home Assistant can be added by its iCal
-address, on the setup page's **Weather & Calendar** tab, under **Calendars from a link**: a name and
+address, on the setup page's **System** tab, under **Calendars from a link**: a name and
 the address. Google Calendar has it under Settings, the calendar, **Secret address in iCal format**;
 iCloud gives a link when you share a calendar as a **Public Calendar**; Outlook has **Publish a
 calendar** under Settings, Calendar, Shared calendars (the ICS link). Anyone with the address can
@@ -1027,7 +1036,7 @@ of them all. That choice stays on the device: it isn't shared or saved in a sett
 
 The Show, the Skylight and the Panel app can show Home Assistant's to-do lists: the Shopping List
 integration, Local To-do, Google Tasks, Todoist, anything that makes a `todo.` entity. They are off
-until you choose lists. Pick them on the setup page's **Weather & Calendar** tab, under **To-do
+until you choose lists. Pick them on the setup page's **Screen** tab, under **To-do
 lists**, or with the [`todo_lists` action](actions.md#choose-the-to-do-lists-shown). Each device keeps
 its own, so the kitchen can show the shopping list and a desk the chores.
 
@@ -1052,7 +1061,7 @@ a Korean song title or a Japanese calendar event, show as boxes. A font of your 
 screen draws any character its font and Go don't have from it. It's never the font for everything;
 that's **Font**, above.
 
-On the setup page's Screen & Photos tab, under **Fonts of your own**, choose a `.ttf`, `.otf` or
+On the setup page's Screen tab, under **Fonts of your own**, choose a `.ttf`, `.otf` or
 `.ttc` file to send it to the device, and use **Remove** to delete one. Or put the file in the
 device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the-ssh-authorized-keys)):
 `/data/misc/techo5/fonts`. The Echo Dot has no screen and no fonts folder.
@@ -1100,7 +1109,10 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   off or the camera is not watching. The model is TensorFlow's person detection example: small
   enough for these processors, and a modest judge. It often misses a person far from the camera or
   half out of the picture.
-  Nothing it sees is kept or sent.
+  Nothing it sees is kept or sent. The model isn't built in: the device downloads it (about 300 KB)
+  the first time person detection is turned on, and keeps it. Until it has arrived, the **Person**
+  sensor stays off; the screen goes by presence detection's own motion either way, so it is never
+  put out for want of the model.
 - **Gestures** (Show and Spot, off by default; the **Gestures** switch in Home
   Assistant): cover the camera with your palm, hand on or almost on the lens, for half a second to
   three seconds. It stops a ringing alarm or timer, and Home Assistant gets an `esphome.techo5_gesture`
@@ -1128,7 +1140,8 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   a finger held on the clock for half a second sends the same event with `gesture: hold`. Only on
   the clock itself, with nothing else on the screen (not over the screensaver, a card or the night
   clock): every other page keeps its taps as they are. With it on, a slow tap on the clock is a
-  hold, so tap quickly to open what a tap opens.
+  hold, so tap quickly to open what a tap opens. The clock shows **OK** in its middle for a moment
+  when a hold has been sent.
 
 ## 7. Voice
 
@@ -1150,6 +1163,16 @@ voice**, and the **Louder top volume** switch in Home Assistant) makes the top o
 louder: steps 0 to 16 are unchanged, and the steps above go into the speaker's tuning hotter, up to
 8 dB at step 30. Like Speaker gain, it can distort on some music at the top steps; turn it off if it
 does.
+
+**Headphone jack sleeps when idle** (devices with a headphone jack, which leaves out the Echo Input:
+its line out is its speaker; off by default; the setup page under **Speaker and voice**, and the
+switch in Home Assistant's **Playback** configuration) switches the jack's output off after 10
+seconds of silence and back on before the next sound. Powered speakers on the jack then stay quiet
+between sounds instead of hissing. The cost is a small pop each time the output switches off and on,
+and the first sound after a quiet spell starts a quarter of a second or more later; music played in
+sync with other rooms keeps its place and is missing that first moment instead. It acts only while
+the jack alone is playing (**Headphones / AUX**, or **Automatic** with something plugged in), not
+with **Speaker and headphones**.
 
 **Louder speech** (off by default; Settings → **Sound**, the setup page under **Speaker and
 voice**, and the **Louder speech** switch in Home Assistant) compresses replies and announcements on
@@ -1209,7 +1232,7 @@ speaking detection** to **Relaxed**, 1.25 seconds. In a quiet room nothing longe
 effect with Home Assistant. With realtime voice and voice without Home Assistant it applies to every
 turn.
 
-On the setup page (Sound & Voice) or in Home Assistant, **Night volume** turns the device down to that
+On the setup page (Sound) or in Home Assistant, **Night volume** turns the device down to that
 level as quiet hours start, if it is louder, and back to where it was as they end. Turned up or down
 during the night, it stays where it was put. Changing Night volume during the night moves the device to
 the new level, and 0 (no night volume) puts it straight back. A muted device stays muted. Alarms and
@@ -1228,7 +1251,7 @@ quiet replies over loud music, or the other way round.
   what the device says. Never music, and not a camera's own sound, which plays at the volume.
 - **Call volume** is for the intercom and phone calls.
 
-Both are set in Settings → **Sound** on the device, on the setup page (Sound & Voice) and as number
+Both are set in Settings → **Sound** on the device, on the setup page (Sound) and as number
 entities in Home Assistant. **0 is the same as the volume**, which is how a device plays that never
 touched them, so nothing changes until you do. -5 is five steps quieter than the volume, 5 is five steps
 louder. They move with the volume: turn the music up and the replies and calls go up with it, keeping
@@ -1324,7 +1347,7 @@ long-term memory of its own remembers across conversations too, whichever wake w
 **Follow-up time** (0 to 30 seconds) is how long, and **Follow-ups in a row** (0 to 10, 0 for no
 limit) how many times. At 0 seconds it listens again only when the assistant asks a question, which
 it always does. **Follow-up tone** is the sound it makes as it listens again. For the first wake
-word, the setup page has the same under **Sound & Voice**, **Listening after an answer**.
+word, the setup page has the same under **Voice**, **Listening after an answer**.
 
 To end the conversation sooner, say only "thank you", "that's all", "never mind" or "goodbye" (or the
 same in the screen's other languages). The answer to it is the last thing said, and the device stops
@@ -1354,7 +1377,7 @@ heard and spoken.** It is off until you choose a wake word for it, on the setup 
 Assistant has no switch for it.
 
 1. Get a key from the provider (an OpenAI or xAI API key, or a Gemini API key from Google AI Studio).
-2. On the setup page, under **Sound**, **Realtime voice**: choose the provider, paste the key, set the
+2. On the setup page, under **Voice**, **Realtime voice**: choose the provider, paste the key, set the
    most minutes a day (30 to start with), and tick the wake word to answer with it. Save.
 
 The key is never shown again; leave the field empty to keep it. Choosing another provider or relay
@@ -1442,14 +1465,14 @@ the web, like scores, news or opening hours, and read the pages it finds. SearXN
 format turned on (`search.formats` in its `settings.yml`). Once a request has read the web, a
 calendar or a to-do list, nothing in that request can change anything, so words from outside can't make it act.
 
-To set it up, open the setup page, **Sound & Voice**, **Voice assistant**:
+To set it up, open the setup page, **Voice**, **Voice assistant**:
 
 1. **Answered by**: *Speech and a chat model, directly*.
 2. **Speech to text** and **Text to speech**: the two Wyoming servers. **Voice** is the Piper voice
    (like `en_US-lessac-medium`; empty is the server's own), and **Language** what you speak (empty
    is English).
 3. **Chat model endpoint**, and **Model** and **Key** if the server needs them. The key is never
-   shown again; **Remove the key** clears it.
+   shown again; **Remove the saved one** clears it.
 4. **Web search**, if you want it: the SearXNG server's address. **Page reader**, if you want that
    too: a [page reader](../tools/page-reader/README.md)'s address. A page is read through it when it
    has almost no text as it comes (it fills itself in with scripts, like a store's hours) or the site
@@ -1491,7 +1514,7 @@ residual connections or pooling (`ADD`, `AVERAGE_POOL_2D`, `MAX_POOL_2D`) run.
 
 The quickest way is the device's setup page:
 
-1. Open the setup page and go to **Sound & Voice**, **Wake words of your own**.
+1. Open the setup page and go to **Voice**, **Wake words of your own**.
 2. Choose the `.json` and the `.tflite`, then **Add wake word**. The device checks that it can run the
    model before it keeps it, and says why if it can't. The phrase in the `.json` (`wake_word`) is what
    it is called.
@@ -1628,7 +1651,7 @@ off; keep them on your own machine.
 ### Watching the wake word scores
 
 The setup page shows what each word the device listens for is scoring, so a threshold can be picked by
-watching instead of by reading the device's log. It is under **Sound & Voice**, after **Wake words of
+watching instead of by reading the device's log. It is under **Voice**, after **Wake words of
 your own**, on a device with microphones.
 
 - The table has each word listened for right now: the wake words, the stop word, the hang-up word
@@ -1660,7 +1683,7 @@ For training a wake word, or a command word, on what this device really hears, t
 record takes of it on the device's own microphones and hand them over as a folder of WAVs, ready to
 import into wakesmith as [real voices](training-wake-word.md#3-add-real-voices), or to use as
 [your own voices](training-wake-word.md#4-add-your-own-voices) when training by hand. It is under
-**Sound & Voice**, after **Wake word scores**, on a device with microphones.
+**Voice**, after **Wake word scores**, on a device with microphones.
 
 It needs **Record takes of a word** switched on, under Privacy & Security on the device's screen or in
 Home Assistant (a Dot has the switch in Home Assistant). It is off on a new device, the Remote API can
@@ -1708,7 +1731,7 @@ voices: keep them on your own machine.
 
 ### Recent voice requests
 
-The last 10 voice requests the device took are listed on the setup page, under **Sound & Voice**, after
+The last 10 voice requests the device took are listed on the setup page, under **Voice**, after
 **Record takes of a word**, on a device with microphones. Newest first, each line shows the time, which
 assistant (slot) answered, the wake word's score, what was heard, the reply, how it ended (completed,
 stopped, interrupted, cut_off or answered_elsewhere, or no_speech or error), and how long listening,
@@ -1826,8 +1849,8 @@ device, and say it again.
 
 ### Sounds of your own
 
-The sounds a voice request makes can be recordings of your own. On the setup page, go to **Sound &
-Voice**, **Sounds of your own**. Each sound has **Play**, which plays what the device plays now,
+The sounds a voice request makes can be recordings of your own. On the setup page, go to **Sound**,
+**Sounds of your own**. Each sound has **Play**, which plays what the device plays now,
 quietly; a file to choose and **Upload** to send a recording for it; and, once it has one, **Use the
 device's own** to go back to the stock sound. The device checks a file as it arrives and refuses one it can't play, with
 the reason, so the sound before it stays. Nothing is converted on the device: send a WAVE file in the
@@ -1976,7 +1999,7 @@ browser on your home network. It is for listening to a nursery or a sickroom fro
 room. A Skylight Calendar has no microphone and does not offer it.
 
 **Who can hear.** Only a browser that has the link, on your own network. Turn the switch on and the
-setup page shows the link under Privacy & Security, **Baby monitor**: this device's address and `/baby`,
+setup page shows the link under Privacy, **Baby monitor**: this device's address and `/baby`,
 with a long random key in it (128 random bits, which nobody can guess). Open it on a phone or computer
 and tap **Tap to listen** (a browser plays sound only after a tap). It works in Safari on an iPhone, in
 Chrome and in Firefox, with no app, but only while the page is open on the screen: a phone that locks
@@ -1995,7 +2018,7 @@ Assistant has a **Baby monitor listening now** sensor, so an automation can tell
 stops the sound at once, ends the listeners, and the page says the microphones are muted; an open
 page starts again by itself a few seconds after you unmute. Voice keeps working while someone listens.
 
-**A dark nursery.** **Baby monitor light** (on the setup page under Privacy & Security, with the
+**A dark nursery.** **Baby monitor light** (on the setup page under Privacy, with the
 link, and in Home Assistant) sets how the device shows a listener:
 
 - **Normal**, as above.
@@ -2027,7 +2050,8 @@ PIN is right. Once the PIN is in, the rest stay open until the settings close or
 two minutes. Set it under Settings → Privacy & Security, on the setup page (Privacy), or with the
 [settings_lock_pin action](actions.md#set-the-settings-locks-pin). Five wrong tries in a row make
 the device wait before it takes another. The **Settings lock** switch in Home Assistant shows
-whether it is on; turning it off removes the PIN.
+whether it is on; turning it off removes the PIN. The setup page turns it off too, after a box is
+ticked to say the settings are then open to anyone at the screen.
 
 While the lock is on, the PIN is also asked for when **Allow** is pressed on the setup page.
 
@@ -2035,7 +2059,7 @@ While the lock is on, the PIN is also asked for when **Allow** is pressed on the
 
 The device gets its address from the router (DHCP). On an Echo Show or an Echo Spot (not an Echo
 Dot) it can be given a fixed one instead: for example from a range the router does not hand out,
-open the setup page, go to **Connections → Network address**, choose **Fixed**, and type the
+open the setup page, go to **Network → Network address**, choose **Fixed**, and type the
 address (`192.168.1.50`, or `192.168.1.50/24` with its prefix), the gateway, and DNS servers if they are not the gateway. On an Echo Show the
 same is on the screen, under Settings → Connections → **Network address**, with a keypad; the
 [network_address action](actions.md#set-the-network-address) does it from Home Assistant.
@@ -2083,7 +2107,7 @@ Some networks sign each person in with a username and a password (WPA2 Enterpris
 such as eduroam and many school and workplace networks. Get the settings from the network's own Wi-Fi
 instructions:
 
-- **On the setup page:** under **Connections → Wi-Fi**, pick the network (a scan marks it "username
+- **On the setup page:** under **Network → Wi-Fi**, pick the network (a scan marks it "username
   and password"), put the password in **Passphrase**, and open **School or work network**. Fill in
   the **Username**, the **Sign-in method** (PEAP with MSCHAPv2 is the most common; TTLS with PAP or
   MSCHAPv2 are there too), and the **Server name**: the domain the instructions give for the
@@ -2101,14 +2125,14 @@ The password is kept on the device, readable only by it, as Wi-Fi passphrases ar
 Networks that ask you to sign in on a web page, as hotels and some guest networks do, aren't
 supported: the device has no browser to sign in with. Many schools have a page for registering a
 device like this one by its Wi-Fi address (MAC) instead. The setup page shows the address under
-**Connections → Wi-Fi**, and an Echo Show shows it on its Wi-Fi page.
+**Network → Wi-Fi**, and an Echo Show shows it on its Wi-Fi page.
 
 ### The ring while a Dot starts
 
 After a start, the ring of a Dot or an Echo 2nd gen walks around in cyan while it waits for Home Assistant:
 it is running, but can't answer a wake word yet. When Home Assistant connects, a comet runs once and the ring
 goes dark. With no Home Assistant, the walk stops by itself after five minutes. For a Dot used without Home
-Assistant, such as an AirPlay speaker, turn the walk off on the setup page under **General → Ring while
+Assistant, such as an AirPlay speaker, turn the walk off on the setup page under **System → Ring while
 starting**. While first run is still to do, the ring breathes orange instead, for as long as it takes.
 
 ### Another Wi-Fi on an Echo Dot
@@ -2143,7 +2167,7 @@ bluetoothd still serves it, so it works the same.
 
 ## 10. Saving the settings
 
-On the setup page, **General**, **Download settings** saves everything the device is set to as a
+On the setup page, **System**, **Download settings** saves everything the device is set to as a
 file, `techo5-settings.json`. **Restore settings from a file** takes one back: from this device
 after a reinstall, or from another device to start this one off the same way. You are shown which
 parts would change first, and nothing changes until you press **Restore and restart**; the device
@@ -2179,8 +2203,8 @@ or attach it to an issue; the diagnostics download is the one made for that.
 
 Settings can be kept in step between devices, setting by setting, each with the devices you choose,
 or copied to other devices once. It is off on every device until you turn it on, on each one that is
-to take part: **Settings sharing** in Home Assistant, or **Shared settings** under **General** on the
-setup page. Every device needs the same house word (Connections), since what one device sends another
+to take part: **Settings sharing** in Home Assistant, or **Shared settings** under **System** on the
+setup page. Every device needs the same house word (Voice), since what one device sends another
 is signed with it.
 
 What turning it on allows, plainly: any device of the house can then copy the settings listed below
@@ -2236,7 +2260,7 @@ streaming, the ambient noise sensor, the clap gesture, hold on the clock, neares
 API itself): those it can read, not change. It never runs Home Assistant actions, and it carries none
 of what was said to the device or what it answered.
 
-1. On the setup page, **Privacy & Security**, **Remote API**, press **Make a key**. The key is shown
+1. On the setup page, **Privacy**, **Remote API**, press **Make a key**. The key is shown
    once, on that page (the one time it crosses your network): copy it. The device does not keep the
    key, only a secret made from it, in its own settings file, which never goes out in the diagnostics
    download or a saved settings file. A lost key cannot be shown again; make a new one, which stops
@@ -2297,7 +2321,7 @@ run: see [NetBird: reaching a device from away](netbird.md).
 
 The original Echo Wall Clock — the round one with the LED ring and a sixty-minute dial — can show
 this device's timers. It is off until turned on. Turn on **Wall clock** (the setup page's
-Connections tab, or Home Assistant), put the clock in pairing mode (hold its center button until
+Network tab, or Home Assistant), put the clock in pairing mode (hold its center button until
 the middle LED pulses amber), and choose **Pair the clock** on the setup page, or press the **Pair
 wall clock** button in Home Assistant. The device
 looks for a clock for two minutes, pairs with it, trusts it and remembers its address; the **Wall
@@ -2308,6 +2332,15 @@ times a day and is not kept awake by the attempts. It reconnects on its own with
 of coming back, and turning **Wall clock** off and on, or pairing, tries again at once.
 A clock that was paired to an Echo must be unpaired from Alexa first, since it stays paired to one
 controller. If you know the clock's address, type it under **Clock address** instead and Save.
+
+Once connected, the device asks the Bluetooth controller to put the clock's link into **sniff
+mode**, where the clock's radio listens only at 1.28-second anchors instead of in every slot. The
+kernel leaves sniff whenever there is a packet to send or receive, and the device asks again a few
+seconds after it has sent something — and at least once a minute — so the clock sleeps between the
+periodic time update and the odd timer change. This is not a setting: there is no useful reason to
+choose the more power-hungry mode. It depends on the controller; where the controller refuses, the
+clock still works and stays in active mode. A timer rings from the clock's own copy of its end time,
+so sniff mode does not delay the ring.
 
 The clock is a display and the timers are this device's own: a timer set by voice or on the screen
 shows the same, and keeps counting while Home Assistant is away. The soonest-ending timer is drawn
@@ -2368,7 +2401,7 @@ too.
 
 Attach the device's diagnostics if you can: open its setup page (Settings → Privacy → Setup page, or
 the device's **Setup page** switch in Home Assistant on a Dot; the **Visit** link on the device's page
-in Home Assistant opens it), go to **General** and press
+in Home Assistant opens it), go to **Status** and press
 **Download diagnostics**. It holds the last of the device's log, its recent wake word detections and
 near misses, and what it is set to. Addresses, network names, keys and
 serial numbers are replaced before you get it, but give it a read before you post it.

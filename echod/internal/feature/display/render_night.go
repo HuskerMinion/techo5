@@ -458,5 +458,15 @@ func (r *renderer) fillShape(box image.Rectangle, c color.Color, path func(z *ve
 	z := vector.NewRasterizer(box.Dx(), box.Dy())
 	path(z, float32(box.Dx()), float32(box.Dy()))
 	z.ClosePath()
-	z.Draw(r.dst, box, image.NewUniform(c), image.Point{})
+	if box.In(r.dst.Bounds()) {
+		z.Draw(r.dst, box, image.NewUniform(c), image.Point{})
+		return
+	}
+	// Partly off the canvas: the rasterizer writes where it is told, past the canvas's edge, so the
+	// shape goes through a mask and only its part on the canvas is laid down. Large words pushed a
+	// month's "+2 more" under the panel's foot, and this panicked.
+	mask := image.NewAlpha(image.Rect(0, 0, box.Dx(), box.Dy()))
+	z.Draw(mask, mask.Bounds(), image.Opaque, image.Point{})
+	on := box.Intersect(r.dst.Bounds())
+	draw.DrawMask(r.dst, on, image.NewUniform(c), image.Point{}, mask, on.Min.Sub(box.Min), draw.Over)
 }

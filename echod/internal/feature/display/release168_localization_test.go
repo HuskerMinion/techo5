@@ -61,7 +61,7 @@ func TestV168NetbirdAndStreamingMessages(t *testing.T) {
 			{netbird.Status{}, "Reach this device from away: off", "外部からのアクセス：オフ"},
 			{netbird.Status{On: true, Downloading: true, Got: 0.37}, "Downloading NetBird, 37%", "NetBirdをダウンロード中：37%"},
 			{netbird.Status{On: true, State: "Connected", Name: "My Show"}, "Connected as My Show", "My Showとして接続済み"},
-			{netbird.Status{On: true, State: "NeedsLogin"}, "Needs a setup key: the setup page, Connections", "セットアップ画面のConnectionsでセットアップキーを設定"},
+			{netbird.Status{On: true, State: "NeedsLogin"}, "Needs a setup key: the setup page, Network", "セットアップ画面のNetworkでセットアップキーを設定"},
 			{netbird.Status{On: true, Problem: "A server-specific problem"}, "A server-specific problem", "A server-specific problem"},
 		} {
 			want := tc.english

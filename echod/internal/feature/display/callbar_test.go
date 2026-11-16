@@ -180,6 +180,8 @@ func TestTheDetailsSayWhatTheCallIsDoing(t *testing.T) {
 		page := scene{now: at, phase: "idle"}
 		door := page
 		door.atDoor = true
+		muted := page
+		muted.muted = true
 		later := talking
 		later.Since = talking.Since.Add(-time.Minute)
 		_, rb := drawCall(panel.wide, panel.high, page, talking, callBarDetails)
@@ -192,6 +194,7 @@ func TestTheDetailsSayWhatTheCallIsDoing(t *testing.T) {
 			"talking": {page, talking},
 			"calling": {page, phone.State{Phase: phone.Dialing, Peer: "104"}},
 			"at-door": {door, talking},
+			"muted":   {muted, talking},
 			"later":   {page, later},
 			"long":    {page, long},
 		} {

@@ -26,6 +26,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -109,9 +110,10 @@ func init() {
 // Fire is one of this device's own reminders coming due: it goes off here and on the devices in
 // ringOn (config.RingEverywhere for all of them).
 func (f *Feature) Fire(label string, ringOn []string) {
-	// A reminder is its words. One with none, however it came to be saved, still says something.
+	// A reminder is its words. One with none, however it came to be saved, still says something, in
+	// the screen's language: it is shown and said here, and the devices it goes to show it as sent.
 	if strings.TrimSpace(label) == "" {
-		label = "Reminder"
+		label = locale.Text(config.Get().Screen.Language, "reminder_untitled")
 	}
 	r := Reminder{ID: newID(), Label: label, From: config.Get().Device.Name, At: time.Now()}
 	d := targets(ringOn, r.From)

@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"path/filepath"
 	"testing"
@@ -86,6 +87,32 @@ func TestPopupSoon(t *testing.T) {
 	if popupSoon(hass.Event{AllDay: true}, now) != "Today" {
 		t.Error("all day")
 	}
+	if got := popupSoon(e, now.Add(80*time.Minute)); got != "Started" {
+		t.Errorf("over: %q", got)
+	}
+}
+
+// The heading is in the screen's language, as the rest of the card is.
+func TestPopupSoonIsTranslated(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
+	if err := config.Set().Screen().Language("fr"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 26, 14, 45, 0, 0, time.Local)
+	e := hass.Event{Start: now.Add(15 * time.Minute), End: now.Add(75 * time.Minute)}
+	for _, c := range []struct {
+		at   time.Time
+		want string
+	}{{now, "Dans 15 minutes"}, {now.Add(14 * time.Minute), "Dans une minute"}, {now.Add(-45 * time.Minute), "Dans une heure"},
+		{now.Add(80 * time.Minute), "Commencé"}} {
+		if got := popupSoon(e, c.at); got != c.want {
+			t.Errorf("at %s: %q, want %q", c.at.Format("15:04"), got, c.want)
+		}
+	}
+	if got := popupSoon(hass.Event{AllDay: true}, now); got != "Aujourd'hui" {
+		t.Errorf("all day: %q", got)
+	}
 }
 
 // popupTestDisplay is a Show with pop-ups on, and events kept in its month.
@@ -128,6 +155,9 @@ func TestPopupsWaitTheirTurn(t *testing.T) {
 	first := d.popupUp()
 	if first == nil {
 		t.Fatal("nothing came up from the queue")
+	}
+	if n := d.popupsWaiting(); n != 1 {
+		t.Errorf("%d waiting under the first, want the other one", n)
 	}
 	if got := duePopups(events, now, config.Get().Calendar, popupShownNow()); len(got) != 1 || got[0].Summary == first.Summary {
 		t.Fatalf("still due after the first came up: %v", got)
@@ -187,5 +217,161 @@ func TestAMergedEventPopsUpForEitherCalendar(t *testing.T) {
 		PopupCalendars: []string{"calendar.work"}}
 	if due := duePopups([]hass.Event{dinner}, start.Add(-10*time.Minute), c, nil); len(due) != 1 {
 		t.Errorf("%d pop-ups, want the dinner, on the work calendar too", len(due))
+	}
+}
+
+// An event is matched across devices by its start and title, whichever calendar each shows it under.
+func TestPopupMatchIgnoresTheCalendar(t *testing.T) {
+	start := time.Date(2026, 9, 26, 15, 0, 0, 0, time.Local)
+	e := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: start}
+	other := e
+	other.Calendar, other.Also = "calendar.work", []string{"calendar.family"}
+	if popupMatch(e) != popupMatch(other) {
+		t.Error("the same event under another calendar did not match")
+	}
+	later := e
+	later.Start = start.Add(time.Hour)
+	renamed := e
+	renamed.Summary = "Dentist again"
+	if popupMatch(e) == popupMatch(later) || popupMatch(e) == popupMatch(renamed) {
+		t.Error("a different event matched")
+	}
+	if n := len(popupMatch(e)); n > 64 {
+		t.Errorf("match is %d long, more than the link between devices carries", n)
+	}
+}
+
+// A tap on a pop-up tells the other devices which event it was.
+func TestTappingAPopupAwayTellsTheHouse(t *testing.T) {
+	d := popupTestDisplay(t)
+	sent := make(chan string, 1)
+	was := sendPopupDismissed
+	sendPopupDismissed = func(id string) { sent <- id }
+	t.Cleanup(func() { sendPopupDismissed = was })
+
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	e := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: at(15, 0), End: at(16, 0)}
+	d.popupQueue = []hass.Event{e}
+	d.popupTick(at(14, 50))
+	if d.popupUp() == nil {
+		t.Fatal("nothing came up")
+	}
+	d.tapPopupAway()
+	if d.popupUp() != nil {
+		t.Error("the pop-up stayed up")
+	}
+	select {
+	case id := <-sent:
+		if id != popupMatch(e) {
+			t.Errorf("sent %q, want %q", id, popupMatch(e))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("nothing was sent")
+	}
+
+	// With nothing up, a tap sends nothing.
+	d.tapPopupAway()
+	select {
+	case id := <-sent:
+		t.Errorf("sent %q with no pop-up up", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// A pop-up tapped away on another device comes down here, whether up or waiting its turn, and does
+// not pop up later; another event is left alone.
+func TestAPopupTappedAwayElsewhereComesDown(t *testing.T) {
+	d := popupTestDisplay(t)
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	dentist := hass.Event{Calendar: "calendar.family", Summary: "Dentist", Start: at(15, 0), End: at(16, 0)}
+	call := hass.Event{Calendar: "calendar.family", Summary: "Call Mom", Start: at(15, 0), End: at(15, 30)}
+	school := hass.Event{Calendar: "calendar.family", Summary: "School run", Start: at(15, 5), End: at(15, 30)}
+	now := at(14, 50)
+
+	d.popupQueue = []hass.Event{dentist, call, school}
+	d.popupTick(now)
+	up := d.popupUp()
+	if up == nil {
+		t.Fatal("nothing came up")
+	}
+
+	// The one waiting its turn, tapped away elsewhere, never comes up here.
+	var waiting hass.Event
+	for _, e := range d.popupQueue {
+		if e.Summary != up.Summary {
+			waiting = e
+			break
+		}
+	}
+	d.popupDismissedElsewhere(popupMatch(waiting), now)
+	if d.popupUp() == nil || d.popupUp().Summary != up.Summary {
+		t.Errorf("the pop-up up changed to %v", d.popupUp())
+	}
+
+	// The one up comes down, and the last one comes up in its place.
+	d.popupDismissedElsewhere(popupMatch(*up), now)
+	d.popupTick(now.Add(time.Second))
+	last := d.popupUp()
+	if last == nil || last.Summary == up.Summary || last.Summary == waiting.Summary {
+		t.Fatalf("after both were tapped away elsewhere, %v", last)
+	}
+
+	// An event tapped away elsewhere before it was due here is kept from popping up later.
+	d.dismissPopup()
+	d.popupDismissedElsewhere(popupMatch(school), now)
+	d.popupQueue = []hass.Event{school}
+	d.popupTick(now.Add(time.Minute))
+	if got := d.popupUp(); got != nil {
+		t.Errorf("%v popped up after it was tapped away elsewhere", got)
+	}
+}
+
+// A pop-up tapped away on another device stays away after this one restarts: what it heard is kept in
+// the config, for a day, and only so many at most (#558).
+func TestAPopupTappedAwayElsewhereIsKeptAcrossARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	config.Use(path)
+	if err := config.Set().Calendar().Sources([]string{"calendar.family"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().Popups(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Calendar().PopupSilent(true); err != nil {
+		t.Fatal(err)
+	}
+	at := func(h, m int) time.Time { return time.Date(2026, 9, 26, h, m, 0, 0, time.Local) }
+	school := hass.Event{Calendar: "calendar.family", Summary: "School run", Start: at(15, 5), End: at(15, 30)}
+	now := at(14, 0) // heard of before it is due here
+	(&Display{poke: make(chan struct{}, 1)}).popupDismissedElsewhere(popupMatch(school), now)
+
+	// The restart: the config read again from the file, and a display with nothing in memory.
+	config.Use(path)
+	if got := config.Get().Calendar.PopupGone; len(got) != 1 || got[0].ID != popupMatch(school) || !got[0].At.Equal(now) {
+		t.Fatalf("kept after a reload: %+v", got)
+	}
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.popupQueue = []hass.Event{school}
+	d.popupTick(at(14, 55))
+	if got := d.popupUp(); got != nil {
+		t.Errorf("%v popped up after a restart, tapped away elsewhere before it", got)
+	}
+
+	// A day on it is forgotten, and a flood of them keeps the newest.
+	later := now.Add(popupGoneFor + time.Hour)
+	for i := range config.PopupGoneMax + 5 {
+		d.popupDismissedElsewhere(fmt.Sprintf("popup-%d", i), later.Add(time.Duration(i)*time.Second))
+	}
+	got := config.Get().Calendar.PopupGone
+	if len(got) != config.PopupGoneMax {
+		t.Fatalf("%d kept, want %d", len(got), config.PopupGoneMax)
+	}
+	for _, g := range got {
+		if g.ID == popupMatch(school) || g.ID == "popup-0" {
+			t.Errorf("%s still kept", g.ID)
+		}
+	}
+	if last := got[len(got)-1]; last.ID != fmt.Sprintf("popup-%d", config.PopupGoneMax+4) {
+		t.Errorf("the newest is %s", last.ID)
 	}
 }

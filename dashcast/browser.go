@@ -116,20 +116,33 @@ func initScript(origin, tokens, allowed []byte, kiosk bool) string {
 // There are two of them, each inside its component's own shadow root where a page-wide style cannot
 // reach: a dashboard's (hui-root, which the Energy page uses too) and the other pages' (History,
 // Logbook: ha-top-app-bar-fixed). A style goes into each as it appears, and --header-height set to
-// nothing there moves the page up into the room. Found by following the path the frontend builds, not
-// by searching the whole page, which on a Pi every second would cost more than it saves.
+// nothing there moves the page up into the room.
+//
+// The style goes in as each of them makes its shadow root, before it draws anything: a page loaded
+// afresh (a screen back after its parked tab was let go, warm.go) drew its dashboard, header and all,
+// and kept the header until a look found it, seconds later on a busy server (techo5-spot#12). The
+// loading screen shown while a dashboard's cards come has a bar of its own, hidden the same way. The
+// look once a second stays, for a shadow root made some other way. It follows the path the frontend
+// builds rather than searching the whole page, which on a Pi every second would cost more than it saves.
 const kioskScript = `
   const css = {
     "hui-root": ":host{--header-height:0px!important} .header{display:none!important}",
     "ha-top-app-bar-fixed": ":host{--header-height:0px!important} header.top-app-bar{display:none!important} .mdc-top-app-bar--fixed-adjust,.content{padding-top:0!important}",
+    "hass-loading-screen": ":host{--header-height:0px!important} .toolbar{display:none!important}",
   };
-  const dress = (el) => {
+  const dress = (el, root = el.shadowRoot) => {
     const rule = css[el.tagName.toLowerCase()];
-    if (!rule || !el.shadowRoot || el.shadowRoot.getElementById("techo5-kiosk")) return;
+    if (!rule || !root || root.getElementById("techo5-kiosk")) return;
     const s = document.createElement("style");
     s.id = "techo5-kiosk";
     s.textContent = rule;
-    el.shadowRoot.appendChild(s);
+    root.appendChild(s);
+  };
+  const attach = Element.prototype.attachShadow;
+  Element.prototype.attachShadow = function (init) {
+    const root = attach.call(this, init);
+    try { dress(this, root); } catch (e) {}
+    return root;
   };
   const look = () => {
     const main = document.querySelector("home-assistant")?.shadowRoot?.querySelector("home-assistant-main")?.shadowRoot;

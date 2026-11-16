@@ -290,6 +290,12 @@ func newDetect() *Detect {
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
 	d.hangup = newHangup(d)
+	// What the words scored during each call, said as it ends (#484). Read as it runs, as the hang-up
+	// word's loading is: two changes close together may run out of order.
+	calls := newCallScores(e)
+	phone.Get().Changed.Listen(func(phone.State) {
+		go calls.follow(phone.Get().State(), time.Now())
+	})
 	for _, k := range commandKinds {
 		c := newCommand(d, k)
 		c.watch()

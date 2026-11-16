@@ -24,15 +24,16 @@ import (
 )
 
 const (
-	service     = "org.bluez"
-	adapterIfc  = "org.bluez.Adapter1"
-	deviceIfc   = "org.bluez.Device1"
-	playerIfc   = "org.bluez.MediaPlayer1"
-	controlIfc  = "org.bluez.MediaControl1"
-	agentIfc    = "org.bluez.Agent1"
-	agentMgrIfc = "org.bluez.AgentManager1"
-	propsIfc    = "org.freedesktop.DBus.Properties"
-	objMgrIfc   = "org.freedesktop.DBus.ObjectManager"
+	service      = "org.bluez"
+	adapterIfc   = "org.bluez.Adapter1"
+	deviceIfc    = "org.bluez.Device1"
+	playerIfc    = "org.bluez.MediaPlayer1"
+	controlIfc   = "org.bluez.MediaControl1"
+	transportIfc = "org.bluez.MediaTransport1"
+	agentIfc     = "org.bluez.Agent1"
+	agentMgrIfc  = "org.bluez.AgentManager1"
+	propsIfc     = "org.freedesktop.DBus.Properties"
+	objMgrIfc    = "org.freedesktop.DBus.ObjectManager"
 
 	agentPath = dbus.ObjectPath("/org/techo5/agent")
 
@@ -359,6 +360,35 @@ func playerOf(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant, devic
 	}
 	sort.Strings(players)
 	return dbus.ObjectPath(players[0]), true
+}
+
+// AbsoluteVolume reports whether bluetoothd can set device's own volume over AVRCP (absolute
+// volume): one of its audio transports has a Volume. BlueZ shows a transport's Volume only once the
+// remote has said over AVRCP that it takes one, which can be a few seconds after its audio comes up,
+// and never for a speaker that does not.
+func (a *Adapter) AbsoluteVolume(device dbus.ObjectPath) (bool, error) {
+	var objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant
+	if err := a.conn.Object(service, "/").Call(objMgrIfc+".GetManagedObjects", 0).Store(&objs); err != nil {
+		return false, err
+	}
+	return transportVolume(objs, device), nil
+}
+
+// transportVolume is whether any of device's MediaTransport1 objects in objs has a Volume.
+func transportVolume(objs map[dbus.ObjectPath]map[string]map[string]dbus.Variant, device dbus.ObjectPath) bool {
+	for path, ifcs := range objs {
+		props, ok := ifcs[transportIfc]
+		if !ok {
+			continue
+		}
+		if dev, _ := props["Device"].Value().(dbus.ObjectPath); dev != device && deviceOf(path) != device {
+			continue
+		}
+		if _, ok := props["Volume"]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // advertOnly is a change that is only a device heard again: its signal strength or what it

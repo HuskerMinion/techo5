@@ -85,6 +85,10 @@ type Message struct {
 const (
 	KindReminder        = "reminder"
 	KindReminderStopped = "reminder-stopped"
+
+	// KindPopupDismissed is an event's pop-up tapped away on another device, with ID naming the
+	// event; it goes to PopupDismissed.
+	KindPopupDismissed = "popup-dismissed"
 )
 
 type Feature struct {
@@ -120,6 +124,10 @@ type Feature struct {
 	// package, since what a reminder does is the reminder's business.
 	Reminded        hook.Hook[Message]
 	ReminderStopped hook.Hook[Message]
+
+	// PopupDismissed fires for an event's pop-up tapped away on another device, so it comes down here
+	// too: whoever tapped it has seen it.
+	PopupDismissed hook.Hook[Message]
 }
 
 var (
@@ -213,6 +221,20 @@ func (f *Feature) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	case KindReminderStopped:
 		f.ReminderStopped.Emit(m)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	case KindPopupDismissed:
+		if legacy {
+			// The old way of proving the house sends the word itself and carries no nonce: kept only
+			// for the kinds devices sent before it was replaced, never for a new one.
+			http.Error(w, "not this house", http.StatusForbidden)
+			return
+		}
+		if !popupID(m.ID) {
+			http.Error(w, "a pop-up names its event", http.StatusBadRequest)
+			return
+		}
+		f.PopupDismissed.Emit(m)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -394,13 +416,13 @@ func (f *Feature) send(m Message) {
 	f.show(m)
 }
 
-// SendTo carries a reminder, or its stopping, to the devices named, or to every one for nil. It is
-// not shown here: the sender already has the reminder. Names are matched however they are cased, and
-// one that is not in the house is logged and skipped.
+// SendTo carries a reminder, its stopping, or a pop-up's dismissal to the devices named, or to every
+// one for nil. It is not shown here: the sender already has it. Names are matched however they are
+// cased, and one that is not in the house is logged and skipped.
 func (f *Feature) SendTo(names []string, m Message) {
 	word := config.Get().Home.HouseWord
 	if word == "" {
-		slog.Warn("reminder not sent to other devices: this house has no word set", "kind", m.Kind)
+		slog.Warn("not sent to other devices: this house has no word set", "kind", m.Kind)
 		return
 	}
 	to := pick(Peers(), names)

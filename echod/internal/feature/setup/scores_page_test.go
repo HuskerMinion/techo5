@@ -11,14 +11,14 @@ import (
 func TestTheScoresSectionWorksWithoutScript(t *testing.T) {
 	s := withScores(t, shownScores)
 	f, c := in(t)
-	page := get(f, "/setup?tab=sound", c).Body.String()
+	page := get(f, "/setup?tab=voice", c).Body.String()
 
 	for _, want := range []string{
 		"<legend>Wake word scores</legend>", `<td>slot=104</td>`, `<td class="scmodel">Hey Jarvis`,
 		`<td class="scthr">0.85</td><td class="sccut">0.75 <span class="note">(different while the speaker plays)</span></td>`,
 		`<td class="scthr">0.80</td><td class="sccut">0.80</td>`,
 		`<td class="sclate">0.60</td>`, "Volume up word: near miss, peak 0.62 against 0.80",
-		`href="/setup?tab=sound&amp;scores=`, `#scores">Refresh</a>`, `data-after="5"`,
+		`href="/setup?tab=voice&amp;scores=`, `#scores">Refresh</a>`, `data-after="5"`,
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the section has no %q", want)

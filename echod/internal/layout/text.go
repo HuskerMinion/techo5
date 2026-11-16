@@ -7,3 +7,11 @@ func DefaultTextSize() int { return defaultTextSize }
 
 // defaultTextSize is DefaultTextSize: 100 here, and set by a board of this build that wants another.
 var defaultTextSize = 100
+
+// MostTextSize is the largest text size the screen offers on this board, in percent. 150% is offered
+// where the screen's pages have been looked at that large and hold (the Skylight, read across a hall);
+// elsewhere the steps stop at 125%.
+func MostTextSize() int { return mostTextSize }
+
+// mostTextSize is MostTextSize: 125 here, and set by a board of this build that offers more.
+var mostTextSize = 125

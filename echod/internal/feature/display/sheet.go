@@ -406,13 +406,13 @@ var giftArm struct {
 
 // giftResetRow clears the device for somebody else and starts first run (firstrun.Reset), asking twice.
 func giftResetRow(now time.Time) settingRow {
-	row := settingRow{id: "giftreset", label: "Reset for someone else", sub: "Clears it and starts setting it up again",
-		kind: ctlDanger, button: "Reset"}
+	row := settingRow{id: "giftreset", label: tr("reset_for_someone_else"), sub: tr("clears_it_and_start_setting_it_up_again"),
+		kind: ctlDanger, button: tr("reset")}
 	giftArm.Lock()
 	armed := !giftArm.at.IsZero() && now.Sub(giftArm.at) < restartWindow
 	giftArm.Unlock()
 	if armed {
-		row.sub, row.button = "Wi-Fi, name, Home Assistant, alarms, everything: tap again", tr("ui_confirm")
+		row.sub, row.button = tr("wifi_name_home_assistant_alarm_everything_tap_again"), tr("ui_confirm")
 	}
 	return row
 }
@@ -1460,9 +1460,9 @@ func (d *Display) sheetSwipe(g touch.Gesture) {
 		return
 	}
 	stillHere()
-	by := notchPx
+	by := d.r.s(notchPx)
 	if g.Kind == touch.SwipeDown {
-		by = -notchPx
+		by = -by
 	}
 	cardMax, pickMax := d.r.scrollLimits()
 	d.mu.Lock()
@@ -1477,8 +1477,9 @@ func (d *Display) sheetSwipe(g touch.Gesture) {
 	d.cardScroll = min(max(d.cardScroll+by, 0), cardMax)
 }
 
-// notchPx is how far a list scrolls for each notch a swipe reports: the touch screen's notch, so
-// the list keeps up with the finger.
+// notchPx is how far a list scrolls for each notch a swipe reports, in the Show 5's pixels: the touch
+// screen's notch, which is larger on a larger panel (56 on the Show 8, 80 on the Skylight), so the list
+// keeps up with the finger on each. Unscaled, a Skylight's list went half as far as the finger.
 const notchPx = 40
 
 // checkUpdates looks for an update, showing Checking… on the Updates row until the answer is in.

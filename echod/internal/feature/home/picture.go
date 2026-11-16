@@ -15,6 +15,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 )
 
 // Pictures for a notification (feature/notify): the camera page, with the notification's words over
@@ -276,7 +277,7 @@ func (f *Feature) fetchStill(ctx context.Context, src, path, id string) {
 		// fetch's error repeats the address - not always as it was given, since Home Assistant's own
 		// full address is fetched as a path - so every query and login in the error comes off before
 		// it goes on the screen or into the log.
-		err = errors.New(redactError(err.Error()))
+		err = errors.New(redact.URLSecrets(redactError(err.Error()))) // and as the camera page's are (cameraTrouble)
 	}
 	f.mu.Lock()
 	if f.viewIsUp(src) && f.cam.Caption != nil && f.cam.Caption.ID == id {

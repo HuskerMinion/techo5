@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -29,8 +30,8 @@ func alarmsSection(w http.ResponseWriter, token string) {
 	v := alarm.Get().View(now)
 	timers := timer.Get().List(now)
 
-	fmt.Fprint(w, `<fieldset><legend>Coming up</legend>
-	 <p class="note" style="margin-top:0">A reminder says its words once and stays on the screen until it is
+	fieldsetOpen(w, "alarm_edit", "Coming up")
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">A reminder says its words once and stays on the screen until it is
 	  dismissed; an alarm with words says them when it starts ringing.</p>`)
 	shown := 0
 	for _, c := range timers {
@@ -49,7 +50,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 	}
 	if len(v.Snoozed) > 0 {
 		fmt.Fprint(w, `<form method="post" action="/setup/save" class="btns">`)
-		hidden(w, token, "snoozes_cancel", "alarms")
+		hidden(w, token, "snoozes_cancel")
 		for _, s := range v.Snoozed {
 			fmt.Fprintf(w, `<span class="where">Snoozed until %s%s</span>`, clockText(s.At), labelSuffix(s.Label))
 		}
@@ -89,7 +90,7 @@ func timerDrawer(w http.ResponseWriter, token string, c timer.Countdown) {
 		timeLeft(c.Left), html.EscapeString(cmpOr(c.Name, "Timer")), where)
 	if c.Local {
 		fmt.Fprint(w, `<form method="post" action="/setup/save" class="btns">`)
-		hidden(w, token, "timer_cancel", "alarms")
+		hidden(w, token, "timer_cancel")
 		fmt.Fprintf(w, `<input type="hidden" name="id" value="%s"><button type="submit" class="quiet">Cancel timer</button></form>`,
 			html.EscapeString(c.ID))
 	} else {
@@ -127,7 +128,7 @@ func alarmDrawer(w http.ResponseWriter, token string, a config.Alarm) {
 		cls, chip, kind, clockTime(a.Hour, a.Minute), label, html.EscapeString(where))
 
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "alarm_edit", "alarms")
+	hidden(w, token, "alarm_edit")
 	fmt.Fprintf(w, `<input type="hidden" name="id" value="%s">`, html.EscapeString(a.ID))
 	whenFields(w, "e"+a.ID, fmt.Sprintf("%02d:%02d", a.Hour, a.Minute), a.Label, a.Remind)
 	daysField(w, a.Days)
@@ -143,15 +144,24 @@ func alarmDrawer(w http.ResponseWriter, token string, a config.Alarm) {
 	if !a.On {
 		toggle = "Turn on"
 	}
+	// Only Save needs the time filled in: turning one off or deleting it goes through whatever the box
+	// holds (formnovalidate).
 	fmt.Fprintf(w, `<div class="btns"><button type="submit" name="act" value="save">Save</button>
-	 <button type="submit" name="act" value="toggle" class="quiet">%s</button>
-	 <button type="submit" name="act" value="delete" class="quiet">Delete</button></div></form></div></details>`, toggle)
+	 <button type="submit" name="act" value="toggle" class="quiet" formnovalidate>%s</button>
+	 <button type="submit" name="act" value="delete" class="quiet danger" formnovalidate>Delete</button></div></form></div></details>`, toggle)
 }
 
 func addDrawer(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<details><summary><strong style="color:var(--accent)">+ Add an alarm, timer or reminder</strong></summary><div class="body">
-	 <form method="post" action="/setup/save">`)
-	hidden(w, token, "alarm_add", "alarms")
+	// The drawer is not in a fieldset of its own, so it is the section: it stays open when the page comes
+	// back from it, with what happened said inside.
+	open := ""
+	if cameBackTo(w, "alarm_add") {
+		open = " open"
+	}
+	fmt.Fprintf(w, `<details id="sec-alarm_add"%s><summary><strong style="color:var(--accent)">+ Add an alarm, timer or reminder</strong></summary><div class="body">`, open)
+	sayHere(w, "alarm_add")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "alarm_add")
 	fmt.Fprint(w, `<label>What</label><div class="kinds">
 	 <label><input type="radio" name="kind" value="alarm" checked>Alarm</label>
 	 <label><input type="radio" name="kind" value="reminder">Reminder</label>
@@ -175,8 +185,9 @@ func addDrawer(w http.ResponseWriter, token string) {
 
 func prefsSection(w http.ResponseWriter, token string) {
 	c := config.Get()
-	fmt.Fprint(w, `<fieldset><legend>For every alarm on this device</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "alarm_prefs", "alarms")
+	fieldsetOpen(w, "alarm_prefs", "For every alarm on this device")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "alarm_prefs")
 	fmt.Fprintf(w, `<div class="row">
 	 <div><label for="snooze">Snooze length, minutes</label><input id="snooze" name="snooze" type="number" min="%d" max="%d" value="%d"></div>
 	 <div><label for="ringvol">Ring volume, 0 to %d</label><input id="ringvol" name="ringvol" type="number" min="0" max="%d" value="%d"></div></div>`,
@@ -212,7 +223,7 @@ func whenFields(w http.ResponseWriter, id, at, label string, remind bool) {
 	if remind {
 		words = "Words <span class=\"note\">(said aloud)</span>"
 	}
-	fmt.Fprintf(w, `<div class="row"><div><label for="t%s">Time</label><input id="t%s" name="at" type="time" value="%s"></div>
+	fmt.Fprintf(w, `<div class="row"><div><label for="t%s">Time</label><input id="t%s" name="at" type="time" required value="%s"></div>
 	 <div><label for="l%s">%s</label><input id="l%s" name="label" value="%s" maxlength="80" autocomplete="off"></div></div>`,
 		id, id, at, id, words, id, html.EscapeString(label))
 }
@@ -318,7 +329,7 @@ func addFromPage(r *http.Request) string {
 		}
 		slog.Info("setup page: a reminder was set")
 	default:
-		hour, minute, err := clockOf(at)
+		hour, minute, err := clockOf(at, "an alarm needs a time, in the At box")
 		if err != nil {
 			return err.Error()
 		}
@@ -359,7 +370,7 @@ func editFromPage(r *http.Request) string {
 	case "toggle":
 		al.On = !al.On
 	default:
-		hour, minute, err := clockOf(r.PostFormValue("at"))
+		hour, minute, err := clockOf(r.PostFormValue("at"), "it needs a time, in the Time box")
 		if err != nil {
 			return err.Error()
 		}
@@ -385,44 +396,57 @@ func editFromPage(r *http.Request) string {
 	return ""
 }
 
+// prefsFromPage keeps the form for every alarm whole or not at all. Every box is read and checked
+// before any is kept: it used to keep the snooze, the ring volume and the sound and then refuse a
+// later box, and the page said the save was refused when half of it had gone through.
 func prefsFromPage(r *http.Request) string {
-	snooze, err1 := strconv.Atoi(r.PostFormValue("snooze"))
-	vol, err2 := strconv.Atoi(r.PostFormValue("ringvol"))
+	snooze, err1 := strconv.Atoi(strings.TrimSpace(r.PostFormValue("snooze")))
+	vol, err2 := strconv.Atoi(strings.TrimSpace(r.PostFormValue("ringvol")))
 	sunrise, err3 := strconv.Atoi(r.PostFormValue("sunrise"))
-	if err1 != nil || err2 != nil || err3 != nil {
-		return "those are numbers"
+	sound := r.PostFormValue("sound")
+	say, rise := config.AlarmSay(r.PostFormValue("say")), config.AlarmRise(r.PostFormValue("rise"))
+	switch {
+	case err1 != nil:
+		return "the snooze length is a number of minutes"
+	case err2 != nil:
+		return fmt.Sprintf("the ring volume is a number, 0 to %d", config.VolumeSteps)
+	case err3 != nil, sunrise != 0 && !contains(wakeLights, sunrise):
+		return "that is not one of the wake light choices"
+	case sound != alarm.Get().Sound() && !slices.Contains(speaker.AlarmSounds(), sound):
+		return "that is not one of the alarm sounds"
+	case say != alarm.Get().Say() && !slices.Contains(config.AlarmSays(), say):
+		return "that is not one of the choices for what an alarm says"
+	case rise != alarm.Get().Rise() && !slices.Contains(config.AlarmRises(), rise):
+		return "that is not one of the choices for how an alarm gets louder"
+	}
+	// The one write that can fail goes first: a failure then has changed nothing, as the page says.
+	if err := config.Set().Alarms().SunriseMinutes(sunrise); err != nil {
+		return err.Error()
 	}
 	alarm.Get().SetSnooze(snooze)
 	alarm.Get().SetRingVolume(vol, false)
-	if s := r.PostFormValue("sound"); s != alarm.Get().Sound() {
-		alarm.Get().SetSound(s, false)
+	if sound != alarm.Get().Sound() {
+		alarm.Get().SetSound(sound, false)
 	}
-	if v := config.AlarmSay(r.PostFormValue("say")); v != alarm.Get().Say() {
-		if !slices.Contains(config.AlarmSays(), v) {
-			return "that is not one of the choices for what an alarm says"
-		}
-		alarm.Get().SetSay(v)
+	if say != alarm.Get().Say() {
+		alarm.Get().SetSay(say)
 	}
-	if v := config.AlarmRise(r.PostFormValue("rise")); v != alarm.Get().Rise() {
-		if !slices.Contains(config.AlarmRises(), v) {
-			return "that is not one of the choices for how an alarm gets louder"
-		}
-		alarm.Get().SetRise(v)
-	}
-	if sunrise != 0 && !contains(wakeLights, sunrise) {
-		return "that is not one of the wake light choices"
-	}
-	if err := config.Set().Alarms().SunriseMinutes(sunrise); err != nil {
-		return err.Error()
+	if rise != alarm.Get().Rise() {
+		alarm.Get().SetRise(rise)
 	}
 	return ""
 }
 
-// clockOf reads a time box's "15:04".
-func clockOf(s string) (hour, minute int, err error) {
-	t, err := time.Parse("15:04", strings.TrimSpace(s))
+// clockOf reads a time box's "15:04". empty is what to say for a box left empty, which names the box:
+// the add drawer's is At, and an alarm's own is Time.
+func clockOf(s, empty string) (hour, minute int, err error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, 0, errors.New(empty)
+	}
+	t, err := time.Parse("15:04", s)
 	if err != nil {
-		return 0, 0, fmt.Errorf("that needs a time")
+		return 0, 0, fmt.Errorf("the time %q is not one this page reads; it is like 06:45", s)
 	}
 	return t.Hour(), t.Minute(), nil
 }

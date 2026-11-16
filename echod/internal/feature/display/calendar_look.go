@@ -14,7 +14,7 @@ import (
 )
 
 // How the calendar looks (docs/calendar-and-night-plan.md, 6): ten switches and the view it opens on, each on the screen
-// under Settings, Display, Calendar, on the setup page's Weather & Calendar tab, and in Home Assistant,
+// under Settings, Display, Calendar, on the setup page's Screen tab, and in Home Assistant,
 // where Shared settings can keep them the same on every screen in the house. Two go by the panel's
 // size until somebody chooses: the week view and the month in full are on where there is room for
 // them, bigger than the Show 5, and off on the Show 5. Which calendars are hidden is the eleventh, set on

@@ -83,7 +83,13 @@ const (
 type Gesture struct {
 	Kind Kind
 	X, Y int
+	// Moved is a Hold that follow mode reported because the finger moved (SetFollow), not one that
+	// stayed put for holdAfter: a page that opens something on a long press tells the two apart by it.
+	Moved bool
 }
+
+// Point is a place in the screen's frame.
+type Point struct{ X, Y int }
 
 func (g Gesture) String() string { return fmt.Sprintf("%s at %d,%d", g.Kind, g.X, g.Y) }
 
@@ -95,6 +101,12 @@ type Screen struct {
 	// goroutine: listeners must not block. That is the first finger down, and a second one that lands
 	// while it is followed does not fire it. A listener that wants the current state reads Touched.
 	Down hook.Hook[bool]
+
+	// Landed fires once the finger the screen follows has a place, with where it came down, on the
+	// reader's goroutine: listeners must not block. Down(true) comes before it, when the controller
+	// has said only that there is a finger, and Down(false) ends it. It is for showing a press under
+	// the finger; what the finger did still comes as a gesture.
+	Landed hook.Hook[Point]
 
 	dev  *input.Device
 	rawW int // panel x range, exclusive
@@ -343,10 +355,15 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 					f.y, f.seenY = int(p.y), true
 				}
 			}
-			if f.sx < 0 && f.seenX && f.seenY {
+			landed := f.sx < 0 && f.seenX && f.seenY
+			if landed {
 				f.sx, f.sy = f.x, f.y
 			}
 			s.mu.Unlock()
+			if landed {
+				x, y := s.landscape(f.sx, f.sy)
+				s.Landed.Emit(Point{X: x, Y: y})
+			}
 			if f.sx >= 0 {
 				s.moved(f)
 			}
@@ -407,7 +424,7 @@ func (s *Screen) moved(f *finger) {
 			f.holdTimer.Stop()
 		}
 		s.mu.Unlock()
-		s.Gestures.Emit(Gesture{Kind: Hold, X: x0, Y: y0})
+		s.Gestures.Emit(Gesture{Kind: Hold, X: x0, Y: y0, Moved: true})
 		s.Gestures.Emit(Gesture{Kind: Drag, X: x1, Y: y1})
 		return
 	}

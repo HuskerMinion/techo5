@@ -20,6 +20,44 @@ func translated(lang, key string, catalog map[string]map[string]string, english 
 }
 
 var uiEnglish = map[string]string{
+	// Words that were written into the drawing code and the features behind it: the calendar
+	// pop-up's heading, a reminder with no words, the radio's notes, the clock styles' names, and
+	// the call page's microphone off (not ui_muted, which some languages read as the sound off).
+	"popup_started":         "Started",
+	"popup_in_a_minute":     "In a minute",
+	"popup_in_d_minutes":    "In %d minutes",
+	"popup_in_an_hour":      "In an hour",
+	"popup_at_s":            "At %s",
+	"reminder_untitled":     "Reminder",
+	"hint_no_start":         "Home Assistant didn't start the stream. Is \"Allow the device to perform Home Assistant actions\" on for this device?",
+	"hint_favorite":         "Couldn't save the station. Home Assistant needs a script named script.radio_favorite_add_station.",
+	"hint_no_home":          "Home Assistant isn't connected to this device, so the station wasn't started.",
+	"hint_play_failed":      "Home Assistant couldn't play that station.",
+	"hint_dropping":         "The stream keeps dropping, so the station was left off.",
+	"clock_style_classic":   "Classic",
+	"clock_style_big":       "Big",
+	"clock_style_flip":      "Flip",
+	"clock_style_led":       "LED",
+	"clock_style_analog":    "Analog",
+	"clock_style_words":     "Words",
+	"clock_style_sun":       "Sun",
+	"clock_style_dashboard": "Dashboard",
+	"clock_style_binary":    "Binary",
+	"clock_style_world":     "World",
+	"clock_style_agenda":    "Agenda",
+	"clock_style_glow":      "Glow",
+	"clock_style_nixie":     "Nixie",
+	"clock_style_stack":     "Stack",
+	"clock_style_overlap":   "Overlap",
+	"call_muted":            "Muted",
+	// The Spot's weather alert heading and volume label, a timer under the clock, and the
+	// footer's word for the music.
+	"weather_alert": "WEATHER ALERT",
+	"volume_caps":   "VOLUME",
+	"timer_left_s":  "Timer %s",
+	"music_playing": "♪ playing",
+	"music_paused":  "♪ paused",
+
 	"drawer_recording":           "Listening",
 	"drawer_talk":                "Talk",
 	"drawer_end_talk":            "End talk  %d:%02d",
@@ -209,6 +247,20 @@ var uiEnglish = map[string]string{
 	"lyrics":                        "Lyrics",
 	"microphone":                    "Microphone",
 	"microphone_off":                "MICROPHONE OFF",
+	"no_wifi":                       "NO WI-FI",
+	"no_home_assistant":             "NO HOME ASSISTANT",
+	"voice_no_home":                 "Can't reach Home Assistant",
+	"voice_no_assistant":            "No voice assistant set up",
+	"voice_timeout":                 "No answer in time",
+	"voice_failed":                  "The assistant couldn't answer",
+	"not_live":                      "NOT LIVE",
+	"deck_failed":                   "That didn't work",
+	"deck_obs_away":                 "OBS isn't connected",
+	"deck_obs_refused":              "OBS refused that",
+	"deck_obs_silent":               "OBS didn't answer",
+	"deck_pc_silent":                "%s is not answering",
+	"deck_pc_unpaired":              "%s isn't paired",
+	"deck_pc_key":                   "The key for %s doesn't match",
 	"minutes_before":                "%d minutes before",
 	"month":                         "Month",
 	"music":                         "Music",
@@ -218,6 +270,7 @@ var uiEnglish = map[string]string{
 	"network_address":               "Network address",
 	"new_timer":                     "New timer",
 	"next":                          "Next",
+	"nextup_label":                  "Next:",
 	"night_by_ha":                   "Controlled by Home Assistant",
 	"night_clock":                   "Night clock",
 	"night_clock_brightness":        "Night clock brightness",
@@ -343,68 +396,71 @@ var uiEnglish = map[string]string{
 	"reading_the_calendar":                      "Reading the calendar…",
 	"remote_api":                                "Remote API",
 	"repeat":                                    "Repeat",
-	"restart":                                   "Restart",
-	"said_as_it_rings":                          "Said as it rings",
-	"same_as_default":                           "Same as the default (%s)",
-	"screen_language":                           "Screen language",
-	"screen_off_when_nobody_is_near":            "Screen off when nobody is near",
-	"screen_on_the_network":                     "Screen on the network",
-	"screensaver":                               "Screensaver",
-	"seconds_option":                            "%d seconds",
-	"sent_from_home_assistant":                  "Sent from Home Assistant",
-	"settings":                                  "Settings",
-	"settings_lock":                             "Settings lock",
-	"shown_as_you_change_it_at_night":           "Shown as you change it, at night",
-	"shown_with_the_clock":                      "Shown with the clock",
-	"silenced":                                  "Silenced",
-	"silenced_press_again_to_snooze_d_min":      "Silenced · press again to snooze %d min",
-	"skin":                                      "Skin",
-	"skin_keeps":                                "Kept for when the skin is off",
-	"sleep_timer":                               "Sleep timer",
-	"slideshow":                                 "Slideshow",
-	"snooze_d_min":                              "Snooze %d min",
-	"sounds":                                    "Sounds",
-	"speaker_gain":                              "Speaker gain",
-	"speakers":                                  "Speakers",
-	"ssh_keys":                                  "SSH keys",
-	"stop":                                      "Stop",
-	"sunrise_alarm":                             "On until the %s alarm",
-	"sunrise_default_description":               "Before alarms that don't choose their own",
-	"sunrise_ringing":                           "On while the alarm rings",
-	"sunrise_rising":                            "The light is coming up now",
-	"sunrise_snooze":                            "On until the %s snooze",
-	"sunrise_until":                             "On until %s",
-	"sunrise_skip_action":                       "Skip",
-	"sunrise_skip_done":                         "Skipped: the alarm at %s",
-	"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
-	"talk_on_the_camera_page":                   "Talk on the camera page",
-	"talk_through_cameras":                      "Talk through cameras",
-	"baby_monitor":                              "Baby monitor",
-	"room_sound_in_a_browser_with_the_link":     "The room's sound in a browser with the link",
-	"record_takes_of_a_word":                    "Record takes of a word",
-	"on_the_setup_page_started_here":            "Asked on the setup page, started here",
-	"tap_lifts_the_night_light":                 "Tap lifts the night light",
-	"night_clock_next_up_and_alerts":            "Night clock shows Next up and notifications",
-	"dim_red_and_no_brighter":                   "Drawn in dim red; the screen gets no brighter",
-	"tap_on_the_clock":                          "Tap on the clock",
-	"tap_to_go_back":                            "Tap to go back",
-	"the_mute_button_does_this_too":             "The mute button does this too",
-	"the_nws_s_alerts_for_home_in_the_u_s":      "The NWS's alerts for home, in the U.S.",
-	"the_words_in_time_looked_up_at_lrclib":     "The words in time, looked up at LRCLIB",
-	"theme_personalize":                         "Make the theme your own",
-	"this_version":                              "This is %s",
-	"time_per_photo":                            "Time per photo",
-	"time_zone":                                 "Time zone",
-	"timer":                                     "Timer",
-	"timer_and_alarm":                           "Timer and alarm",
-	"timer_suffix":                              " timer",
-	"timers":                                    "Timers",
-	"today":                                     "Today",
-	"tomorrow":                                  "Tomorrow",
-	"treble":                                    "Treble",
-	"turn_screen":                               "Turn screen",
-	"ui_1_hour":                                 "1 hour",
-	"ui_1_hour_d_minutes":                       "1 hour %d minutes",
+	"reset":                                     "Reset",
+	"reset_for_someone_else":                    "Reset for someone else",
+	"clears_it_and_start_setting_it_up_again":             "Clears it and starts setting it up again",
+	"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, name, Home Assistant, alarms, everything: tap again",
+	"restart":                               "Restart",
+	"said_as_it_rings":                      "Said as it rings",
+	"same_as_default":                       "Same as the default (%s)",
+	"screen_language":                       "Screen language",
+	"screen_off_when_nobody_is_near":        "Screen off when nobody is near",
+	"screen_on_the_network":                 "Screen on the network",
+	"screensaver":                           "Screensaver",
+	"seconds_option":                        "%d seconds",
+	"sent_from_home_assistant":              "Sent from Home Assistant",
+	"settings":                              "Settings",
+	"settings_lock":                         "Settings lock",
+	"shown_as_you_change_it_at_night":       "Shown as you change it, at night",
+	"shown_with_the_clock":                  "Shown with the clock",
+	"silenced":                              "Silenced",
+	"skin":                                  "Skin",
+	"skin_keeps":                            "Kept for when the skin is off",
+	"sleep_timer":                           "Sleep timer",
+	"slideshow":                             "Slideshow",
+	"snooze_d_min":                          "Snooze %d min",
+	"sounds":                                "Sounds",
+	"speaker_gain":                          "Speaker gain",
+	"speakers":                              "Speakers",
+	"ssh_keys":                              "SSH keys",
+	"stop":                                  "Stop",
+	"sunrise_alarm":                         "On until the %s alarm",
+	"sunrise_default_description":           "Before alarms that don't choose their own",
+	"sunrise_ringing":                       "On while the alarm rings",
+	"sunrise_rising":                        "The light is coming up now",
+	"sunrise_snooze":                        "On until the %s snooze",
+	"sunrise_until":                         "On until %s",
+	"sunrise_skip_action":                   "Skip",
+	"sunrise_skip_done":                     "Skipped: the alarm at %s",
+	"sunrise_skip_refused":                  "Not skipped: the alarm at %s",
+	"talk_on_the_camera_page":               "Talk on the camera page",
+	"talk_through_cameras":                  "Talk through cameras",
+	"baby_monitor":                          "Baby monitor",
+	"room_sound_in_a_browser_with_the_link": "The room's sound in a browser with the link",
+	"record_takes_of_a_word":                "Record takes of a word",
+	"on_the_setup_page_started_here":        "Asked on the setup page, started here",
+	"tap_lifts_the_night_light":             "Tap lifts the night light",
+	"night_clock_next_up_and_alerts":        "Night clock shows Next up and notifications",
+	"dim_red_and_no_brighter":               "Drawn in dim red; the screen gets no brighter",
+	"tap_on_the_clock":                      "Tap on the clock",
+	"tap_to_go_back":                        "Tap to go back",
+	"the_mute_button_does_this_too":         "The mute button does this too",
+	"the_nws_s_alerts_for_home_in_the_u_s":  "The NWS's alerts for home, in the U.S.",
+	"the_words_in_time_looked_up_at_lrclib": "The words in time, looked up at LRCLIB",
+	"theme_personalize":                     "Make the theme your own",
+	"this_version":                          "This is %s",
+	"time_per_photo":                        "Time per photo",
+	"time_zone":                             "Time zone",
+	"timer":                                 "Timer",
+	"timer_and_alarm":                       "Timer and alarm",
+	"timer_suffix":                          " timer",
+	"timers":                                "Timers",
+	"today":                                 "Today",
+	"tomorrow":                              "Tomorrow",
+	"treble":                                "Treble",
+	"turn_screen":                           "Turn screen",
+	"ui_1_hour":                             "1 hour",
+	"ui_1_hour_d_minutes":                   "1 hour %d minutes",
 	"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "A face on it, for whoever has to look at it",
 	"ui_a_landscape_for_the_weather_in_place_of_photos": "A landscape for the weather, in place of photos",
 	"ui_a_pin_before_most_settings_change":              "A PIN before most settings change",
@@ -504,8 +560,8 @@ var uiEnglish = map[string]string{
 	"ui_more":                               "More",
 	"ui_muted":                              "Muted",
 	"ui_name_weather_updates_and_restart":   "Name, weather, updates and restart",
-	"ui_needs_a_key_the_setup_page_connections":       "Needs a key: the setup page, Connections",
-	"ui_needs_a_setup_key_the_setup_page_connections": "Needs a setup key: the setup page, Connections",
+	"ui_needs_a_key_the_setup_page_connections":       "Needs a key: the setup page, Network",
+	"ui_needs_a_setup_key_the_setup_page_connections": "Needs a setup key: the setup page, Network",
 	"ui_needs_speaker_eq_which_is_off":                "Needs Speaker EQ, which is off",
 	"ui_never":                                        "Never",
 	"ui_new_alarm":                                    "New alarm",
@@ -812,10 +868,265 @@ var uiEnglish = map[string]string{
 	"ui_mealie_step_of":                             "Step %d of %d",
 	"ui_mealie_previous":                            "Previous",
 	"ui_mealie_no_steps":                            "This recipe has no ingredients or steps.",
+
+	// Words on cards and overlays that were written into the drawing code.
+	"card_reminder":                   "REMINDER",
+	"card_notification":               "NOTIFICATION",
+	"card_drag_for_more":              "DRAG FOR MORE",
+	"tap_again":                       "Tap again",
+	"tap_again_s":                     "Tap again: %s",
+	"camera_button_sent":              "Sent",
+	"camera_button_no_home_assistant": "No Home Assistant",
+	"connecting_to_the_dashboard":     "Connecting to the dashboard…",
+	"loading_the_dashboard":           "Loading the dashboard…",
+	"obs_is_not_set_up":               "OBS isn't set up: setup page → Screen → Deck",
+
+	// The ringing page's note under a silenced alarm: which buttons snooze it.
+	"silenced_press_a_button_to_snooze_d_min": "Silenced · press a volume or microphone button to snooze %d min",
+
+	// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+	// and the welcome card. Names, networks and addresses are the %s and %d.
+	"firstrun_tap_to_begin":         "Tap anywhere to begin",
+	"firstrun_tap_to_finish":        "Tap anywhere to finish",
+	"firstrun_hello":                "Hello",
+	"firstrun_this_is_s":            "This is %s.",
+	"firstrun_welcome_say":          "This is %s. Say \"%s\" and ask for anything.",
+	"firstrun_the_wake_word":        "the wake word",
+	"firstrun_welcome_settings":     "Swipe down from the top for settings: Wi-Fi, Bluetooth, cameras, radio, themes.",
+	"firstrun_welcome_move":         "Say \"show the front door\" or \"go home\" to move the screen.",
+	"firstrun_welcome_home":         "Home Assistant can show cameras, dashboards and photos here.",
+	"firstrun_step_d_of_d":          "Step %d of %d",
+	"firstrun_name_this_device":     "Name this device",
+	"firstrun_the_room_it_is_in":    "The room it is in",
+	"firstrun_save":                 "Save",
+	"firstrun_needs_a_name":         "The device needs a name",
+	"firstrun_type_a_room":          "Type a room, or Cancel",
+	"firstrun_room_not_saved":       "Could not save the room",
+	"firstrun_other_room":           "Other",
+	"firstrun_title_wifi":           "Wi-Fi",
+	"firstrun_wifi_none":            "Not on a network yet. Choose your Wi-Fi to connect %s.",
+	"firstrun_wifi_needed":          "Everything after this needs it: Home Assistant, the weather, the radio and updates.",
+	"firstrun_wifi_connected_to":    "Connected to %s.",
+	"firstrun_wifi_address":         "Its address on the network is %s.",
+	"firstrun_title_zone":           "Time zone",
+	"firstrun_zone_is":              "Time zone: %s.",
+	"firstrun_zone_clock":           "The clock says %s. Change the zone if that is not the time here.",
+	"firstrun_title_name":           "Name and room",
+	"firstrun_name_is":              "Name: %s.",
+	"firstrun_renaming":             "Restarting to use the new name…",
+	"firstrun_room_from_home":       "Its room is set in Home Assistant.",
+	"firstrun_name_which_room":      "Name: %s. Which room is it in?",
+	"firstrun_name_and_room":        "Name: %s. Room: %s.",
+	"firstrun_home_added_going":     "Home Assistant has added it. Going on…",
+	"firstrun_home_added":           "Home Assistant has added it.",
+	"firstrun_home_no_network":      "Not on a network yet, so Home Assistant cannot reach it.",
+	"firstrun_home_add_it":          "Add it in Home Assistant: it appears under Settings, Devices & services. Nothing to type.",
+	"firstrun_home_unkeyed_note":    "Home Assistant sends the device its key unencrypted, so add it on a network you trust. Needs Home Assistant 2026.9 or later.",
+	"firstrun_home_open_d":          "Open for %d more minutes.",
+	"firstrun_home_adopt_note":      "Home Assistant sends the device its new key unencrypted, so do this only on a network you trust. Needs Home Assistant 2026.9 or later.",
+	"firstrun_home_esphome":         "Add ESPHome with %s, port 6053, and this key:",
+	"firstrun_home_choose":          "Add it to Home Assistant with nothing to type, or type its key.",
+	"firstrun_home_alone":           "Or use it on its own: alarms, timers, the radio and the clock work without Home Assistant.",
+	"firstrun_title_updates":        "Updates",
+	"firstrun_updates_looking":      "Looking for an update…",
+	"firstrun_updates_current":      "It is up to date.",
+	"firstrun_updates_tonight":      "TECHO5 %s is ready. It installs tonight, after setup.",
+	"firstrun_updates_ready":        "TECHO5 %s is ready: install it from Settings, General.",
+	"firstrun_updates_auto":         "Updates install by themselves overnight (2 to 5 AM), while nothing plays.",
+	"firstrun_updates_manual":       "Updates wait for you to install them.",
+	"firstrun_title_sound":          "Sound check",
+	"firstrun_sound_played":         "A short sound just played. Did you hear it?",
+	"firstrun_next":                 "Next",
+	"firstrun_change":               "Change",
+	"firstrun_not_now":              "Not now",
+	"firstrun_choose_wifi":          "Choose Wi-Fi",
+	"firstrun_change_name":          "Change name",
+	"firstrun_skip_for_now":         "Skip for now",
+	"firstrun_use_it_on_its_own":    "Use it on its own",
+	"firstrun_on_its_own":           "On its own",
+	"firstrun_add_it_instead":       "Add it instead",
+	"firstrun_type_the_key":         "Type the key",
+	"firstrun_add_it":               "Add it",
+	"firstrun_leave_them_off":       "Leave them off",
+	"firstrun_turn_them_on":         "Turn them on",
+	"firstrun_play_again":           "Play again",
+	"firstrun_yes":                  "Yes",
+	"firstrun_on_a_phone":           "On a phone",
+	"firstrun_choose_a_room":        "Choose a room",
+	"firstrun_room_s":               "Room: %s",
+	"firstrun_show_the_key":         "Show the key",
+	"firstrun_tap_to_go_back":       "Tap to go back",
+	"firstrun_phone_at":             "On a phone: %s:%d/setup",
+	"firstrun_spot_steps":           "A few steps set it up.",
+	"firstrun_spot_tap_to_begin":    "Tap to begin.",
+	"firstrun_title_done":           "All set",
+	"firstrun_spot_done":            "%s is set up.",
+	"firstrun_spot_menu":            "Hold the screen for the menu.",
+	"firstrun_spot_tap_to_finish":   "Tap to finish.",
+	"firstrun_spot_on":              "On %s.",
+	"firstrun_spot_at":              "At %s.",
+	"firstrun_spot_no_network":      "Not on a network.",
+	"firstrun_spot_install_again":   "Install again with your Wi-Fi to put it on one.",
+	"firstrun_spot_zone":            "%s.",
+	"firstrun_spot_clock":           "The clock says %s.",
+	"firstrun_title_name_only":      "Name",
+	"firstrun_spot_restarting":      "Restarting to use",
+	"firstrun_spot_new_name":        "the new name…",
+	"firstrun_spot_name":            "Name: %s",
+	"firstrun_going_on":             "Going on…",
+	"firstrun_spot_home_no_network": "Not on a network yet.",
+	"firstrun_spot_home_add":        "Add it in Home Assistant: Devices & services. Nothing to type.",
+	"firstrun_spot_trust":           "Only on a network you trust.",
+	"firstrun_spot_open_d":          "Open %d more minutes. Only on a network you trust.",
+	"firstrun_spot_home_choose":     "Add it with nothing to type,",
+	"firstrun_spot_home_choose_key": "or with its key.",
+	"firstrun_spot_tonight":         "%s installs tonight.",
+	"firstrun_spot_ready":           "%s is ready.",
+	"firstrun_spot_manual":          "Updates wait for you.",
+	"firstrun_spot_auto":            "Updates install overnight.",
+	"firstrun_spot_hear":            "Did you hear that?",
 }
 
 var uiTranslations = map[string]map[string]string{
 	"es": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Toca en cualquier lugar para empezar",
+		"firstrun_tap_to_finish":        "Toca en cualquier lugar para terminar",
+		"firstrun_hello":                "Hola",
+		"firstrun_this_is_s":            "Este es %s.",
+		"firstrun_welcome_say":          "Este es %s. Di \"%s\" y pide lo que quieras.",
+		"firstrun_the_wake_word":        "la palabra de activación",
+		"firstrun_welcome_settings":     "Desliza hacia abajo desde arriba para los ajustes: Wi-Fi, Bluetooth, cámaras, radio, temas.",
+		"firstrun_welcome_move":         "Di \"muestra la puerta principal\" o \"pantalla de inicio\" para cambiar la pantalla.",
+		"firstrun_welcome_home":         "Home Assistant puede mostrar aquí cámaras, paneles y fotos.",
+		"firstrun_step_d_of_d":          "Paso %d de %d",
+		"firstrun_name_this_device":     "Nombra este dispositivo",
+		"firstrun_the_room_it_is_in":    "La pieza en la que está",
+		"firstrun_save":                 "Guardar",
+		"firstrun_needs_a_name":         "El dispositivo necesita un nombre",
+		"firstrun_type_a_room":          "Escribe una pieza, o Cancelar",
+		"firstrun_room_not_saved":       "No se pudo guardar la pieza",
+		"firstrun_other_room":           "Otra",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "Aún no está en una red. Elige tu Wi-Fi para conectar %s.",
+		"firstrun_wifi_needed":          "Todo lo que sigue lo necesita: Home Assistant, el tiempo, la radio y las actualizaciones.",
+		"firstrun_wifi_connected_to":    "Conectado a %s.",
+		"firstrun_wifi_address":         "Su dirección en la red es %s.",
+		"firstrun_title_zone":           "Zona horaria",
+		"firstrun_zone_is":              "Zona horaria: %s.",
+		"firstrun_zone_clock":           "El reloj marca %s. Cambia la zona si esa no es la hora aquí.",
+		"firstrun_title_name":           "Nombre y pieza",
+		"firstrun_name_is":              "Nombre: %s.",
+		"firstrun_renaming":             "Reiniciando para usar el nuevo nombre…",
+		"firstrun_room_from_home":       "Su pieza se define en Home Assistant.",
+		"firstrun_name_which_room":      "Nombre: %s. ¿En qué pieza está?",
+		"firstrun_name_and_room":        "Nombre: %s. Pieza: %s.",
+		"firstrun_home_added_going":     "Home Assistant lo ha añadido. Continuando…",
+		"firstrun_home_added":           "Home Assistant lo ha añadido.",
+		"firstrun_home_no_network":      "Aún no está en una red, así que Home Assistant no puede llegar a él.",
+		"firstrun_home_add_it":          "Añádelo en Home Assistant: aparece en Ajustes, Dispositivos y servicios. No hay nada que escribir.",
+		"firstrun_home_unkeyed_note":    "Home Assistant envía al dispositivo su clave sin cifrar, así que añádelo en una red de confianza. Requiere Home Assistant 2026.9 o posterior.",
+		"firstrun_home_open_d":          "Abierto %d minutos más.",
+		"firstrun_home_adopt_note":      "Home Assistant envía al dispositivo su nueva clave sin cifrar, así que hazlo solo en una red de confianza. Requiere Home Assistant 2026.9 o posterior.",
+		"firstrun_home_esphome":         "Añade ESPHome con %s, puerto 6053, y esta clave:",
+		"firstrun_home_choose":          "Añádelo a Home Assistant sin escribir nada, o escribe su clave.",
+		"firstrun_home_alone":           "O úsalo por sí solo: alarmas, temporizadores, la radio y el reloj funcionan sin Home Assistant.",
+		"firstrun_title_updates":        "Actualizaciones",
+		"firstrun_updates_looking":      "Buscando una actualización…",
+		"firstrun_updates_current":      "Está al día.",
+		"firstrun_updates_tonight":      "TECHO5 %s está lista. Se instala esta noche, después de la configuración.",
+		"firstrun_updates_ready":        "TECHO5 %s está lista: instálala desde Ajustes, General.",
+		"firstrun_updates_auto":         "Las actualizaciones se instalan solas por la noche (de 2 a 5), mientras no suena nada.",
+		"firstrun_updates_manual":       "Las actualizaciones esperan a que las instales.",
+		"firstrun_title_sound":          "Prueba de sonido",
+		"firstrun_sound_played":         "Acaba de sonar un sonido breve. ¿Lo has oído?",
+		"firstrun_next":                 "Siguiente",
+		"firstrun_change":               "Cambiar",
+		"firstrun_not_now":              "Ahora no",
+		"firstrun_choose_wifi":          "Elegir Wi-Fi",
+		"firstrun_change_name":          "Cambiar nombre",
+		"firstrun_skip_for_now":         "Omitir por ahora",
+		"firstrun_use_it_on_its_own":    "Usarlo por sí solo",
+		"firstrun_on_its_own":           "Por sí solo",
+		"firstrun_add_it_instead":       "Mejor añadirlo",
+		"firstrun_type_the_key":         "Con clave",
+		"firstrun_add_it":               "Añadirlo",
+		"firstrun_leave_them_off":       "Desactivarlas",
+		"firstrun_turn_them_on":         "Activarlas",
+		"firstrun_play_again":           "Repetir",
+		"firstrun_yes":                  "Sí",
+		"firstrun_on_a_phone":           "En un teléfono",
+		"firstrun_choose_a_room":        "Elegir pieza",
+		"firstrun_room_s":               "Pieza: %s",
+		"firstrun_show_the_key":         "Mostrar la clave",
+		"firstrun_tap_to_go_back":       "Toca para volver",
+		"firstrun_phone_at":             "En un teléfono: %s:%d/setup",
+		"firstrun_spot_steps":           "Unos pocos pasos lo configuran.",
+		"firstrun_spot_tap_to_begin":    "Toca para empezar.",
+		"firstrun_title_done":           "Todo listo",
+		"firstrun_spot_done":            "%s está configurado.",
+		"firstrun_spot_menu":            "Mantén pulsada la pantalla para el menú.",
+		"firstrun_spot_tap_to_finish":   "Toca para terminar.",
+		"firstrun_spot_on":              "En %s.",
+		"firstrun_spot_at":              "Dirección: %s.",
+		"firstrun_spot_no_network":      "Sin red.",
+		"firstrun_spot_install_again":   "Instala de nuevo con tu Wi-Fi para conectarlo.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "El reloj marca %s.",
+		"firstrun_title_name_only":      "Nombre",
+		"firstrun_spot_restarting":      "Reiniciando para usar",
+		"firstrun_spot_new_name":        "el nuevo nombre…",
+		"firstrun_spot_name":            "Nombre: %s",
+		"firstrun_going_on":             "Continuando…",
+		"firstrun_spot_home_no_network": "Aún no está en una red.",
+		"firstrun_spot_home_add":        "Añádelo en Home Assistant: Dispositivos y servicios. Nada que escribir.",
+		"firstrun_spot_trust":           "Solo en una red de confianza.",
+		"firstrun_spot_open_d":          "Abierto %d minutos más. Solo en una red de confianza.",
+		"firstrun_spot_home_choose":     "Añádelo sin escribir nada,",
+		"firstrun_spot_home_choose_key": "o con su clave.",
+		"firstrun_spot_tonight":         "%s se instala esta noche.",
+		"firstrun_spot_ready":           "%s está lista.",
+		"firstrun_spot_manual":          "Las actualizaciones te esperan.",
+		"firstrun_spot_auto":            "Se actualiza por la noche.",
+		"firstrun_spot_hear":            "¿Lo has oído?",
+
+		"nextup_label":                "Siguiente:",
+		"popup_started":               "Empezó",
+		"popup_in_a_minute":           "En un minuto",
+		"popup_in_d_minutes":          "En %d minutos",
+		"popup_in_an_hour":            "En una hora",
+		"popup_at_s":                  "A las %s",
+		"reminder_untitled":           "Recordatorio",
+		"hint_no_start":               "Home Assistant no inició la emisión. ¿Está activada la opción \"Permitir que el dispositivo realice acciones de Home Assistant\" para este dispositivo?",
+		"hint_favorite":               "No se pudo guardar la emisora. Home Assistant necesita un script llamado script.radio_favorite_add_station.",
+		"hint_no_home":                "Home Assistant no está conectado a este dispositivo, así que la emisora no se inició.",
+		"hint_play_failed":            "Home Assistant no pudo reproducir esa emisora.",
+		"hint_dropping":               "La emisión se corta una y otra vez, así que la emisora se dejó apagada.",
+		"clock_style_classic":         "Clásico",
+		"clock_style_big":             "Grande",
+		"clock_style_flip":            "Paletas",
+		"clock_style_led":             "LED",
+		"clock_style_analog":          "Analógico",
+		"clock_style_words":           "Palabras",
+		"clock_style_sun":             "Sol",
+		"clock_style_dashboard":       "Panel",
+		"clock_style_binary":          "Binario",
+		"clock_style_world":           "Mundo",
+		"clock_style_agenda":          "Agenda",
+		"clock_style_glow":            "Brillo",
+		"clock_style_nixie":           "Nixie",
+		"clock_style_stack":           "Pila",
+		"clock_style_overlap":         "Superpuesto",
+		"call_muted":                  "Micro silenciado",
+		"weather_alert":               "ALERTA METEOROLÓGICA",
+		"volume_caps":                 "VOLUMEN",
+		"timer_left_s":                "Temporizador %s",
+		"music_playing":               "♪ reproduciendo",
+		"music_paused":                "♪ en pausa",
+		"press_again_to_snooze_d_min": "pulsa de nuevo para posponer %d min",
+
+		"clock":                         "Reloj",
 		"sunrise_skip_action":           "Omitir",
 		"sunrise_skip_done":             "Omitida la alarma de las %s",
 		"sunrise_skip_refused":          "No se pudo omitir la alarma de las %s",
@@ -906,6 +1217,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Letra",
 		"microphone":                    "Micrófono",
 		"microphone_off":                "MICRÓFONO APAGADO",
+		"no_wifi":                       "SIN WI-FI",
+		"no_home_assistant":             "SIN HOME ASSISTANT",
+		"voice_no_home":                 "No se puede conectar con Home Assistant",
+		"voice_no_assistant":            "Ningún asistente de voz configurado",
+		"voice_timeout":                 "Sin respuesta a tiempo",
+		"voice_failed":                  "El asistente no pudo responder",
+		"not_live":                      "NO EN DIRECTO",
+		"deck_failed":                   "No funcionó",
+		"deck_obs_away":                 "OBS no está conectado",
+		"deck_obs_refused":              "OBS lo rechazó",
+		"deck_obs_silent":               "OBS no respondió",
+		"deck_pc_silent":                "%s no responde",
+		"deck_pc_unpaired":              "%s no está emparejado",
+		"deck_pc_key":                   "La clave de %s no coincide",
 		"minutes_before":                "%d minutos antes",
 		"month":                         "Mes",
 		"music":                         "Música",
@@ -946,6 +1271,10 @@ var uiTranslations = map[string]map[string]string{
 		"quiet_hours":                   "Horas de silencio",
 		"reading_the_calendar":          "Leyendo el calendario…",
 		"repeat":                        "Repetir",
+		"reset":                         "Restablecer",
+		"reset_for_someone_else":        "Restablecer para otra persona",
+		"clears_it_and_start_setting_it_up_again":             "Borra todo y permite volver a configurarlo",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nombre, Home Assistant, alarmas, todo: toca otra vez",
 		"restart":                       "Reiniciar",
 		"screen_language":               "Idioma de pantalla",
 		"screensaver":                   "Protector de pantalla",
@@ -1121,8 +1450,159 @@ var uiTranslations = map[string]map[string]string{
 		"calendar_look_chip_size_label": "Etiquetas de calendarios",
 		"calendar_look_chip_size_sub":   "Los nombres de los calendarios sobre el mes",
 		"option_normal":                 "Normal",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RECORDATORIO",
+		"card_notification":               "NOTIFICACIÓN",
+		"card_drag_for_more":              "ARRASTRA PARA VER MÁS",
+		"tap_again":                       "Toca de nuevo",
+		"tap_again_s":                     "Toca de nuevo: %s",
+		"camera_button_sent":              "Enviado",
+		"camera_button_no_home_assistant": "Sin Home Assistant",
+		"connecting_to_the_dashboard":     "Conectando con el panel…",
+		"loading_the_dashboard":           "Cargando el panel…",
+		"obs_is_not_set_up":               "OBS no está configurado: página de configuración → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenciada · pulsa un botón de volumen o de micrófono para posponer %d min",
 	},
 	"fr": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Touchez l'écran pour commencer",
+		"firstrun_tap_to_finish":        "Touchez l'écran pour terminer",
+		"firstrun_hello":                "Bonjour",
+		"firstrun_this_is_s":            "Voici %s.",
+		"firstrun_welcome_say":          "Voici %s. Dites « %s » et posez une question.",
+		"firstrun_the_wake_word":        "le mot d'activation",
+		"firstrun_welcome_settings":     "Balayez du haut vers le bas pour les paramètres : Wi-Fi, Bluetooth, caméras, radio, thèmes.",
+		"firstrun_welcome_move":         "Dites « affiche la porte d'entrée » ou « écran d'accueil » pour changer d'écran.",
+		"firstrun_welcome_home":         "Home Assistant peut afficher ici des caméras, des tableaux de bord et des photos.",
+		"firstrun_step_d_of_d":          "Étape %d sur %d",
+		"firstrun_name_this_device":     "Nommer cet appareil",
+		"firstrun_the_room_it_is_in":    "La pièce où il se trouve",
+		"firstrun_save":                 "Enregistrer",
+		"firstrun_needs_a_name":         "L'appareil a besoin d'un nom",
+		"firstrun_type_a_room":          "Saisissez une pièce, ou Annuler",
+		"firstrun_room_not_saved":       "Impossible d'enregistrer la pièce",
+		"firstrun_other_room":           "Autre",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "Pas encore sur un réseau. Choisissez votre Wi-Fi pour connecter %s.",
+		"firstrun_wifi_needed":          "Tout ce qui suit en a besoin : Home Assistant, la météo, la radio et les mises à jour.",
+		"firstrun_wifi_connected_to":    "Connecté à %s.",
+		"firstrun_wifi_address":         "Son adresse sur le réseau est %s.",
+		"firstrun_title_zone":           "Fuseau horaire",
+		"firstrun_zone_is":              "Fuseau horaire : %s.",
+		"firstrun_zone_clock":           "L'horloge indique %s. Changez le fuseau si ce n'est pas l'heure ici.",
+		"firstrun_title_name":           "Nom et pièce",
+		"firstrun_name_is":              "Nom : %s.",
+		"firstrun_renaming":             "Redémarrage pour utiliser le nouveau nom…",
+		"firstrun_room_from_home":       "Sa pièce est définie dans Home Assistant.",
+		"firstrun_name_which_room":      "Nom : %s. Dans quelle pièce ?",
+		"firstrun_name_and_room":        "Nom : %s. Pièce : %s.",
+		"firstrun_home_added_going":     "Home Assistant l'a ajouté. On continue…",
+		"firstrun_home_added":           "Home Assistant l'a ajouté.",
+		"firstrun_home_no_network":      "Pas encore sur un réseau : Home Assistant ne peut donc pas le joindre.",
+		"firstrun_home_add_it":          "Ajoutez-le dans Home Assistant : il apparaît sous Paramètres, Appareils et services. Rien à saisir.",
+		"firstrun_home_unkeyed_note":    "Home Assistant envoie sa clé à l'appareil sans chiffrement : ajoutez-le donc sur un réseau de confiance. Nécessite Home Assistant 2026.9 ou plus récent.",
+		"firstrun_home_open_d":          "Ouvert encore %d minutes.",
+		"firstrun_home_adopt_note":      "Home Assistant envoie sa nouvelle clé à l'appareil sans chiffrement : ne le faites donc que sur un réseau de confiance. Nécessite Home Assistant 2026.9 ou plus récent.",
+		"firstrun_home_esphome":         "Ajoutez ESPHome avec %s, port 6053, et cette clé :",
+		"firstrun_home_choose":          "Ajoutez-le à Home Assistant sans rien saisir, ou saisissez sa clé.",
+		"firstrun_home_alone":           "Ou utilisez-le seul : alarmes, minuteurs, radio et horloge fonctionnent sans Home Assistant.",
+		"firstrun_title_updates":        "Mises à jour",
+		"firstrun_updates_looking":      "Recherche d'une mise à jour…",
+		"firstrun_updates_current":      "Il est à jour.",
+		"firstrun_updates_tonight":      "TECHO5 %s est prête. Elle s'installe cette nuit, après la configuration.",
+		"firstrun_updates_ready":        "TECHO5 %s est prête : installez-la depuis Paramètres, Général.",
+		"firstrun_updates_auto":         "Les mises à jour s'installent seules la nuit (de 2 h à 5 h), quand rien ne joue.",
+		"firstrun_updates_manual":       "Les mises à jour attendent que vous les installiez.",
+		"firstrun_title_sound":          "Test du son",
+		"firstrun_sound_played":         "Un son bref vient d'être joué. L'avez-vous entendu ?",
+		"firstrun_next":                 "Suivant",
+		"firstrun_change":               "Modifier",
+		"firstrun_not_now":              "Pas maintenant",
+		"firstrun_choose_wifi":          "Choisir le Wi-Fi",
+		"firstrun_change_name":          "Changer le nom",
+		"firstrun_skip_for_now":         "Passer pour l'instant",
+		"firstrun_use_it_on_its_own":    "L'utiliser seul",
+		"firstrun_on_its_own":           "Seul",
+		"firstrun_add_it_instead":       "Plutôt l'ajouter",
+		"firstrun_type_the_key":         "Saisir la clé",
+		"firstrun_add_it":               "L'ajouter",
+		"firstrun_leave_them_off":       "Les désactiver",
+		"firstrun_turn_them_on":         "Les activer",
+		"firstrun_play_again":           "Rejouer",
+		"firstrun_yes":                  "Oui",
+		"firstrun_on_a_phone":           "Sur un téléphone",
+		"firstrun_choose_a_room":        "Choisir une pièce",
+		"firstrun_room_s":               "Pièce : %s",
+		"firstrun_show_the_key":         "Afficher la clé",
+		"firstrun_tap_to_go_back":       "Touchez pour revenir",
+		"firstrun_phone_at":             "Sur un téléphone : %s:%d/setup",
+		"firstrun_spot_steps":           "Quelques étapes pour le configurer.",
+		"firstrun_spot_tap_to_begin":    "Touchez pour commencer.",
+		"firstrun_title_done":           "Tout est prêt",
+		"firstrun_spot_done":            "%s est configuré.",
+		"firstrun_spot_menu":            "Maintenez l'écran pour le menu.",
+		"firstrun_spot_tap_to_finish":   "Touchez pour terminer.",
+		"firstrun_spot_on":              "Sur %s.",
+		"firstrun_spot_at":              "Adresse : %s.",
+		"firstrun_spot_no_network":      "Pas de réseau.",
+		"firstrun_spot_install_again":   "Réinstallez avec votre Wi-Fi pour le connecter.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "L'horloge indique %s.",
+		"firstrun_title_name_only":      "Nom",
+		"firstrun_spot_restarting":      "Redémarrage pour utiliser",
+		"firstrun_spot_new_name":        "le nouveau nom…",
+		"firstrun_spot_name":            "Nom : %s",
+		"firstrun_going_on":             "On continue…",
+		"firstrun_spot_home_no_network": "Pas encore sur un réseau.",
+		"firstrun_spot_home_add":        "Ajoutez-le dans Home Assistant : Appareils et services. Rien à saisir.",
+		"firstrun_spot_trust":           "Seulement sur un réseau de confiance.",
+		"firstrun_spot_open_d":          "Ouvert encore %d minutes. Seulement sur un réseau de confiance.",
+		"firstrun_spot_home_choose":     "Ajoutez-le sans rien saisir,",
+		"firstrun_spot_home_choose_key": "ou avec sa clé.",
+		"firstrun_spot_tonight":         "%s s'installe cette nuit.",
+		"firstrun_spot_ready":           "%s est prête.",
+		"firstrun_spot_manual":          "Les mises à jour vous attendent.",
+		"firstrun_spot_auto":            "Mises à jour la nuit.",
+		"firstrun_spot_hear":            "L'avez-vous entendu ?",
+
+		"nextup_label":          "Prochain :",
+		"popup_started":         "Commencé",
+		"popup_in_a_minute":     "Dans une minute",
+		"popup_in_d_minutes":    "Dans %d minutes",
+		"popup_in_an_hour":      "Dans une heure",
+		"popup_at_s":            "À %s",
+		"reminder_untitled":     "Rappel",
+		"hint_no_start":         "Home Assistant n'a pas lancé le flux. L'option « Autoriser l'appareil à effectuer des actions Home Assistant » est-elle activée pour cet appareil ?",
+		"hint_favorite":         "Impossible d'enregistrer la station. Home Assistant a besoin d'un script nommé script.radio_favorite_add_station.",
+		"hint_no_home":          "Home Assistant n'est pas connecté à cet appareil, la station n'a donc pas été lancée.",
+		"hint_play_failed":      "Home Assistant n'a pas pu lire cette station.",
+		"hint_dropping":         "Le flux se coupe sans cesse, la station a donc été arrêtée.",
+		"clock_style_classic":   "Classique",
+		"clock_style_big":       "Grand",
+		"clock_style_flip":      "Palettes",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analogique",
+		"clock_style_words":     "Mots",
+		"clock_style_sun":       "Soleil",
+		"clock_style_dashboard": "Tableau de bord",
+		"clock_style_binary":    "Binaire",
+		"clock_style_world":     "Monde",
+		"clock_style_agenda":    "Agenda",
+		"clock_style_glow":      "Lueur",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Empilé",
+		"clock_style_overlap":   "Superposé",
+		"call_muted":            "Micro coupé",
+		"weather_alert":         "ALERTE MÉTÉO",
+		"volume_caps":           "VOLUME",
+		"timer_left_s":          "Minuteur %s",
+		"music_playing":         "♪ en lecture",
+		"music_paused":          "♪ en pause",
+
 		"drawer_recording":              "Écoute en cours",
 		"drawer_talk":                   "Parler",
 		"drawer_end_talk":               "Terminer la conversation %d:%02d",
@@ -1216,6 +1696,20 @@ var uiTranslations = map[string]map[string]string{
 		"media_playback":                "Lecture",
 		"microphone":                    "Microphone",
 		"microphone_off":                "MICROPHONE DÉSACTIVÉ",
+		"no_wifi":                       "PAS DE WI-FI",
+		"no_home_assistant":             "PAS DE HOME ASSISTANT",
+		"voice_no_home":                 "Home Assistant est injoignable",
+		"voice_no_assistant":            "Aucun assistant vocal configuré",
+		"voice_timeout":                 "Pas de réponse à temps",
+		"voice_failed":                  "L'assistant n'a pas pu répondre",
+		"not_live":                      "PAS EN DIRECT",
+		"deck_failed":                   "Cela n'a pas fonctionné",
+		"deck_obs_away":                 "OBS n'est pas connecté",
+		"deck_obs_refused":              "OBS a refusé",
+		"deck_obs_silent":               "OBS n'a pas répondu",
+		"deck_pc_silent":                "%s ne répond pas",
+		"deck_pc_unpaired":              "%s n'est pas appairé",
+		"deck_pc_key":                   "La clé de %s ne correspond pas",
 		"minutes_before":                "%d minutes avant",
 		"month":                         "Mois",
 		"music":                         "Musique",
@@ -1237,35 +1731,39 @@ var uiTranslations = map[string]map[string]string{
 		"quiet_hours":                   "Heures silencieuses",
 		"reading_the_calendar":          "Lecture du calendrier…",
 		"repeat":                        "Répéter",
-		"restart":                       "Redémarrer",
-		"screen_language":               "Langue de l'écran",
-		"screensaver":                   "Économiseur d'écran",
-		"seconds_option":                "%d secondes",
-		"settings":                      "Paramètres",
-		"silenced":                      "Mis en sourdine",
-		"snooze_d_min":                  "Répéter dans %d min",
-		"sounds":                        "Sons",
-		"stop":                          "Arrêter",
-		"timer":                         "Minuteur",
-		"timer_and_alarm":               "Minuteurs et alarmes",
-		"timers":                        "Minuteurs",
-		"today":                         "Aujourd'hui",
-		"tomorrow":                      "Demain",
-		"treble":                        "Aigus",
-		"updates":                       "Mises à jour",
-		"voice":                         "Voix",
-		"volume":                        "Volume",
-		"wake_word":                     "Mot d'activation",
-		"weather":                       "Météo",
-		"weather_alerts":                "Alertes météo",
-		"week":                          "Semaine",
-		"weekdays":                      "Jours de semaine",
-		"weekends":                      "Week-ends",
-		"wi_fi":                         "Wi-Fi",
-		"drawer_no_calls":               "Personne à appeler pour le moment. Attribuez le même mot de maison à chaque appareil dans sa page de configuration pour appeler d'une pièce à l'autre, ou connectez le téléphone (action phone_account) pour accéder à vos contacts.",
-		"drawer_no_cameras":             "Aucune caméra pour le moment. Configurez un jeton Home Assistant pour toutes les afficher, ou choisissez-en quelques-unes avec l'action home_cameras.",
-		"drawer_no_cameras_disabled":    "Aucune caméra : aucune n'est sélectionnée pour Home Assistant, dans la page de configuration ou avec l'action home_cameras.",
-		"drawer_no_radio":               "Aucune station pour le moment. Fournissez à l'appareil un jeton Home Assistant (action home_assistant) pour accéder aux stations locales et populaires, ou ajoutez les vôtres avec home_radio.",
+		"reset":                         "Réinitialiser",
+		"reset_for_someone_else":        "Réinitialiser pour quelqu'un d'autre",
+		"clears_it_and_start_setting_it_up_again":             "Efface et recommence la configuration",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nom, Home Assistant, alarmes, tout: appuyer à nouveau",
+		"restart":                    "Redémarrer",
+		"screen_language":            "Langue de l'écran",
+		"screensaver":                "Économiseur d'écran",
+		"seconds_option":             "%d secondes",
+		"settings":                   "Paramètres",
+		"silenced":                   "Mis en sourdine",
+		"snooze_d_min":               "Répéter dans %d min",
+		"sounds":                     "Sons",
+		"stop":                       "Arrêter",
+		"timer":                      "Minuteur",
+		"timer_and_alarm":            "Minuteurs et alarmes",
+		"timers":                     "Minuteurs",
+		"today":                      "Aujourd'hui",
+		"tomorrow":                   "Demain",
+		"treble":                     "Aigus",
+		"updates":                    "Mises à jour",
+		"voice":                      "Voix",
+		"volume":                     "Volume",
+		"wake_word":                  "Mot d'activation",
+		"weather":                    "Météo",
+		"weather_alerts":             "Alertes météo",
+		"week":                       "Semaine",
+		"weekdays":                   "Jours de semaine",
+		"weekends":                   "Week-ends",
+		"wi_fi":                      "Wi-Fi",
+		"drawer_no_calls":            "Personne à appeler pour le moment. Attribuez le même mot de maison à chaque appareil dans sa page de configuration pour appeler d'une pièce à l'autre, ou connectez le téléphone (action phone_account) pour accéder à vos contacts.",
+		"drawer_no_cameras":          "Aucune caméra pour le moment. Configurez un jeton Home Assistant pour toutes les afficher, ou choisissez-en quelques-unes avec l'action home_cameras.",
+		"drawer_no_cameras_disabled": "Aucune caméra : aucune n'est sélectionnée pour Home Assistant, dans la page de configuration ou avec l'action home_cameras.",
+		"drawer_no_radio":            "Aucune station pour le moment. Fournissez à l'appareil un jeton Home Assistant (action home_assistant) pour accéder aux stations locales et populaires, ou ajoutez les vôtres avec home_radio.",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB est la valeur normale ; une amplification peut provoquer de la distorsion, surtout avec davantage de basses.",
 		"a_browser_is_asking":                                      "UN NAVIGATEUR DEMANDE L'AUTORISATION",
 		"a_camera_s_own_audio_while_its_view_is_up":                "Le son propre à la caméra pendant que son flux est affiché",
@@ -1479,7 +1977,6 @@ var uiTranslations = map[string]map[string]string{
 		"settings_lock":                             "Verrouillage des paramètres",
 		"shown_as_you_change_it_at_night":           "Aperçu pendant le réglage, la nuit",
 		"shown_with_the_clock":                      "Affiché avec l'horloge",
-		"silenced_press_again_to_snooze_d_min":      "Son coupé ; appuyez à nouveau pour répéter dans %d min",
 		"skin":                                      "Thème",
 		"skin_keeps":                                "Conservé lorsque le thème est désactivé",
 		"sleep_timer":                               "Minuteur de veille",
@@ -1613,8 +2110,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Plus",
 		"ui_muted":                              "Son coupé",
 		"ui_name_weather_updates_and_restart":   "Nom, météo, mises à jour et redémarrage",
-		"ui_needs_a_key_the_setup_page_connections":       "Une clé est nécessaire : page de configuration, Connexions",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Une clé de configuration est nécessaire : page de configuration, Connexions",
+		"ui_needs_a_key_the_setup_page_connections":       "Une clé est nécessaire : page de configuration, Réseau",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Une clé de configuration est nécessaire : page de configuration, Réseau",
 		"ui_needs_speaker_eq_which_is_off":                "Nécessite l'égaliseur du haut-parleur, qui est désactivé",
 		"ui_never":                                        "Jamais",
 		"ui_new_alarm":                                    "Nouvelle alarme",
@@ -1916,8 +2413,159 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":     "Étape %d sur %d",
 		"ui_mealie_previous":    "Précédent",
 		"ui_mealie_no_steps":    "Cette recette ne comporte ni ingrédients ni étapes.",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RAPPEL",
+		"card_notification":               "NOTIFICATION",
+		"card_drag_for_more":              "GLISSER POUR LA SUITE",
+		"tap_again":                       "Touchez à nouveau",
+		"tap_again_s":                     "Touchez à nouveau : %s",
+		"camera_button_sent":              "Envoyé",
+		"camera_button_no_home_assistant": "Pas de Home Assistant",
+		"connecting_to_the_dashboard":     "Connexion au tableau de bord…",
+		"loading_the_dashboard":           "Chargement du tableau de bord…",
+		"obs_is_not_set_up":               "OBS n'est pas configuré : page de configuration → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Son coupé ; bouton de volume ou de micro pour répéter dans %d min",
 	},
 	"gl": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Toca en calquera parte para comezar",
+		"firstrun_tap_to_finish":        "Toca en calquera parte para rematar",
+		"firstrun_hello":                "Ola",
+		"firstrun_this_is_s":            "Este é %s.",
+		"firstrun_welcome_say":          "Este é %s. Di \"%s\" e pide o que queiras.",
+		"firstrun_the_wake_word":        "a palabra de activación",
+		"firstrun_welcome_settings":     "Esvara cara abaixo desde arriba para os axustes: Wi-Fi, Bluetooth, cámaras, radio, temas.",
+		"firstrun_welcome_move":         "Di \"amosa a porta principal\" ou \"pantalla de inicio\" para cambiar a pantalla.",
+		"firstrun_welcome_home":         "Home Assistant pode amosar aquí cámaras, paneis e fotos.",
+		"firstrun_step_d_of_d":          "Paso %d de %d",
+		"firstrun_name_this_device":     "Pon nome a este dispositivo",
+		"firstrun_the_room_it_is_in":    "O cuarto no que está",
+		"firstrun_save":                 "Gardar",
+		"firstrun_needs_a_name":         "O dispositivo necesita un nome",
+		"firstrun_type_a_room":          "Escribe un cuarto, ou Cancelar",
+		"firstrun_room_not_saved":       "Non se puido gardar o cuarto",
+		"firstrun_other_room":           "Outro",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "Aínda non está nunha rede. Escolle a túa Wi-Fi para conectar %s.",
+		"firstrun_wifi_needed":          "Todo o que vén despois a necesita: Home Assistant, o tempo, a radio e as actualizacións.",
+		"firstrun_wifi_connected_to":    "Conectado a %s.",
+		"firstrun_wifi_address":         "O seu enderezo na rede é %s.",
+		"firstrun_title_zone":           "Fuso horario",
+		"firstrun_zone_is":              "Fuso horario: %s.",
+		"firstrun_zone_clock":           "O reloxo marca %s. Cambia o fuso se esa non é a hora aquí.",
+		"firstrun_title_name":           "Nome e cuarto",
+		"firstrun_name_is":              "Nome: %s.",
+		"firstrun_renaming":             "Reiniciando para usar o novo nome…",
+		"firstrun_room_from_home":       "O seu cuarto defínese en Home Assistant.",
+		"firstrun_name_which_room":      "Nome: %s. En que cuarto está?",
+		"firstrun_name_and_room":        "Nome: %s. Cuarto: %s.",
+		"firstrun_home_added_going":     "Home Assistant engadiuno. Seguindo…",
+		"firstrun_home_added":           "Home Assistant engadiuno.",
+		"firstrun_home_no_network":      "Aínda non está nunha rede, así que Home Assistant non pode chegar a el.",
+		"firstrun_home_add_it":          "Engádeo en Home Assistant: aparece en Configuración, Dispositivos e servizos. Non hai nada que escribir.",
+		"firstrun_home_unkeyed_note":    "Home Assistant envía ao dispositivo a súa clave sen cifrar, así que engádeo nunha rede de confianza. Require Home Assistant 2026.9 ou posterior.",
+		"firstrun_home_open_d":          "Aberto %d minutos máis.",
+		"firstrun_home_adopt_note":      "Home Assistant envía ao dispositivo a súa nova clave sen cifrar, así que faino só nunha rede de confianza. Require Home Assistant 2026.9 ou posterior.",
+		"firstrun_home_esphome":         "Engade ESPHome con %s, porto 6053, e esta clave:",
+		"firstrun_home_choose":          "Engádeo a Home Assistant sen escribir nada, ou escribe a súa clave.",
+		"firstrun_home_alone":           "Ou úsao por si só: alarmas, temporizadores, a radio e o reloxo funcionan sen Home Assistant.",
+		"firstrun_title_updates":        "Actualizacións",
+		"firstrun_updates_looking":      "Buscando unha actualización…",
+		"firstrun_updates_current":      "Está ao día.",
+		"firstrun_updates_tonight":      "TECHO5 %s está lista. Instálase esta noite, despois da configuración.",
+		"firstrun_updates_ready":        "TECHO5 %s está lista: instálaa desde Axustes, Xeral.",
+		"firstrun_updates_auto":         "As actualizacións instálanse soas pola noite (das 2 ás 5), mentres non soa nada.",
+		"firstrun_updates_manual":       "As actualizacións agardan a que as instales.",
+		"firstrun_title_sound":          "Proba de son",
+		"firstrun_sound_played":         "Acaba de soar un son curto. Oíchelo?",
+		"firstrun_next":                 "Seguinte",
+		"firstrun_change":               "Cambiar",
+		"firstrun_not_now":              "Agora non",
+		"firstrun_choose_wifi":          "Escoller Wi-Fi",
+		"firstrun_change_name":          "Cambiar o nome",
+		"firstrun_skip_for_now":         "Omitir polo de agora",
+		"firstrun_use_it_on_its_own":    "Usalo por si só",
+		"firstrun_on_its_own":           "Por si só",
+		"firstrun_add_it_instead":       "Mellor engadilo",
+		"firstrun_type_the_key":         "Coa clave",
+		"firstrun_add_it":               "Engadilo",
+		"firstrun_leave_them_off":       "Desactivalas",
+		"firstrun_turn_them_on":         "Activalas",
+		"firstrun_play_again":           "Repetir",
+		"firstrun_yes":                  "Si",
+		"firstrun_on_a_phone":           "Nun teléfono",
+		"firstrun_choose_a_room":        "Escoller cuarto",
+		"firstrun_room_s":               "Cuarto: %s",
+		"firstrun_show_the_key":         "Amosar a clave",
+		"firstrun_tap_to_go_back":       "Toca para volver",
+		"firstrun_phone_at":             "Nun teléfono: %s:%d/setup",
+		"firstrun_spot_steps":           "Uns poucos pasos configúrano.",
+		"firstrun_spot_tap_to_begin":    "Toca para comezar.",
+		"firstrun_title_done":           "Todo listo",
+		"firstrun_spot_done":            "%s está configurado.",
+		"firstrun_spot_menu":            "Mantén premida a pantalla para o menú.",
+		"firstrun_spot_tap_to_finish":   "Toca para rematar.",
+		"firstrun_spot_on":              "En %s.",
+		"firstrun_spot_at":              "Enderezo: %s.",
+		"firstrun_spot_no_network":      "Sen rede.",
+		"firstrun_spot_install_again":   "Instala de novo coa túa Wi-Fi para conectalo.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "O reloxo marca %s.",
+		"firstrun_title_name_only":      "Nome",
+		"firstrun_spot_restarting":      "Reiniciando para usar",
+		"firstrun_spot_new_name":        "o novo nome…",
+		"firstrun_spot_name":            "Nome: %s",
+		"firstrun_going_on":             "Seguindo…",
+		"firstrun_spot_home_no_network": "Aínda non está nunha rede.",
+		"firstrun_spot_home_add":        "Engádeo en Home Assistant: Dispositivos e servizos. Nada que escribir.",
+		"firstrun_spot_trust":           "Só nunha rede de confianza.",
+		"firstrun_spot_open_d":          "Aberto %d minutos máis. Só nunha rede de confianza.",
+		"firstrun_spot_home_choose":     "Engádeo sen escribir nada,",
+		"firstrun_spot_home_choose_key": "ou coa súa clave.",
+		"firstrun_spot_tonight":         "%s instálase esta noite.",
+		"firstrun_spot_ready":           "%s está lista.",
+		"firstrun_spot_manual":          "As actualizacións agárdante.",
+		"firstrun_spot_auto":            "Actualízase pola noite.",
+		"firstrun_spot_hear":            "Oíchelo?",
+
+		"nextup_label":          "Seguinte:",
+		"popup_started":         "Comezou",
+		"popup_in_a_minute":     "Nun minuto",
+		"popup_in_d_minutes":    "En %d minutos",
+		"popup_in_an_hour":      "Nunha hora",
+		"popup_at_s":            "Ás %s",
+		"reminder_untitled":     "Recordatorio",
+		"hint_no_start":         "Home Assistant non iniciou a emisión. Está activada a opción \"Permitir que o dispositivo realice accións de Home Assistant\" para este dispositivo?",
+		"hint_favorite":         "Non se puido gardar a emisora. Home Assistant precisa dun script chamado script.radio_favorite_add_station.",
+		"hint_no_home":          "Home Assistant non está conectado a este dispositivo, así que non se iniciou a emisora.",
+		"hint_play_failed":      "Home Assistant non puido reproducir esa emisora.",
+		"hint_dropping":         "A emisión córtase unha e outra vez, así que a emisora quedou apagada.",
+		"clock_style_classic":   "Clásico",
+		"clock_style_big":       "Grande",
+		"clock_style_flip":      "Paletas",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analóxico",
+		"clock_style_words":     "Palabras",
+		"clock_style_sun":       "Sol",
+		"clock_style_dashboard": "Panel",
+		"clock_style_binary":    "Binario",
+		"clock_style_world":     "Mundo",
+		"clock_style_agenda":    "Axenda",
+		"clock_style_glow":      "Brillo",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Pila",
+		"clock_style_overlap":   "Superposto",
+		"call_muted":            "Micro silenciado",
+		"weather_alert":         "ALERTA METEOROLÓXICA",
+		"volume_caps":           "VOLUME",
+		"timer_left_s":          "Temporizador %s",
+		"music_playing":         "♪ reproducindo",
+		"music_paused":          "♪ en pausa",
+
 		"drawer_recording":           "Escoitando",
 		"drawer_talk":                "Falar",
 		"drawer_end_talk":            "Rematar a conversa  %d:%02d",
@@ -2107,6 +2755,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Letra",
 		"microphone":                    "Micrófono",
 		"microphone_off":                "MICRÓFONO APAGADO",
+		"no_wifi":                       "SEN WIFI",
+		"no_home_assistant":             "SEN HOME ASSISTANT",
+		"voice_no_home":                 "Non se pode conectar con Home Assistant",
+		"voice_no_assistant":            "Ningún asistente de voz configurado",
+		"voice_timeout":                 "Sen resposta a tempo",
+		"voice_failed":                  "O asistente non puido responder",
+		"not_live":                      "NON EN DIRECTO",
+		"deck_failed":                   "Non funcionou",
+		"deck_obs_away":                 "OBS non está conectado",
+		"deck_obs_refused":              "OBS rexeitouno",
+		"deck_obs_silent":               "OBS non respondeu",
+		"deck_pc_silent":                "%s non responde",
+		"deck_pc_unpaired":              "%s non está emparellado",
+		"deck_pc_key":                   "A clave de %s non coincide",
 		"minutes_before":                "%d minutos antes",
 		"month":                         "Mes",
 		"music":                         "Música",
@@ -2241,68 +2903,71 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Lendo o calendario…",
 		"remote_api":                                "API remota",
 		"repeat":                                    "Repetir",
-		"restart":                                   "Reiniciar",
-		"said_as_it_rings":                          "Dito mentres soa",
-		"same_as_default":                           "Igual que o predeterminado (%s)",
-		"screen_language":                           "Idioma da pantalla",
-		"screen_off_when_nobody_is_near":            "Pantalla apagada cando non hai ninguén preto",
-		"screen_on_the_network":                     "Pantalla na rede",
-		"screensaver":                               "Protector de pantalla",
-		"seconds_option":                            "%d segundos",
-		"sent_from_home_assistant":                  "Enviado desde Home Assistant",
-		"settings":                                  "Axustes",
-		"settings_lock":                             "Bloqueo dos axustes",
-		"shown_as_you_change_it_at_night":           "Amósase mentres o cambias, de noite",
-		"shown_with_the_clock":                      "Amósase co reloxo",
-		"silenced":                                  "Silenciado",
-		"silenced_press_again_to_snooze_d_min":      "Silenciado · preme de novo para adiar %d min",
-		"skin":                                      "Aparencia",
-		"skin_keeps":                                "Gárdase para cando a aparencia estea desactivada",
-		"sleep_timer":                               "Temporizador de apagado",
-		"slideshow":                                 "Presentación de fotos",
-		"snooze_d_min":                              "Adiar %d min",
-		"sounds":                                    "Sons",
-		"speaker_gain":                              "Ganancia do altofalante",
-		"speakers":                                  "Altofalantes",
-		"ssh_keys":                                  "Claves SSH",
-		"stop":                                      "Parar",
-		"sunrise_alarm":                             "Acesa ata a alarma das %s",
-		"sunrise_default_description":               "Antes das alarmas que non escollen a súa propia",
-		"sunrise_ringing":                           "Acesa mentres soa a alarma",
-		"sunrise_rising":                            "A luz está a subir agora",
-		"sunrise_snooze":                            "Acesa ata o aprazamento das %s",
-		"sunrise_until":                             "Acesa ata as %s",
-		"sunrise_skip_action":                       "Skip",
-		"sunrise_skip_done":                         "Skipped: the alarm at %s",
-		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
-		"talk_on_the_camera_page":                   "Falar na páxina da cámara",
-		"talk_through_cameras":                      "Falar a través das cámaras",
-		"baby_monitor":                              "Vixiabebés",
-		"room_sound_in_a_browser_with_the_link":     "O son da sala nun navegador, co enlace",
-		"record_takes_of_a_word":                    "Gravar tomas dunha palabra",
-		"on_the_setup_page_started_here":            "Pedido na páxina de configuración, iniciado aquí",
-		"tap_lifts_the_night_light":                 "Un toque quita a luz de noite",
-		"night_clock_next_up_and_alerts":            "O reloxo de noite mostra Seguinte e as notificacións",
-		"dim_red_and_no_brighter":                   "En vermello tenue; a pantalla non brilla máis",
-		"tap_on_the_clock":                          "Toque no reloxo",
-		"tap_to_go_back":                            "Toca para volver",
-		"the_mute_button_does_this_too":             "O botón de silencio tamén fai isto",
-		"the_nws_s_alerts_for_home_in_the_u_s":      "Os avisos do NWS para a casa, nos EUA",
-		"the_words_in_time_looked_up_at_lrclib":     "A letra ao compás, buscada en LRCLIB",
-		"theme_personalize":                         "Fai teu o tema",
-		"this_version":                              "Esta é a %s",
-		"time_per_photo":                            "Tempo por foto",
-		"time_zone":                                 "Fuso horario",
-		"timer":                                     "Temporizador",
-		"timer_and_alarm":                           "Temporizador e alarma",
-		"timer_suffix":                              " (temporizador)",
-		"timers":                                    "Temporizadores",
-		"today":                                     "Hoxe",
-		"tomorrow":                                  "Mañá",
-		"treble":                                    "Agudos",
-		"turn_screen":                               "Pantalla da quenda",
-		"ui_1_hour":                                 "1 hora",
-		"ui_1_hour_d_minutes":                       "1 hora e %d minutos",
+		"reset":                                     "Restablecer",
+		"reset_for_someone_else":                    "Restablecer para outra persoa",
+		"clears_it_and_start_setting_it_up_again":             "Borra todo e volve comezar a configuración",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, alarmas, todo: toca de novo",
+		"restart":                               "Reiniciar",
+		"said_as_it_rings":                      "Dito mentres soa",
+		"same_as_default":                       "Igual que o predeterminado (%s)",
+		"screen_language":                       "Idioma da pantalla",
+		"screen_off_when_nobody_is_near":        "Pantalla apagada cando non hai ninguén preto",
+		"screen_on_the_network":                 "Pantalla na rede",
+		"screensaver":                           "Protector de pantalla",
+		"seconds_option":                        "%d segundos",
+		"sent_from_home_assistant":              "Enviado desde Home Assistant",
+		"settings":                              "Axustes",
+		"settings_lock":                         "Bloqueo dos axustes",
+		"shown_as_you_change_it_at_night":       "Amósase mentres o cambias, de noite",
+		"shown_with_the_clock":                  "Amósase co reloxo",
+		"silenced":                              "Silenciado",
+		"skin":                                  "Aparencia",
+		"skin_keeps":                            "Gárdase para cando a aparencia estea desactivada",
+		"sleep_timer":                           "Temporizador de apagado",
+		"slideshow":                             "Presentación de fotos",
+		"snooze_d_min":                          "Adiar %d min",
+		"sounds":                                "Sons",
+		"speaker_gain":                          "Ganancia do altofalante",
+		"speakers":                              "Altofalantes",
+		"ssh_keys":                              "Claves SSH",
+		"stop":                                  "Parar",
+		"sunrise_alarm":                         "Acesa ata a alarma das %s",
+		"sunrise_default_description":           "Antes das alarmas que non escollen a súa propia",
+		"sunrise_ringing":                       "Acesa mentres soa a alarma",
+		"sunrise_rising":                        "A luz está a subir agora",
+		"sunrise_snooze":                        "Acesa ata o aprazamento das %s",
+		"sunrise_until":                         "Acesa ata as %s",
+		"sunrise_skip_action":                   "Skip",
+		"sunrise_skip_done":                     "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                  "Not skipped: the alarm at %s",
+		"talk_on_the_camera_page":               "Falar na páxina da cámara",
+		"talk_through_cameras":                  "Falar a través das cámaras",
+		"baby_monitor":                          "Vixiabebés",
+		"room_sound_in_a_browser_with_the_link": "O son da sala nun navegador, co enlace",
+		"record_takes_of_a_word":                "Gravar tomas dunha palabra",
+		"on_the_setup_page_started_here":        "Pedido na páxina de configuración, iniciado aquí",
+		"tap_lifts_the_night_light":             "Un toque quita a luz de noite",
+		"night_clock_next_up_and_alerts":        "O reloxo de noite mostra Seguinte e as notificacións",
+		"dim_red_and_no_brighter":               "En vermello tenue; a pantalla non brilla máis",
+		"tap_on_the_clock":                      "Toque no reloxo",
+		"tap_to_go_back":                        "Toca para volver",
+		"the_mute_button_does_this_too":         "O botón de silencio tamén fai isto",
+		"the_nws_s_alerts_for_home_in_the_u_s":  "Os avisos do NWS para a casa, nos EUA",
+		"the_words_in_time_looked_up_at_lrclib": "A letra ao compás, buscada en LRCLIB",
+		"theme_personalize":                     "Fai teu o tema",
+		"this_version":                          "Esta é a %s",
+		"time_per_photo":                        "Tempo por foto",
+		"time_zone":                             "Fuso horario",
+		"timer":                                 "Temporizador",
+		"timer_and_alarm":                       "Temporizador e alarma",
+		"timer_suffix":                          " (temporizador)",
+		"timers":                                "Temporizadores",
+		"today":                                 "Hoxe",
+		"tomorrow":                              "Mañá",
+		"treble":                                "Agudos",
+		"turn_screen":                           "Pantalla da quenda",
+		"ui_1_hour":                             "1 hora",
+		"ui_1_hour_d_minutes":                   "1 hora e %d minutos",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Unha cara para quen teña que mirar para el",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Unha paisaxe segundo o tempo, en lugar de fotos",
 		"ui_a_pin_before_most_settings_change":              "Un PIN antes de cambiar a maioría dos axustes",
@@ -2402,8 +3067,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Máis",
 		"ui_muted":                              "Silenciado",
 		"ui_name_weather_updates_and_restart":   "Nome, tempo, actualizacións e reinicio",
-		"ui_needs_a_key_the_setup_page_connections":       "Precisa unha clave: páxina de configuración, Conexións",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Precisa unha clave de configuración: páxina de configuración, Conexións",
+		"ui_needs_a_key_the_setup_page_connections":       "Precisa unha clave: páxina de configuración, Rede",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Precisa unha clave de configuración: páxina de configuración, Rede",
 		"ui_needs_speaker_eq_which_is_off":                "Precisa o ecualizador do altofalante, que está desactivado",
 		"ui_never":                                        "Nunca",
 		"ui_new_alarm":                                    "Nova alarma",
@@ -2707,8 +3372,159 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":     "Paso %d de %d",
 		"ui_mealie_previous":    "Anterior",
 		"ui_mealie_no_steps":    "Esta receita non ten ingredientes nin pasos.",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "RECORDATORIO",
+		"card_notification":               "NOTIFICACIÓN",
+		"card_drag_for_more":              "ARRASTRA PARA VER MÁIS",
+		"tap_again":                       "Toca de novo",
+		"tap_again_s":                     "Toca de novo: %s",
+		"camera_button_sent":              "Enviado",
+		"camera_button_no_home_assistant": "Sen Home Assistant",
+		"connecting_to_the_dashboard":     "Conectando co panel…",
+		"loading_the_dashboard":           "Cargando o panel…",
+		"obs_is_not_set_up":               "OBS non está configurado: páxina de configuración → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenciado · preme un botón de volume ou de micrófono para adiar %d min",
 	},
 	"it": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Tocca un punto qualsiasi per iniziare",
+		"firstrun_tap_to_finish":        "Tocca un punto qualsiasi per finire",
+		"firstrun_hello":                "Ciao",
+		"firstrun_this_is_s":            "Questo è %s.",
+		"firstrun_welcome_say":          "Questo è %s. Di' «%s» e fai una domanda.",
+		"firstrun_the_wake_word":        "la parola di attivazione",
+		"firstrun_welcome_settings":     "Scorri dall'alto in basso per le impostazioni: Wi-Fi, Bluetooth, telecamere, radio, temi.",
+		"firstrun_welcome_move":         "Di' «mostra la porta d'ingresso» o «torna all'orologio» per cambiare schermata.",
+		"firstrun_welcome_home":         "Home Assistant può mostrare qui telecamere, dashboard e foto.",
+		"firstrun_step_d_of_d":          "Passo %d di %d",
+		"firstrun_name_this_device":     "Dai un nome al dispositivo",
+		"firstrun_the_room_it_is_in":    "La stanza in cui si trova",
+		"firstrun_save":                 "Salva",
+		"firstrun_needs_a_name":         "Il dispositivo ha bisogno di un nome",
+		"firstrun_type_a_room":          "Scrivi una stanza, o Annulla",
+		"firstrun_room_not_saved":       "Impossibile salvare la stanza",
+		"firstrun_other_room":           "Altra",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "Non è ancora su una rete. Scegli il tuo Wi-Fi per connettere %s.",
+		"firstrun_wifi_needed":          "Tutto ciò che segue ne ha bisogno: Home Assistant, il meteo, la radio e gli aggiornamenti.",
+		"firstrun_wifi_connected_to":    "Connesso a %s.",
+		"firstrun_wifi_address":         "Il suo indirizzo sulla rete è %s.",
+		"firstrun_title_zone":           "Fuso orario",
+		"firstrun_zone_is":              "Fuso orario: %s.",
+		"firstrun_zone_clock":           "L'orologio segna %s. Cambia il fuso se non è l'ora di qui.",
+		"firstrun_title_name":           "Nome e stanza",
+		"firstrun_name_is":              "Nome: %s.",
+		"firstrun_renaming":             "Riavvio per usare il nuovo nome…",
+		"firstrun_room_from_home":       "La sua stanza è impostata in Home Assistant.",
+		"firstrun_name_which_room":      "Nome: %s. In quale stanza si trova?",
+		"firstrun_name_and_room":        "Nome: %s. Stanza: %s.",
+		"firstrun_home_added_going":     "Home Assistant l'ha aggiunto. Si prosegue…",
+		"firstrun_home_added":           "Home Assistant l'ha aggiunto.",
+		"firstrun_home_no_network":      "Non è ancora su una rete, quindi Home Assistant non può raggiungerlo.",
+		"firstrun_home_add_it":          "Aggiungilo in Home Assistant: compare in Impostazioni, Dispositivi e servizi. Niente da scrivere.",
+		"firstrun_home_unkeyed_note":    "Home Assistant invia al dispositivo la sua chiave senza cifratura, quindi aggiungilo su una rete di cui ti fidi. Richiede Home Assistant 2026.9 o successivo.",
+		"firstrun_home_open_d":          "Aperto ancora per %d minuti.",
+		"firstrun_home_adopt_note":      "Home Assistant invia al dispositivo la sua nuova chiave senza cifratura, quindi fallo solo su una rete di cui ti fidi. Richiede Home Assistant 2026.9 o successivo.",
+		"firstrun_home_esphome":         "ESPHome: %s, porta 6053, con questa chiave:",
+		"firstrun_home_choose":          "Aggiungilo a Home Assistant senza scrivere nulla, o scrivi la sua chiave.",
+		"firstrun_home_alone":           "Oppure usalo da solo: sveglie, timer, radio e orologio funzionano senza Home Assistant.",
+		"firstrun_title_updates":        "Aggiornamenti",
+		"firstrun_updates_looking":      "Ricerca di un aggiornamento…",
+		"firstrun_updates_current":      "È aggiornato.",
+		"firstrun_updates_tonight":      "TECHO5 %s è pronto. Si installa stanotte, dopo la configurazione.",
+		"firstrun_updates_ready":        "TECHO5 %s è pronto: installalo da Impostazioni, Generale.",
+		"firstrun_updates_auto":         "Gli aggiornamenti si installano da soli di notte (dalle 2 alle 5), quando non suona nulla.",
+		"firstrun_updates_manual":       "Gli aggiornamenti aspettano che tu li installi.",
+		"firstrun_title_sound":          "Prova audio",
+		"firstrun_sound_played":         "È appena stato riprodotto un breve suono. L'hai sentito?",
+		"firstrun_next":                 "Avanti",
+		"firstrun_change":               "Cambia",
+		"firstrun_not_now":              "Non ora",
+		"firstrun_choose_wifi":          "Scegli Wi-Fi",
+		"firstrun_change_name":          "Cambia nome",
+		"firstrun_skip_for_now":         "Salta per ora",
+		"firstrun_use_it_on_its_own":    "Usalo da solo",
+		"firstrun_on_its_own":           "Da solo",
+		"firstrun_add_it_instead":       "Aggiungilo invece",
+		"firstrun_type_the_key":         "Con chiave",
+		"firstrun_add_it":               "Aggiungilo",
+		"firstrun_leave_them_off":       "Disattivali",
+		"firstrun_turn_them_on":         "Attivali",
+		"firstrun_play_again":           "Riascolta",
+		"firstrun_yes":                  "Sì",
+		"firstrun_on_a_phone":           "Su un telefono",
+		"firstrun_choose_a_room":        "Scegli una stanza",
+		"firstrun_room_s":               "Stanza: %s",
+		"firstrun_show_the_key":         "Mostra la chiave",
+		"firstrun_tap_to_go_back":       "Tocca per tornare indietro",
+		"firstrun_phone_at":             "Su un telefono: %s:%d/setup",
+		"firstrun_spot_steps":           "Pochi passi per configurarlo.",
+		"firstrun_spot_tap_to_begin":    "Tocca per iniziare.",
+		"firstrun_title_done":           "Tutto pronto",
+		"firstrun_spot_done":            "%s è configurato.",
+		"firstrun_spot_menu":            "Tieni premuto lo schermo per il menu.",
+		"firstrun_spot_tap_to_finish":   "Tocca per finire.",
+		"firstrun_spot_on":              "Su %s.",
+		"firstrun_spot_at":              "Indirizzo: %s.",
+		"firstrun_spot_no_network":      "Nessuna rete.",
+		"firstrun_spot_install_again":   "Reinstalla con il tuo Wi-Fi per connetterlo.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "L'orologio segna %s.",
+		"firstrun_title_name_only":      "Nome",
+		"firstrun_spot_restarting":      "Riavvio per usare",
+		"firstrun_spot_new_name":        "il nuovo nome…",
+		"firstrun_spot_name":            "Nome: %s",
+		"firstrun_going_on":             "Si prosegue…",
+		"firstrun_spot_home_no_network": "Non è ancora su una rete.",
+		"firstrun_spot_home_add":        "Aggiungilo in Home Assistant: Dispositivi e servizi. Niente da scrivere.",
+		"firstrun_spot_trust":           "Solo su una rete di cui ti fidi.",
+		"firstrun_spot_open_d":          "Aperto ancora %d minuti. Solo su una rete di cui ti fidi.",
+		"firstrun_spot_home_choose":     "Aggiungilo senza scrivere nulla,",
+		"firstrun_spot_home_choose_key": "o con la sua chiave.",
+		"firstrun_spot_tonight":         "%s si installa stanotte.",
+		"firstrun_spot_ready":           "%s è pronto.",
+		"firstrun_spot_manual":          "Gli aggiornamenti ti aspettano.",
+		"firstrun_spot_auto":            "Aggiornamenti di notte.",
+		"firstrun_spot_hear":            "L'hai sentito?",
+
+		"nextup_label":          "Prossimo:",
+		"popup_started":         "Iniziato",
+		"popup_in_a_minute":     "Tra un minuto",
+		"popup_in_d_minutes":    "Tra %d minuti",
+		"popup_in_an_hour":      "Tra un'ora",
+		"popup_at_s":            "Alle %s",
+		"reminder_untitled":     "Promemoria",
+		"hint_no_start":         "Home Assistant non ha avviato lo stream. L'opzione \"Consenti al dispositivo di eseguire azioni di Home Assistant\" è attiva per questo dispositivo?",
+		"hint_favorite":         "Impossibile salvare la stazione. Home Assistant ha bisogno di uno script chiamato script.radio_favorite_add_station.",
+		"hint_no_home":          "Home Assistant non è collegato a questo dispositivo, quindi la stazione non è stata avviata.",
+		"hint_play_failed":      "Home Assistant non è riuscito a riprodurre quella stazione.",
+		"hint_dropping":         "Lo stream continua a cadere, quindi la stazione è stata spenta.",
+		"clock_style_classic":   "Classico",
+		"clock_style_big":       "Grande",
+		"clock_style_flip":      "A palette",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analogico",
+		"clock_style_words":     "Parole",
+		"clock_style_sun":       "Sole",
+		"clock_style_dashboard": "Dashboard",
+		"clock_style_binary":    "Binario",
+		"clock_style_world":     "Mondo",
+		"clock_style_agenda":    "Agenda",
+		"clock_style_glow":      "Bagliore",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Pila",
+		"clock_style_overlap":   "Sovrapposto",
+		"call_muted":            "Micro disattivato",
+		"weather_alert":         "ALLERTA METEO",
+		"volume_caps":           "VOLUME",
+		"timer_left_s":          "Timer %s",
+		"music_playing":         "♪ in riproduzione",
+		"music_paused":          "♪ in pausa",
+
 		"drawer_recording":           "In ascolto",
 		"drawer_talk":                "Parla",
 		"drawer_end_talk":            "Termina la conversazione  %d:%02d",
@@ -2898,6 +3714,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Testo",
 		"microphone":                    "Microfono",
 		"microphone_off":                "MICROFONO DISATTIVATO",
+		"no_wifi":                       "NESSUN WI-FI",
+		"no_home_assistant":             "NESSUN HOME ASSISTANT",
+		"voice_no_home":                 "Home Assistant non è raggiungibile",
+		"voice_no_assistant":            "Nessun assistente vocale configurato",
+		"voice_timeout":                 "Nessuna risposta in tempo",
+		"voice_failed":                  "L'assistente non ha potuto rispondere",
+		"not_live":                      "NON IN DIRETTA",
+		"deck_failed":                   "Non ha funzionato",
+		"deck_obs_away":                 "OBS non è connesso",
+		"deck_obs_refused":              "OBS ha rifiutato",
+		"deck_obs_silent":               "OBS non ha risposto",
+		"deck_pc_silent":                "%s non risponde",
+		"deck_pc_unpaired":              "%s non è associato",
+		"deck_pc_key":                   "La chiave di %s non corrisponde",
 		"minutes_before":                "%d minuti prima",
 		"month":                         "Mese",
 		"music":                         "Musica",
@@ -3032,68 +3862,71 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Lettura del calendario…",
 		"remote_api":                                "API per script",
 		"repeat":                                    "Ripeti",
-		"restart":                                   "Riavvia",
-		"said_as_it_rings":                          "Pronunciato mentre la sveglia suona",
-		"same_as_default":                           "Come il valore predefinito (%s)",
-		"screen_language":                           "Lingua dello schermo",
-		"screen_off_when_nobody_is_near":            "Spegni lo schermo quando non c'è nessuno nelle vicinanze",
-		"screen_on_the_network":                     "Schermo accessibile in rete",
-		"screensaver":                               "Salvaschermo",
-		"seconds_option":                            "%d secondi",
-		"sent_from_home_assistant":                  "Inviato da Home Assistant",
-		"settings":                                  "Impostazioni",
-		"settings_lock":                             "Blocco delle impostazioni",
-		"shown_as_you_change_it_at_night":           "Le modifiche vengono mostrate anche di notte",
-		"shown_with_the_clock":                      "Mostrato insieme all'orologio",
-		"silenced":                                  "Silenziato",
-		"silenced_press_again_to_snooze_d_min":      "Silenziato · premi di nuovo per posticipare di %d min",
-		"skin":                                      "Aspetto grafico",
-		"skin_keeps":                                "Mantenuto quando l'aspetto grafico è disattivato",
-		"sleep_timer":                               "Timer di spegnimento",
-		"slideshow":                                 "Presentazione",
-		"snooze_d_min":                              "Posticipa di %d min",
-		"sounds":                                    "Suoni",
-		"speaker_gain":                              "Guadagno dell'altoparlante",
-		"speakers":                                  "Altoparlanti",
-		"ssh_keys":                                  "Chiavi SSH",
-		"stop":                                      "Ferma",
-		"sunrise_alarm":                             "Luce accesa fino alla prossima sveglia (%s)",
-		"sunrise_default_description":               "Vale per le sveglie senza una durata di illuminazione personalizzata",
-		"sunrise_ringing":                           "Luce accesa mentre la sveglia suona",
-		"sunrise_rising":                            "Lo schermo si sta illuminando gradualmente",
-		"sunrise_snooze":                            "Luce accesa fino alla fine del posticipo, alle %s",
-		"sunrise_until":                             "Luce accesa fino alle %s",
-		"sunrise_skip_action":                       "Skip",
-		"sunrise_skip_done":                         "Skipped: the alarm at %s",
-		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
-		"talk_on_the_camera_page":                   "Parla dalla pagina della telecamera",
-		"talk_through_cameras":                      "Parla attraverso le telecamere",
-		"baby_monitor":                              "Baby monitor",
-		"room_sound_in_a_browser_with_the_link":     "Il suono della stanza in un browser, con il link",
-		"record_takes_of_a_word":                    "Registra una parola più volte",
-		"on_the_setup_page_started_here":            "Richiesta dalla pagina di configurazione, avviata qui",
-		"tap_lifts_the_night_light":                 "Tocca per riattivare lo schermo",
-		"night_clock_next_up_and_alerts":            "L'orologio notturno mostra Prossimo evento e le notifiche",
-		"dim_red_and_no_brighter":                   "In rosso tenue; lo schermo non diventa più luminoso",
-		"tap_on_the_clock":                          "Azione al tocco dell'orologio",
-		"tap_to_go_back":                            "Tocca per tornare indietro",
-		"the_mute_button_does_this_too":             "Anche il pulsante di silenziamento fa questo",
-		"the_nws_s_alerts_for_home_in_the_u_s":      "Avvisi meteo del NWS per la località negli Stati Uniti",
-		"the_words_in_time_looked_up_at_lrclib":     "Testo sincronizzato recuperato da LRCLIB",
-		"theme_personalize":                         "Personalizza il tema",
-		"this_version":                              "Versione corrente: %s",
-		"time_per_photo":                            "Durata di ogni foto",
-		"time_zone":                                 "Fuso orario",
-		"timer":                                     "Timer",
-		"timer_and_alarm":                           "Timer e sveglia",
-		"timer_suffix":                              " timer",
-		"timers":                                    "Timer",
-		"today":                                     "Oggi",
-		"tomorrow":                                  "Domani",
-		"treble":                                    "Alti",
-		"turn_screen":                               "Stile della schermata vocale",
-		"ui_1_hour":                                 "1 ora",
-		"ui_1_hour_d_minutes":                       "1 ora %d minuti",
+		"reset":                                     "Ripristina",
+		"reset_for_someone_else":                    "Ripristina per qualcun altro",
+		"clears_it_and_start_setting_it_up_again":             "Cancella tutto e avvia di nuovo la configurazione",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nome, Home Assistant, sveglie, tutto: tocca di nuovo",
+		"restart":                               "Riavvia",
+		"said_as_it_rings":                      "Pronunciato mentre la sveglia suona",
+		"same_as_default":                       "Come il valore predefinito (%s)",
+		"screen_language":                       "Lingua dello schermo",
+		"screen_off_when_nobody_is_near":        "Spegni lo schermo quando non c'è nessuno nelle vicinanze",
+		"screen_on_the_network":                 "Schermo accessibile in rete",
+		"screensaver":                           "Salvaschermo",
+		"seconds_option":                        "%d secondi",
+		"sent_from_home_assistant":              "Inviato da Home Assistant",
+		"settings":                              "Impostazioni",
+		"settings_lock":                         "Blocco delle impostazioni",
+		"shown_as_you_change_it_at_night":       "Le modifiche vengono mostrate anche di notte",
+		"shown_with_the_clock":                  "Mostrato insieme all'orologio",
+		"silenced":                              "Silenziato",
+		"skin":                                  "Aspetto grafico",
+		"skin_keeps":                            "Mantenuto quando l'aspetto grafico è disattivato",
+		"sleep_timer":                           "Timer di spegnimento",
+		"slideshow":                             "Presentazione",
+		"snooze_d_min":                          "Posticipa di %d min",
+		"sounds":                                "Suoni",
+		"speaker_gain":                          "Guadagno dell'altoparlante",
+		"speakers":                              "Altoparlanti",
+		"ssh_keys":                              "Chiavi SSH",
+		"stop":                                  "Ferma",
+		"sunrise_alarm":                         "Luce accesa fino alla prossima sveglia (%s)",
+		"sunrise_default_description":           "Vale per le sveglie senza una durata di illuminazione personalizzata",
+		"sunrise_ringing":                       "Luce accesa mentre la sveglia suona",
+		"sunrise_rising":                        "Lo schermo si sta illuminando gradualmente",
+		"sunrise_snooze":                        "Luce accesa fino alla fine del posticipo, alle %s",
+		"sunrise_until":                         "Luce accesa fino alle %s",
+		"sunrise_skip_action":                   "Skip",
+		"sunrise_skip_done":                     "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                  "Not skipped: the alarm at %s",
+		"talk_on_the_camera_page":               "Parla dalla pagina della telecamera",
+		"talk_through_cameras":                  "Parla attraverso le telecamere",
+		"baby_monitor":                          "Baby monitor",
+		"room_sound_in_a_browser_with_the_link": "Il suono della stanza in un browser, con il link",
+		"record_takes_of_a_word":                "Registra una parola più volte",
+		"on_the_setup_page_started_here":        "Richiesta dalla pagina di configurazione, avviata qui",
+		"tap_lifts_the_night_light":             "Tocca per riattivare lo schermo",
+		"night_clock_next_up_and_alerts":        "L'orologio notturno mostra Prossimo evento e le notifiche",
+		"dim_red_and_no_brighter":               "In rosso tenue; lo schermo non diventa più luminoso",
+		"tap_on_the_clock":                      "Azione al tocco dell'orologio",
+		"tap_to_go_back":                        "Tocca per tornare indietro",
+		"the_mute_button_does_this_too":         "Anche il pulsante di silenziamento fa questo",
+		"the_nws_s_alerts_for_home_in_the_u_s":  "Avvisi meteo del NWS per la località negli Stati Uniti",
+		"the_words_in_time_looked_up_at_lrclib": "Testo sincronizzato recuperato da LRCLIB",
+		"theme_personalize":                     "Personalizza il tema",
+		"this_version":                          "Versione corrente: %s",
+		"time_per_photo":                        "Durata di ogni foto",
+		"time_zone":                             "Fuso orario",
+		"timer":                                 "Timer",
+		"timer_and_alarm":                       "Timer e sveglia",
+		"timer_suffix":                          " timer",
+		"timers":                                "Timer",
+		"today":                                 "Oggi",
+		"tomorrow":                              "Domani",
+		"treble":                                "Alti",
+		"turn_screen":                           "Stile della schermata vocale",
+		"ui_1_hour":                             "1 ora",
+		"ui_1_hour_d_minutes":                   "1 ora %d minuti",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Una faccina sul sole, per chi lo guarda",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Mostra un paesaggio a tema meteo al posto delle foto",
 		"ui_a_pin_before_most_settings_change":              "Richiedi un PIN per quasi tutte le impostazioni",
@@ -3192,8 +4025,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Altro",
 		"ui_muted":                              "Audio disattivato",
 		"ui_name_weather_updates_and_restart":   "Nome, meteo, aggiornamenti e riavvio",
-		"ui_needs_a_key_the_setup_page_connections":       "Richiede una chiave: pagina di configurazione, Connessioni",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Richiede una chiave di configurazione: pagina di configurazione, Connessioni",
+		"ui_needs_a_key_the_setup_page_connections":       "Richiede una chiave: pagina di configurazione, Rete",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Richiede una chiave di configurazione: pagina di configurazione, Rete",
 		"ui_needs_speaker_eq_which_is_off":                "Richiede l'equalizzazione dell'altoparlante, attualmente disattivata",
 		"ui_never":                                        "Mai",
 		"ui_new_alarm":                                    "Nuova sveglia",
@@ -3502,221 +4335,1869 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":     "Passo %d di %d",
 		"ui_mealie_previous":    "Precedente",
 		"ui_mealie_no_steps":    "Questa ricetta non prevede né ingredienti né passaggi.",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "PROMEMORIA",
+		"card_notification":               "NOTIFICA",
+		"card_drag_for_more":              "TRASCINA PER IL RESTO",
+		"tap_again":                       "Tocca di nuovo",
+		"tap_again_s":                     "Tocca di nuovo: %s",
+		"camera_button_sent":              "Inviato",
+		"camera_button_no_home_assistant": "Nessun Home Assistant",
+		"connecting_to_the_dashboard":     "Connessione alla dashboard…",
+		"loading_the_dashboard":           "Caricamento della dashboard…",
+		"obs_is_not_set_up":               "OBS non è configurato: pagina di configurazione → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Silenziato · premi un tasto del volume o del microfono per posticipare di %d min",
 	},
 	"nl": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Tik ergens om te beginnen",
+		"firstrun_tap_to_finish":        "Tik ergens om af te ronden",
+		"firstrun_hello":                "Hallo",
+		"firstrun_this_is_s":            "Dit is %s.",
+		"firstrun_welcome_say":          "Dit is %s. Zeg \"%s\" en vraag wat je wilt.",
+		"firstrun_the_wake_word":        "het wekwoord",
+		"firstrun_welcome_settings":     "Veeg van boven naar beneden voor de instellingen: wifi, Bluetooth, camera's, radio, thema's.",
+		"firstrun_welcome_move":         "Zeg \"toon de voordeur\" of \"terug naar de klok\" om het scherm te wisselen.",
+		"firstrun_welcome_home":         "Home Assistant kan hier camera's, dashboards en foto's tonen.",
+		"firstrun_step_d_of_d":          "Stap %d van %d",
+		"firstrun_name_this_device":     "Geef dit apparaat een naam",
+		"firstrun_the_room_it_is_in":    "De kamer waar het staat",
+		"firstrun_save":                 "Opslaan",
+		"firstrun_needs_a_name":         "Het apparaat heeft een naam nodig",
+		"firstrun_type_a_room":          "Typ een kamer, of Annuleren",
+		"firstrun_room_not_saved":       "Kan de kamer niet opslaan",
+		"firstrun_other_room":           "Andere",
+		"firstrun_title_wifi":           "Wifi",
+		"firstrun_wifi_none":            "Nog niet op een netwerk. Kies je wifi om %s te verbinden.",
+		"firstrun_wifi_needed":          "Alles hierna heeft het nodig: Home Assistant, het weer, de radio en updates.",
+		"firstrun_wifi_connected_to":    "Verbonden met %s.",
+		"firstrun_wifi_address":         "Het adres op het netwerk is %s.",
+		"firstrun_title_zone":           "Tijdzone",
+		"firstrun_zone_is":              "Tijdzone: %s.",
+		"firstrun_zone_clock":           "De klok zegt %s. Wijzig de zone als dat hier niet de tijd is.",
+		"firstrun_title_name":           "Naam en kamer",
+		"firstrun_name_is":              "Naam: %s.",
+		"firstrun_renaming":             "Herstarten om de nieuwe naam te gebruiken…",
+		"firstrun_room_from_home":       "De kamer wordt in Home Assistant ingesteld.",
+		"firstrun_name_which_room":      "Naam: %s. In welke kamer staat het?",
+		"firstrun_name_and_room":        "Naam: %s. Kamer: %s.",
+		"firstrun_home_added_going":     "Home Assistant heeft het toegevoegd. Verder…",
+		"firstrun_home_added":           "Home Assistant heeft het toegevoegd.",
+		"firstrun_home_no_network":      "Nog niet op een netwerk, dus Home Assistant kan het niet bereiken.",
+		"firstrun_home_add_it":          "Voeg het toe in Home Assistant: het verschijnt onder Instellingen, Apparaten & diensten. Niets te typen.",
+		"firstrun_home_unkeyed_note":    "Home Assistant stuurt het apparaat zijn sleutel onversleuteld, dus voeg het toe op een netwerk dat je vertrouwt. Vereist Home Assistant 2026.9 of nieuwer.",
+		"firstrun_home_open_d":          "Nog %d minuten open.",
+		"firstrun_home_adopt_note":      "Home Assistant stuurt het apparaat zijn nieuwe sleutel onversleuteld, dus doe dit alleen op een netwerk dat je vertrouwt. Vereist Home Assistant 2026.9 of nieuwer.",
+		"firstrun_home_esphome":         "ESPHome: %s, poort 6053, met deze sleutel:",
+		"firstrun_home_choose":          "Voeg het toe aan Home Assistant zonder iets te typen, of typ de sleutel.",
+		"firstrun_home_alone":           "Of gebruik het zelfstandig: wekkers, timers, de radio en de klok werken zonder Home Assistant.",
+		"firstrun_title_updates":        "Updates",
+		"firstrun_updates_looking":      "Zoeken naar een update…",
+		"firstrun_updates_current":      "Het is up-to-date.",
+		"firstrun_updates_tonight":      "TECHO5 %s staat klaar. Het wordt vannacht geïnstalleerd, na het instellen.",
+		"firstrun_updates_ready":        "TECHO5 %s staat klaar: installeer het via Instellingen, Algemeen.",
+		"firstrun_updates_auto":         "Updates installeren zichzelf 's nachts (2 tot 5 uur), als er niets speelt.",
+		"firstrun_updates_manual":       "Updates wachten tot je ze installeert.",
+		"firstrun_title_sound":          "Geluidstest",
+		"firstrun_sound_played":         "Er klonk net een kort geluid. Hoorde je het?",
+		"firstrun_next":                 "Volgende",
+		"firstrun_change":               "Wijzigen",
+		"firstrun_not_now":              "Niet nu",
+		"firstrun_choose_wifi":          "Wifi kiezen",
+		"firstrun_change_name":          "Naam wijzigen",
+		"firstrun_skip_for_now":         "Nu overslaan",
+		"firstrun_use_it_on_its_own":    "Zelfstandig gebruiken",
+		"firstrun_on_its_own":           "Zelfstandig",
+		"firstrun_add_it_instead":       "Toch toevoegen",
+		"firstrun_type_the_key":         "Sleutel",
+		"firstrun_add_it":               "Toevoegen",
+		"firstrun_leave_them_off":       "Uitzetten",
+		"firstrun_turn_them_on":         "Aanzetten",
+		"firstrun_play_again":           "Nog eens",
+		"firstrun_yes":                  "Ja",
+		"firstrun_on_a_phone":           "Op een telefoon",
+		"firstrun_choose_a_room":        "Kies een kamer",
+		"firstrun_room_s":               "Kamer: %s",
+		"firstrun_show_the_key":         "Sleutel tonen",
+		"firstrun_tap_to_go_back":       "Tik om terug te gaan",
+		"firstrun_phone_at":             "Op een telefoon: %s:%d/setup",
+		"firstrun_spot_steps":           "Een paar stappen stellen het in.",
+		"firstrun_spot_tap_to_begin":    "Tik om te beginnen.",
+		"firstrun_title_done":           "Klaar",
+		"firstrun_spot_done":            "%s is ingesteld.",
+		"firstrun_spot_menu":            "Houd het scherm vast voor het menu.",
+		"firstrun_spot_tap_to_finish":   "Tik om af te ronden.",
+		"firstrun_spot_on":              "Op %s.",
+		"firstrun_spot_at":              "Adres: %s.",
+		"firstrun_spot_no_network":      "Geen netwerk.",
+		"firstrun_spot_install_again":   "Installeer opnieuw met je wifi om het te verbinden.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "De klok zegt %s.",
+		"firstrun_title_name_only":      "Naam",
+		"firstrun_spot_restarting":      "Herstarten voor",
+		"firstrun_spot_new_name":        "de nieuwe naam…",
+		"firstrun_spot_name":            "Naam: %s",
+		"firstrun_going_on":             "Verder…",
+		"firstrun_spot_home_no_network": "Nog niet op een netwerk.",
+		"firstrun_spot_home_add":        "Voeg het toe in Home Assistant: Apparaten & diensten. Niets te typen.",
+		"firstrun_spot_trust":           "Alleen op een netwerk dat je vertrouwt.",
+		"firstrun_spot_open_d":          "Nog %d minuten open. Alleen op een netwerk dat je vertrouwt.",
+		"firstrun_spot_home_choose":     "Voeg het toe zonder te typen,",
+		"firstrun_spot_home_choose_key": "of met de sleutel.",
+		"firstrun_spot_tonight":         "%s wordt vannacht geïnstalleerd.",
+		"firstrun_spot_ready":           "%s staat klaar.",
+		"firstrun_spot_manual":          "Updates wachten op jou.",
+		"firstrun_spot_auto":            "Updates 's nachts.",
+		"firstrun_spot_hear":            "Hoorde je dat?",
+
+		"nextup_label":          "Volgende:",
+		"popup_started":         "Begonnen",
+		"popup_in_a_minute":     "Over een minuut",
+		"popup_in_d_minutes":    "Over %d minuten",
+		"popup_in_an_hour":      "Over een uur",
+		"popup_at_s":            "Om %s",
+		"reminder_untitled":     "Herinnering",
+		"hint_no_start":         "Home Assistant heeft de stream niet gestart. Staat \"Het apparaat toestaan Home Assistant-acties uit te voeren\" aan voor dit apparaat?",
+		"hint_favorite":         "De zender kon niet worden opgeslagen. Home Assistant heeft een script nodig met de naam script.radio_favorite_add_station.",
+		"hint_no_home":          "Home Assistant is niet met dit apparaat verbonden, dus de zender is niet gestart.",
+		"hint_play_failed":      "Home Assistant kon die zender niet afspelen.",
+		"hint_dropping":         "De stream valt steeds weg, dus de zender is uit gelaten.",
+		"clock_style_classic":   "Klassiek",
+		"clock_style_big":       "Groot",
+		"clock_style_flip":      "Flip",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analoog",
+		"clock_style_words":     "Woorden",
+		"clock_style_sun":       "Zon",
+		"clock_style_dashboard": "Dashboard",
+		"clock_style_binary":    "Binair",
+		"clock_style_world":     "Wereld",
+		"clock_style_agenda":    "Agenda",
+		"clock_style_glow":      "Gloed",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Stapel",
+		"clock_style_overlap":   "Overlap",
+		"call_muted":            "Gedempt",
+		"weather_alert":         "WEERWAARSCHUWING",
+		"volume_caps":           "VOLUME",
+		"timer_left_s":          "Timer %s",
+		"music_playing":         "♪ speelt",
+		"music_paused":          "♪ gepauzeerd",
+
+		// The header pill and the voice failure line (link_status.go, voice)
+		"no_wifi":            "GEEN WIFI",
+		"no_home_assistant":  "GEEN HOME ASSISTANT",
+		"voice_no_home":      "Home Assistant is niet bereikbaar",
+		"voice_no_assistant": "Geen spraakassistent ingesteld",
+		"voice_timeout":      "Geen antwoord op tijd",
+		"voice_failed":       "De assistent kon niet antwoorden",
+		"silenced_press_a_button_to_snooze_d_min": "Gedempt · druk op een volume- of microfoonknop om %d min te sluimeren",
+		"card_reminder": "HERINNERING",
+		"tap_again_s":   "Tik nogmaals: %s",
+		"deck_pc_key":   "De sleutel voor %s klopt niet",
+		// 0 dB is normal; boosts can distort, especially with more bass
+		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normaal; versterking kan vervormen, vooral met meer bas",
+		// A BROWSER IS ASKING
+		"a_browser_is_asking": "EEN BROWSER VRAAGT",
+		// A camera's own audio, while its view is up
+		"a_camera_s_own_audio_while_its_view_is_up": "Het eigen geluid van een camera, terwijl het beeld open is",
+		// A tap brings the screen back until the room is quiet
+		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Een tik brengt het scherm terug tot het rustig is in de kamer",
+		// A whole look over the theme and font
+		"a_whole_look_over_the_theme_and_font": "Een compleet uiterlijk voor thema en lettertype",
+		// About
+		"about": "Over",
+		// AirPlay sets the volume
+		"airplay_sets_the_volume": "AirPlay regelt het volume",
+		// Alarm
+		"alarm": "Wekker",
+		// Lights the room, no sound, at %s, %s
+		"alarm_lights_at": "Verlicht de kamer, zonder geluid, om %s, %s",
+		// Lights the room, no sound, once, at %s
+		"alarm_lights_once": "Verlicht de kamer, zonder geluid, eenmalig, om %s",
+		// Rings at %s, %s
+		"alarm_rings_at": "Gaat af om %s, %s",
+		// Rings once, at %s
+		"alarm_rings_once": "Gaat eenmalig af, om %s",
+		// Alarm sound
+		"alarm_sound": "Wekkergeluid",
+		// All day
+		"all_day": "Hele dag",
+		// All-day events
+		"all_day_events": "Afspraken voor de hele dag",
+		// Allow Drop In
+		"allow_drop_in": "Drop In toestaan",
+		// Another speaker's music, while this one is quiet
+		"another_speaker_s_music_while_this_one_is_quiet": "Muziek van een andere luidspreker, terwijl deze stil is",
+		// Answer time
+		"answer_time": "Antwoordduur",
+		// Asks twice
+		"asks_twice": "Vraagt twee keer",
+		// At night
+		"at_night": "'s Nachts",
 		// Audio output
 		"audio_output": "Geluidsuitgang",
+		// Auto-brightness
+		"auto_brightness": "Automatische helderheid",
+		// Automatic uses the NWS in the lower 48
+		"automatic_uses_the_nws_in_the_lower_48": "Automatisch gebruikt de NWS in de 48 aaneengesloten staten",
+		// Baby monitor
+		"baby_monitor": "Babyfoon",
 		// Back
 		"back": "Terug",
+		// Back in about a minute
+		"back_in_about_a_minute": "Over ongeveer een minuut terug",
 		// Background
 		"background": "Achtergrond",
 		// Bass
-		"bass": "Bass",
+		"bass": "Bas",
+		// Bluetooth audio
+		"bluetooth_audio": "Bluetooth-audio",
+		// BLUETOOTH PAIRING
+		"bluetooth_pairing": "BLUETOOTH KOPPELEN",
+		// Bluetooth proxy
+		"bluetooth_proxy": "Bluetooth-proxy",
+		// Bluetooth Secure Connections
+		"bluetooth_secure_connections": "Beveiligde Bluetooth-verbindingen",
 		// Brightness
 		"brightness": "Helderheid",
+		// and %d more today
+		"calendar_and_d_more_today": "en nog %d meer vandaag",
+		// Calendar chips
+		"calendar_look_chip_size_label": "Kalenderchips",
+		// The calendars' names over the month
+		"calendar_look_chip_size_sub": "De namen van de agenda's boven de maand",
+		// Coming up, one line each
+		"calendar_look_coming_up_refined_label": "Binnenkort, één regel per afspraak",
+		// With each day's weather
+		"calendar_look_coming_up_refined_sub": "Met het weer van elke dag",
+		// Countdowns
+		"calendar_look_countdowns_label": "Aftellingen",
+		// \"in 25 min\" on today's events
+		"calendar_look_countdowns_sub": "\"in 25 min\" bij de afspraken van vandaag",
+		// Dashboard events
+		"calendar_look_dashboard_events_label": "Dashboard-afspraken",
+		// Which events the Dashboard clock style lists
+		"calendar_look_dashboard_events_sub": "Welke afspraken de klokstijl Dashboard toont",
+		// Day timeline
+		"calendar_look_day_timeline_label": "Dagtijdlijn",
+		// A day's events on its hours
+		"calendar_look_day_timeline_sub": "De afspraken van een dag per uur",
+		// Event icons
+		"calendar_look_event_icons_label": "Pictogrammen",
+		// A small picture for a birthday, trash day, a flight…
+		"calendar_look_event_icons_sub": "Een klein plaatje voor een verjaardag, ophaaldag, vlucht…",
+		// Month details
+		"calendar_look_month_details_label": "Maanddetails",
+		// Full: times, icons and weather on the days
+		"calendar_look_month_details_sub": "Volledig: tijden, pictogrammen en weer per dag",
+		// Next up on the clock
+		"calendar_look_next_up_label": "Volgende op de klok",
+		// Today's next event at the foot of the clock
+		"calendar_look_next_up_sub": "De volgende afspraak van vandaag onderaan de klok",
+		// Next up within
+		"calendar_look_next_up_within_label": "Volgende binnen",
+		// How far ahead the clock's next event looks
+		"calendar_look_next_up_within_sub": "Hoe ver de klok vooruitkijkt",
+		// Opens on
+		"calendar_look_opens_on_label": "Opent met",
+		// The view a tap on the date opens
+		"calendar_look_opens_on_sub": "De weergave die opent als je op de datum tikt",
+		// Weather in the calendar
+		"calendar_look_weather_label": "Weer in de agenda",
+		// The forecast on each day
+		"calendar_look_weather_sub": "De voorspelling per dag",
+		// Week starts Monday
+		"calendar_look_week_starts_monday_label": "Week begint op maandag",
+		// Rather than Sunday
+		"calendar_look_week_starts_monday_sub": "In plaats van zondag",
+		// Week view
+		"calendar_look_week_view_label": "Weekweergave",
+		// Seven days on their hours
+		"calendar_look_week_view_sub": "Zeven dagen per uur",
+		// Nothing coming up
+		"calendar_nothing_coming_up": "Niets op komst",
+		// Now, until %s
+		"calendar_now_until": "Nu, tot %s",
+		// Call button
+		"call_button": "Belknop",
+		// Call ring
+		"call_ring": "Beltoon",
+		// Call screen
+		"call_screen": "Oproepscherm",
+		// Camera
+		"camera": "Camera",
+		// Camera on network
+		"camera_on_network": "Camera op het netwerk",
+		// Camera on the network
+		"camera_on_the_network": "Camera op het netwerk",
+		// Camera sound
+		"camera_sound": "Camerageluid",
+		// Camera test
+		"camera_test_setting": "Cameratest",
+		// Camera time
+		"camera_time": "Cameraduur",
+		// Cameras
+		"cameras": "Camera's",
 		// Cancel
 		"cancel": "Annuleren",
+		// Certificate checks
+		"certificate_checks": "Certificaatcontrole",
+		// Change it on the setup page
+		"change_it_on_the_setup_page": "Wijzig het op de installatiepagina",
+		// Classic, or a picture that moves with the voice
+		"classic_or_a_picture_that_moves_with_the_voice": "Klassiek, of een beeld dat meebeweegt met de stem",
 		// Clear
 		"clear": "Wissen",
+		// Clock
+		"clock": "Klok",
+		// Clock format
+		"clock_format": "Tijdnotatie",
+		// How the clock looks all day
+		"clock_style_description": "Hoe de klok er de hele dag uitziet",
+		// Clock style
+		"clock_style_label": "Klokstijl",
 		// Close
 		"close": "Sluiten",
+		// Coming up
+		"coming_up": "Binnenkort",
 		// Connect
 		"connect": "Verbinden",
+		// Connected as %s
+		"connected_as": "Verbonden als %s",
+		// Connecting to OBS…
+		"connecting_to_obs": "Verbinden met OBS…",
+		//    +%d more
+		"d_more": "   +%d meer",
+		// Dashboard
+		"dashboard": "Dashboard",
 		// Day
 		"day": "Dag",
+		// every day
+		"days_every_day": "elke dag",
+		// once
+		"days_once": "eenmalig",
+		// weekdays
+		"days_weekdays": "werkdagen",
+		// weekends
+		"days_weekends": "weekend",
+		// off
+		"default_off": "uit",
 		// Default
 		"default_option": "Standaard",
+		// Del
+		"del": "Wis",
+		// Dim after idle
+		"dim_after_idle": "Dimmen na inactiviteit",
+		// Drawn in dim red; the screen gets no brighter
+		"dim_red_and_no_brighter": "In gedimd rood; het scherm wordt niet helderder",
+		// Dimmest
+		"dimmest": "Donkerste stand",
 		// Do not disturb
 		"do_not_disturb": "Niet storen",
 		// Done
 		"done": "Gereed",
+		// Down to Dimmest until touched, spoken to or somebody near
+		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Tot de donkerste stand, tot je tikt, ertegen praat of iemand in de buurt is",
+		// All cameras
+		"drawer_all_cameras": "Alle camera's",
+		// Announce
+		"drawer_announce": "Aankondigen",
+		// Announcements need a house word — the same word on every device here, set on each one's setup page. Until then this device neither sends them nor takes them.
+		"drawer_announce_setup": "Aankondigingen hebben een huiswoord nodig: hetzelfde woord op elk apparaat hier, ingesteld op de installatiepagina van elk. Tot dan verstuurt en ontvangt dit apparaat ze niet.",
 		// ANNOUNCEMENT
 		"drawer_announcement": "AANKONDIGING",
+		// Another room
+		"drawer_another_room": "Andere kamer",
+		// It sends when you stop talking
+		"drawer_auto_send": "Verstuurt zodra je stopt met praten",
+		// back to the clock
+		"drawer_back_to_the_clock": "terug naar de klok",
 		// Call
 		"drawer_call": "Bellen",
+		// %s ringing · tap here to stop
+		"drawer_call_alarm": "%s gaat af · tik om te stoppen",
+		// tap to close
+		"drawer_camera_close": "tik om te sluiten",
+		// Connecting to %s…
+		"drawer_camera_connect": "Verbinden met %s…",
+		// Up to six at once; tap one to see it alone
+		"drawer_camera_grid_hint": "Maximaal zes tegelijk; tik er één aan om die alleen te zien",
+		// off while muted
+		"drawer_camera_off_while_muted": "uit zolang gedempt",
+		// showing now
+		"drawer_camera_showing_now": "wordt nu getoond",
+		// tap to show
+		"drawer_camera_tap_to_show": "tik om te tonen",
+		// Connecting…
+		"drawer_connecting": "Verbinden…",
+		// %d to call
+		"drawer_d_contacts_to_call": "%d om te bellen",
+		// %d · tap, then turn
+		"drawer_d_tap_then_turn": "%d · tik, dan draaien",
+		// from Home Assistant
+		"drawer_dashboard_from_home_assistant": "vanuit Home Assistant",
+		// %d other devices
+		"drawer_device_count": "%d andere apparaten",
+		// TAP TO DISMISS
+		"drawer_dismiss": "TIK OM TE SLUITEN",
+		// No stations in this list yet
+		"drawer_empty_stations": "Nog geen zenders in deze lijst",
+		// End talk  %d:%02d
+		"drawer_end_talk": "Gesprek beëindigen  %d:%02d",
 		// Favorites
 		"drawer_favorites": "Favorieten",
+		// forecast
+		"drawer_forecast": "voorspelling",
+		// Go ahead
+		"drawer_go_ahead": "Zeg het maar",
+		// Goes to %s
+		"drawer_goes_to": "Gaat naar %s",
+		// tap a camera to see it alone  ·  tap here to close
+		"drawer_grid_close": "tik een camera aan om die alleen te zien  ·  tik hier om te sluiten",
+		// all rooms in the group
+		"drawer_group_stop": "alle kamers in de groep",
+		// Heard on %s
+		"drawer_heard_on": "Gehoord op %s",
+		// Intercom, in the house
+		"drawer_intercom": "Intercom, in huis",
+		// Asking Home Assistant for stations…
+		"drawer_loading_stations": "Zenders bij Home Assistant opvragen…",
+		// Local stations
+		"drawer_local": "Zenders in de buurt",
+		// microphone is off
+		"drawer_microphone_is_off": "microfoon is uit",
+		// microphone is on
+		"drawer_microphone_is_on": "microfoon is aan",
 		// Mute
 		"drawer_mute": "Geluid uit",
+		// needs a house word
+		"drawer_needs_a_house_word": "heeft een huiswoord nodig",
+		// Nobody to call yet. Give every device the same house word on its setup page to call between rooms, or sign the phone in (the phone_account action) for your contacts.
+		"drawer_no_calls": "Nog niemand om te bellen. Geef elk apparaat hetzelfde huiswoord op zijn installatiepagina om tussen kamers te bellen, of meld de telefoon aan (de phone_account-actie) voor je contacten.",
+		// No cameras yet. Set a Home Assistant token to list them all, or pick some with the home_cameras action.
+		"drawer_no_cameras": "Nog geen camera's. Stel een Home Assistant-token in om ze allemaal te tonen, of kies er een paar met de home_cameras-actie.",
+		// No cameras: None is chosen for Home Assistant's cameras, on the setup page or with the home_cameras action.
+		"drawer_no_cameras_disabled": "Geen camera's: voor de camera's van Home Assistant is Geen gekozen, op de installatiepagina of met de home_cameras-actie.",
+		// No stations within 100 km
+		"drawer_no_local": "Geen zenders binnen 100 km",
+		// no other devices found
+		"drawer_no_other_devices": "geen andere apparaten gevonden",
+		// No other devices found yet
+		"drawer_no_peers": "Nog geen andere apparaten gevonden",
+		// No picture
+		"drawer_no_picture": "Geen beeld",
+		// No stations yet. Give the device a Home Assistant token (the home_assistant action) for local and popular stations, or add your own with home_radio.
+		"drawer_no_radio": "Nog geen zenders. Geef het apparaat een Home Assistant-token (de home_assistant-actie) voor lokale en populaire zenders, of voeg je eigen toe met home_radio.",
+		// No to-do lists are chosen. Choose them on the setup page.
+		"drawer_no_todo": "Geen takenlijsten gekozen. Kies ze op de installatiepagina.",
+		// nobody to call yet
+		"drawer_nobody_to_call_yet": "nog niemand om te bellen",
+		// 1 other device
+		"drawer_one_device": "1 ander apparaat",
 		// Paused
 		"drawer_paused": "Gepauzeerd",
+		// paused · pick a station
+		"drawer_paused_pick_a_station": "gepauzeerd · kies een zender",
 		// Phone
 		"drawer_phone": "Telefoon",
+		// Playing
+		"drawer_playing": "Speelt",
+		// Playing now
+		"drawer_playing_now": "Speelt nu",
+		// playing · pick a station
+		"drawer_playing_pick_a_station": "speelt · kies een zender",
+		// Popular worldwide
+		"drawer_popular": "Wereldwijd populair",
 		// Radio
 		"drawer_radio": "Radio",
+		// radio stations
+		"drawer_radio_stations": "radiozenders",
+		// Listening
+		"drawer_recording": "Luistert",
+		// Say something
+		"drawer_say_something": "Zeg iets",
+		// TAP TO SEND  ·  HOLD TO CANCEL
+		"drawer_send_hint": "TIK OM TE VERSTUREN  ·  HOUD VAST OM TE ANNULEREN",
+		// display, sound, alarms
+		"drawer_settings_display_sound_alarms": "scherm, geluid, wekkers",
+		// Or say \"show %s\"
+		"drawer_show_camera": "Of zeg \"laat %s zien\"",
+		// tap the screen to wake
+		"drawer_sleep_tap_the_screen_to_wake": "tik op het scherm om het te wekken",
 		// Speak
 		"drawer_speak": "Spreken",
+		// Speak now
+		"drawer_speak_now": "Spreek nu",
+		// SPEAKING TO THE HOUSE
+		"drawer_speaking_house": "SPREEKT HET HELE HUIS TOE",
+		// Could not list the stations
+		"drawer_station_error": "Kon de zenders niet laden",
+		// Stop the music
+		"drawer_stop_music": "Stop de muziek",
+		// Stop the radio
+		"drawer_stop_radio": "Stop de radio",
+		// Talk
+		"drawer_talk": "Spreken",
+		// Talk: %s
+		"drawer_talk_error": "Spreken: %s",
+		// tap to ask
+		"drawer_talk_tap_to_ask": "tik om te vragen",
+		// this Spot · hold for the list
+		"drawer_this_spot_hold_for_the_list": "deze Spot · houd vast voor de lijst",
+		// none running
+		"drawer_timer_none_running": "geen actieve timer",
+		// ringing · tap to stop
+		"drawer_timer_ringing_tap_to_stop": "gaat af · tik om te stoppen",
+		// %s left
+		"drawer_timer_s_left": "nog %s",
+		// %s left · %d timers
+		"drawer_timer_s_left_d_timers": "nog %s · %d timers",
+		// To-do
+		"drawer_todo": "Taken",
+		// Nothing to do
+		"drawer_todo_empty": "Niets te doen",
+		// Try again
+		"drawer_try_again": "Opnieuw proberen",
+		// Try Popular worldwide
+		"drawer_try_popular": "Probeer Wereldwijd populair",
+		// turn on in Home Assistant
+		"drawer_turn_on_in_home_assistant": "aanzetten in Home Assistant",
+		// turn · tap to play
+		"drawer_turn_tap_to_play": "draaien · tik om af te spelen",
+		// turn · tap to stop
+		"drawer_turn_tap_to_stop": "draaien · tik om te stoppen",
+		// turn · tap to stop all rooms
+		"drawer_turn_tap_to_stop_all_rooms": "draaien · tik stopt alles",
+		// turn the ring · tap when done
+		"drawer_turn_the_ring_tap_when_done": "draai aan de ring · tik als je klaar bent",
 		// Unmute
 		"drawer_unmute": "Geluid aan",
+		// Encrypted with this device's key
+		"encrypted_with_this_device_s_key": "Versleuteld met de sleutel van dit apparaat",
+		// Every day
+		"every_day": "Elke dag",
+		// Follows the room's light
+		"follows_the_room_s_light": "Volgt het licht in de kamer",
+		// For all the screen's words
+		"font_description": "Voor alle woorden op het scherm",
 		// Font
 		"font_label": "Lettertype",
+		// For downloads; updates always check
+		"for_downloads_updates_always_check": "Voor downloads; updates worden altijd gecontroleerd",
+		// For muting and timers
+		"for_muting_and_timers": "Voor dempen en timers",
+		// For timers
+		"for_timers": "Voor timers",
+		// Forget %s
+		"forget_device": "%s vergeten",
+		// Full page, or a strip over the clock
+		"full_page_or_a_strip_over_the_clock": "Hele pagina, of een strook boven de klok",
 		// Hang up
 		"hang_up": "Ophangen",
+		// Higher wakes by mistake less often
+		"higher_wakes_by_mistake_less_often": "Hoger: minder valse activeringen",
+		// Home Assistant link
+		"home_assistant_link": "Home Assistant-koppeling",
+		// Home Assistant sounds
+		"home_assistant_sounds": "Home Assistant-geluiden",
 		// Home screen
 		"home_screen": "Beginscherm",
+		// How a call rings here
+		"how_a_call_rings_here": "Hoe een oproep hier klinkt",
+		// How dark auto-brightness goes in a dark room
+		"how_dark_auto_brightness_goes_in_a_dark_room": "Hoe donker de automatische helderheid in een donkere kamer wordt",
+		// How long a camera opened here stays up
+		"how_long_a_camera_opened_here_stays_up": "Hoe lang een hier geopende camera in beeld blijft",
+		// How long an answer stays up; a tap clears it
+		"how_long_an_answer_stays_up_a_tap_clears_it": "Hoe lang een antwoord blijft staan; tik om het te wissen",
+		// How running timers show on the clock
+		"how_running_timers_show_on_the_clock": "Hoe lopende timers op de klok verschijnen",
+		// How the night clock looks
+		"how_the_night_clock_looks": "Hoe de nachtklok eruitziet",
+		// Ignore room lights
+		"ignore_room_lights": "Kamerlicht negeren",
+		// Intercom calls connect by themselves, after a chime
+		"intercom_calls_connect_by_themselves_after_a_chime": "Na een signaaltoon verbinden intercom-oproepen vanzelf.",
+		// Intercom calls from other rooms are turned away
+		"intercom_calls_from_other_rooms_are_turned_away": "Intercomoproepen uit andere kamers worden geweigerd",
+		//  is done
+		"is_done": " is klaar",
+		// Its dates, its weather, and what it listens for
+		"its_dates_its_weather_and_what_it_listens_for": "Datums, weer en waar het op reageert",
+		// Lets Home Assistant hear nearby devices
+		"lets_home_assistant_hear_nearby_devices": "Laat Home Assistant apparaten in de buurt waarnemen",
+		// %d of %d
+		"level_of": "%d van %d",
+		// Loading the rain map…
+		"loading_the_rain_map": "Regenradar laden…",
+		// Loading video…
+		"loading_video": "Video laden…",
+		// Look
+		"look": "Uiterlijk",
+		// Louder speech
+		"louder_speech": "Hardere spraak",
+		// Lyrics
+		"lyrics": "Songtekst",
 		// Playback
-		"media_playback": "Weergave",
+		"media_playback": "Afspelen",
 		// Microphone
 		"microphone": "Microfoon",
+		// MICROPHONE OFF
+		"microphone_off": "MICROFOON UIT",
+		// %d minutes before
+		"minutes_before": "%d minuten vooraf",
 		// Month
 		"month": "Maand",
 		// Music
 		"music": "Muziek",
+		// Music Assistant player
+		"music_assistant_player": "Music Assistant-speler",
 		// Name
 		"name": "Naam",
+		// Downloading NetBird, %d%%
+		"netbird_downloading": "NetBird wordt gedownload, %d%%",
 		// Network address
 		"network_address": "Netwerkadres",
+		// New timer
+		"new_timer": "Nieuwe timer",
 		// Next
 		"next": "Volgende",
+		// Controlled by Home Assistant
+		"night_by_ha": "Bestuurd door Home Assistant",
+		// Night clock
+		"night_clock": "Nachtklok",
+		// Night clock brightness
+		"night_clock_brightness": "Helderheid van de nachtklok",
+		// Night clock shows Next up and notifications
+		"night_clock_next_up_and_alerts": "Nachtklok toont Volgende en meldingen",
+		// Custom…
+		"night_custom": "Aangepast…",
+		// Dark, a faint glow, or a clock alone until touched
+		"night_description_show": "Donker, een zwakke gloed, of alleen een klok tot je tikt",
+		// Dim, a red clock, or dark
+		"night_description_spot": "Gedimd, een rode klok, of donker",
+		// Night hours
+		"night_hours": "Nachturen",
+		// No login
+		"no_login": "Geen aanmelding",
+		// No networks heard yet
+		"no_networks_heard_yet": "Nog geen netwerken gevonden",
+		// No rain map:
+		"no_rain_map": "Geen regenradar: ",
+		// Not available on this build
+		"not_available_on_this_build": "Niet beschikbaar in deze build",
+		// Not connected
+		"not_connected": "Niet verbonden",
+		// Not now
+		"not_now": "Niet nu",
+		// Nothing in the next two weeks
+		"nothing_in_the_next_two_weeks": "Niets in de komende twee weken",
 		// Now playing
 		"now_playing":         "Speelt nu",
-		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_classic": "Klassiek",
+		// Now playing follows
+		"now_playing_follows": "Volgt wat nu speelt",
+		"now_playing_layout":  "Indeling voor afspelen",
 		"now_playing_modern":  "Modern",
+		// Off if a phone pairs, then drops. Drops devices briefly
+		"off_if_a_phone_pairs_then_drops_drops_devices_briefly": "Uit als een telefoon koppelt en daarna wegvalt. Apparaten vallen kort weg",
 		// OK
 		"ok": "OK",
+		// On the home screen: devices and contacts
+		"on_the_home_screen_devices_and_contacts": "Op het beginscherm: apparaten en contacten",
+		// Asked on the setup page, started here
+		"on_the_setup_page_started_here": "Aangevraagd op de installatiepagina, hier gestart",
+		// Once
+		"once": "Eenmalig",
+		// 1 hour
+		"one_hour": "1 uur",
+		// 1 minute
+		"one_minute": "1 minuut",
+		// 10 minutes
+		"option_10_minutes": "10 minuten",
+		// 10 seconds
+		"option_10_seconds": "10 seconden",
+		// 12-hour
+		"option_12_hour": "12-uurs",
+		// 12 hours
+		"option_12_hours": "12 uur",
+		// 15 seconds
+		"option_15_seconds": "15 seconden",
+		// 1 hour
+		"option_1_hour": "1 uur",
+		// 1 hour before
+		"option_1_hour_before": "1 uur vooraf",
+		// 1 minute
+		"option_1_minute": "1 minuut",
+		// 24-hour
+		"option_24_hour": "24-uurs",
+		// 2 minutes
+		"option_2_minutes": "2 minuten",
+		// 30 seconds
+		"option_30_seconds": "30 seconden",
+		// 3 hours
+		"option_3_hours": "3 uur",
+		// 5 minutes
+		"option_5_minutes": "5 minuten",
+		// 5 seconds
+		"option_5_seconds": "5 seconden",
+		// 6 hours
+		"option_6_hours": "6 uur",
+		// Above the strip
+		"option_above_the_strip": "Boven de strook",
+		// Always
+		"option_always": "Altijd",
+		// As it starts
+		"option_as_it_starts": "Bij de start",
 		// Automatic
 		"option_automatic": "Automatisch",
+		// Both
+		"option_both": "Beide",
+		// Bottom
+		"option_bottom": "Onder",
+		// Bottom center
+		"option_bottom_center": "Middenonder",
+		// Bottom left
+		"option_bottom_left": "Linksonder",
+		// Bottom right
+		"option_bottom_right": "Rechtsonder",
+		// Camera's own size
+		"option_camera_s_own_size": "Eigen formaat van de camera",
 		// Center
 		"option_center": "Midden",
+		// Coming up
+		"option_coming_up": "Binnenkort",
+		// Coming week
+		"option_coming_week": "Komende week",
 		// Day
 		"option_day": "Dag",
 		// Default
 		"option_default": "Standaard",
+		// Dim
+		"option_dim": "Gedimd",
+		// Every day
+		"option_every_day": "Elke dag",
 		// Fade
 		"option_fade": "Vervaging",
+		// Fill the screen
+		"option_fill_the_screen": "Scherm vullen",
+		// Full
+		"option_full": "Volledig",
+		// Full at once
+		"option_full_at_once": "Meteen volledig",
+		// Full page
+		"option_full_page": "Hele pagina",
 		// Gold
 		"option_gold": "Goud",
+		// Headphones
+		"option_headphones": "Koptelefoon",
+		// Headphones / AUX
+		"option_headphones_aux": "Koptelefoon / AUX",
 		// Hide
 		"option_hide": "Verbergen",
+		// In the morning
+		"option_in_the_morning": "In de ochtend",
+		// Internal speaker
+		"option_internal_speaker": "Interne luidspreker",
+		// Its words
+		"option_its_words": "Alleen de songtekst",
+		// Light
+		"option_light": "Zwak",
+		// Medium
+		"option_medium": "Gemiddeld",
+		// Mint
+		"option_mint": "Mint",
 		// Month
 		"option_month": "Maand",
+		// Never
+		"option_never": "Nooit",
+		// Night clock
+		"option_night_clock": "Nachtklok",
 		// Night light
 		"option_night_light": "Nachtlamp",
+		// None
+		"option_none": "Geen",
+		// Normal
+		"option_normal": "Normaal",
+		// Nothing
+		"option_nothing": "Niets",
+		// Off
+		"option_off": "Uit",
+		// On
+		"option_on": "Aan",
+		// Once
+		"option_once": "Eenmalig",
+		// Over 1 minute
+		"option_over_1_minute": "Meer dan 1 minuut",
+		// Over 2 minutes
+		"option_over_2_minutes": "Meer dan 2 minuten",
+		// Over 30 seconds
+		"option_over_30_seconds": "Meer dan 30 seconden",
+		// Over 5 minutes
+		"option_over_5_minutes": "Meer dan 5 minuten",
 		// Red
 		"option_red": "Rood",
+		// Red LED
+		"option_red_led": "Rode led",
+		// Rose
+		"option_rose": "Rosé",
+		// Screen off
+		"option_screen_off": "Scherm uit",
 		// Show
 		"option_show": "Weergeven",
 		// Silent
 		"option_silent": "Stil",
 		// Simple
 		"option_simple": "Eenvoudig",
+		// Sky
+		"option_sky": "Hemelblauw",
 		// Solid
 		"option_solid": "Effen",
 		// Speaker
 		"option_speaker": "Luidspreker",
+		// Speaker and headphones
+		"option_speaker_and_headphones": "Luidspreker en koptelefoon",
+		// Strip
+		"option_strip": "Strook",
+		// Strip after 10 s
+		"option_strip_after_10_s": "Strook na 10 s",
+		// Strip after 30 s
+		"option_strip_after_30_s": "Strook na 30 s",
+		// Strip at once
+		"option_strip_at_once": "Strook meteen",
+		// Strong
+		"option_strong": "Sterk",
+		// The time and its words
+		"option_the_time_and_its_words": "De tijd en de songtekst",
+		// Today only
+		"option_today_only": "Alleen vandaag",
+		// Today or 12 hours
+		"option_today_or_12_hours": "Vandaag of 12 uur",
+		// Top left
+		"option_top_left": "Linksboven",
+		// Top right
+		"option_top_right": "Rechtsboven",
+		// Until tapped
+		"option_until_tapped": "Tot je tikt",
+		// Week
+		"option_week": "Week",
+		// Weekdays
+		"option_weekdays": "Werkdagen",
+		// Weekends
+		"option_weekends": "Weekend",
+		// White
+		"option_white": "Wit",
+		// Whole picture
+		"option_whole_picture": "Heel beeld",
+		// Out of area targets in Home Assistant
+		"out_of_area_targets_in_home_assistant": "Doelen buiten het gebied in Home Assistant",
+		// Its own page, or Hang up over the page
+		"page_or_hang_up_button": "Eigen pagina, of Ophangen over de pagina",
+		// Pair a new device
+		"pair_a_new_device": "Een nieuw apparaat koppelen",
+		// Photos from Home Assistant
+		"photos_from_home_assistant": "Foto's van Home Assistant",
+		// The same PIN again
+		"pin_again": "Dezelfde pincode nog eens",
+		// Enter the PIN
+		"pin_enter": "Voer de pincode in",
+		// A new PIN, 4 to 8 digits
+		"pin_new": "Een nieuwe pincode, 4 tot 8 cijfers",
+		// They did not match
+		"pin_no_match": "Ze komen niet overeen",
+		// Could not save it
+		"pin_not_saved": "Kon het niet opslaan",
+		// At least 4 digits
+		"pin_too_short": "Minstens 4 cijfers",
+		// Try again in %s
+		"pin_try_again_in": "Probeer het over %s opnieuw",
+		// %d min
+		"pin_wait_minutes": "%d min",
+		// %d s
+		"pin_wait_seconds": "%d s",
+		// Wrong PIN
+		"pin_wrong": "Verkeerde pincode",
 		// Play
 		"play": "Afspelen",
+		// Play music in sync with other rooms
+		"play_music_in_sync_with_other_rooms": "Muziek synchroon met andere kamers afspelen",
+		// Play to it from an iPhone, iPad or Mac
+		"play_to_it_from_an_iphone_ipad_or_mac": "Vanaf een iPhone, iPad of Mac afspelen",
+		// Play to it from music apps and servers
+		"play_to_it_from_music_apps_and_servers": "Vanuit muziekapps en -servers erop afspelen",
+		// Play to it from the Spotify app (Premium)
+		"play_to_it_from_the_spotify_app_premium": "Vanuit de Spotify-app afspelen (Premium)",
+		// Pop up
+		"pop_up": "Pop-up",
+		// Pop-ups
+		"pop_ups": "Pop-ups",
+		// The camera notices somebody near; nothing is kept
+		"presence_description": "De camera merkt dat er iemand in de buurt is; er wordt niets bewaard",
 		// Presence
 		"presence_heading": "Aanwezigheid",
+		// Presence detection
+		"presence_label": "Aanwezigheidsdetectie",
+		// Lights again when somebody comes near
+		"presence_return": "Licht weer op als er iemand in de buurt komt",
+		// press again to snooze %d min
+		"press_again_to_snooze_d_min": "druk nogmaals om %d min te sluimeren",
+		// Put it in pairing mode first
+		"put_it_in_pairing_mode_first": "Zet het eerst in de koppelmodus",
+		// Hold the code up to the camera, about a hand's width away.
+		"qr_scan_hint": "Houd de code ongeveer een handbreedte voor de camera.",
+		// The privacy mute holds the camera off.
+		"qr_scan_muted": "De privacyschakelaar houdt de camera uit.",
+		// Read: %s
+		"qr_scan_read": "Gelezen: %s",
+		// Scan a QR code
+		"qr_scan_title": "QR-code scannen",
 		// Quiet
 		"quiet": "Rustig",
 		// Quiet hours
 		"quiet_hours": "Stille uren",
+		// Radar source
+		"radar_source": "Radarbron",
+		// Rain, snow and storms move on the forecast
+		"rain_snow_and_storms_move_on_the_forecast": "Regen, sneeuw en onweer trekken over de voorspelling",
+		// Reading the calendar…
+		"reading_the_calendar": "Agenda lezen…",
+		// Record takes of a word
+		"record_takes_of_a_word": "Opnamen van een woord maken",
+		// Remote API
+		"remote_api": "Remote-API",
 		// Repeat
 		"repeat": "Herhalen",
+		// Replies and announcements
+		"replies_and_announcements": "Antwoorden en aankondigingen",
+		// Reset
+		"reset": "Opnieuw instellen",
+		// Reset for someone else
+		"reset_for_someone_else": "Opnieuw instellen voor iemand anders",
+		// Clears it and starts setting it up again
+		"clears_it_and_start_setting_it_up_again": "Wist alles en begint de installatie opnieuw",
+		// Wi-Fi, name, Home Assistant, alarms, everything: tap again
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, naam, Home Assistant, alarmen, alles: tik nogmaals",
 		// Restart
 		"restart": "Opnieuw opstarten",
+		// The room's sound in a browser with the link
+		"room_sound_in_a_browser_with_the_link": "Kamergeluid in de browser, via de link",
+		// Said as it rings
+		"said_as_it_rings": "Wordt gezegd bij het afgaan",
+		// Same as the default (%s)
+		"same_as_default": "Zelfde als standaard (%s)",
 		// Screen language
 		"screen_language": "Schermtaal",
+		// Screen off when nobody is near
+		"screen_off_when_nobody_is_near": "Scherm uit als er niemand in de buurt is",
+		// Screen on network
+		"screen_on_network": "Scherm op het netwerk",
+		// Screen on the network
+		"screen_on_the_network": "Scherm op het netwerk",
+		// Screensaver
+		"screensaver": "Schermbeveiliging",
+		// %d seconds
+		"seconds_option": "%d seconden",
+		// Sent from Home Assistant
+		"sent_from_home_assistant": "Verzonden vanuit Home Assistant",
 		// Settings
 		"settings": "Instellingen",
+		// Settings lock
+		"settings_lock": "Instellingenslot",
+		// Shown as you change it, at night
+		"shown_as_you_change_it_at_night": "Te zien terwijl je het wijzigt, 's nachts",
+		// Shown with the clock
+		"shown_with_the_clock": "Getoond bij de klok",
+		// Silenced
+		"silenced": "Gedempt",
+		// Skin
+		"skin": "Skin",
+		// Kept for when the skin is off
+		"skin_keeps": "Bewaard voor als de skin uit staat",
+		// Sleep
+		"sleep": "Slaapstand",
+		// Sleep timer
+		"sleep_timer": "Slaaptimer",
 		// Slideshow
 		"slideshow": "Diavoorstelling",
+		// Snooze %d min
+		"snooze_d_min": "Sluimer %d min",
+		// Sounds
+		"sounds": "Geluiden",
+		// Speaker gain
+		"speaker_gain": "Luidsprekerversterking",
+		// Speakers
+		"speakers": "Luidsprekers",
 		// Threshold
 		"spot_threshold": "Drempelwaarde",
+		// SSH keys
+		"ssh_keys": "SSH-sleutels",
 		// Stop
 		"stop": "Stoppen",
+		// On until the %s alarm
+		"sunrise_alarm": "Aan tot de wekker van %s",
+		// Before alarms that don't choose their own
+		"sunrise_default_description": "Voor wekkers die er zelf geen kiezen",
+		// On while the alarm rings
+		"sunrise_ringing": "Aan terwijl de wekker afgaat",
+		// The light is coming up now
+		"sunrise_rising": "Het licht komt nu op",
+		// Skip
+		"sunrise_skip_action": "Overslaan",
+		// Skipped: the alarm at %s
+		"sunrise_skip_done": "Overgeslagen: de wekker van %s",
+		// Not skipped: the alarm at %s
+		"sunrise_skip_refused": "Niet overgeslagen: de wekker van %s",
+		// On until the %s snooze
+		"sunrise_snooze": "Aan tot het sluimeren om %s",
+		// On until %s
+		"sunrise_until": "Aan tot %s",
+		// swipe to snooze %d min
+		"swipe_to_snooze_d_min": "veeg om %d min te sluimeren",
+		// Talk on the camera page
+		"talk_on_the_camera_page": "Spreken op de camerapagina",
+		// Talk through cameras
+		"talk_through_cameras": "Spreken via camera's",
+		// Tap lifts the night light
+		"tap_lifts_the_night_light": "Tik maakt het nachtlampje feller",
+		// Tap on the clock
+		"tap_on_the_clock": "Tikken op de klok",
+		// Tap to go back
+		"tap_to_go_back": "Tik om terug te gaan",
+		// Tap to stop
+		"tap_to_stop": "Tik om te stoppen",
+		// How large every word on the screen is
+		"text_size_description": "Hoe groot elk woord op het scherm is",
+		// Text size
+		"text_size_label": "Tekstgrootte",
+		// The mute button does this too
+		"the_mute_button_does_this_too": "De dempknop doet dit ook",
+		// The NWS's alerts for home, in the U.S.
+		"the_nws_s_alerts_for_home_in_the_u_s": "De NWS-waarschuwingen voor thuis, in de VS",
+		// The words in time, looked up at LRCLIB
+		"the_words_in_time_looked_up_at_lrclib": "De songtekst op de maat, opgezocht bij LRCLIB",
+		// Make the theme your own
+		"theme_personalize": "Pas het thema aan",
+		// This is %s
+		"this_version": "Dit is %s",
+		// Time per photo
+		"time_per_photo": "Tijd per foto",
 		// Time zone
 		"time_zone": "Tijdzone",
 		// Timer
 		"timer": "Timer",
+		// Timer and alarm
+		"timer_and_alarm": "Timer en wekker",
+		// Timer done
+		"timer_done": "Timer klaar",
+		// %s done
+		"timer_name_done": "%s klaar",
+		// %s timer done
+		"timer_named_done": "%s-timer klaar",
 		//  timer
 		"timer_suffix": " timer",
+		// Timers
+		"timers": "Timers",
 		// Today
 		"today": "Vandaag",
+		// Tomorrow
+		"tomorrow": "Morgen",
+		// Treble
+		"treble": "Hoge tonen",
+		// Turn screen
+		"turn_screen": "Spraakscherm",
+		// 1 hour
+		"ui_1_hour": "1 uur",
+		// 1 hour %d minutes
+		"ui_1_hour_d_minutes": "1 uur %d minuten",
+		// A face on it, for whoever has to look at it
+		"ui_a_face_on_it_for_whoever_has_to_look_at_it": "Een gezicht erop, voor wie ernaar moet kijken",
+		// A landscape for the weather, in place of photos
+		"ui_a_landscape_for_the_weather_in_place_of_photos": "Een landschap voor het weer, in plaats van foto's",
+		// A PIN before most settings change
+		"ui_a_pin_before_most_settings_change": "Een pincode voor je de meeste instellingen wijzigt",
+		// + Add alarm
+		"ui_add_alarm": "+ Wekker toevoegen",
+		// Add one here, or from Home Assistant
+		"ui_add_one_here_or_from_home_assistant": "Hier een toevoegen, of vanuit Home Assistant",
+		// Add the device in Home Assistant to encrypt it
+		"ui_add_the_device_in_home_assistant_to_encrypt_it": "Voeg het apparaat toe aan Home Assistant om het te versleutelen",
+		// Could not be applied: %s
+		"ui_address_could_not_apply": "Kon niet worden toegepast: %s",
+		// Type the address, or choose Automatic.
+		"ui_address_enter_or_automatic": "Typ het adres, of kies Automatisch.",
+		// Address
+		"ui_address_field_address": "Adres",
 		// Gateway
 		"ui_address_field_gateway": "Gateway",
+		// the gateway
+		"ui_address_gateway_placeholder": "de gateway",
+		// Automatic (DHCP)
+		"ui_address_mode_automatic": "Automatisch (DHCP)",
+		// Fixed
+		"ui_address_mode_fixed": "Vast",
+		// No prefix means /24. Up to three DNS servers, with commas.
+		"ui_address_no_prefix_help": "Geen prefix betekent /24. Maximaal drie DNS-servers, gescheiden door komma's.",
+		// Address not found: use its IP
+		"ui_address_not_found_use_its_ip": "Adres niet gevonden: gebruik het IP-adres",
+		// Not kept: %s
+		"ui_address_not_kept": "Niet overgenomen: %s",
+		// Nothing changed: that is the setting in use.
+		"ui_address_nothing_changed": "Niets gewijzigd: dat is de huidige instelling.",
+		// Now at %s. Home Assistant follows within about two minutes.
+		"ui_address_now_at": "Nu op %s. Home Assistant volgt binnen ongeveer twee minuten.",
+		// The router hands out the address.
+		"ui_address_router_assigns": "De router deelt het adres uit.",
+		// Saved. The address is %s.
+		"ui_address_saved_at": "Opgeslagen. Het adres is %s.",
+		// Trying %s…
+		"ui_address_trying": "%s wordt geprobeerd…",
+		// Adjusts the speaker tuning to the room
+		"ui_adjusts_the_speaker_tuning_to_the_room": "Stemt de luidspreker af op de kamer",
+		// Beeps
+		"ui_alarm_sound_beeps": "Piepjes",
+		// Bells
+		"ui_alarm_sound_bells": "Klokken",
+		// Chimes
+		"ui_alarm_sound_chimes": "Klokkenspel",
+		// Gentle
+		"ui_alarm_sound_gentle": "Zacht",
+		// Your own
+		"ui_alarm_sound_own": "Je eigen",
+		// Pulse
+		"ui_alarm_sound_pulse": "Puls",
 		// Alarms
 		"ui_alarms": "Wekkers",
+		// Alarms and timers always sound
+		"ui_alarms_and_timers_always_sound": "Wekkers en timers gaan altijd af",
+		// Alarms and timers, not the music
+		"ui_alarms_and_timers_not_the_music": "Wekkers en timers, niet de muziek",
+		// Alarms and timers will make no sound
+		"ui_alarms_and_timers_will_make_no_sound": "Wekkers en timers maken geen geluid",
+		// Alarms on this device and how they ring
+		"ui_alarms_on_this_device_and_how_they_ring": "Wekkers op dit apparaat en hoe ze afgaan",
+		// Alarms & Timers
+		"ui_alarms_timers": "Wekkers en timers",
+		// All
+		"ui_all": "Alle",
+		// Alarms on
+		"ui_all_alarms": "Wekkers aan",
+		// All off: none ring until this is back on
+		"ui_all_alarms_off_sub": "Alles uit: er gaat niets af tot dit weer aan staat",
+		// Every alarm at once, for a trip
+		"ui_all_alarms_on_sub": "Alle wekkers tegelijk, bijvoorbeeld voor een reis",
+		// All calendars shown
+		"ui_all_calendars_shown": "Alle agenda's getoond",
+		// All of it, with blurred sides; off fills the screen
+		"ui_all_of_it_with_blurred_sides_off_fills_the_screen": "Alles, met vervaagde zijkanten; uit vult het scherm",
+		// All photos
+		"ui_all_photos": "Alle foto's",
 		// Allow
 		"ui_allow": "Toestaan",
+		// An event coming up, over the screen
+		"ui_an_event_coming_up_over_the_screen": "Een aankomende afspraak over het scherm",
 		// Answer
 		"ui_answer": "Opnemen",
+		// ‹  Back
+		"ui_back": "‹  Terug",
+		// Bluetooth audio · Connected
+		"ui_bluetooth_audio_connected": "Bluetooth-audio · Verbonden",
+		// Brightness, night, clock and photos
+		"ui_brightness_night_clock_and_photos": "Helderheid, nacht, klok en foto's",
+		// Brightness, night, theme, home screen and weather
+		"ui_brightness_night_theme_home_screen_and_weather": "Helderheid, nacht, thema, beginscherm en weer",
 		// Calendar
 		"ui_calendar": "Agenda",
+		// Calendars
+		"ui_calendars": "Agenda's",
+		// Chime
+		"ui_call_ring_chime": "Bel",
+		// Old phone
+		"ui_call_ring_old_phone": "Oude telefoon",
+		// Call volume
+		"ui_call_volume": "Oproepvolume",
+		// Calling…
+		"ui_calling": "Bellen…",
+		// Calling
+		"ui_calling_variant": "Bellen",
+		// Camera picture
+		"ui_camera_picture": "Camerabeeld",
+		// Camera strips
+		"ui_camera_strips": "Camerastroken",
+		// Camera strips shade
+		"ui_camera_strips_shade": "Donkerte van de camerastroken",
+		// Can't play it
+		"ui_can_t_play_it": "Kan het niet afspelen",
+		// Can't reach Home Assistant
+		"ui_can_t_reach_home_assistant": "Kan Home Assistant niet bereiken",
+		// Off
+		"ui_certificate_checks_off": "Uit",
+		// On
+		"ui_certificate_checks_on": "Aan",
 		// Change
 		"ui_change": "Wijzigen",
+		// Check for updates
+		"ui_check_for_updates": "Controleren op updates",
+		// Check now
+		"ui_check_now": "Nu controleren",
+		// Checking…
+		"ui_checking": "Controleren…",
+		// Chips while music plays
+		"ui_chips_while_music_plays": "Chips tijdens muziek",
+		// Where the glance chips go while the music strip is up
+		"ui_chips_while_music_plays_sub": "Waar de chips staan als de muziekstrook in beeld is",
+		// Chosen here
+		"ui_chosen_here": "Hier gekozen",
+		// Clock position
+		"ui_clock_position": "Positie van de klok",
+		// For the Classic, Flip, LED, Sun and Glow styles
+		"ui_clock_position_styles": "Voor de stijlen Classic, Flip, LED, Sun en Glow",
 		// Closed
 		"ui_closed": "Gesloten",
 		// Confirm
 		"ui_confirm": "Bevestigen",
+		// Connected to %s
+		"ui_connected_to_s": "Verbonden met %s",
+		// Connections
+		"ui_connections": "Verbindingen",
+		// Custom
+		"ui_custom": "Aangepast",
+		// Custom colors
+		"ui_custom_colors": "Eigen kleuren",
+		// %d:%02d left
+		"ui_d_02d_left": "%d:%02d over",
+		// %d calendars
+		"ui_d_calendars": "%d agenda's",
+		// %d hours
+		"ui_d_hours": "%d uur",
+		// %d min
+		"ui_d_min": "%d min",
+		// %d min left
+		"ui_d_min_left": "%d min over",
+		// %d minutes
+		"ui_d_minutes": "%d minuten",
+		// Dark theme
+		"ui_dark_theme": "Donker thema",
+		// Date and place
+		"ui_date_and_place": "Datum en plaats",
+		// Date color
+		"ui_date_color": "Datumkleur",
 		// Days
 		"ui_days": "Dagen",
 		// Decline
 		"ui_decline": "Weigeren",
 		// Delete
 		"ui_delete": "Verwijderen",
+		// Delete alarm
+		"ui_delete_alarm": "Wekker verwijderen",
 		// Disconnect
 		"ui_disconnect": "Ontkoppelen",
 		// Display
 		"ui_display": "Scherm",
+		// Drop In
+		"ui_drop_in": "Drop In",
+		// Earbuds or a speaker
+		"ui_earbuds_or_a_speaker": "Oordopjes of een luidspreker",
 		// Edit
 		"ui_edit": "Bewerken",
+		// Edit alarm
+		"ui_edit_alarm": "Wekker bewerken",
+		// Encrypted
+		"ui_encrypted": "Versleuteld",
+		// Event pop-ups
+		"ui_event_pop_ups": "Afspraak-pop-ups",
+		// Every folder inside the one chosen
+		"ui_every_folder_inside_the_one_chosen": "Elke map in de gekozen map",
+		// Favorites only
+		"ui_favorites_only": "Alleen favorieten",
+		// Flat
+		"ui_flat": "Neutraal",
+		// For all the screen's words
+		"ui_for_all_the_screen_s_words": "Voor alle woorden op het scherm",
+		// Forget
+		"ui_forget": "Vergeten",
+		// From Home Assistant
+		"ui_from_home_assistant": "Vanuit Home Assistant",
+		// From Home Assistant · %s
+		"ui_from_home_assistant_s": "Vanuit Home Assistant · %s",
+		// From quiet up to the ring volume
+		"ui_from_quiet_up_to_the_ring_volume": "Van zacht tot het belvolume",
+		// General
+		"ui_general": "Algemeen",
+		// Gets louder
+		"ui_gets_louder": "Wordt luider",
+		// Glance chip size
+		"ui_glance_chip_size": "Chipgrootte",
+		// Group it with other AirPlay 2 speakers
+		"ui_group_it_with_other_airplay_2_speakers": "Groepeer het met andere AirPlay 2-luidsprekers",
+		// Home Assistant isn't set up here
+		"ui_home_assistant_isn_t_set_up_here": "Home Assistant is hier niet ingesteld",
+		// Home Assistant refused the token
+		"ui_home_assistant_refused_the_token": "Home Assistant weigerde het token",
+		// Home Assistant: Settings, Voice assistants
+		"ui_home_assistant_settings_voice_assistants": "Home Assistant: Instellingen, Spraakassistenten",
 		// Hour
 		"ui_hour": "Uur",
+		// How answers sound
+		"ui_how_answers_sound": "Hoe antwoorden klinken",
+		// How dark those strips are
+		"ui_how_dark_those_strips_are": "Hoe donker die stroken zijn",
+		// In Home Assistant
+		"ui_in_home_assistant": "In Home Assistant",
+		// Include subfolders
+		"ui_include_subfolders": "Submappen meenemen",
 		// Incoming call
 		"ui_incoming_call": "Inkomende oproep",
 		// Install
 		"ui_install": "Installeren",
+		// Light only
+		"ui_light_only": "Alleen licht",
+		// Light theme
+		"ui_light_theme": "Licht thema",
 		// Listening
 		"ui_listening": "Luistert",
+		// Listening…
+		"ui_listening_turn": "Luistert…",
+		// Loading…
+		"ui_loading": "Laden…",
+		// Local
+		"ui_local": "Lokaal",
+		// Make a key on the setup page first
+		"ui_make_a_key_on_the_setup_page_first": "Maak eerst een sleutel aan op de installatiepagina",
+		// Match all
+		"ui_match_all_languages": "Alle talen herkennen",
 		// Minute
 		"ui_minute": "Minuut",
 		// More
 		"ui_more": "Meer",
 		// Muted
 		"ui_muted": "Gedempt",
+		// Name, weather, updates and restart
+		"ui_name_weather_updates_and_restart": "Naam, weer, updates en opnieuw opstarten",
+		// Needs a key: the setup page, Connections
+		"ui_needs_a_key_the_setup_page_connections": "Vereist een sleutel: installatiepagina, Verbindingen",
+		// Needs a setup key: the setup page, Connections
+		"ui_needs_a_setup_key_the_setup_page_connections": "Vereist een installatiesleutel: installatiepagina, Verbindingen",
+		// Needs Speaker EQ, which is off
+		"ui_needs_speaker_eq_which_is_off": "Vereist luidspreker-EQ, die uit staat",
+		// Never
+		"ui_never": "Nooit",
+		// New alarm
+		"ui_new_alarm": "Nieuwe wekker",
+		// Night ends
+		"ui_night_ends": "Nacht eindigt",
+		// Night ends at
+		"ui_night_ends_at": "Nacht eindigt om",
+		// Night starts
+		"ui_night_starts": "Nacht begint",
+		// Night starts at
+		"ui_night_starts_at": "Nacht begint om",
+		// No address yet
+		"ui_no_address_yet": "Nog geen adres",
+		// No alarms yet
+		"ui_no_alarms_yet": "Nog geen wekkers",
+		// No contacts yet: Home Assistant's phone_contacts action sets them
+		"ui_no_contacts_yet": "Nog geen contacten: de phone_contacts-actie van Home Assistant stelt ze in",
+		// No sound at all
+		"ui_no_sound_at_all": "Helemaal geen geluid",
+		// No sound: the light, then the night ends
+		"ui_no_sound_the_light_then_the_night_ends": "Geen geluid: het licht, dan eindigt de nacht",
+		// No stations
+		"ui_no_stations": "Geen zenders",
+		// None
+		"ui_none": "Geen",
+		// None chosen
+		"ui_none_chosen": "Geen map gekozen",
+		// None in Home Assistant yet
+		"ui_none_in_home_assistant_yet": "Nog geen enkele in Home Assistant",
+		// None yet
+		"ui_none_yet": "Nog geen",
+		// Not encrypted
+		"ui_not_encrypted": "Niet versleuteld",
+		// Not for Dashboard, Agenda or World
+		"ui_not_for_dashboard_agenda_or_world": "Niet voor Dashboard, Agenda of World",
+		// Not managed here
+		"ui_not_managed_here": "Niet hier beheerd",
+		// Not set
+		"ui_not_set": "Niet ingesteld",
+		// Not the music's
+		"ui_not_the_music_s": "Geldt niet voor muziek",
+		// Nothing on this day
+		"ui_nothing_on_this_day": "Niets op deze dag",
+		// Off
+		"ui_off": "Uit",
+		// Off if a phone pairs, then drops
+		"ui_off_if_a_phone_pairs_then_drops": "Uit als een telefoon koppelt en daarna wegvalt",
+		// On
+		"ui_on": "Aan",
+		// On a call
+		"ui_on_a_call": "In gesprek",
+		// On, but no key yet, so nothing listens
+		"ui_on_but_no_key_yet_so_nothing_listens": "Aan, maar nog geen sleutel, dus er luistert niets",
+		// On the screensaver, under each photo
+		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
+		// On this device
+		"ui_on_this_device": "Op dit apparaat",
+		// On: turn off to remove the PIN
+		"ui_on_turn_off_to_remove_the_pin": "Aan: zet uit om de pincode te verwijderen",
+		// Open the dashboard or the deck, or nothing
+		"ui_open_the_dashboard_or_the_deck_or_nothing": "Dashboard of deck openen, of niets",
 		// Pair
 		"ui_pair": "Koppelen",
+		// Password for %s
+		"ui_password_for_s": "Wachtwoord voor %s",
 		// PAUSED
 		"ui_paused": "GEPAUZEERD",
+		// Photo folder
+		"ui_photo_folder": "Fotomap",
+		// Photo pairs
+		"ui_photo_pairs": "Fotoparen",
+		// %d folder
+		"ui_photo_picker_folder_one": "%d map",
+		// %d folders
+		"ui_photo_picker_folders": "%d mappen",
+		// Couldn't open this folder
+		"ui_photo_picker_open_failed": "Kon deze map niet openen",
+		// Opening…
+		"ui_photo_picker_opening": "Openen…",
+		// %d photo
+		"ui_photo_picker_photo_one": "%d foto",
+		// %d photos
+		"ui_photo_picker_photos": "%d foto's",
+		// Use this folder
+		"ui_photo_picker_use_folder": "Deze map gebruiken",
+		// PLAYING
+		"ui_playing": "SPEELT",
+		// Plays once when you choose it
+		"ui_plays_once_when_you_choose_it": "Speelt één keer als je het kiest",
+		// Pop-up calendars
+		"ui_pop_up_calendars": "Agenda-pop-ups",
+		// Pop-up chime
+		"ui_pop_up_chime": "Pop-up-signaal",
+		// Popular
+		"ui_popular": "Populair",
+		// Port 22, keys only
+		"ui_port_22_keys_only": "Poort 22, alleen sleutels",
 		// Privacy
 		"ui_privacy": "Privacy",
+		// Privacy & Security
+		"ui_privacy_security": "Privacy en beveiliging",
+		// Radar
+		"ui_radar": "Radar",
+		// latest
+		"ui_radar_latest": "nieuwste",
+		// RADAR
+		"ui_radar_variant": "RADAR",
+		// Radio needs a Home Assistant token
+		"ui_radio_needs_a_home_assistant_token": "Radio vereist een Home Assistant-token",
+		// Reach this device from away: off
+		"ui_reach_this_device_from_away_off": "Dit apparaat op afstand bereiken: uit",
+		// Recording
+		"ui_recording": "Opname loopt",
+		// Recording takes
+		"ui_recording_takes": "Opnamen maken",
+		// Remote access and how this device is reached
+		"ui_remote_access_and_how_this_device_is_reached": "Toegang op afstand en hoe dit apparaat bereikbaar is",
+		// Remote access and security
+		"ui_remote_access_and_security": "Toegang op afstand en beveiliging",
 		// Rescan
 		"ui_rescan": "Opnieuw scannen",
+		// Ring volume
+		"ui_ring_volume": "Belvolume",
+		// Rings from this device itself
+		"ui_rings_from_this_device_itself": "Gaat af via dit apparaat zelf",
 		// Running
 		"ui_running": "Actief",
+		// Same as volume
+		"ui_same_as_volume": "Zelfde als volume",
+		// Same word in both slots: only one answers
+		"ui_same_wake_word_twice": "Hetzelfde woord in beide vakken: maar één antwoordt",
 		// Save
 		"ui_save": "Opslaan",
+		// Scanning
+		"ui_scanning": "Scannen",
+		// Scripts signed with this device's key
+		"ui_scripts_signed_with_this_device_s_key": "Scripts ondertekend met de sleutel van dit apparaat",
+		// Secure Connections
+		"ui_secure_connections": "Beveiligde verbindingen",
+		// Server default
+		"ui_server_default": "Serverstandaard",
+		// Server name for %s (empty: not checked)
+		"ui_server_for_s": "Servernaam voor %s (leeg: niet gecontroleerd)",
+		// Set
+		"ui_set": "Instellen",
+		// Set here
+		"ui_set_here": "Hier ingesteld",
+		// Set a house word on the setup page to call the other devices
+		"ui_set_house_word_to_call_other_devices": "Stel een huiswoord in op de installatiepagina om de andere apparaten te bellen",
+		// Set there
+		"ui_set_there": "Daar instellen",
+		// this device's address, port %d
+		"ui_setup_address_fallback": "het adres van dit apparaat, poort %d",
+		// Allow it only if that browser is yours.
+		"ui_setup_ask_hint": "Sta het alleen toe als die browser van jou is.",
+		// A browser is asking
+		"ui_setup_ask_spot_1": "Een browser vraagt",
+		// to be let in
+		"ui_setup_ask_spot_2": "om toegang",
+		// A browser is asking to be let in
+		"ui_setup_ask_title": "Een browser vraagt om toegang",
+		// A browser is asking: press the action button
+		"ui_setup_browser_waiting": "Een browser vraagt: druk op de actieknop",
+		// setup: a browser is asking to be let in
+		"ui_setup_footer_asking": "installatie: een browser vraagt om toegang",
+		// Open %s
+		"ui_setup_open_url": "Open %s",
+		// Setup page
+		"ui_setup_page": "Installatiepagina",
 		// Show
 		"ui_show": "Weergeven",
+		// Show whole photo
+		"ui_show_whole_photo": "Hele foto tonen",
+		// Shown on the calendar page, from Home Assistant
+		"ui_shown_on_the_calendar_page_from_home_assistant": "Getoond op de agendapagina, vanuit Home Assistant",
+		// Shuffle photos
+		"ui_shuffle_photos": "Willekeurige volgorde",
 		// Silent
 		"ui_silent": "Stil",
+		// Silent at night and in quiet hours
+		"ui_silent_at_night_and_in_quiet_hours": "Stil 's nachts en in stille uren",
+		// Small
+		"ui_small": "Klein",
+		// Snooze length
+		"ui_snooze_length": "Sluimerduur",
+		// Snoozed until %s
+		"ui_snoozed_until_s": "Sluimeren tot %s",
+		// Someone's at the door
+		"ui_someone_s_at_the_door": "Er is iemand aan de deur",
 		// Sound
 		"ui_sound": "Geluid",
+		// Sound & Voice
+		"ui_sound_voice": "Geluid en stem",
+		// Speaking voice
+		"ui_speaking_voice": "Spreekstem",
+		// Spoken by Home Assistant
+		"ui_spoken_by_home_assistant": "Uitgesproken door Home Assistant",
+		// Start
+		"ui_start": "Start",
+		// Start Assist, open the dashboard or the deck, or nothing
+		"ui_start_assist_open_the_dashboard_or_the_deck_or_nothing": "Assist starten, dashboard of deck openen, of niets",
+		// Starting…
+		"ui_starting": "Starten…",
+		// Starting
+		"ui_starting_variant": "Starten",
+		// Stations
+		"ui_stations": "Zenders",
+		// Steps from the volume
+		"ui_steps_from_the_volume": "Stappen vanaf het volume",
+		// Stopping…
+		"ui_stopping": "Stoppen…",
+		// Stops the music after a while
+		"ui_stops_the_music_after_a_while": "Stopt de muziek na een tijdje",
+		// Sun with a face
+		"ui_sun_with_a_face": "Zon met een gezicht",
+		// Sun up %s · down %s
+		"ui_sunrise_sunset_times": "Zon op %s · onder %s",
+		// swipe for more
+		"ui_swipe_for_more": "veeg voor meer",
+		// swipe for the forecast
+		"ui_swipe_for_the_forecast": "veeg voor de voorspelling",
+		// Swipe to decline
+		"ui_swipe_to_decline": "Veeg om te weigeren",
+		// like “%s”
+		"ui_takes_like_word": "zoals “%s”",
+		// of “%s”
+		"ui_takes_of_word": "van “%s”",
+		// Say it, wait a second, and say it again.
+		"ui_takes_repeat_instructions": "Zeg het, wacht een seconde en zeg het nog eens.",
+		// The setup page asked. Up to two minutes.
+		"ui_takes_setup_request_limit": "De installatiepagina vroeg erom. Maximaal twee minuten.",
+		// the setup page asked
+		"ui_takes_setup_requested": "gevraagd op de installatiepagina",
+		// %d:%02d of %d:%02d
+		"ui_takes_time_progress": "%d:%02d van %d:%02d",
+		// Talk on camera page
+		"ui_talk_on_camera_page": "Spreken op de camerapagina",
+		// Talk to cameras
+		"ui_talk_to_cameras": "Spreken via camera's",
+		// Tap a color for each part; the theme becomes Custom
+		"ui_tap_a_color_for_each_part_the_theme_becomes_custom": "Tik een kleur voor elk onderdeel; het thema wordt Custom",
+		// Tap again to delete it
+		"ui_tap_again_to_delete_it": "Tik nogmaals om te verwijderen",
+		// Tap again to forget it
+		"ui_tap_again_to_forget_it": "Tik nogmaals om het te vergeten",
+		// Tap again to restart now
+		"ui_tap_again_to_restart_now": "Tik nogmaals om nu opnieuw op te starten",
+		// Tap to answer
+		"ui_tap_to_answer": "Tik om op te nemen",
+		// Tap to hang up
+		"ui_tap_to_hang_up": "Tik om op te hangen",
+		// The date and AM/PM
+		"ui_the_date_and_am_pm": "De datum en AM/PM",
+		// The device's own tones only; alarms still sound
+		"ui_the_device_s_own_tones_only_alarms_still_sound": "Alleen de eigen tonen van het apparaat; wekkers gaan nog af",
+		// The iPhone's volume slider moves the device's volume
+		"ui_the_iphone_slider_is_the_device_s_volume": "De volumeschuif van de iPhone regelt het volume van het apparaat",
+		// The music stops on its own; nothing rings
+		"ui_the_music_stops_on_its_own_nothing_rings": "De muziek stopt vanzelf; er gaat niets af",
+		// The photos marked as favorites in Immich
+		"ui_the_photos_marked_as_favorites_in_immich": "De foto's die in Immich als favoriet zijn gemarkeerd",
+		// The size of the text under the clock
+		"ui_the_text_under_the_clock": "De grootte van de tekst onder de klok",
+		// The weather's corner over the clock
+		"ui_the_weather_s_corner_over_the_clock": "De hoek van het weer boven de klok",
 		// Theme
 		"ui_theme": "Thema",
 		// Thinking
 		"ui_thinking": "Denkt na",
+		// Thinking…
+		"ui_thinking_turn": "Denkt na…",
+		// This video can't be played
+		"ui_this_video_can_t_be_played": "Deze video kan niet worden afgespeeld",
+		// Banner
+		"ui_timer_style_banner": "Banner",
+		// Big
+		"ui_timer_style_big": "Groot",
+		// Corner
+		"ui_timer_style_corner": "Hoek",
 		// Line
 		"ui_timer_style_line": "Regel",
+		// Ring
+		"ui_timer_style_ring": "Ring",
+		// Tiny
+		"ui_tiny": "Mini",
+		// Turned off in Home Assistant
+		"ui_turned_off_in_home_assistant": "Uitgeschakeld in Home Assistant",
+		// Two tall photos side by side
+		"ui_two_tall_photos_side_by_side": "Twee staande foto's naast elkaar",
+		// Common
+		"ui_tz_common": "Veelgebruikt",
+		// Follow Home Assistant
+		"ui_tz_follow_ha": "Home Assistant volgen",
+		// Under its name and at its foot: solid, or fading into it
+		"ui_under_its_name_and_at_its_foot_solid_or_fading_into_it": "Onder de naam en aan de voet: effen, of erin vervagend",
 		// Unknown
 		"ui_unknown": "Onbekend",
+		// Username for %s
+		"ui_username_for_s": "Gebruikersnaam voor %s",
+		// Video
+		"ui_video": "Video",
+		// Show a video from
+		"ui_video_request_prompt": "Toon een video van",
+		// Voice volume
+		"ui_voice_volume": "Spraakvolume",
+		// Volume, voice, quiet hours and music
+		"ui_volume_voice_quiet_hours_and_music": "Volume, stem, stille uren en muziek",
+		// Waiting for Home Assistant
+		"ui_waiting_for_home_assistant": "Wachten op Home Assistant",
+		// Weather art
+		"ui_weather_art": "Weerbeeld",
+		// Weather position
+		"ui_weather_position": "Positie van het weer",
+		// Whole, filling the screen, or the camera's own size
+		"ui_whole_filling_the_screen_or_the_camera_s_own_size": "Heel beeld, scherm vullend, of het eigen formaat van de camera",
+		// Wi-Fi, Bluetooth and the Bluetooth proxy
+		"ui_wi_fi_bluetooth_and_the_bluetooth_proxy": "Wifi, Bluetooth en de Bluetooth-proxy",
+		// With headphones in
+		"ui_with_headphones_in": "Met koptelefoon",
 		// Update channel
 		"update_channel": "Updatekanaal",
+		// %s is ready · this is %s
+		"update_ready": "%s is klaar · dit is %s",
 		// Updates
 		"updates": "Updates",
 		// Voice
 		"voice": "Stem",
 		// Volume
 		"volume": "Volume",
+		// Wake sound
+		"wake_sound": "Wekgeluid",
+		// Wake with light
+		"wake_with_light": "Wekken met licht",
+		// Wake word
+		"wake_word": "Wekwoord",
+		// Wake word threshold
+		"wake_word_threshold": "Drempelwaarde wekwoord",
+		// Wake word threshold (playing)
+		"wake_word_threshold_playing": "Drempelwaarde wekwoord (afspelen)",
 		// Weather
 		"weather": "Weer",
+		// Weather alerts
+		"weather_alerts": "Weerwaarschuwingen",
+		// Weather animation
+		"weather_animation": "Weeranimatie",
+		// Forecast needs a Home Assistant token
+		"weather_forecast_needs_a_home_assistant_token": "Voorspelling vereist een Home Assistant-token",
+		// Home Assistant forecast
+		"weather_ha_forecast": "Home Assistant-voorspelling",
+		// High
+		"weather_high": "Max",
+		// Low
+		"weather_low": "Min",
+		// Home Assistant has not sent a reading
+		"weather_no_reading_from_home_assistant": "Home Assistant heeft nog geen meting gestuurd",
+		// No weather yet
+		"weather_no_weather_yet": "Nog geen weer",
+		// Weather %d
+		"weather_number": "Weer %d",
+		// Rain
+		"weather_rain_probability": "Regen",
+		// Week
+		"week": "Week",
+		// S M T W T F S
+		"weekday_initials": "Z M D W D V Z",
+		// Weekdays
+		"weekdays": "Werkdagen",
+		// Weekends
+		"weekends": "Weekend",
+		// Where the sound goes with headphones in
+		"where_the_sound_goes_with_headphones_in": "Waar het geluid heen gaat met een koptelefoon",
 		// Wi-Fi
 		"wi_fi": "Wifi",
+		// Connected
+		"wifi_connected": "Verbonden",
 	},
 	"ja": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "画面をタップして開始",
+		"firstrun_tap_to_finish":        "画面をタップして完了",
+		"firstrun_hello":                "こんにちは",
+		"firstrun_this_is_s":            "%sです。",
+		"firstrun_welcome_say":          "%sです。「%s」と話しかけて、何でも聞いてください。",
+		"firstrun_the_wake_word":        "ウェイクワード",
+		"firstrun_welcome_settings":     "上から下へスワイプで設定：Wi-Fi、Bluetooth、カメラ、ラジオ、テーマ。",
+		"firstrun_welcome_move":         "「玄関のカメラ」「ホーム画面に戻って」と話しかけると画面を切り替えます。",
+		"firstrun_welcome_home":         "Home Assistantからカメラ、ダッシュボード、写真をここに表示できます。",
+		"firstrun_step_d_of_d":          "ステップ%d/%d",
+		"firstrun_name_this_device":     "このデバイスの名前",
+		"firstrun_the_room_it_is_in":    "設置する部屋",
+		"firstrun_save":                 "保存",
+		"firstrun_needs_a_name":         "デバイスには名前が必要です",
+		"firstrun_type_a_room":          "部屋を入力するか、キャンセル",
+		"firstrun_room_not_saved":       "部屋を保存できませんでした",
+		"firstrun_other_room":           "その他",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "まだネットワークに接続していません。Wi-Fiを選んで%sを接続してください。",
+		"firstrun_wifi_needed":          "この後のすべてに必要です：Home Assistant、天気、ラジオ、アップデート。",
+		"firstrun_wifi_connected_to":    "%sに接続しました。",
+		"firstrun_wifi_address":         "ネットワーク上のアドレスは%sです。",
+		"firstrun_title_zone":           "タイムゾーン",
+		"firstrun_zone_is":              "タイムゾーン：%s。",
+		"firstrun_zone_clock":           "時計は%sを示しています。ここの時刻と違う場合はタイムゾーンを変更してください。",
+		"firstrun_title_name":           "名前と部屋",
+		"firstrun_name_is":              "名前：%s。",
+		"firstrun_renaming":             "新しい名前で再起動しています…",
+		"firstrun_room_from_home":       "部屋はHome Assistantで設定されます。",
+		"firstrun_name_which_room":      "名前：%s。どの部屋にありますか？",
+		"firstrun_name_and_room":        "名前：%s。部屋：%s。",
+		"firstrun_home_added_going":     "Home Assistantに追加されました。次へ進みます…",
+		"firstrun_home_added":           "Home Assistantに追加されました。",
+		"firstrun_home_no_network":      "まだネットワークに接続していないため、Home Assistantから接続できません。",
+		"firstrun_home_add_it":          "Home Assistantの設定の「デバイスとサービス」に表示されるので追加してください。入力は不要です。",
+		"firstrun_home_unkeyed_note":    "鍵は暗号化されずに送られるため、信頼できるネットワークで追加してください。Home Assistant 2026.9以降が必要です。",
+		"firstrun_home_open_d":          "あと%d分間受け付けます。",
+		"firstrun_home_adopt_note":      "新しい鍵は暗号化されずに送られるため、信頼できるネットワークでのみ行ってください。Home Assistant 2026.9以降が必要です。",
+		"firstrun_home_esphome":         "ESPHomeを%s、ポート6053、この鍵で追加してください：",
+		"firstrun_home_choose":          "入力なしでHome Assistantに追加するか、鍵を入力してください。",
+		"firstrun_home_alone":           "単体でも使えます：アラーム、タイマー、ラジオ、時計はHome Assistantなしで動作します。",
+		"firstrun_title_updates":        "アップデート",
+		"firstrun_updates_looking":      "アップデートを確認しています…",
+		"firstrun_updates_current":      "最新の状態です。",
+		"firstrun_updates_tonight":      "TECHO5 %sの準備ができました。セットアップ後、今夜インストールされます。",
+		"firstrun_updates_ready":        "TECHO5 %sの準備ができました：設定の「一般」からインストールしてください。",
+		"firstrun_updates_auto":         "アップデートは何も再生していないときに夜間（午前2時〜5時）自動でインストールされます。",
+		"firstrun_updates_manual":       "アップデートは手動でインストールするまで待機します。",
+		"firstrun_title_sound":          "サウンドチェック",
+		"firstrun_sound_played":         "短い音が鳴りました。聞こえましたか？",
+		"firstrun_next":                 "次へ",
+		"firstrun_change":               "変更",
+		"firstrun_not_now":              "今はしない",
+		"firstrun_choose_wifi":          "Wi-Fiを選択",
+		"firstrun_change_name":          "名前を変更",
+		"firstrun_skip_for_now":         "今はスキップ",
+		"firstrun_use_it_on_its_own":    "単体で使う",
+		"firstrun_on_its_own":           "単体で使う",
+		"firstrun_add_it_instead":       "追加する",
+		"firstrun_type_the_key":         "鍵を入力",
+		"firstrun_add_it":               "追加",
+		"firstrun_leave_them_off":       "オフにする",
+		"firstrun_turn_them_on":         "オンにする",
+		"firstrun_play_again":           "もう一度",
+		"firstrun_yes":                  "はい",
+		"firstrun_on_a_phone":           "スマホで設定",
+		"firstrun_choose_a_room":        "部屋を選択",
+		"firstrun_room_s":               "部屋：%s",
+		"firstrun_show_the_key":         "鍵を表示",
+		"firstrun_tap_to_go_back":       "タップして戻る",
+		"firstrun_phone_at":             "スマホで：%s:%d/setup",
+		"firstrun_spot_steps":           "いくつかの手順で設定します。",
+		"firstrun_spot_tap_to_begin":    "タップして開始。",
+		"firstrun_title_done":           "設定完了",
+		"firstrun_spot_done":            "%sの設定が完了しました。",
+		"firstrun_spot_menu":            "画面を長押しでメニュー。",
+		"firstrun_spot_tap_to_finish":   "タップして完了。",
+		"firstrun_spot_on":              "%sに接続中。",
+		"firstrun_spot_at":              "アドレス：%s。",
+		"firstrun_spot_no_network":      "ネットワークなし。",
+		"firstrun_spot_install_again":   "Wi-Fiを指定して再インストールすると接続できます。",
+		"firstrun_spot_zone":            "%s。",
+		"firstrun_spot_clock":           "時計は%sです。",
+		"firstrun_title_name_only":      "名前",
+		"firstrun_spot_restarting":      "新しい名前で",
+		"firstrun_spot_new_name":        "再起動しています…",
+		"firstrun_spot_name":            "名前：%s",
+		"firstrun_going_on":             "次へ進みます…",
+		"firstrun_spot_home_no_network": "まだネットワークに接続していません。",
+		"firstrun_spot_home_add":        "Home Assistantで追加：デバイスとサービス。入力は不要です。",
+		"firstrun_spot_trust":           "信頼できるネットワークでのみ。",
+		"firstrun_spot_open_d":          "あと%d分間受け付けます。信頼できるネットワークでのみ。",
+		"firstrun_spot_home_choose":     "入力なしで追加、",
+		"firstrun_spot_home_choose_key": "または鍵で追加。",
+		"firstrun_spot_tonight":         "%sは今夜インストールされます。",
+		"firstrun_spot_ready":           "%sの準備ができました。",
+		"firstrun_spot_manual":          "アップデートは手動です。",
+		"firstrun_spot_auto":            "アップデートは夜間に自動。",
+		"firstrun_spot_hear":            "聞こえましたか？",
+
+		"nextup_label":          "次:",
+		"popup_started":         "開始済み",
+		"popup_in_a_minute":     "1分後",
+		"popup_in_d_minutes":    "%d分後",
+		"popup_in_an_hour":      "1時間後",
+		"popup_at_s":            "%s開始",
+		"reminder_untitled":     "リマインダー",
+		"hint_no_start":         "Home Assistantがストリームを開始しませんでした。このデバイスで「デバイスがHome Assistantのアクションを実行することを許可する」はオンになっていますか？",
+		"hint_favorite":         "放送局を保存できませんでした。Home Assistantにscript.radio_favorite_add_stationという名前のスクリプトが必要です。",
+		"hint_no_home":          "このデバイスにHome Assistantが接続されていないため、放送局を開始しませんでした。",
+		"hint_play_failed":      "Home Assistantはその放送局を再生できませんでした。",
+		"hint_dropping":         "ストリームが何度も途切れるため、放送局を止めました。",
+		"clock_style_classic":   "クラシック",
+		"clock_style_big":       "ビッグ",
+		"clock_style_flip":      "フリップ",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "アナログ",
+		"clock_style_words":     "ことば",
+		"clock_style_sun":       "太陽",
+		"clock_style_dashboard": "ダッシュボード",
+		"clock_style_binary":    "2進数",
+		"clock_style_world":     "世界",
+		"clock_style_agenda":    "予定",
+		"clock_style_glow":      "グロー",
+		"clock_style_nixie":     "ニキシー",
+		"clock_style_stack":     "スタック",
+		"clock_style_overlap":   "オーバーラップ",
+		"call_muted":            "マイクオフ",
+		"weather_alert":         "気象警報",
+		"volume_caps":           "音量",
+		"timer_left_s":          "タイマー %s",
+		"music_playing":         "♪ 再生中",
+		"music_paused":          "♪ 一時停止中",
+
 		"drawer_recording":           "録音中",
 		"drawer_talk":                "話す",
 		"drawer_end_talk":            "会話を終了  %d:%02d",
@@ -3906,6 +6387,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "歌詞",
 		"microphone":                    "マイク",
 		"microphone_off":                "マイクはオフです",
+		"no_wifi":                       "Wi-Fiなし",
+		"no_home_assistant":             "Home Assistantなし",
+		"voice_no_home":                 "Home Assistantに接続できません",
+		"voice_no_assistant":            "音声アシスタントが設定されていません",
+		"voice_timeout":                 "時間内に応答がありませんでした",
+		"voice_failed":                  "アシスタントが応答できませんでした",
+		"not_live":                      "ライブではありません",
+		"deck_failed":                   "うまくいきませんでした",
+		"deck_obs_away":                 "OBSに接続されていません",
+		"deck_obs_refused":              "OBSに拒否されました",
+		"deck_obs_silent":               "OBSから応答がありません",
+		"deck_pc_silent":                "%s から応答がありません",
+		"deck_pc_unpaired":              "%s はペアリングされていません",
+		"deck_pc_key":                   "%s のキーが一致しません",
 		"minutes_before":                "%d分前",
 		"month":                         "月表示",
 		"music":                         "音楽",
@@ -4040,68 +6535,71 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "カレンダーを読み込み中…",
 		"remote_api":                                "リモートAPI",
 		"repeat":                                    "繰り返し",
-		"restart":                                   "再起動",
-		"said_as_it_rings":                          "鳴動中に読み上げ",
-		"same_as_default":                           "既定の設定（%s）",
-		"screen_language":                           "画面の言語",
-		"screen_off_when_nobody_is_near":            "近くに人がいなければ画面を消す",
-		"screen_on_the_network":                     "ネットワーク経由の画面共有",
-		"screensaver":                               "スクリーンセーバー",
-		"seconds_option":                            "%d秒",
-		"sent_from_home_assistant":                  "Home Assistantから取得",
-		"settings":                                  "設定",
-		"settings_lock":                             "設定のロック",
-		"shown_as_you_change_it_at_night":           "夜間に変更を反映して表示",
-		"shown_with_the_clock":                      "時計と一緒に表示",
-		"silenced":                                  "消音中",
-		"silenced_press_again_to_snooze_d_min":      "消音中・もう一度押すと%d分スヌーズ",
-		"skin":                                      "画面スタイル",
-		"skin_keeps":                                "スタイル解除後に適用",
-		"sleep_timer":                               "スリープタイマー",
-		"slideshow":                                 "スライドショー",
-		"snooze_d_min":                              "%d分スヌーズ",
-		"sounds":                                    "効果音",
-		"speaker_gain":                              "スピーカー増幅",
-		"speakers":                                  "スピーカー",
-		"ssh_keys":                                  "SSHキー",
-		"stop":                                      "停止",
-		"sunrise_alarm":                             "%sのアラームまで点灯",
-		"sunrise_default_description":               "個別設定のないアラームの前に点灯",
-		"sunrise_ringing":                           "アラームが鳴っている間は点灯",
-		"sunrise_rising":                            "徐々に明るくしています",
-		"sunrise_snooze":                            "%sのスヌーズ終了まで点灯",
-		"sunrise_until":                             "%sまで点灯",
-		"sunrise_skip_action":                       "Skip",
-		"sunrise_skip_done":                         "Skipped: the alarm at %s",
-		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
-		"talk_on_the_camera_page":                   "カメラ画面から会話",
-		"talk_through_cameras":                      "カメラ経由で会話",
-		"baby_monitor":                              "ベビーモニター",
-		"room_sound_in_a_browser_with_the_link":     "リンクを開いたブラウザで部屋の音を聞く",
-		"record_takes_of_a_word":                    "単語を繰り返し録音",
-		"on_the_setup_page_started_here":            "セットアップ画面で依頼、ここで開始",
-		"tap_lifts_the_night_light":                 "タップで通常表示に戻る",
-		"night_clock_next_up_and_alerts":            "ナイトクロックに次の予定と通知を表示",
-		"dim_red_and_no_brighter":                   "暗い赤で表示。画面は明るくなりません",
-		"tap_on_the_clock":                          "時計をタップ",
-		"tap_to_go_back":                            "タップして戻る",
-		"the_mute_button_does_this_too":             "ミュートボタンでも切り替え可能",
-		"the_nws_s_alerts_for_home_in_the_u_s":      "米国NWSの気象警報を表示",
-		"the_words_in_time_looked_up_at_lrclib":     "LRCLIBの同期歌詞を表示",
-		"theme_personalize":                         "テーマの各部分の色を変更",
-		"this_version":                              "現在のバージョン：%s",
-		"time_per_photo":                            "写真の切り替え間隔",
-		"time_zone":                                 "タイムゾーン",
-		"timer":                                     "タイマー",
-		"timer_and_alarm":                           "タイマーとアラーム",
-		"timer_suffix":                              " タイマー",
-		"timers":                                    "タイマー",
-		"today":                                     "今日",
-		"tomorrow":                                  "明日",
-		"treble":                                    "高音",
-		"turn_screen":                               "音声応答画面",
-		"ui_1_hour":                                 "1時間",
-		"ui_1_hour_d_minutes":                       "1時間%d分",
+		"reset":                                     "リセット",
+		"reset_for_someone_else":                    "別の人のためにリセット",
+		"clears_it_and_start_setting_it_up_again":             "すべて消去してセットアップをやり直します",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi、名前、Home Assistant、アラームなどすべてが消去されます。もう一度タップしてください",
+		"restart":                               "再起動",
+		"said_as_it_rings":                      "鳴動中に読み上げ",
+		"same_as_default":                       "既定の設定（%s）",
+		"screen_language":                       "画面の言語",
+		"screen_off_when_nobody_is_near":        "近くに人がいなければ画面を消す",
+		"screen_on_the_network":                 "ネットワーク経由の画面共有",
+		"screensaver":                           "スクリーンセーバー",
+		"seconds_option":                        "%d秒",
+		"sent_from_home_assistant":              "Home Assistantから取得",
+		"settings":                              "設定",
+		"settings_lock":                         "設定のロック",
+		"shown_as_you_change_it_at_night":       "夜間に変更を反映して表示",
+		"shown_with_the_clock":                  "時計と一緒に表示",
+		"silenced":                              "消音中",
+		"skin":                                  "画面スタイル",
+		"skin_keeps":                            "スタイル解除後に適用",
+		"sleep_timer":                           "スリープタイマー",
+		"slideshow":                             "スライドショー",
+		"snooze_d_min":                          "%d分スヌーズ",
+		"sounds":                                "効果音",
+		"speaker_gain":                          "スピーカー増幅",
+		"speakers":                              "スピーカー",
+		"ssh_keys":                              "SSHキー",
+		"stop":                                  "停止",
+		"sunrise_alarm":                         "%sのアラームまで点灯",
+		"sunrise_default_description":           "個別設定のないアラームの前に点灯",
+		"sunrise_ringing":                       "アラームが鳴っている間は点灯",
+		"sunrise_rising":                        "徐々に明るくしています",
+		"sunrise_snooze":                        "%sのスヌーズ終了まで点灯",
+		"sunrise_until":                         "%sまで点灯",
+		"sunrise_skip_action":                   "Skip",
+		"sunrise_skip_done":                     "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                  "Not skipped: the alarm at %s",
+		"talk_on_the_camera_page":               "カメラ画面から会話",
+		"talk_through_cameras":                  "カメラ経由で会話",
+		"baby_monitor":                          "ベビーモニター",
+		"room_sound_in_a_browser_with_the_link": "リンクを開いたブラウザで部屋の音を聞く",
+		"record_takes_of_a_word":                "単語を繰り返し録音",
+		"on_the_setup_page_started_here":        "セットアップ画面で依頼、ここで開始",
+		"tap_lifts_the_night_light":             "タップで通常表示に戻る",
+		"night_clock_next_up_and_alerts":        "ナイトクロックに次の予定と通知を表示",
+		"dim_red_and_no_brighter":               "暗い赤で表示。画面は明るくなりません",
+		"tap_on_the_clock":                      "時計をタップ",
+		"tap_to_go_back":                        "タップして戻る",
+		"the_mute_button_does_this_too":         "ミュートボタンでも切り替え可能",
+		"the_nws_s_alerts_for_home_in_the_u_s":  "米国NWSの気象警報を表示",
+		"the_words_in_time_looked_up_at_lrclib": "LRCLIBの同期歌詞を表示",
+		"theme_personalize":                     "テーマの各部分の色を変更",
+		"this_version":                          "現在のバージョン：%s",
+		"time_per_photo":                        "写真の切り替え間隔",
+		"time_zone":                             "タイムゾーン",
+		"timer":                                 "タイマー",
+		"timer_and_alarm":                       "タイマーとアラーム",
+		"timer_suffix":                          " タイマー",
+		"timers":                                "タイマー",
+		"today":                                 "今日",
+		"tomorrow":                              "明日",
+		"treble":                                "高音",
+		"turn_screen":                           "音声応答画面",
+		"ui_1_hour":                             "1時間",
+		"ui_1_hour_d_minutes":                   "1時間%d分",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "太陽に顔を表示",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "写真の代わりに天気に合った風景を表示",
 		"ui_a_pin_before_most_settings_change":              "多くの設定変更にPINを要求",
@@ -4201,8 +6699,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "さらに表示",
 		"ui_muted":                              "ミュート中",
 		"ui_name_weather_updates_and_restart":   "名前・天気・更新・再起動",
-		"ui_needs_a_key_the_setup_page_connections":       "セットアップ画面のConnectionsで鍵を設定",
-		"ui_needs_a_setup_key_the_setup_page_connections": "セットアップ画面のConnectionsでセットアップキーを設定",
+		"ui_needs_a_key_the_setup_page_connections":       "セットアップ画面のNetworkで鍵を設定",
+		"ui_needs_a_setup_key_the_setup_page_connections": "セットアップ画面のNetworkでセットアップキーを設定",
 		"ui_needs_speaker_eq_which_is_off":                "スピーカーEQを有効にしてください",
 		"ui_never":                                        "なし",
 		"ui_new_alarm":                                    "新しいアラーム",
@@ -4510,12 +7008,163 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":     "%d/%d ステップ目",
 		"ui_mealie_previous":    "前へ",
 		"ui_mealie_no_steps":    "このレシピには材料も手順もありません。",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "リマインダー",
+		"card_notification":               "通知",
+		"card_drag_for_more":              "ドラッグで続きを表示",
+		"tap_again":                       "もう一度タップ",
+		"tap_again_s":                     "もう一度タップ：%s",
+		"camera_button_sent":              "送信しました",
+		"camera_button_no_home_assistant": "Home Assistantに未接続",
+		"connecting_to_the_dashboard":     "ダッシュボードに接続中…",
+		"loading_the_dashboard":           "ダッシュボードを読み込み中…",
+		"obs_is_not_set_up":               "OBSが未設定です：セットアップ画面 → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "消音中・音量またはマイクのボタンを押すと%d分スヌーズ",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
 	// review can compare the two without the other map. Keys left out fall back
 	// to English. Format arguments are the same as the English ones.
 	"de": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Zum Starten irgendwo tippen",
+		"firstrun_tap_to_finish":        "Zum Abschließen irgendwo tippen",
+		"firstrun_hello":                "Hallo",
+		"firstrun_this_is_s":            "Das ist %s.",
+		"firstrun_welcome_say":          "Das ist %s. „%s“ sagen und etwas fragen.",
+		"firstrun_the_wake_word":        "das Weckwort",
+		"firstrun_welcome_settings":     "Von oben nach unten wischen für die Einstellungen: WLAN, Bluetooth, Kameras, Radio, Designs.",
+		"firstrun_welcome_move":         "„Zeig die Haustür“ oder „Zurück zur Uhr“ sagen, um den Bildschirm zu wechseln.",
+		"firstrun_welcome_home":         "Home Assistant kann hier Kameras, Dashboards und Fotos zeigen.",
+		"firstrun_step_d_of_d":          "Schritt %d von %d",
+		"firstrun_name_this_device":     "Gerät benennen",
+		"firstrun_the_room_it_is_in":    "Der Raum, in dem es steht",
+		"firstrun_save":                 "Speichern",
+		"firstrun_needs_a_name":         "Das Gerät braucht einen Namen",
+		"firstrun_type_a_room":          "Einen Raum eingeben, oder Abbrechen",
+		"firstrun_room_not_saved":       "Raum konnte nicht gespeichert werden",
+		"firstrun_other_room":           "Anderer",
+		"firstrun_title_wifi":           "WLAN",
+		"firstrun_wifi_none":            "Noch in keinem Netzwerk. Das WLAN wählen, um %s zu verbinden.",
+		"firstrun_wifi_needed":          "Alles Weitere braucht es: Home Assistant, das Wetter, das Radio und Updates.",
+		"firstrun_wifi_connected_to":    "Verbunden mit %s.",
+		"firstrun_wifi_address":         "Seine Adresse im Netzwerk ist %s.",
+		"firstrun_title_zone":           "Zeitzone",
+		"firstrun_zone_is":              "Zeitzone: %s.",
+		"firstrun_zone_clock":           "Die Uhr zeigt %s. Die Zone ändern, falls das hier nicht die Uhrzeit ist.",
+		"firstrun_title_name":           "Name und Raum",
+		"firstrun_name_is":              "Name: %s.",
+		"firstrun_renaming":             "Neustart, um den neuen Namen zu verwenden…",
+		"firstrun_room_from_home":       "Sein Raum wird in Home Assistant festgelegt.",
+		"firstrun_name_which_room":      "Name: %s. In welchem Raum steht es?",
+		"firstrun_name_and_room":        "Name: %s. Raum: %s.",
+		"firstrun_home_added_going":     "Home Assistant hat es hinzugefügt. Es geht weiter…",
+		"firstrun_home_added":           "Home Assistant hat es hinzugefügt.",
+		"firstrun_home_no_network":      "Noch in keinem Netzwerk, daher kann Home Assistant es nicht erreichen.",
+		"firstrun_home_add_it":          "In Home Assistant hinzufügen: Es erscheint unter Einstellungen, Geräte & Dienste. Nichts einzugeben.",
+		"firstrun_home_unkeyed_note":    "Home Assistant schickt dem Gerät seinen Schlüssel unverschlüsselt, daher nur in einem vertrauenswürdigen Netzwerk hinzufügen. Erfordert Home Assistant 2026.9 oder neuer.",
+		"firstrun_home_open_d":          "Noch %d Minuten offen.",
+		"firstrun_home_adopt_note":      "Home Assistant schickt dem Gerät seinen neuen Schlüssel unverschlüsselt, daher nur in einem vertrauenswürdigen Netzwerk ausführen. Erfordert Home Assistant 2026.9 oder neuer.",
+		"firstrun_home_esphome":         "ESPHome: %s, Port 6053, mit diesem Schlüssel:",
+		"firstrun_home_choose":          "Ohne Eingabe zu Home Assistant hinzufügen, oder den Schlüssel eingeben.",
+		"firstrun_home_alone":           "Oder allein nutzen: Wecker, Timer, Radio und Uhr funktionieren ohne Home Assistant.",
+		"firstrun_title_updates":        "Updates",
+		"firstrun_updates_looking":      "Suche nach einem Update…",
+		"firstrun_updates_current":      "Es ist auf dem neuesten Stand.",
+		"firstrun_updates_tonight":      "TECHO5 %s ist bereit. Es wird heute Nacht installiert, nach der Einrichtung.",
+		"firstrun_updates_ready":        "TECHO5 %s ist bereit: unter Einstellungen, Allgemein installieren.",
+		"firstrun_updates_auto":         "Updates installieren sich nachts von selbst (2 bis 5 Uhr), wenn nichts läuft.",
+		"firstrun_updates_manual":       "Updates warten, bis sie installiert werden.",
+		"firstrun_title_sound":          "Tontest",
+		"firstrun_sound_played":         "Gerade wurde ein kurzer Ton abgespielt. War er zu hören?",
+		"firstrun_next":                 "Weiter",
+		"firstrun_change":               "Ändern",
+		"firstrun_not_now":              "Nicht jetzt",
+		"firstrun_choose_wifi":          "WLAN wählen",
+		"firstrun_change_name":          "Name ändern",
+		"firstrun_skip_for_now":         "Vorerst überspringen",
+		"firstrun_use_it_on_its_own":    "Allein nutzen",
+		"firstrun_on_its_own":           "Allein",
+		"firstrun_add_it_instead":       "Doch hinzufügen",
+		"firstrun_type_the_key":         "Schlüssel",
+		"firstrun_add_it":               "Hinzufügen",
+		"firstrun_leave_them_off":       "Ausschalten",
+		"firstrun_turn_them_on":         "Einschalten",
+		"firstrun_play_again":           "Nochmal",
+		"firstrun_yes":                  "Ja",
+		"firstrun_on_a_phone":           "Mit dem Telefon",
+		"firstrun_choose_a_room":        "Raum wählen",
+		"firstrun_room_s":               "Raum: %s",
+		"firstrun_show_the_key":         "Schlüssel zeigen",
+		"firstrun_tap_to_go_back":       "Zum Zurückgehen tippen",
+		"firstrun_phone_at":             "Mit dem Telefon: %s:%d/setup",
+		"firstrun_spot_steps":           "Ein paar Schritte richten es ein.",
+		"firstrun_spot_tap_to_begin":    "Zum Starten tippen.",
+		"firstrun_title_done":           "Alles bereit",
+		"firstrun_spot_done":            "%s ist eingerichtet.",
+		"firstrun_spot_menu":            "Für das Menü den Bildschirm halten.",
+		"firstrun_spot_tap_to_finish":   "Zum Abschließen tippen.",
+		"firstrun_spot_on":              "In %s.",
+		"firstrun_spot_at":              "Adresse: %s.",
+		"firstrun_spot_no_network":      "Kein Netzwerk.",
+		"firstrun_spot_install_again":   "Mit dem WLAN neu installieren, um es zu verbinden.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "Die Uhr zeigt %s.",
+		"firstrun_title_name_only":      "Name",
+		"firstrun_spot_restarting":      "Neustart für",
+		"firstrun_spot_new_name":        "den neuen Namen…",
+		"firstrun_spot_name":            "Name: %s",
+		"firstrun_going_on":             "Es geht weiter…",
+		"firstrun_spot_home_no_network": "Noch in keinem Netzwerk.",
+		"firstrun_spot_home_add":        "In Home Assistant hinzufügen: Geräte & Dienste. Nichts einzugeben.",
+		"firstrun_spot_trust":           "Nur in einem vertrauenswürdigen Netzwerk.",
+		"firstrun_spot_open_d":          "Noch %d Minuten offen. Nur in einem vertrauenswürdigen Netzwerk.",
+		"firstrun_spot_home_choose":     "Ohne Eingabe hinzufügen,",
+		"firstrun_spot_home_choose_key": "oder mit dem Schlüssel.",
+		"firstrun_spot_tonight":         "%s wird heute Nacht installiert.",
+		"firstrun_spot_ready":           "%s ist bereit.",
+		"firstrun_spot_manual":          "Updates warten auf die Installation.",
+		"firstrun_spot_auto":            "Updates nachts automatisch.",
+		"firstrun_spot_hear":            "War das zu hören?",
+
+		"nextup_label":          "Als Nächstes:",
+		"popup_started":         "Begonnen",
+		"popup_in_a_minute":     "In einer Minute",
+		"popup_in_d_minutes":    "In %d Minuten",
+		"popup_in_an_hour":      "In einer Stunde",
+		"popup_at_s":            "Um %s",
+		"reminder_untitled":     "Erinnerung",
+		"hint_no_start":         "Home Assistant hat den Stream nicht gestartet. Ist „Dem Gerät erlauben, Home-Assistant-Aktionen auszuführen“ für dieses Gerät eingeschaltet?",
+		"hint_favorite":         "Sender konnte nicht gespeichert werden. Home Assistant braucht ein Skript namens script.radio_favorite_add_station.",
+		"hint_no_home":          "Home Assistant ist nicht mit diesem Gerät verbunden, daher wurde der Sender nicht gestartet.",
+		"hint_play_failed":      "Home Assistant konnte diesen Sender nicht abspielen.",
+		"hint_dropping":         "Der Stream bricht immer wieder ab, daher bleibt der Sender aus.",
+		"clock_style_classic":   "Klassisch",
+		"clock_style_big":       "Groß",
+		"clock_style_flip":      "Klapp",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analog",
+		"clock_style_words":     "Wörter",
+		"clock_style_sun":       "Sonne",
+		"clock_style_dashboard": "Dashboard",
+		"clock_style_binary":    "Binär",
+		"clock_style_world":     "Welt",
+		"clock_style_agenda":    "Agenda",
+		"clock_style_glow":      "Glühen",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Stapel",
+		"clock_style_overlap":   "Überlappend",
+		"call_muted":            "Mikro aus",
+		"weather_alert":         "WETTERWARNUNG",
+		"volume_caps":           "LAUTSTÄRKE",
+		"timer_left_s":          "Timer %s",
+		"music_playing":         "♪ läuft",
+		"music_paused":          "♪ pausiert",
+
 		// Listening
 		"drawer_recording": "Hört zu",
 		// Talk
@@ -4872,7 +7521,21 @@ var uiTranslations = map[string]map[string]string{
 		// Microphone
 		"microphone": "Mikrofon",
 		// MICROPHONE OFF
-		"microphone_off": "MIKROFON AUS",
+		"microphone_off":     "MIKROFON AUS",
+		"no_wifi":            "KEIN WLAN",
+		"no_home_assistant":  "KEIN HOME ASSISTANT",
+		"voice_no_home":      "Home Assistant ist nicht erreichbar",
+		"voice_no_assistant": "Kein Sprachassistent eingerichtet",
+		"voice_timeout":      "Keine rechtzeitige Antwort",
+		"voice_failed":       "Der Assistent konnte nicht antworten",
+		"not_live":           "NICHT LIVE",
+		"deck_failed":        "Das hat nicht geklappt",
+		"deck_obs_away":      "OBS ist nicht verbunden",
+		"deck_obs_refused":   "OBS hat das abgelehnt",
+		"deck_obs_silent":    "OBS hat nicht geantwortet",
+		"deck_pc_silent":     "%s antwortet nicht",
+		"deck_pc_unpaired":   "%s ist nicht gekoppelt",
+		"deck_pc_key":        "Der Schlüssel für %s passt nicht",
 		// %d minutes before
 		"minutes_before": "%d Minuten vorher",
 		// Month
@@ -5138,6 +7801,14 @@ var uiTranslations = map[string]map[string]string{
 		"remote_api": "Remote-API",
 		// Repeat
 		"repeat": "Wiederholen",
+		// Reset
+		"reset": "Zurücksetzen",
+		// Reset for someone else
+		"reset_for_someone_else": "Für jemand anderen zurücksetzen",
+		// Clears it and starts setting it up again
+		"clears_it_and_start_setting_it_up_again": "Löscht alles und startet die Einrichtung erneut",
+		// Wi-Fi, name, Home Assistant, alarms, everything: tap again
+		"wifi_name_home_assistant_alarm_everything_tap_again": "WLAN, Name, Home Assistant, Wecker, alles: erneut tippen",
 		// Restart
 		"restart": "Neu starten",
 		// Said as it rings
@@ -5166,8 +7837,6 @@ var uiTranslations = map[string]map[string]string{
 		"shown_with_the_clock": "Wird mit der Uhr angezeigt",
 		// Silenced
 		"silenced": "Stummgeschaltet",
-		// Silenced · press again to snooze %d min
-		"silenced_press_again_to_snooze_d_min": "Stumm · erneut drücken für %d min Schlummern",
 		// Skin
 		"skin": "Skin",
 		// Kept for when the skin is off
@@ -5456,10 +8125,10 @@ var uiTranslations = map[string]map[string]string{
 		"ui_muted": "Stumm",
 		// Name, weather, updates and restart
 		"ui_name_weather_updates_and_restart": "Name, Wetter, Updates und Neustart",
-		// Needs a key: the setup page, Connections
-		"ui_needs_a_key_the_setup_page_connections": "Braucht einen Schlüssel: Einrichtungsseite, Verbindungen",
-		// Needs a setup key: the setup page, Connections
-		"ui_needs_a_setup_key_the_setup_page_connections": "Braucht einen Einrichtungsschlüssel: Einrichtungsseite, Verbindungen",
+		// Needs a key: the setup page, Network
+		"ui_needs_a_key_the_setup_page_connections": "Braucht einen Schlüssel: Einrichtungsseite, Netzwerk",
+		// Needs a setup key: the setup page, Network
+		"ui_needs_a_setup_key_the_setup_page_connections": "Braucht einen Einrichtungsschlüssel: Einrichtungsseite, Netzwerk",
 		// Needs Speaker EQ, which is off
 		"ui_needs_speaker_eq_which_is_off": "Braucht den Lautsprecher-EQ, der aus ist",
 		// Never
@@ -5919,8 +8588,170 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":                             "Schritt %d von %d",
 		"ui_mealie_previous":                            "Vorheriger Schritt",
 		"ui_mealie_no_steps":                            "Dieses Rezept hat keine Schritte oder Zutaten.",
+
+		// Words on cards and overlays that were written into the drawing code.
+		// REMINDER
+		"card_reminder": "ERINNERUNG",
+		// NOTIFICATION
+		"card_notification": "BENACHRICHTIGUNG",
+		// DRAG FOR MORE
+		"card_drag_for_more": "FÜR MEHR ZIEHEN",
+		// Tap again
+		"tap_again": "Erneut tippen",
+		// Tap again: %s
+		"tap_again_s": "Erneut tippen: %s",
+		// Sent
+		"camera_button_sent": "Gesendet",
+		// No Home Assistant
+		"camera_button_no_home_assistant": "Kein Home Assistant",
+		// Connecting to the dashboard…
+		"connecting_to_the_dashboard": "Verbinde mit dem Dashboard…",
+		// Loading the dashboard…
+		"loading_the_dashboard": "Dashboard wird geladen…",
+		// OBS isn't set up: setup page → Screen → Deck
+		"obs_is_not_set_up": "OBS ist nicht eingerichtet: Einrichtungsseite → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		// Silenced · press a volume or microphone button to snooze %d min
+		"silenced_press_a_button_to_snooze_d_min": "Stumm · Lautstärke- oder Mikrofontaste drücken für %d min Schlummern",
 	},
 	"tr": {
+		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
+		// and the welcome card. Names, networks and addresses are the %s and %d.
+		"firstrun_tap_to_begin":         "Başlamak için herhangi bir yere dokunun",
+		"firstrun_tap_to_finish":        "Bitirmek için herhangi bir yere dokunun",
+		"firstrun_hello":                "Merhaba",
+		"firstrun_this_is_s":            "Bu cihaz: %s.",
+		"firstrun_welcome_say":          "Bu cihaz: %s. \"%s\" deyin ve sorun.",
+		"firstrun_the_wake_word":        "uyandırma sözcüğü",
+		"firstrun_welcome_settings":     "Ayarlar için yukarıdan aşağı kaydırın: Wi-Fi, Bluetooth, kameralar, radyo, temalar.",
+		"firstrun_welcome_move":         "Ekranı değiştirmek için \"ön kapıyı göster\" veya \"ana ekrana dön\" deyin.",
+		"firstrun_welcome_home":         "Home Assistant burada kameraları, panoları ve fotoğrafları gösterebilir.",
+		"firstrun_step_d_of_d":          "Adım %d/%d",
+		"firstrun_name_this_device":     "Bu cihaza ad verin",
+		"firstrun_the_room_it_is_in":    "Bulunduğu oda",
+		"firstrun_save":                 "Kaydet",
+		"firstrun_needs_a_name":         "Cihazın bir ada ihtiyacı var",
+		"firstrun_type_a_room":          "Bir oda yazın veya İptal",
+		"firstrun_room_not_saved":       "Oda kaydedilemedi",
+		"firstrun_other_room":           "Diğer",
+		"firstrun_title_wifi":           "Wi-Fi",
+		"firstrun_wifi_none":            "Henüz bir ağa bağlı değil. %s cihazını bağlamak için Wi-Fi ağınızı seçin.",
+		"firstrun_wifi_needed":          "Bundan sonraki her şey buna ihtiyaç duyar: Home Assistant, hava durumu, radyo ve güncellemeler.",
+		"firstrun_wifi_connected_to":    "Bağlı ağ: %s.",
+		"firstrun_wifi_address":         "Ağdaki adresi: %s.",
+		"firstrun_title_zone":           "Saat dilimi",
+		"firstrun_zone_is":              "Saat dilimi: %s.",
+		"firstrun_zone_clock":           "Saat: %s. Buradaki saat bu değilse saat dilimini değiştirin.",
+		"firstrun_title_name":           "Ad ve oda",
+		"firstrun_name_is":              "Ad: %s.",
+		"firstrun_renaming":             "Yeni adı kullanmak için yeniden başlatılıyor…",
+		"firstrun_room_from_home":       "Odası Home Assistant'ta ayarlanır.",
+		"firstrun_name_which_room":      "Ad: %s. Hangi odada?",
+		"firstrun_name_and_room":        "Ad: %s. Oda: %s.",
+		"firstrun_home_added_going":     "Home Assistant cihazı ekledi. Devam ediliyor…",
+		"firstrun_home_added":           "Home Assistant cihazı ekledi.",
+		"firstrun_home_no_network":      "Henüz bir ağa bağlı değil, bu yüzden Home Assistant ona ulaşamıyor.",
+		"firstrun_home_add_it":          "Home Assistant'ta ekleyin: Ayarlar, Cihazlar ve hizmetler altında görünür. Bir şey yazmanız gerekmez.",
+		"firstrun_home_unkeyed_note":    "Home Assistant cihaza anahtarını şifrelemeden gönderir, bu yüzden güvendiğiniz bir ağda ekleyin. Home Assistant 2026.9 veya üstü gerekir.",
+		"firstrun_home_open_d":          "%d dakika daha açık.",
+		"firstrun_home_adopt_note":      "Home Assistant cihaza yeni anahtarını şifrelemeden gönderir, bu yüzden bunu yalnızca güvendiğiniz bir ağda yapın. Home Assistant 2026.9 veya üstü gerekir.",
+		"firstrun_home_esphome":         "ESPHome: %s, port 6053, bu anahtarla:",
+		"firstrun_home_choose":          "Hiçbir şey yazmadan Home Assistant'a ekleyin veya anahtarını yazın.",
+		"firstrun_home_alone":           "Ya da tek başına kullanın: alarmlar, zamanlayıcılar, radyo ve saat Home Assistant olmadan çalışır.",
+		"firstrun_title_updates":        "Güncellemeler",
+		"firstrun_updates_looking":      "Güncelleme aranıyor…",
+		"firstrun_updates_current":      "Güncel.",
+		"firstrun_updates_tonight":      "TECHO5 %s hazır. Kurulumdan sonra bu gece yüklenir.",
+		"firstrun_updates_ready":        "TECHO5 %s hazır: Ayarlar, Genel bölümünden yükleyin.",
+		"firstrun_updates_auto":         "Güncellemeler, hiçbir şey çalmazken gece (02.00–05.00) kendiliğinden yüklenir.",
+		"firstrun_updates_manual":       "Güncellemeler siz yükleyene kadar bekler.",
+		"firstrun_title_sound":          "Ses testi",
+		"firstrun_sound_played":         "Kısa bir ses çalındı. Duydunuz mu?",
+		"firstrun_next":                 "Sonraki",
+		"firstrun_change":               "Değiştir",
+		"firstrun_not_now":              "Şimdi değil",
+		"firstrun_choose_wifi":          "Wi-Fi seç",
+		"firstrun_change_name":          "Adı değiştir",
+		"firstrun_skip_for_now":         "Şimdilik atla",
+		"firstrun_use_it_on_its_own":    "Tek başına kullan",
+		"firstrun_on_its_own":           "Tek başına",
+		"firstrun_add_it_instead":       "Bunun yerine ekle",
+		"firstrun_type_the_key":         "Anahtarı yaz",
+		"firstrun_add_it":               "Ekle",
+		"firstrun_leave_them_off":       "Kapat",
+		"firstrun_turn_them_on":         "Aç",
+		"firstrun_play_again":           "Tekrar çal",
+		"firstrun_yes":                  "Evet",
+		"firstrun_on_a_phone":           "Telefonda",
+		"firstrun_choose_a_room":        "Oda seç",
+		"firstrun_room_s":               "Oda: %s",
+		"firstrun_show_the_key":         "Anahtarı göster",
+		"firstrun_tap_to_go_back":       "Geri dönmek için dokun",
+		"firstrun_phone_at":             "Telefonda: %s:%d/setup",
+		"firstrun_spot_steps":           "Birkaç adımda kurulur.",
+		"firstrun_spot_tap_to_begin":    "Başlamak için dokunun.",
+		"firstrun_title_done":           "Her şey hazır",
+		"firstrun_spot_done":            "%s kuruldu.",
+		"firstrun_spot_menu":            "Menü için ekranı basılı tutun.",
+		"firstrun_spot_tap_to_finish":   "Bitirmek için dokunun.",
+		"firstrun_spot_on":              "Ağ: %s.",
+		"firstrun_spot_at":              "Adres: %s.",
+		"firstrun_spot_no_network":      "Ağ yok.",
+		"firstrun_spot_install_again":   "Bir ağa bağlamak için Wi-Fi bilgilerinizle yeniden yükleyin.",
+		"firstrun_spot_zone":            "%s.",
+		"firstrun_spot_clock":           "Saat: %s.",
+		"firstrun_title_name_only":      "Ad",
+		"firstrun_spot_restarting":      "Yeni adı kullanmak için",
+		"firstrun_spot_new_name":        "yeniden başlatılıyor…",
+		"firstrun_spot_name":            "Ad: %s",
+		"firstrun_going_on":             "Devam ediliyor…",
+		"firstrun_spot_home_no_network": "Henüz bir ağa bağlı değil.",
+		"firstrun_spot_home_add":        "Home Assistant'ta ekleyin: Cihazlar ve hizmetler. Bir şey yazmanız gerekmez.",
+		"firstrun_spot_trust":           "Yalnızca güvendiğiniz bir ağda.",
+		"firstrun_spot_open_d":          "%d dakika daha açık. Yalnızca güvendiğiniz bir ağda.",
+		"firstrun_spot_home_choose":     "Hiçbir şey yazmadan ekleyin",
+		"firstrun_spot_home_choose_key": "ya da anahtarıyla.",
+		"firstrun_spot_tonight":         "%s bu gece yüklenir.",
+		"firstrun_spot_ready":           "%s hazır.",
+		"firstrun_spot_manual":          "Güncellemeler sizi bekler.",
+		"firstrun_spot_auto":            "Güncellemeler gece yüklenir.",
+		"firstrun_spot_hear":            "Duydunuz mu?",
+
+		"nextup_label":          "Sıradaki:",
+		"popup_started":         "Başladı",
+		"popup_in_a_minute":     "Bir dakika içinde",
+		"popup_in_d_minutes":    "%d dakika içinde",
+		"popup_in_an_hour":      "Bir saat içinde",
+		"popup_at_s":            "Saat %s",
+		"reminder_untitled":     "Hatırlatıcı",
+		"hint_no_start":         "Home Assistant yayını başlatmadı. Bu cihaz için \"Cihazın Home Assistant eylemleri gerçekleştirmesine izin ver\" açık mı?",
+		"hint_favorite":         "İstasyon kaydedilemedi. Home Assistant'ın script.radio_favorite_add_station adlı bir betiğe ihtiyacı var.",
+		"hint_no_home":          "Home Assistant bu cihaza bağlı değil, bu yüzden istasyon başlatılmadı.",
+		"hint_play_failed":      "Home Assistant bu istasyonu çalamadı.",
+		"hint_dropping":         "Yayın sürekli kesiliyor, bu yüzden istasyon kapalı bırakıldı.",
+		"clock_style_classic":   "Klasik",
+		"clock_style_big":       "Büyük",
+		"clock_style_flip":      "Kapakçık",
+		"clock_style_led":       "LED",
+		"clock_style_analog":    "Analog",
+		"clock_style_words":     "Kelimeler",
+		"clock_style_sun":       "Güneş",
+		"clock_style_dashboard": "Pano",
+		"clock_style_binary":    "İkili",
+		"clock_style_world":     "Dünya",
+		"clock_style_agenda":    "Ajanda",
+		"clock_style_glow":      "Parıltı",
+		"clock_style_nixie":     "Nixie",
+		"clock_style_stack":     "Yığın",
+		"clock_style_overlap":   "Örtüşme",
+		"call_muted":            "Mikrofon kapalı",
+		"weather_alert":         "HAVA UYARISI",
+		"volume_caps":           "SES",
+		"timer_left_s":          "Zamanlayıcı %s",
+		"music_playing":         "♪ çalıyor",
+		"music_paused":          "♪ duraklatıldı",
+
 		"ui_listening_turn":          "Dinleniyor…",
 		"ui_thinking_turn":           "Düşünüyor…",
 		"ui_thinking":                "Düşünüyor",
@@ -6113,6 +8944,20 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics":                        "Şarkı sözleri",
 		"microphone":                    "Mikrofon",
 		"microphone_off":                "MİKROFON KAPALI",
+		"no_wifi":                       "WI-FI YOK",
+		"no_home_assistant":             "HOME ASSISTANT YOK",
+		"voice_no_home":                 "Home Assistant'a ulaşılamıyor",
+		"voice_no_assistant":            "Sesli asistan kurulu değil",
+		"voice_timeout":                 "Zamanında yanıt gelmedi",
+		"voice_failed":                  "Asistan yanıt veremedi",
+		"not_live":                      "CANLI DEĞİL",
+		"deck_failed":                   "İşe yaramadı",
+		"deck_obs_away":                 "OBS bağlı değil",
+		"deck_obs_refused":              "OBS bunu reddetti",
+		"deck_obs_silent":               "OBS yanıt vermedi",
+		"deck_pc_silent":                "%s yanıt vermiyor",
+		"deck_pc_unpaired":              "%s eşleştirilmemiş",
+		"deck_pc_key":                   "%s anahtarı eşleşmiyor",
 		"minutes_before":                "%d dakika önce",
 		"month":                         "Ay",
 		"music":                         "Müzik",
@@ -6247,68 +9092,71 @@ var uiTranslations = map[string]map[string]string{
 		"reading_the_calendar":                      "Takvim okunuyor…",
 		"remote_api":                                "Uzak API",
 		"repeat":                                    "Tekrarla",
-		"restart":                                   "Yeniden başlat",
-		"said_as_it_rings":                          "Çalarken söylenen",
-		"same_as_default":                           "Varsayılanla aynı (%s)",
-		"screen_language":                           "Ekran dili",
-		"screen_off_when_nobody_is_near":            "Kimse yakında değilken ekranı kapat",
-		"screen_on_the_network":                     "Ağdaki ekran",
-		"screensaver":                               "Ekran koruyucu",
-		"seconds_option":                            "%d saniye",
-		"sent_from_home_assistant":                  "Home Assistant'tan gönderildi",
-		"settings":                                  "Ayarlar",
-		"settings_lock":                             "Ayar kilidi",
-		"shown_as_you_change_it_at_night":           "Gece değiştirirken gösterilir",
-		"shown_with_the_clock":                      "Saatle birlikte gösterilir",
-		"silenced":                                  "Susturuldu",
-		"silenced_press_again_to_snooze_d_min":      "Susturuldu · ertele için tekrar bas %d dk",
-		"skin":                                      "Kaplama",
-		"skin_keeps":                                "Kaplama kapalıyken saklanır",
-		"sleep_timer":                               "Uyku zamanlayıcısı",
-		"slideshow":                                 "Slayt gösterisi",
-		"snooze_d_min":                              "Ertele %d dk",
-		"sounds":                                    "Sesler",
-		"speaker_gain":                              "Hoparlör kazancı",
-		"speakers":                                  "Hoparlörler",
-		"ssh_keys":                                  "SSH anahtarları",
-		"stop":                                      "Durdur",
-		"sunrise_alarm":                             "%s alarmına kadar açık",
-		"sunrise_default_description":               "Kendi sesini seçmeyen alarmlardan önce",
-		"sunrise_ringing":                           "Alarm çalarken açık",
-		"sunrise_rising":                            "Işık şu an yükseliyor",
-		"sunrise_snooze":                            "%s ertelemesine kadar açık",
-		"sunrise_until":                             "%s kadar açık",
-		"sunrise_skip_action":                       "Skip",
-		"sunrise_skip_done":                         "Skipped: the alarm at %s",
-		"sunrise_skip_refused":                      "Not skipped: the alarm at %s",
-		"talk_on_the_camera_page":                   "Kamera sayfasında konuş",
-		"talk_through_cameras":                      "Kameralar üzerinden konuş",
-		"baby_monitor":                              "Bebek telsizi",
-		"room_sound_in_a_browser_with_the_link":     "Odanın sesi, bağlantıyla bir tarayıcıda",
-		"record_takes_of_a_word":                    "Bir kelimeyi birkaç kez kaydet",
-		"on_the_setup_page_started_here":            "Kurulum sayfasından istenir, burada başlatılır",
-		"tap_lifts_the_night_light":                 "Dokunmak gece lambasını yükseltir",
-		"night_clock_next_up_and_alerts":            "Gece saati Sıradaki ve bildirimleri gösterir",
-		"dim_red_and_no_brighter":                   "Loş kırmızıyla çizilir; ekran daha parlak olmaz",
-		"tap_on_the_clock":                          "Saate dokun",
-		"tap_to_go_back":                            "Geri dönmek için dokun",
-		"the_mute_button_does_this_too":             "Sessiz düğmesi de bunu yapar",
-		"the_nws_s_alerts_for_home_in_the_u_s":      "ABD'de ev için NWS uyarıları",
-		"the_words_in_time_looked_up_at_lrclib":     "LRCLIB'den alınan zamanlı sözler",
-		"theme_personalize":                         "Temayı kendinize göre yapın",
-		"this_version":                              "Bu sürüm: %s",
-		"time_per_photo":                            "Fotoğraf başına süre",
-		"time_zone":                                 "Saat dilimi",
-		"timer":                                     "Zamanlayıcı",
-		"timer_and_alarm":                           "Zamanlayıcı ve alarm",
-		"timer_suffix":                              " zamanlayıcı",
-		"timers":                                    "Zamanlayıcılar",
-		"today":                                     "Bugün",
-		"tomorrow":                                  "Yarın",
-		"treble":                                    "Tiz",
-		"turn_screen":                               "Ekranı çevir",
-		"ui_1_hour":                                 "1 saat",
-		"ui_1_hour_d_minutes":                       "1 saat %d dakika",
+		"reset":                                     "Sıfırla",
+		"reset_for_someone_else":                    "Başkası için sıfırla",
+		"clears_it_and_start_setting_it_up_again":             "Her şeyi siler ve kurulumu yeniden başlatır",
+		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, ad, Home Assistant, alarmlar, her şey: tekrar dokunun",
+		"restart":                               "Yeniden başlat",
+		"said_as_it_rings":                      "Çalarken söylenen",
+		"same_as_default":                       "Varsayılanla aynı (%s)",
+		"screen_language":                       "Ekran dili",
+		"screen_off_when_nobody_is_near":        "Kimse yakında değilken ekranı kapat",
+		"screen_on_the_network":                 "Ağdaki ekran",
+		"screensaver":                           "Ekran koruyucu",
+		"seconds_option":                        "%d saniye",
+		"sent_from_home_assistant":              "Home Assistant'tan gönderildi",
+		"settings":                              "Ayarlar",
+		"settings_lock":                         "Ayar kilidi",
+		"shown_as_you_change_it_at_night":       "Gece değiştirirken gösterilir",
+		"shown_with_the_clock":                  "Saatle birlikte gösterilir",
+		"silenced":                              "Susturuldu",
+		"skin":                                  "Kaplama",
+		"skin_keeps":                            "Kaplama kapalıyken saklanır",
+		"sleep_timer":                           "Uyku zamanlayıcısı",
+		"slideshow":                             "Slayt gösterisi",
+		"snooze_d_min":                          "Ertele %d dk",
+		"sounds":                                "Sesler",
+		"speaker_gain":                          "Hoparlör kazancı",
+		"speakers":                              "Hoparlörler",
+		"ssh_keys":                              "SSH anahtarları",
+		"stop":                                  "Durdur",
+		"sunrise_alarm":                         "%s alarmına kadar açık",
+		"sunrise_default_description":           "Kendi sesini seçmeyen alarmlardan önce",
+		"sunrise_ringing":                       "Alarm çalarken açık",
+		"sunrise_rising":                        "Işık şu an yükseliyor",
+		"sunrise_snooze":                        "%s ertelemesine kadar açık",
+		"sunrise_until":                         "%s kadar açık",
+		"sunrise_skip_action":                   "Skip",
+		"sunrise_skip_done":                     "Skipped: the alarm at %s",
+		"sunrise_skip_refused":                  "Not skipped: the alarm at %s",
+		"talk_on_the_camera_page":               "Kamera sayfasında konuş",
+		"talk_through_cameras":                  "Kameralar üzerinden konuş",
+		"baby_monitor":                          "Bebek telsizi",
+		"room_sound_in_a_browser_with_the_link": "Odanın sesi, bağlantıyla bir tarayıcıda",
+		"record_takes_of_a_word":                "Bir kelimeyi birkaç kez kaydet",
+		"on_the_setup_page_started_here":        "Kurulum sayfasından istenir, burada başlatılır",
+		"tap_lifts_the_night_light":             "Dokunmak gece lambasını yükseltir",
+		"night_clock_next_up_and_alerts":        "Gece saati Sıradaki ve bildirimleri gösterir",
+		"dim_red_and_no_brighter":               "Loş kırmızıyla çizilir; ekran daha parlak olmaz",
+		"tap_on_the_clock":                      "Saate dokun",
+		"tap_to_go_back":                        "Geri dönmek için dokun",
+		"the_mute_button_does_this_too":         "Sessiz düğmesi de bunu yapar",
+		"the_nws_s_alerts_for_home_in_the_u_s":  "ABD'de ev için NWS uyarıları",
+		"the_words_in_time_looked_up_at_lrclib": "LRCLIB'den alınan zamanlı sözler",
+		"theme_personalize":                     "Temayı kendinize göre yapın",
+		"this_version":                          "Bu sürüm: %s",
+		"time_per_photo":                        "Fotoğraf başına süre",
+		"time_zone":                             "Saat dilimi",
+		"timer":                                 "Zamanlayıcı",
+		"timer_and_alarm":                       "Zamanlayıcı ve alarm",
+		"timer_suffix":                          " zamanlayıcı",
+		"timers":                                "Zamanlayıcılar",
+		"today":                                 "Bugün",
+		"tomorrow":                              "Yarın",
+		"treble":                                "Tiz",
+		"turn_screen":                           "Ekranı çevir",
+		"ui_1_hour":                             "1 saat",
+		"ui_1_hour_d_minutes":                   "1 saat %d dakika",
 		"ui_a_face_on_it_for_whoever_has_to_look_at_it":     "Bakması gereken kişi için üzerine bir yüz",
 		"ui_a_landscape_for_the_weather_in_place_of_photos": "Fotoğraflar yerine hava durumu için bir manzara",
 		"ui_a_pin_before_most_settings_change":              "Çoğu ayar değişikliğinden önce PIN",
@@ -6407,8 +9255,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_more":                               "Daha fazla",
 		"ui_muted":                              "Sessiz",
 		"ui_name_weather_updates_and_restart":   "Ad, hava durumu, güncellemeler ve yeniden başlatma",
-		"ui_needs_a_key_the_setup_page_connections":       "Anahtar gerekli: kurulum sayfası, Bağlantılar",
-		"ui_needs_a_setup_key_the_setup_page_connections": "Kurulum anahtarı gerekli: kurulum sayfası, Bağlantılar",
+		"ui_needs_a_key_the_setup_page_connections":       "Anahtar gerekli: kurulum sayfası, Ağ",
+		"ui_needs_a_setup_key_the_setup_page_connections": "Kurulum anahtarı gerekli: kurulum sayfası, Ağ",
 		"ui_needs_speaker_eq_which_is_off":                "Kapalı olan Hoparlör EQ gerekli",
 		"ui_never":                                        "Asla",
 		"ui_new_alarm":                                    "Yeni alarm",
@@ -6715,5 +9563,20 @@ var uiTranslations = map[string]map[string]string{
 		"ui_mealie_step_of":     "%d'nin %d'si",
 		"ui_mealie_previous":    "Önceki",
 		"ui_mealie_no_steps":    "Bu tarifte ne malzeme ne de adım bulunmaktadır.",
+
+		// Words on cards and overlays that were written into the drawing code.
+		"card_reminder":                   "HATIRLATICI",
+		"card_notification":               "BİLDİRİM",
+		"card_drag_for_more":              "DEVAMI İÇİN SÜRÜKLE",
+		"tap_again":                       "Tekrar dokunun",
+		"tap_again_s":                     "Tekrar dokunun: %s",
+		"camera_button_sent":              "Gönderildi",
+		"camera_button_no_home_assistant": "Home Assistant yok",
+		"connecting_to_the_dashboard":     "Dashboard'a bağlanılıyor…",
+		"loading_the_dashboard":           "Dashboard yükleniyor…",
+		"obs_is_not_set_up":               "OBS kurulmamış: kurulum sayfası → Screen → Deck",
+
+		// The ringing page's note under a silenced alarm: which buttons snooze it.
+		"silenced_press_a_button_to_snooze_d_min": "Susturuldu · %d dk ertelemek için ses veya mikrofon düğmesine bas",
 	},
 }

@@ -49,16 +49,28 @@ func cueOver(s scene) (light, words bool) {
 
 // turnCue draws a cue turn over whatever the frame turned out to be.
 func (r *renderer) turnCue(s scene) {
-	if rainbowHere(s) {
+	rainbow := rainbowHere(s)
+	if rainbow {
 		r.rainbowTurn(s)
-		return
+		if s.failed == "" {
+			return
+		}
+		// Rainbow's card is for a turn it has been showing: a failure's line is the plain captions',
+		// over it.
 	}
 	light, words := cueOver(s)
-	if light && cueLit(s.cue) {
+	if light && cueLit(s.cue) && !rainbow {
 		r.cueLight(s)
 	}
+	if line := failedLine(s.failed); line != "" {
+		// A request that failed: why, in the captions' place and in the accent (turn_failed.go).
+		if words {
+			r.captions(s, line, amber)
+		}
+		return
+	}
 	if text := cueWords(s.cue, s.heard, s.reply); words && text != "" {
-		r.captions(s, text)
+		r.captions(s, text, cream)
 	}
 }
 
@@ -116,9 +128,15 @@ func (r *renderer) cueLight(s scene) {
 	default:
 		draw.Draw(r.dst, band, image.NewUniform(c), image.Point{}, draw.Src)
 	}
-	// The header's "microphone off" pill goes back over the band: it says more than the band does.
-	if s.muted && !s.redClockFace() {
+	// The header's pill goes back over the band: it says more than the band does. Muted, it is in the
+	// middle where the device draws no microphone tab; with only a lost link to say, it hangs below the
+	// tab, since a turn started then is about to fail for want of what the pill names.
+	switch {
+	case s.redClockFace():
+	case s.muted:
 		r.header(s)
+	case s.linkDown != linkUp:
+		r.headerAt(s, band.Max.Y+r.s(36)+r.s(8))
 	}
 }
 
@@ -139,8 +157,9 @@ func (r *renderer) cueMic(c color.RGBA, band image.Rectangle) {
 // captions lays text over the foot of the page on a shaded strip, light on dark whatever the theme,
 // as words over a photo are; red over the night clock. Above the controls along the foot when the page
 // has them (footAt). A longer answer is cut after captionLines lines,
-// the last ending in an ellipsis, and a word too long for a line is cut the same way.
-func (r *renderer) captions(s scene, text string) {
+// the last ending in an ellipsis, and a word too long for a line is cut the same way. ink is the words'
+// color by day.
+func (r *renderer) captions(s scene, text string, ink color.RGBA) {
 	width := r.w - 2*r.margin
 	lines := r.wrap(r.small, text, width)
 	if len(lines) > captionLines {
@@ -165,7 +184,7 @@ func (r *renderer) captions(s scene, text string) {
 	draw.Draw(r.dst, strip, image.NewUniform(under), image.Point{}, draw.Over)
 	r.setCaptionsAt(strip)
 	onPhoto(func() {
-		c := cueColor(s, cream)
+		c := cueColor(s, ink)
 		y := top + r.s(36)
 		for _, l := range lines {
 			r.text(r.small, l, r.margin, y, c)

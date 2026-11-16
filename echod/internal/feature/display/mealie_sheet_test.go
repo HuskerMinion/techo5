@@ -502,3 +502,40 @@ func TestMealieGuidePageScrollsAndIsNotTurnedByIt(t *testing.T) {
 		t.Errorf("a scroll that lifted on Next turned the page to %d", got)
 	}
 }
+
+// A finger on a part of the recipe sheet shows on that part and nowhere else, as on the other sheets
+// (press_places_test.go); where a tap does nothing, the sheet is as it is without a finger.
+func TestMealiePressShowsWhereATapActs(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		sheet mealieSheet
+		kind  int
+	}{
+		{"a recipe", loadedMealieSheet(testRecipes(6)), mealiePartItem},
+		{"Done", loadedMealieSheet(testRecipes(6)), mealiePartDone},
+		{"Next", guideSheet(2), mealiePartNext},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			scene := scene{now: time.Now(), phase: "idle", showDash: true, dashMode: config.DashboardDrawn,
+				drawn: fourControls(), dashMealie: &c.sheet}
+			plain := testRenderer()
+			b := zonesOfKind(drawFrame(plain, &c.sheet), c.kind)[0].r
+			press := func(at image.Point) *renderer {
+				r := testRenderer()
+				s := scene
+				s.press = pressView{on: true, at: at}
+				r.draw(s)
+				return r
+			}
+			if box, differs := diffBox(press(b.Min.Add(b.Max).Div(2)), plain); !differs {
+				t.Errorf("a finger on %v looks as the sheet does without one", b)
+			} else if !box.In(b.Inset(-plain.s(8))) {
+				t.Errorf("the press shows over %v, outside %v", box, b)
+			}
+			bar := plain.mealieGeometry().bar
+			if box, differs := diffBox(press(bar.Min.Add(bar.Max).Div(2)), plain); differs {
+				t.Errorf("a finger where a tap does nothing changed the sheet over %v", box)
+			}
+		})
+	}
+}

@@ -37,36 +37,36 @@ func firstRunButtons(v firstRunView) []frButton {
 	switch v.step {
 	case frWifi:
 		if v.wifi.Connected {
-			return []frButton{{"Change", "wifi"}, {"Next", "next"}}
+			return []frButton{{tr("firstrun_change"), "wifi"}, {tr("firstrun_next"), "next"}}
 		}
-		return []frButton{{"Not now", "next"}, {"Choose Wi-Fi", "wifi"}}
+		return []frButton{{tr("firstrun_not_now"), "next"}, {tr("firstrun_choose_wifi"), "wifi"}}
 	case frZone:
-		return []frButton{{"Change", "zone"}, {"Next", "next"}}
+		return []frButton{{tr("firstrun_change"), "zone"}, {tr("firstrun_next"), "next"}}
 	case frName:
 		if v.renaming {
 			return nil
 		}
-		return []frButton{{"Change name", "rename"}, {"Next", "next"}}
+		return []frButton{{tr("firstrun_change_name"), "rename"}, {tr("firstrun_next"), "next"}}
 	case frHome:
 		switch {
 		case v.home:
-			return []frButton{{"Next", "next"}}
+			return []frButton{{tr("firstrun_next"), "next"}}
 		case !v.adopt.IsZero() || v.unkeyed:
-			return []frButton{{"Skip for now", "next"}}
+			return []frButton{{tr("firstrun_skip_for_now"), "next"}}
 		case v.showKey || v.wifi.Address == "":
 			if v.wifi.Address == "" {
-				return []frButton{{"Use it on its own", "next"}}
+				return []frButton{{tr("firstrun_use_it_on_its_own"), "next"}}
 			}
-			return []frButton{{"On its own", "next"}, {"Add it instead", "adopt"}}
+			return []frButton{{tr("firstrun_on_its_own"), "next"}, {tr("firstrun_add_it_instead"), "adopt"}}
 		}
-		return []frButton{{"On its own", "next"}, {"Type the key", "key"}, {"Add it", "adopt"}}
+		return []frButton{{tr("firstrun_on_its_own"), "next"}, {tr("firstrun_type_the_key"), "key"}, {tr("firstrun_add_it"), "adopt"}}
 	case frUpdates:
 		if v.auto {
-			return []frButton{{"Leave them off", "auto"}, {"Next", "next"}}
+			return []frButton{{tr("firstrun_leave_them_off"), "auto"}, {tr("firstrun_next"), "next"}}
 		}
-		return []frButton{{"Turn them on", "auto"}, {"Next", "next"}}
+		return []frButton{{tr("firstrun_turn_them_on"), "auto"}, {tr("firstrun_next"), "next"}}
 	case frSound:
-		return []frButton{{"Play again", "again"}, {"Yes", "next"}}
+		return []frButton{{tr("firstrun_play_again"), "again"}, {tr("firstrun_yes"), "next"}}
 	}
 	return nil
 }
@@ -172,11 +172,11 @@ func (d *Display) firstRunKey(k string) {
 func (d *Display) firstRunSave(what, text string) {
 	if what == "room" {
 		if text == "" {
-			d.firstRunTypeError("Type a room, or Cancel")
+			d.firstRunTypeError(tr("firstrun_type_a_room"))
 			return
 		}
 		if err := firstrun.SetArea(text); err != nil {
-			d.firstRunTypeError("Could not save the room")
+			d.firstRunTypeError(tr("firstrun_room_not_saved"))
 			return
 		}
 		d.mu.Lock()
@@ -188,6 +188,12 @@ func (d *Display) firstRunSave(what, text string) {
 		d.mu.Lock()
 		d.firstRun.typing, d.firstRun.text = "", ""
 		d.mu.Unlock()
+		return
+	}
+	if text == "" {
+		// The one refusal this keyboard can bring about (it types one line, within the limit), in the
+		// screen's words; the setup page's others stay its own.
+		d.firstRunTypeError(tr("firstrun_needs_a_name"))
 		return
 	}
 	if msg := firstrun.Rename(text); msg != "" {

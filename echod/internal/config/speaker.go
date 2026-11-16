@@ -70,6 +70,11 @@ type Speaker struct {
 	// them (speaker.Player.SetLouderTop, #304). Off by default.
 	LouderTop bool `json:"louder_top,omitempty"`
 
+	// JackSleep takes the headphone path down while nothing plays, with the jack the output, so powered
+	// speakers on it do not hiss between sounds (speaker.Player.SetJackSleep, #537). Off by default:
+	// it pops going down and coming back.
+	JackSleep bool `json:"jack_sleep,omitempty"`
+
 	// SoundsMoved is whether the wake sounds have been moved to Home Assistant's: once, for a device
 	// saved when Chirp was the default, and only for a word still on it (config.Load).
 	SoundsMoved bool `json:"sounds_moved,omitempty"`
@@ -192,6 +197,11 @@ func (w SpeakerWriter) ClearerSpeech(v bool) error {
 
 func (w SpeakerWriter) LouderTop(v bool) error {
 	return w.st.Update(func(c *Config) { c.Speaker.LouderTop = v })
+}
+
+// JackSleep saves whether the headphone jack's path comes down while nothing plays.
+func (w SpeakerWriter) JackSleep(v bool) error {
+	return w.st.Update(func(c *Config) { c.Speaker.JackSleep = v })
 }
 
 func (w SpeakerWriter) ClassicSounds(v bool) error {

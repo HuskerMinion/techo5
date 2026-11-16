@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"log/slog"
 	"strings"
@@ -126,9 +127,9 @@ func (c *cameraButtons) tap(camera string, i int, buttons []config.CameraButton,
 		defer c.mu.Unlock()
 		c.noteCamera, c.noteIndex, c.noteFailed = camera, i, !heard
 		if heard {
-			c.note, c.noteUntil = "Sent", time.Now().Add(buttonSent)
+			c.note, c.noteUntil = tr("camera_button_sent"), time.Now().Add(buttonSent)
 		} else {
-			c.note, c.noteUntil = "No Home Assistant", time.Now().Add(buttonFailed)
+			c.note, c.noteUntil = tr("camera_button_no_home_assistant"), time.Now().Add(buttonFailed)
 			slog.Warn("camera button: Home Assistant is not connected to this device; the action was not run",
 				"camera", camera, "service", b.Service)
 		}
@@ -140,9 +141,9 @@ func (c *cameraButtons) tap(camera string, i int, buttons []config.CameraButton,
 // sentence made of it reads oddly for a noun ("Garage").
 func armedLabel(label string) string {
 	if label == "" {
-		return "Tap again"
+		return tr("tap_again")
 	}
-	return "Tap again: " + label
+	return fmt.Sprintf(tr("tap_again_s"), label)
 }
 
 // cameraButtonsFor is the buttons the camera page shows on view v: none on the grid.

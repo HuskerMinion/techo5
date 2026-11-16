@@ -380,17 +380,32 @@ func (r *roundRenderer) dial(s roundScene) {
 	r.dim(244)
 	r.ringAt(center, center, dialR-1, dialR+1, 0, 2*math.Pi, color.RGBA{62, 68, 78, 255})
 
+	// The item a tap at the finger does (dialHitAt): the one under it, or with the finger in the middle
+	// the one at the top. Between the middle and the ring a tap only puts the menu away.
+	pressed := -1
+	if r.press.on {
+		item, middle := dialHitAt(r.press.at.X, r.press.at.Y, s.menuRot, n)
+		switch {
+		case middle:
+			pressed = s.menuSel
+		case item >= 0:
+			pressed = item
+		}
+	}
 	for i, it := range items {
 		if i == s.menuSel {
 			continue
 		}
 		x, y := itemPos(i, n, s.menuRot)
+		if i == pressed {
+			r.discAt(x, y, dialHit-8, r.pressTinted(true, colIconGround, colIcon))
+		}
 		r.icon(it.id, s, x, y, 18, 2.6, colIcon)
 	}
 	if s.menuSel >= 0 && s.menuSel < n {
 		it := items[s.menuSel]
 		x, y := itemPos(s.menuSel, n, s.menuRot)
-		r.discAt(x, y, chosenRing, colIconGround)
+		r.discAt(x, y, chosenRing, r.pressTinted(pressed == s.menuSel, colIconGround, it.color))
 		r.ringAt(x, y, chosenRing-3.5, chosenRing, 0, 2*math.Pi, it.color)
 		accent := it.color
 		accent.A = 150

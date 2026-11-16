@@ -9,11 +9,13 @@ import "context"
 func (w *Watch) moved(ctx context.Context) {
 	ssid, joined := w.network(ctx)
 	if !joined || ssid == "" {
+		w.bc.forget() // what was heard before the link went down says nothing of the link that comes back
 		return
 	}
 	if w.ssid != "" && ssid != w.ssid {
 		w.say("wifi: joined another network; renewing the lease")
 		w.renew()
+		w.bc.forget()
 	}
 	w.ssid = ssid
 }

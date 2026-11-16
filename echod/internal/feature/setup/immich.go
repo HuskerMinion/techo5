@@ -23,34 +23,42 @@ import (
 // immichAsk is how long saving a server waits for Immich to answer with its albums.
 const immichAsk = 8 * time.Second
 
-// immichListAsk is how long the setup page waits for Immich's album list as it is drawn.
-const immichListAsk = 3 * time.Second
+// immichListAsk is the most asking Immich for its album list for the page may take. The page itself
+// waits less (lookup.go).
+const immichListAsk = 5 * time.Second
+
+// immichAnswer is Immich's album list, or why there is none.
+type immichAnswer struct {
+	albums []home.ImmichAlbum
+	err    error
+}
+
+// immichLookup keeps Immich's answer, so a draw of the tab does not wait for it each time.
+var immichLookup = &lookup[immichAnswer]{ask: immichListAsk}
 
 func immichSection(w http.ResponseWriter, token string) {
 	srv := config.Get().Home.Immich
-	fmt.Fprint(w, `<fieldset><legend>Photos from Immich</legend>
-	 <p style="margin:0">Show photos from your own Immich server, with no Home Assistant needed.</p>
-	 <form method="post" action="/setup/save">`)
-	hidden(w, token, "immich", "photos")
+	fieldsetOpen(w, "immich", "Photos from Immich")
+	// Saving waits for Immich to list the albums (immichAsk).
+	fmt.Fprintf(w, `<p style="margin:0">Show photos from your own Immich server, with no Home Assistant needed.</p>
+	 <form method="post" action="/setup/save"%s>`, busy(busyImmich))
+	hidden(w, token, "immich")
 	keyNote := `In Immich: your account, <strong>Account Settings</strong>, <strong>API Keys</strong>, <strong>New API Key</strong>. It needs to read albums and photos.`
-	keyHolder := ""
 	if srv.Key != "" {
-		keyNote = `A key is kept. Leave this empty to keep it, or paste a new one to replace it.`
-		keyHolder = "Kept"
+		keyNote = `Paste a new one to replace it.`
 	}
 	fmt.Fprintf(w, `<label for="immichsrv">Server address</label>
 	 <input id="immichsrv" name="server" value="%s" placeholder="http://192.168.1.20:2283" autocomplete="off">
-	 <label for="immichkey">API key</label>
-	 <input id="immichkey" name="key" type="password" placeholder="%s" autocomplete="new-password">
+	 %s
 	 <p class="note">%s The key stays on this device and this page never shows it again.</p>
 	 <p><button type="submit">Save</button></p></form>`,
-		html.EscapeString(srv.Server), keyHolder, keyNote)
+		html.EscapeString(srv.Server), secretField("immichkey", "API key", "key", srv.Key != "", ""), keyNote)
 	if srv.Set() {
 		immichAlbumForm(w, token, srv)
 		immichShowForm(w, token)
 		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-		hidden(w, token, "immich-forget", "photos")
-		fmt.Fprint(w, `<p><button type="submit">Forget this server</button></p></form>`)
+		hidden(w, token, "immich-forget")
+		fmt.Fprint(w, `<p><button type="submit" class="danger">Forget this server</button></p></form>`)
 	}
 	fmt.Fprint(w, `</fieldset>`)
 }
@@ -58,17 +66,23 @@ func immichSection(w http.ResponseWriter, token string) {
 // immichAlbumForm offers the whole library and each album as the slideshow's photos, with the one
 // showing now chosen.
 func immichAlbumForm(w http.ResponseWriter, token string, srv config.Immich) {
-	// Short: the whole page waits for it, and an Immich that is down should not hold the page up.
-	ctx, cancel := context.WithTimeout(context.Background(), immichListAsk)
-	defer cancel()
-	albums, err := home.ImmichAlbums(ctx, srv)
+	// Asked through a lookup (lookup.go): an Immich that is down does not hold the page up.
+	a, ok := immichLookup.get(context.Background(), lookupKey(srv.Server, srv.Key), func(ctx context.Context) immichAnswer {
+		albums, err := home.ImmichAlbums(ctx, srv)
+		return immichAnswer{albums, err}
+	})
+	if !ok {
+		fmt.Fprint(w, `<p class="note">Asking Immich for its albums; reload the page in a moment to choose one.</p>`)
+		return
+	}
+	albums, err := a.albums, a.err
 	if err != nil {
 		fmt.Fprintf(w, `<p class="note">The albums could not be listed: %s</p>`, html.EscapeString(err.Error()))
 		return
 	}
 	source, _, _ := home.Get().SlideshowSettings()
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "immich-album", "photos")
+	hidden(w, token, "immich-album")
 	fmt.Fprint(w, `<label for="immichalbum">Photos to show</label><select id="immichalbum" name="source">`)
 	option := func(value, label string) {
 		sel := ""
@@ -98,7 +112,7 @@ func immichShowForm(w http.ResponseWriter, token string) {
 		return ""
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	hidden(w, token, "immich-show", "photos")
+	hidden(w, token, "immich-show")
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="favorites" value="yes" style="width:auto"%s> Favorites only</label></p>
 	 <label for="immichfrom">Taken from</label><input id="immichfrom" name="from" type="date" value="%s">
 	 <label for="immichto">Taken through</label><input id="immichto" name="to" type="date" value="%s">
@@ -166,6 +180,7 @@ func saveImmich(r *http.Request) string {
 	if err := config.Set().Home().Immich(next); err != nil {
 		return "could not keep it: " + err.Error()
 	}
+	immichLookup.forget() // the albums are asked for again, of the server as it is now saved
 	if cur.Server != "" && server != cur.Server {
 		home.Get().ResetImmich() // the photos listed, and an album chosen, were the other server's
 	}
@@ -201,6 +216,7 @@ func forgetImmich() string {
 	if err := config.Set().Home().Immich(config.Immich{}); err != nil {
 		return "could not forget it: " + err.Error()
 	}
+	immichLookup.forget()
 	slog.Info("setup page: the Immich server was forgotten")
 	return ""
 }

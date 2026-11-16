@@ -36,8 +36,9 @@ func bluetoothSection(w http.ResponseWriter, token string) {
 	if !sc && !vol {
 		return
 	}
-	fmt.Fprint(w, `<fieldset><legend>Bluetooth</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "bluetooth", "connections")
+	fieldsetOpen(w, "bluetooth", "Bluetooth")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "bluetooth")
 	if vol {
 		fmt.Fprintf(w, `
 	 <p><label><input type="checkbox" name="setsvolume" value="yes" style="width:auto"%s> Bluetooth sets the volume</label></p>

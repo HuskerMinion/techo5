@@ -66,7 +66,7 @@ func (r *paint) dashPage(v dashboard.Drawn, scroll int, adj dashAdjusting, area 
 	if len(v.Sections) == 0 {
 		msg := v.Problem
 		if msg == "" {
-			msg = "Loading the dashboard…"
+			msg = tr("loading_the_dashboard")
 		}
 		lines := r.wrapLines(fc.label, msg, area.Dx())
 		y := area.Min.Y + area.Dy()/2 - len(lines)*r.s(30)/2
@@ -375,11 +375,43 @@ func (r *paint) mdiIconIn(name string, b image.Rectangle, size int, c color.RGBA
 	r.text(face, string(g), b.Min.X+(b.Dx()-side)/2, b.Min.Y+b.Dy()/2-mid, c)
 }
 
+// tileCard is a tile's card: the theme's, leaning a little to the tile's color while it is on. The
+// badge alone said on from off, 44 px of a tile at a contrast under 1.6:1, and across a room a row of
+// tiles all looked the same.
+func tileCard(t dashboard.Tile, pal dashPal) color.RGBA {
+	if !t.On || t.Gone {
+		return pal.card
+	}
+	c := pal.active
+	if t.Color.A != 0 {
+		c = t.Color
+	}
+	return lerp(pal.card, c, tileOnTint)
+}
+
+// tileOnTint is how far the card of a tile that is on leans to its color.
+const tileOnTint = 0.12
+
+// tileInks are the colors of a tile's name and of what it is doing. What a tile that is on is doing is
+// drawn nearly as strong as its name, since that line is the news; one that is gone has both dimmed, so
+// it does not read as a tile that works.
+func tileInks(t dashboard.Tile, pal dashPal) (name, value color.RGBA) {
+	switch {
+	case t.Gone:
+		return lerp(pal.text, pal.card, 0.45), lerp(pal.sub, pal.card, 0.35)
+	case t.On:
+		return pal.text, lerp(pal.sub, pal.text, 0.7)
+	}
+	return pal.text, pal.sub
+}
+
 // tile draws one thing as Home Assistant's tile card does: a round badge with its icon, lit when it
 // is on, then its name, and what it is doing underneath.
 func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAdjusting) {
 	fc := r.faces()
-	r.roundFill(b, pal.rad, pal.card, pal.card)
+	card := tileCard(t, pal)
+	r.roundFill(b, pal.rad, card, card)
+	nameInk, valueInk := tileInks(t, pal)
 
 	// A tile bigger than the usual one, set large or filling the screen, scales its badge and words
 	// with it: by its height, and no further than its width leaves room for the name.
@@ -449,8 +481,8 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 	lines, nameFace := r.tileName(name, func() font.Face { return r.textFace(false, scale(21)) }, t.Name, room)
 	mid := b.Min.Y + b.Dy()/2
 	if len(lines) == 1 {
-		r.text(nameFace, lines[0], x, mid-r.s(scale(3)), pal.text)
-		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(24)), pal.sub)
+		r.text(nameFace, lines[0], x, mid-r.s(scale(3)), nameInk)
+		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(24)), valueInk)
 		return
 	}
 	// Two lines of name and the value fill the tile; with no value the two sit about its middle.
@@ -458,10 +490,10 @@ func (r *paint) tile(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashA
 	if t.Value == "" {
 		first, second = -11, 11
 	}
-	r.text(nameFace, lines[0], x, mid+r.s(scale(first)), pal.text)
-	r.text(nameFace, lines[1], x, mid+r.s(scale(second)), pal.text)
+	r.text(nameFace, lines[0], x, mid+r.s(scale(first)), nameInk)
+	r.text(nameFace, lines[1], x, mid+r.s(scale(second)), nameInk)
 	if t.Value != "" {
-		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(25)), pal.sub)
+		r.text(value, r.fit(value, t.Value, room), x, mid+r.s(scale(25)), valueInk)
 	}
 }
 
@@ -528,13 +560,14 @@ func (r *paint) tileBelow(b image.Rectangle, t dashboard.Tile, pal dashPal, scal
 		name, value = r.textFace(false, scale(29)), r.textFace(false, scale(21))
 	}
 	vx := x + badge + r.s(scale(10))
-	r.text(value, r.fit(value, t.Value, b.Max.X-pad-vx), vx, top+badge/2+r.s(scale(7)), pal.sub)
+	nameInk, valueInk := tileInks(t, pal)
+	r.text(value, r.fit(value, t.Value, b.Max.X-pad-vx), vx, top+badge/2+r.s(scale(7)), valueInk)
 	lines, nameFace := r.tileName(name, func() font.Face { return r.textFace(false, scale(21)) }, t.Name, b.Dx()-2*pad)
 	if len(lines) == 2 {
-		r.text(nameFace, lines[0], x, y0+r.s(scale(76)), pal.text)
-		r.text(nameFace, lines[1], x, y0+r.s(scale(99)), pal.text)
+		r.text(nameFace, lines[0], x, y0+r.s(scale(76)), nameInk)
+		r.text(nameFace, lines[1], x, y0+r.s(scale(99)), nameInk)
 	} else {
-		r.text(nameFace, lines[0], x, y0+r.s(scale(86)), pal.text)
+		r.text(nameFace, lines[0], x, y0+r.s(scale(86)), nameInk)
 	}
 }
 
@@ -563,7 +596,7 @@ func (r *paint) row(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAd
 		sw := image.Rect(right-r.s(46), b.Min.Y+(b.Dy()-r.s(24))/2, right, b.Min.Y+(b.Dy()+r.s(24))/2)
 		track := lerp(pal.card, pal.sub, 0.35)
 		if t.On {
-			track = lerp(pal.card, pal.accent, 0.6)
+			track = pal.accent
 		}
 		r.roundFill(sw, float64(sw.Dy())/2, track, track)
 		knob := sw.Dy() - r.s(6)
@@ -571,9 +604,11 @@ func (r *paint) row(b image.Rectangle, t dashboard.Tile, pal dashPal, adj dashAd
 		if t.On {
 			kx = sw.Max.X - r.s(3) - knob
 		}
+		// The same knob on or off: it was the accent on a track of the accent, 2:1 against it, and the
+		// switch read as a blank pill. Where it sits says which, and now so does the track.
 		kc := lerp(pal.text, pal.card, 0.1)
-		if t.On {
-			kc = pal.accent
+		if t.On && colorContrast(kc, track) < 2.5 {
+			kc = pal.card
 		}
 		k := image.Rect(kx, sw.Min.Y+r.s(3), kx+knob, sw.Min.Y+r.s(3)+knob)
 		r.roundFill(k, float64(knob)/2, kc, kc)

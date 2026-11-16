@@ -42,7 +42,7 @@ project started on:
   Home Assistant can see one ringing: `binary_sensor.sounding` is on while any ring is active (including one a button silenced and not yet answered), `alarm_sounding` and `timer_sounding` say which kind, and the `sounding_what` text sensor names them (`alarm "Wake up", timer "Pasta"`). They are on every device.
 - **Echo Wall Clock**: the original wall clock's LED ring shows this device's running timers, the
   soonest as a filled run from twelve and every other one as a bright segment at its minute; a
-  timer that ends pulses the ring. Off until paired from the setup page's Connections tab or Home
+  timer that ends pulses the ring. Off until paired from the setup page's Network tab or Home
   Assistant. The timers come from the device itself, not Home Assistant, so they keep counting
   while it is away. Tested on the Show 8 (1st gen, crown); it should work on checkers, cronos,
   crown, athena and the Dot, and not on the Panel, whose Bluetooth is Android's.
@@ -95,7 +95,7 @@ project started on:
   General, Time zone) holds over Home Assistant's until Follow Home Assistant is chosen again; the Common
   zones work even on an early image with no zone database.
 - **Clock**: set from time servers on the internet (NTP). A time server on your own network, like a
-  router's, can be set on the setup page (General, Time server) and is asked first. A device that
+  router's, can be set on the setup page (Network, Time server) and is asked first. A device that
   reaches no time server at all takes Home Assistant's time when it connects; once NTP has set the
   clock, Home Assistant's time doesn't change it. On a Dot, a new time server is asked from its next
   restart.

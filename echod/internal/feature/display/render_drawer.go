@@ -104,6 +104,10 @@ func (r *renderer) drawer(s scene) {
 	fc := r.faces()
 	r.pending = r.pending[:0]
 	r.dimAll(0.55)
+	// The press is the drawer's now (draw kept it off the page under it), and under an open list not
+	// its rows' buttons'.
+	r.press = s.press
+	r.press.on = s.press.on && s.drawerPick == ""
 
 	panel := image.Rect(r.w-r.cardIn()-r.drawerW(), r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
 	r.addZone(zone{r: image.Rect(0, 0, panel.Min.X-r.s(4), r.h), kind: zoneDone}) // the dimmed clock closes it
@@ -167,6 +171,8 @@ func (r *renderer) drawer(s scene) {
 			pickMax = r.picker(p, s.pickScroll)
 		}
 	}
+	r.press.on = s.press.on
+	r.pressZone()
 
 	r.zmu.Lock()
 	r.zones, r.pending = r.pending, r.zones

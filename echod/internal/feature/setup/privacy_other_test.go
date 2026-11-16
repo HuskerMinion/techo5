@@ -15,7 +15,7 @@ import (
 func TestSSHIsShownOnOrOff(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	rec := httptest.NewRecorder()
-	privacySection(rec)
+	switchedOnSection(rec)
 	got := rec.Body.String()
 	if !strings.Contains(got, "SSH: off · Camera on the network: off · Screen on the network: off") {
 		t.Errorf("page does not show the switches:\n%s", got)

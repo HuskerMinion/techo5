@@ -19,7 +19,8 @@
 // counters.) The counters go by where a packet was addressed, not how it came: a router that sends
 // group traffic on to each device as its own (multicast to unicast), or a host on the network that
 // does, keeps the network heard through a broken group key, and the watcher then leaves it be, as it
-// did before.
+// did before. Broadcasts have no such way round, and broadcast.go watches them on their own, Home
+// Assistant connected or not (techo5-dot#45).
 package wifiwatch
 
 import (
@@ -100,6 +101,7 @@ type Watch struct {
 	ssid string // the network joined at the last look, empty before one was
 
 	mc *multicast // multicast that stops while the link is up (multicast.go)
+	bc *broadcast // broadcasts that stop while the link is up (broadcast.go)
 }
 
 // settle is how long after a reassociation the sign has to be back before it is said that it is not:
@@ -107,7 +109,7 @@ type Watch struct {
 const settle = 2 * time.Minute
 
 func New() *Watch {
-	return &Watch{
+	w := &Watch{
 		now:          time.Now,
 		haConnected:  func() bool { return voice.Get().HomeAssistant() },
 		groupPackets: wifi.GroupPackets,
@@ -127,6 +129,13 @@ func New() *Watch {
 		wait:  firstWait,
 		mc:    newMulticast(),
 	}
+	if watchBroadcasts {
+		w.bc = newBroadcast()
+		w.bc.record = w.record
+		// Not straight after this watcher has reassociated: what came of that is still to be seen.
+		w.bc.held = func() bool { return !w.tried.IsZero() && w.now().Sub(w.tried) < settle }
+	}
+	return w
 }
 
 // record puts the link's evidence in the log, which is what a diagnostics download carries: enough
@@ -156,6 +165,9 @@ func (w *Watch) Run(ctx context.Context) error {
 			w.look(ctx)
 			if w.mc != nil {
 				w.mc.look(ctx)
+			}
+			if w.bc != nil {
+				w.bc.look(ctx)
 			}
 		}
 	}

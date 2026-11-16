@@ -80,7 +80,7 @@ A device that was given access to your Home Assistant with an administrator's to
 ESPHome entry there first. Otherwise, delete the device from **Settings → Devices & services → ESPHome**
 in your Home Assistant afterward.
 The new key isn't shown anywhere. To add the device to another Home Assistant later, open its setup
-page, go to **General**, and choose **Let a Home Assistant add this device**: for 15 minutes the
+page, go to **Network**, and choose **Let a Home Assistant add this device**: for 15 minutes the
 device has no key, and the Home Assistant that adds it sets one. Home Assistant sends that key over
 your network unencrypted, as it does for ESPHome devices, so open the window only on a network you
 trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9).
@@ -130,7 +130,7 @@ data:
 In YAML, refer to this action as `esphome.<node>_network_address`.
 
 Sets how the device gets its address on Wi-Fi: from the router (DHCP), or fixed. It is the
-**Connections → Network address** setting of the setup page, explained in
+**Network → Network address** setting of the setup page, explained in
 [Setting it up](setup.md#9-a-fixed-address). The device answers first and changes its address two
 seconds later.
 
@@ -203,7 +203,8 @@ A time of day: `7:30`, `07:30`, `19:30:00`, `7:30 pm`, `7:30pm`, `3 pm`, or `3pm
 
 Which days it repeats on. One of `once` (the default — rings once and turns itself off), `daily`
 (or `every day`, `everyday`), `weekdays`, `weekends`, or a comma- or space-separated list of days,
-matched by prefix: `mon,wed,fri`, `tue thu`.
+matched by prefix: `mon,wed,fri`, `tue thu`. The English two-letter names work too: `Mo,We,Fr`.
+Numbers and ranges (`mon-fri`) are not days.
 
 ### label (Can be empty)
 
@@ -1284,7 +1285,7 @@ In YAML, refer to this action as `esphome.<node>_home_cameras`.
 
 Sets which of Home Assistant's cameras the device offers on its Cameras page, in the camera grid,
 on the setup page's Talk through cameras list and by voice ("show the front door"). There are three
-choices, also on the setup page under Connections → Home Assistant cameras:
+choices, also on the setup page under Cameras → Home Assistant cameras:
 
 - **None**: no Home Assistant camera at all.
 - **All**: every camera entity Home Assistant has, refreshed every 10 minutes. This is the default for
@@ -1461,7 +1462,7 @@ not the Dot.
 
 Puts up to four buttons on one camera's view that each run a Home Assistant action, such as
 **Open gate** or **Unlock**. Each call sets that camera's whole set, in the order given, and replaces
-what it had. The same buttons are on the setup page under Connections → Camera buttons. See
+what it had. The same buttons are on the setup page under Cameras → Camera buttons. See
 [Camera buttons](setup.md#camera-buttons).
 
 > **Good to know**
@@ -2046,7 +2047,7 @@ edge and a tap on the tab do. A tap on the screen outside the drawer, or its clo
 away. At night it lights a screen the night has put out, at the night light's level (or at half
 brightness with no night light), and the drawer shows over the red night clock until it is closed. A
 screen somebody turned off stays off. Fails on a device that has no list chosen (choose them with
-`todo_lists`, or on the setup page's Weather & Calendar tab). No arguments.
+`todo_lists`, or on the setup page's Screen tab). No arguments.
 
 ```yaml
 action: esphome.kitchen_todo_show
@@ -2082,7 +2083,9 @@ In YAML, refer to this action as `esphome.<node>_calendar_popup_sources`.
 With **Event pop-ups** on, an event coming up shows over the screen: a timed event a while before it
 starts (the **Pop up** select, a quarter hour by default), an all-day event once in the morning, as
 the night hours end. At night and in quiet hours it makes no sound and does not light a dark screen.
-Each pop-up fires an `esphome.techo5_calendar` event with `event: popup`, `summary`, `calendar`,
+A tap takes it down here and on every other Show in the house with the same event up or still to
+come, matched by its start and its title; that needs the same **house word** on each, as reminders
+do. Each pop-up fires an `esphome.techo5_calendar` event with `event: popup`, `summary`, `calendar`,
 `start` and `device`. This action chooses which of the device's calendars pop up. A Show only.
 
 ### calendars (Required)

@@ -35,6 +35,8 @@ import (
 //	kindPages    a JSON list of the web pages' names (pages.go), the one answer to a hello asking for it
 //	kindKeyboard JSON: a text field on the page got focus ({"up":true,"kind","value","label"}) or lost it
 //	             ({"up":false}), for the device to put its keyboard up or away (field.go)
+//	kindAlive    nothing: the server is still there, sent every aliveEvery whatever else is (keepAlive).
+//	             A device from before it takes it for a kind it does not know, and does nothing with it.
 //
 // A line from the device is a touch ({"t":"tap"|"down"|"move"|"up","x","y"}), or typing for the field
 // with focus: {"t":"text","s":"what was typed"} or {"t":"key","k":"Backspace"|"Enter"|"done"}. A
@@ -49,7 +51,32 @@ const (
 	kindHalf     = 3
 	kindPages    = 4
 	kindKeyboard = 5
+	kindAlive    = 6
 )
+
+// aliveEvery is how often a device is told the server is still there. A page that does not change
+// sends no pictures, for hours, and a device could not tell that from a connection that had died with
+// its socket open: it kept the last picture up and went on taking taps for it. With this it knows
+// within a few of them missed. A variable for the tests.
+var aliveEvery = 5 * time.Second
+
+// keepAlive tells the device the server is there until the session ends. A device that takes nothing
+// for as long as a write may wait is gone: lost ends the session then, and the tab is parked.
+func keepAlive(ctx context.Context, out *sender, lost func()) {
+	t := time.NewTicker(aliveEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if out.send(kindAlive) != nil {
+				lost()
+				return
+			}
+		}
+	}
+}
 
 // soft is how much of the screen has to change in one frame before it goes at half size, and
 // settle how long after the last such frame the full-size pictures follow.
@@ -204,6 +231,8 @@ func serve(ctx context.Context, b *browser, g *guard, cfg config, raw net.Conn) 
 
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// From here on, through a tab that is slow to open as well.
+	go keepAlive(sctx, out, cancel)
 
 	// The tab: this screen's parked one if it left a moment ago (warm.go), or a new one. It outlives
 	// the session, so it is opened against the server's context, not this connection's.

@@ -46,9 +46,13 @@ func (r *roundRenderer) slideshowScreensaverFace(s roundScene) {
 	// Washed as the background is, and kept for the second when it is the weather art (washedArt).
 	r.washed.lay(r.dst, s.slideshowScreensaver, color.RGBA{colBackground.R, colBackground.G, colBackground.B, slideshowWash})
 	r.artWeather(s)
-	r.readableOver(s.slideshowScreensaver, colBackground, slideshowWash, func() {
-		r.screensaverClock(s)
-		r.photoCaption(s.slideshowCaptions)
+	// The clock wanders a few pixels against image retention, as the clock face does
+	// (clock_drift_spot.go); the photos change under it, the clock would not.
+	r.drifted(spotClockDrift(s.now, false), func() {
+		r.readableOver(s.slideshowScreensaver, colBackground, slideshowWash, func() {
+			r.screensaverClock(s)
+			r.photoCaption(s.slideshowCaptions)
+		})
 	})
 }
 
@@ -65,7 +69,8 @@ func (r *roundRenderer) photoCaption(caps []home.PhotoCaption) {
 		y -= 28
 	}
 	if c.Place != "" {
-		r.centered(r.tiny, clip(r.tiny, r, c.Place, side*2/3), y, colText)
+		// Clipped short of the circle by the clock's drift either side, which moves it too.
+		r.centered(r.tiny, clip(r.tiny, r, c.Place, side*2/3-2*spotDriftAcross), y, colText)
 	}
 }
 

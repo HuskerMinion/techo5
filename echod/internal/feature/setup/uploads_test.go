@@ -137,7 +137,7 @@ func TestASoundIsSentFromThePage(t *testing.T) {
 		t.Fatalf("kept %d files from requests that were refused", len(entries))
 	}
 
-	if w := send(up(c.Value, "failure", good, c)); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/setup?saved=1&tab=sound" {
+	if w := send(up(c.Value, "failure", good, c)); w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/setup?at=sounds&saved=1&tab=sound#sec-sounds" {
 		t.Fatalf("a good sound: %d %s", w.Code, w.Header().Get("Location"))
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "failure.wav")); err != nil || string(b) != good {

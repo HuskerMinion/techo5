@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"maps"
 	"math"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -607,7 +609,9 @@ func (s *session) asks(t media.Transport) {
 		if name == "stop" && takes["pause"] {
 			name = "pause"
 		} else {
-			slog.Debug("sendspin transport", "command", name, "taken", false)
+			// At Info, not Debug: a Next that does nothing is a question people ask (#521), and the
+			// diagnostics bundle should say that the server did not list it, and what it did list.
+			slog.Info("sendspin transport: the server does not take this command", "command", name, "takes", slices.Sorted(maps.Keys(takes)))
 			return
 		}
 	}

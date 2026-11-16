@@ -329,3 +329,7 @@ const (
 	PlaybackDevice = 6
 	hwTrimDB       = 0.0
 )
+
+// ownVolumeTable is whether the unit's AFE.cfg volume table is used in place of firstCurves: only
+// on the 2nd gen Shows (paths_cronos.go).
+func ownVolumeTable() bool { return false }

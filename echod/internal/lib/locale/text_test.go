@@ -274,3 +274,97 @@ func TestSkipWords(t *testing.T) {
 		t.Errorf("de done is %q", got)
 	}
 }
+
+// Words that were once written into the drawing code: in every catalog, the partial ones too, so no
+// screen shows them in English.
+func TestOnceHardcodedWordsAreInEveryCatalog(t *testing.T) {
+	keys := []string{"popup_started", "popup_in_a_minute", "popup_in_d_minutes", "popup_in_an_hour", "popup_at_s",
+		"reminder_untitled", "hint_no_start", "hint_favorite", "hint_no_home", "hint_play_failed", "hint_dropping",
+		"call_muted", "silenced", "press_again_to_snooze_d_min"}
+	for key := range uiEnglish {
+		if strings.HasPrefix(key, "clock_style_") && key != "clock_style_label" && key != "clock_style_description" {
+			keys = append(keys, key)
+		}
+	}
+	for lang, catalog := range uiTranslations {
+		for _, key := range keys {
+			if catalog[key] == "" {
+				t.Errorf("%s: no %s", lang, key)
+			}
+		}
+	}
+}
+
+// First run's words on the screen (the firstrun_ keys): each one drawn is in uiEnglish, each one in
+// uiEnglish is drawn, and every catalog, the partial ones too, has them all, so a screen in another
+// language never walks somebody through setting it up in English.
+func TestFirstRunWordsAreInEveryCatalog(t *testing.T) {
+	drawn := map[string]bool{}
+	paths, err := filepath.Glob("../../feature/display/*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range paths {
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			if name, ok := call.Fun.(*ast.Ident); !ok || name.Name != "tr" {
+				return true
+			}
+			if lit, ok := call.Args[0].(*ast.BasicLit); ok {
+				if key, err := strconv.Unquote(lit.Value); err == nil && strings.HasPrefix(key, "firstrun_") {
+					drawn[key] = true
+				}
+			}
+			return true
+		})
+	}
+	if len(drawn) == 0 {
+		t.Fatal("no firstrun_ key is drawn")
+	}
+	var keys []string
+	for key := range uiEnglish {
+		if strings.HasPrefix(key, "firstrun_") {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	for key := range drawn {
+		if _, ok := uiEnglish[key]; !ok {
+			t.Errorf("%s is drawn but not in uiEnglish", key)
+		}
+	}
+	for _, key := range keys {
+		if !drawn[key] {
+			t.Errorf("%s is in uiEnglish but nothing draws it", key)
+		}
+	}
+	for _, lang := range []string{"es", "fr", "gl", "it", "nl", "ja", "de", "tr"} {
+		if _, ok := uiTranslations[lang]; !ok {
+			t.Errorf("%s: no catalog", lang)
+		}
+	}
+	for lang, catalog := range uiTranslations {
+		for _, key := range keys {
+			if catalog[key] == "" {
+				t.Errorf("%s: no %s", lang, key)
+			}
+		}
+	}
+}
+
+// A muted call is its microphone off, not the sound: French and Italian say so (ui_muted there reads
+// as the sound off).
+func TestAMutedCallSaysTheMicrophone(t *testing.T) {
+	for _, lang := range []string{"fr", "it"} {
+		if got := Text(lang, "call_muted"); !strings.HasPrefix(got, "Micro") || got == Text(lang, "ui_muted") {
+			t.Errorf("%s: a muted call says %q", lang, got)
+		}
+	}
+}

@@ -295,6 +295,9 @@ func (r *renderer) climateSheet(v *climateView, th dashboard.Theme) {
 	r.roundFill(btn, pal.rad, pal.accent, pal.accent)
 	r.text(fc.button, done, btn.Min.X+(bw-r.width(fc.button, done))/2, btn.Min.Y+btnH/2+r.s(9), pal.bg)
 	zones = append(zones, mediaZone{r: btn, kind: climatePartDone})
+	if z, ok := r.pressPart(zones, card); ok { // every part of it is a button (climateTap)
+		r.pressOnPart(z.r, pal)
+	}
 	r.setClimate(zones, card)
 }
 
@@ -322,6 +325,6 @@ func (r *renderer) climateAt(x, y int) (mediaZone, bool) {
 	r.zmu.Lock()
 	zones, card := slices.Clone(r.climateZones), r.climateCard
 	r.zmu.Unlock()
-	z, _, in := mediaHit(zones, card, x, y)
+	z, _, in := mediaHit(zones, card, x, y, r.s(sheetSlop))
 	return z, in
 }

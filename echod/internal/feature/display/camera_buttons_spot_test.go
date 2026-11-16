@@ -26,9 +26,16 @@ func TestTheRoundCameraButtons(t *testing.T) {
 		"camera-buttons":      {talkOffered: true, cameraSound: true, camButtons: four[:2]},
 		"camera-buttons-four": {talkOffered: true, cameraSound: true, camButtons: four},
 		"camera-buttons-bare": {camButtons: four[:1]},
+		// The most there are, under a notification's words: the words keep to one line, clear of the
+		// highest button.
+		"camera-buttons-captioned": {talkOffered: true, cameraSound: true, camButtons: four},
 	}
 	for name, s := range scenes {
 		s.now, s.phase, s.showCamera, s.camera = at, "idle", true, view
+		if name == "camera-buttons-captioned" {
+			s.camera.Caption = &home.Caption{ID: "1", Title: "Doorbell",
+				Message: "Someone is at the front door and has been waiting there for a while"}
+		}
 		img := image.NewRGBA(image.Rect(0, 0, side, side))
 		r := newRoundRenderer(img)
 		r.draw(s)
@@ -45,6 +52,45 @@ func TestTheRoundCameraButtons(t *testing.T) {
 			}
 			if b.Min.X < center-rimIn || b.Max.X > center+rimIn || b.Min.Y < 40 {
 				t.Errorf("%s: button %d at %v, off the face", name, i, b)
+			}
+			// Inside the glass at its corners too, where a circle is narrower than at the bar's middle.
+			for _, p := range []image.Point{b.Min, {X: b.Max.X, Y: b.Min.Y}} {
+				if dx, dy := p.X-center, p.Y-center; dx*dx+dy*dy > rimIn*rimIn {
+					t.Errorf("%s: button %d's corner %v is outside the glass", name, i, p)
+				}
+			}
+			if b.Dy() != cameraBarH {
+				t.Errorf("%s: button %d is %d high, want %d", name, i, b.Dy(), cameraBarH)
+			}
+		}
+		if top := cameraBarsTop(s); len(r.cameraButtonsAt) > 0 && top != r.cameraButtonsAt[len(r.cameraButtonsAt)-1].Min.Y {
+			t.Errorf("%s: the bars are reckoned to reach %d and the highest is drawn at %d",
+				name, top, r.cameraButtonsAt[len(r.cameraButtonsAt)-1].Min.Y)
+		}
+		// Up the middle of the stack, no point belongs to two controls, and between the lowest bar and
+		// the highest none is dead: the bars' targets meet halfway across each gap.
+		low, high := side, 0
+		for _, c := range append([]image.Rectangle{r.cameraTalkAt, r.cameraSoundAt}, r.cameraButtonsAt...) {
+			if !c.Empty() {
+				low, high = min(low, c.Min.Y), max(high, c.Max.Y)
+			}
+		}
+		for y := 0; y < side; y++ {
+			claims := 0
+			if r.cameraButtonTapped(center, y) >= 0 {
+				claims++
+			}
+			if r.cameraTalkTapped(center, y) {
+				claims++
+			}
+			if r.cameraSoundTapped(center, y) {
+				claims++
+			}
+			if claims > 1 {
+				t.Errorf("%s: a tap at y=%d is taken by %d controls", name, y, claims)
+			}
+			if claims == 0 && y >= low && y < high {
+				t.Errorf("%s: a tap at y=%d, between the bars, is nobody's", name, y)
 			}
 		}
 		for _, c := range []image.Rectangle{r.cameraTalkAt, r.cameraSoundAt} {

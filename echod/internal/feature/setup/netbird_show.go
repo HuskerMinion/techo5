@@ -33,19 +33,26 @@ func netbirdSection(w http.ResponseWriter, token string) {
 	case st.On:
 		where = "Starting."
 	}
-	fmt.Fprint(w, `<fieldset><legend>NetBird</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "netbird", "connections")
+	netbirdForm(w, token, where)
+}
+
+// netbirdForm is the section's form, with where the device stands said above it (as HTML). Joining
+// holds the request for up to two minutes, so the form says it is at work (script.go).
+func netbirdForm(w http.ResponseWriter, token, where string) {
+	fieldsetOpen(w, "netbird", "NetBird")
+	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyNetbird))
+	hidden(w, token, "netbird")
 	fmt.Fprintf(w, `<p class="note">%s</p>
-	 <label for="nbkey">Setup key</label>
-	 <input id="nbkey" name="key" type="password" autocomplete="off">
+	 %s
 	 <label for="nbmgmt">Management server</label>
-	 <input id="nbmgmt" name="management" type="url" value="%s" placeholder="%s">
+	 <input id="nbmgmt" name="management" type="url" inputmode="url" value="%s" placeholder="%s">
 	 <p class="note">A setup key from your NetBird dashboard. Leave the management server empty for NetBird's
 	  own; put in your own if you run one. The key joins the device once and is not kept; after that the
 	  device rejoins by itself. Over NetBird, as over Tailscale, Home Assistant reaches the device on its
 	  encrypted link, and nothing else answers but the setup page while Remote setup is on.</p>
 	 <p><button type="submit">Join</button></p></form></fieldset>`,
-		where, html.EscapeString(config.Get().Netbird.Management), html.EscapeString(netbird.DefaultManagement))
+		where, onceField("nbkey", "Setup key", "key", "required"),
+		html.EscapeString(config.Get().Netbird.Management), html.EscapeString(netbird.DefaultManagement))
 }
 
 // saveNetbird joins with the key and server typed.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 )
 
 // A notification from Home Assistant: its words in a card in the middle of the screen, the reminder's
@@ -29,6 +30,30 @@ const (
 // and its tap is taken first.
 func (r *renderer) notifyBox() image.Rectangle { return r.reminderBox() }
 
+// notifyBoxFor is where n's card is drawn, and so where a tap puts it away: a large or huge one takes
+// most of the screen (sizedBox), and a tap anywhere on it is a tap on it.
+func (r *renderer) notifyBoxFor(n notify.Notification) image.Rectangle {
+	if !n.Own && n.Size != notify.SizeNormal {
+		return r.sizedBox(n.Size)
+	}
+	return r.notifyBox()
+}
+
+// cardAt is whether p is on the card that is up: a reminder's, a notification's or an event's pop-up.
+// The card is drawn over the announcement's strip where the two meet, so a finger there is the card's.
+func (d *Display) cardAt(p image.Point) bool {
+	if d.r == nil {
+		return false
+	}
+	if _, up := remind.Get().Showing(); up {
+		return p.In(d.r.reminderBox())
+	}
+	if n, up := notify.Get().Card(); up {
+		return p.In(d.r.notifyBoxFor(n))
+	}
+	return d.r.popupTapped(p)
+}
+
 func (r *renderer) notifyCard(s scene) {
 	n := s.notification
 	if n.Own {
@@ -36,7 +61,7 @@ func (r *renderer) notifyCard(s scene) {
 		return
 	}
 	if n.Size != notify.SizeNormal {
-		r.sizedNoticeCard(r.sizedBox(n.Size), n.Size, n.Icon, n.Title, n.Message)
+		r.sizedNoticeCard(r.notifyBoxFor(n), n.Size, n.Icon, n.Title, n.Message)
 		return
 	}
 	r.noticeCard(r.notifyBox(), 56, 126, n.Icon, n.Title, n.Message, notifyLines)

@@ -12,8 +12,9 @@ import (
 // replyPlayerSection is where the assistant's spoken replies play: this device, or another Home
 // Assistant media player.
 func replyPlayerSection(w http.ResponseWriter, token string) {
-	fmt.Fprint(w, `<fieldset><legend>Replies play on</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "replyplayer", "sound")
+	fieldsetOpen(w, "replyplayer", "Replies play on")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "replyplayer")
 	fmt.Fprintf(w, `<label for="player">Media player</label>
 	 <input id="player" name="player" value="%s" maxlength="100" placeholder="media_player.kitchen_dot" autocomplete="off">
 	 <p class="note">Leave it empty to hear replies from this device. Type a Home Assistant media player,

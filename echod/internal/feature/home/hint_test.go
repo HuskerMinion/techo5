@@ -83,7 +83,7 @@ func TestAStationHomeAssistantNeverStartedSaysSo(t *testing.T) {
 	r.ask(t, "Example FM")
 	select {
 	case h := <-r.hints:
-		if h.Message != NoStartHint || h.Title == "" {
+		if h.Message != HintText(NoStartHint) || h.Title == "" {
 			t.Errorf("note %+v", h)
 		}
 	case <-time.After(2 * time.Second):
@@ -139,9 +139,9 @@ func TestNoNoteWhereItWouldBeWrong(t *testing.T) {
 			c.Unheard()
 		}
 	})
-	r.ask(t, "Example FM")
+	r.askWatched(t, "Example FM", false)
+	quiet(t, r, "a put-back with no Home Assistant connected")
 	stop()
-	quiet(t, r, "no Home Assistant connected")
 	if c := r.chosen(); c != "" {
 		t.Errorf("no Home Assistant connected: still shown as starting %q", c)
 	}
@@ -240,7 +240,7 @@ func TestTheStarRefusedSaysWhichScript(t *testing.T) {
 	}
 	select {
 	case h := <-r.hints:
-		if h.Message != FavoriteHint {
+		if h.Message != HintText(FavoriteHint) {
 			t.Errorf("note %+v", h)
 		}
 	default:

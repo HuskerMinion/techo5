@@ -32,7 +32,13 @@ type styleFaceKey struct {
 // handful of faces rather than one per fraction of a pixel. A new font or text size empties the set
 // (useFont).
 func (r *renderer) styleFace(bold bool, size int) font.Face {
-	px := max(r.atTextSize(r.s(size))/4*4, 8)
+	return r.pxFace(bold, r.atTextSize(r.s(size)))
+}
+
+// pxFace is a face px of this panel's pixels in the screen font, rounded down to a few pixels and
+// kept with styleFace's.
+func (r *renderer) pxFace(bold bool, px int) font.Face {
+	px = max(px/4*4, 8)
 	k := styleFaceKey{bold, px}
 	if f, ok := r.styleFaces[k]; ok {
 		return f
@@ -90,6 +96,12 @@ func (r *renderer) styledClock(s scene, style string) {
 	if align, foot := clockAlign(); foot && cornerStyle(style) {
 		box, r.cornered = r.cornerBox(s, style, align, bottom), true
 	}
+	// The style's box wanders a few pixels as the classic clock does, against the panel keeping a
+	// shadow of what stands still in it: the digits, a dial's ticks, the cards, the unlit segments, the
+	// tubes (clock_drift.go). The box only moves, it keeps its size, so every style fits the same faces
+	// into it; it moves down, never up toward the weather, and no further than the gap the strips and
+	// timers under it leave.
+	box = box.Add(r.clockDrift(s.now))
 
 	corner := true
 	switch style {
@@ -209,7 +221,7 @@ func (r *renderer) bigStyle(s scene, box image.Rectangle) {
 	base := box.Min.Y + (box.Dy()+h)/2
 	r.text(f, hm, x, base, cream)
 	if ampm != "" {
-		r.text(r.ampm, ampm, x+w+r.s(16), base-h+capHeight(r.ampm), dateColor(amber))
+		r.text(r.ampm, ampm, x+w+r.s(16), base-h+capHeight(r.ampm), r.ampmInk())
 	}
 	// The whole time opens the calendar, as the date does under the classic face.
 	r.setDateAt(image.Rect(x, base-h, x+w+aw, base))
@@ -465,7 +477,10 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	tempX, tempW := box.Min.X+timeW+r.s(28), max(mark, r.width(hf, "-88°"), r.width(hf, "888°"))
 	// The next events, in a column right of the middle, which is left to a tap that starts Assist: a
 	// steady margin past the time and the temperature, as much air either side of the divider at col-30.
-	col := min(max(tempX+tempW+r.s(60), r.w/2+r.s(40)), r.w/2+r.s(70))
+	// The middle and the right edge are the box's, which are the screen's but for the clock's drift
+	// (styledClock), so the whole page moves together.
+	mid, right := box.Min.X+box.Dx()/2, box.Max.X
+	col := min(max(tempX+tempW+r.s(60), mid+r.s(40)), mid+r.s(70))
 	// The temperature now, while the row of the coming days, which only has their highs and lows, is
 	// up; without the row, the weather line under the date has it. Beside the time, the icon over the
 	// degrees, where that always fits; otherwise at the end of the events' heading. A tap on it opens the
@@ -483,13 +498,13 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		} else if len(s.alerts.Here) == 0 {
 			// Not with an alert up: its badge is at this corner, and the weather line under the date has it.
 			hf, mark = r.styleFace(true, 30), r.s(40)
-			x := r.w - r.margin - r.width(hf, t)
+			x := right - r.width(hf, t)
 			r.text(hf, t, x, top+r.s(24), cream)
 			if s.weather.Condition != "" {
 				r.weatherIcon(s.weather.Condition, x-r.s(10)-mark/2, top+r.s(24)-capHeight(hf)/2, mark)
 			}
 			wide := max(r.width(hf, "-88°"), r.width(hf, "888°"))
-			r.setTempAt(image.Rect(r.w-r.margin-wide-r.s(10)-mark, top, r.w-r.margin, top+r.s(34)))
+			r.setTempAt(image.Rect(right-wide-r.s(10)-mark, top, right, top+r.s(34)))
 			tempShown = true
 		}
 	}
@@ -537,7 +552,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		return tx
 	}
 	tx := widest()
-	if tx-col > (r.w-r.margin-col)*dashWhenShare/100 {
+	if tx-col > (right-col)*dashWhenShare/100 {
 		short = true
 		tx = widest()
 	}
@@ -550,7 +565,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		if hhm != "" {
 			r.text(r.tiny, hhm, col+r.width(r.tiny, day)+r.s(8), y, dim)
 		}
-		r.text(r.tiny, r.clipTo(r.tiny, e.Summary, r.w-r.margin-tx), tx, y, cream)
+		r.text(r.tiny, r.clipTo(r.tiny, e.Summary, right-tx), tx, y, cream)
 		y += r.s(44)
 	}
 	// The divider, between the time and the events: past the date and the last event, and down to the
@@ -561,7 +576,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	}
 	r.fxLine(float64(col-r.s(30)), float64(top+r.s(4)), float64(col-r.s(30)), float64(divEnd), float64(r.s(2)), ember, 1)
 	// A tap on the column, its heading to its last line, opens the agenda.
-	r.setNextAt(image.Rect(col-r.s(20), top-r.s(10), r.w-r.margin, max(y-r.s(30), top+r.s(76))+r.s(10)))
+	r.setNextAt(image.Rect(col-r.s(20), top-r.s(10), right, max(y-r.s(30), top+r.s(76))+r.s(10)))
 
 	// Without room for the row, today's weather on a line, so the style that leaves out the weather
 	// corner still says what it is outside and still opens the forecast.

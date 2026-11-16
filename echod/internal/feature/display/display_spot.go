@@ -186,6 +186,12 @@ type Display struct {
 	on      bool
 	ceiling int
 
+	// press is the finger a press is shown under, pageShown the face the last frame drew, which a
+	// finger lands on, and pressSeq counts the presses (press.go).
+	press     pressState
+	pageShown pageID
+	pressSeq  uint64
+
 	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
 	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which
 	// dashboard, a finger moving on it, a level being slid, the idle one put away until, and a finger
@@ -208,6 +214,7 @@ type Display struct {
 	settled       bool // level has reached the target; settle steps it there between readings
 	view          voice.State
 	viewAt        time.Time
+	link          linkWatch // whether Home Assistant and the Wi-Fi are there, for the clock faces to say
 	volume        int
 	volAt         time.Time
 
@@ -423,9 +430,12 @@ func build() *Display {
 	d.nightMode = nightModeSwitch(d)
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
+	go d.watchLink()
 	media.Get().OnVolume.Listen(d.volumeMoved)
 	ambient.Get().Lux.Listen(d.lux)
 	touch.Get().Gestures.Listen(d.gesture)
+	touch.Get().Landed.Listen(d.fingerLanded)
+	touch.Get().Down.Listen(d.fingerDown)
 	timer.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	alarm.Get().Changed.Listen(func(struct{}) { d.ringLights() })
 	remind.Get().Changed.Listen(func(struct{}) { d.reminderLights() })
@@ -653,7 +663,8 @@ func (d *Display) lux(float64) {
 func (d *Display) changed(s voice.State) {
 	d.mu.Lock()
 	newHeard := s.Heard != "" && s.Heard != d.view.Heard
-	if s.Phase == "listening" && d.view.Phase != "listening" {
+	if (s.Phase == "listening" && d.view.Phase != "listening") || s.Failed != "" {
+		// A request that failed is said whatever was put away before it: it is a new thing to say.
 		d.quiet = false
 	}
 	d.view = s
@@ -720,6 +731,17 @@ func (d *Display) gesture(g touch.Gesture) {
 	// face has not seen the card yet, so it is not a tap on anything.
 	held := d.noticeHeld()
 	ringTap := g.Kind == touch.Tap && ringingNow(time.Now()).any()
+	// A finger that swipes, drags or is held is not pressing what it came down on (press.go).
+	switch g.Kind {
+	case touch.SwipeUp, touch.SwipeDown, touch.SwipeLeft, touch.SwipeRight:
+		if d.pressClear() {
+			d.wake()
+		}
+	case touch.Hold:
+		d.pressHeld(g.Moved)
+	case touch.Drag:
+		d.pressMoved(g.X, g.Y)
+	}
 
 	if !on {
 		// A dark panel only lights; nothing under the finger is acted on. A long press on a face the
@@ -1221,6 +1243,10 @@ func (d *Display) menuGesture(g touch.Gesture) {
 				d.act(id)
 				d.wake()
 				return
+			default:
+				// A tap on nothing, between the middle and the ring or outside it, puts the menu away:
+				// otherwise the only way out of one opened by mistake was to wait, or to pick something.
+				d.closeMenu()
 			}
 		case touch.SwipeLeft:
 			d.menuSel = (d.menuSel + 1) % n
@@ -1583,15 +1609,16 @@ func (d *Display) frame() (next time.Duration) {
 		}
 		return time.Hour
 	}
-	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "") && now.Sub(at) < linger() {
+	if view.Phase == "idle" && (view.Heard != "" || view.Reply != "" || view.Failed != "") && now.Sub(at) < linger() {
 		s.phase = "lingering"
+		s.failed = failedShown(view.Failed)
 	}
 	if quiet && (s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
 		// A screen command: the screen it asked for is the answer, not the words.
-		s.phase, s.heard, s.reply = "idle", "", ""
+		s.phase, s.heard, s.reply, s.failed = "idle", "", "", ""
 	}
 	if cueOn() {
-		s.cue, s.phase, s.heard, s.reply = cueTurn(s.phase, s.heard, s.reply, captionsOn())
+		s.cue, s.phase, s.heard, s.reply = cueFailed(s.phase, s.heard, s.reply, s.failed, captionsOn())
 	}
 	s.said = voice.Spoken(s.reply, now)
 	if equalizerOn() && (s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || s.phase == "lingering") {
@@ -1600,6 +1627,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	s.muted, _ = mute.Get().Muted()
 	s.mutedSubtle = muteRingSubtle.Load()
+	s.linkDown = d.link.down(now)
 	s.noIdleRing = idleRingHidden.Load()
 	s.listening = babymon.Shown()
 	// A stream this player is carrying is the room's when it is what is being heard: the face names it,
@@ -1793,9 +1821,11 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.redShown = s.nightClockFace()
 	d.mu.Unlock()
+	d.pressScene(&s, now)
 	if s.showVideo && s.videoLive {
 		// The picture's own frames go to the panel; the canvas holds only the controls.
 		d.r.draw(s)
+		d.pressUnshown(s.press, d.r.press.shown)
 		d.videoPainting, d.videoOver = true, d.r.videoOver
 		for pending := true; pending; {
 			select {
@@ -1812,6 +1842,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	drawn := time.Now()
 	d.r.draw(s)
+	d.pressUnshown(s.press, d.r.press.shown)
 	d.mu.Lock()
 	d.callShown = d.r.callDrawn
 	d.mu.Unlock()

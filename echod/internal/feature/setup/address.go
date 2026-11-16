@@ -26,10 +26,16 @@ func addressSection(w http.ResponseWriter, token string) {
 	if !wifi.Available() || !wifi.AddressSupported() {
 		return
 	}
-	a := wifi.LoadAddress()
-	fmt.Fprint(w, `<fieldset><legend>Network address</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "address", "connections")
-	if reason := wifi.AddressFallback(); reason != "" {
+	addressForm(w, token, wifi.LoadAddress(), wifi.AddressFallback())
+}
+
+// addressForm is the section for a setting, and why the last change was not kept if it was not: apart
+// from whether this device offers it, so it can be drawn where there is no Wi-Fi to ask.
+func addressForm(w http.ResponseWriter, token string, a wifi.Address, reason string) {
+	fieldsetOpen(w, "address", "Network address")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "address")
+	if reason != "" {
 		fmt.Fprintf(w, `<p class="bad">The last change was not kept: %s. The device kept the setting
 		 below.</p>`, html.EscapeString(reason))
 	}
@@ -43,16 +49,18 @@ func addressSection(w http.ResponseWriter, token string) {
 	if a.Fixed && len(a.DNS) == 1 && a.DNS[0].Equal(a.Gateway) {
 		dns = "" // the default, shown as the placeholder
 	}
+	// The address, gateway and DNS are for a fixed address: the page leaves them out while Automatic is
+	// chosen (.fixedonly, tabs.go). They are still sent, and saveAddress ignores them for Automatic.
 	fmt.Fprintf(w, `<label><input type="radio" name="mode" value="dhcp"%s> Automatic, from the router (DHCP)</label>
 	 <label><input type="radio" name="mode" value="fixed"%s> Fixed</label>
-	 <label for="address">Address</label>
+	 <div class="fixedonly"><label for="address">Address</label>
 	 <input id="address" name="address" value="%s" autocomplete="off" placeholder="192.168.1.50/24">
 	 <label for="gateway">Gateway</label>
 	 <input id="gateway" name="gateway" value="%s" autocomplete="off" placeholder="192.168.1.1">
 	 <label for="dns">DNS</label>
 	 <input id="dns" name="dns" value="%s" autocomplete="off" placeholder="the gateway">
 	 <p class="note">A fixed address can be one the router's DHCP does not hand out. Without a prefix it is
-	  /24. Up to three DNS servers, with commas between them; left empty, it asks the gateway.</p>
+	  /24. Up to three DNS servers, with commas between them; left empty, it asks the gateway.</p></div>
 	 <p class="note">Changing it moves this page to the new address, where the browser has to be let in
 	  again. A new fixed address is tried first: if another device has it, or the gateway does not answer
 	  from it, the device keeps the setting it had and says why here. Once kept, it is used as it is after

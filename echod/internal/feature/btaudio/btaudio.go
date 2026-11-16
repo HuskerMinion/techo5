@@ -213,6 +213,9 @@ type Feature struct {
 	reopened time.Time
 	// soundHeard is the speaker told to say when sound starts going to the stream (moveStream).
 	soundHeard sync.Once
+	// spk is the volume of the stream played out: the speaker's own, or the device's in software
+	// (speakervol.go).
+	spk speakerVol
 }
 
 var (
@@ -545,6 +548,13 @@ func (f *Feature) refresh() {
 		f.attach(al, *want, wantDev)
 	case streamReopen:
 		f.reopen(wantDev)
+	case streamKeep:
+		f.mu.Lock()
+		s := f.stream
+		f.mu.Unlock()
+		if s != nil && want != nil && s.Path == want.Path {
+			f.speakerLook(al, *want, s, f.canAbs(want.Device), false)
+		}
 	}
 	if want == nil {
 		f.mu.Lock()
@@ -974,17 +984,7 @@ func (f *Feature) followSlider(al pcmSetter, s *inStream) { f.phoneSlider(al, s.
 
 // sliderTo sets the device's volume to the step for a phone's level. A raise stops where night volume
 // says (media.CapRaise). A variable for the tests.
-var sliderTo = func(level int) {
-	m := media.Get()
-	from, to := m.Volume(), stepFor(level)
-	if to > from {
-		to = m.CapRaise(to)
-	}
-	if to != from {
-		slog.Info("bluetooth: a phone's volume slider sets the volume", "level", level, "step", to)
-		m.Set(to)
-	}
-}
+var sliderTo = func(level int) { volumeFrom(level, "bluetooth: a phone's volume slider sets the volume") }
 
 // tellPhone moves the slider of the phone playing here to the device's volume step, unless it is at
 // that step already: a slider being dragged is left alone, and the level it was dragged to is not
@@ -1220,6 +1220,10 @@ func (f *Feature) attach(al *bluealsa.Client, p bluealsa.PCM, d bluez.Device) {
 		speaker.Get().SetSink(nil, "", 0, 0) // closes it
 	}
 	speaker.Get().SetSink(s, displayName(d), p.Rate, p.Channels)
+	// The device's volume is the speaker's own where it takes absolute volume: at once, and again a
+	// moment later for an AVRCP connection that comes up after the audio (speakervol.go).
+	f.speakerLook(al, p, s, f.canAbs(p.Device), true)
+	f.speakerAgain(s)
 	slog.Info("playing through bluetooth", "device", displayName(d), "codec", p.Codec, "rate", p.Rate, "channels", p.Channels)
 	f.note(displayName(d) + " connected")
 }
@@ -1292,6 +1296,7 @@ func (f *Feature) reopen(d bluez.Device) {
 		return
 	}
 	slog.Info("bluetooth: the stream stopped while open; opening it again", "device", displayName(d))
+	f.speakerGone()
 	speaker.Get().SetSink(nil, "", 0, 0) // the speaker closes the stream
 	time.AfterFunc(reopenAfter, f.wake)
 }
@@ -1306,6 +1311,7 @@ func (f *Feature) detach() {
 	if s == nil {
 		return
 	}
+	f.speakerGone()
 	speaker.Get().SetSink(nil, "", 0, 0) // the speaker closes the stream
 	slog.Info("bluetooth audio ended")
 	f.note("Disconnected")

@@ -113,6 +113,10 @@ func Current(ctx context.Context) Status {
 	return st
 }
 
+// HasAddress is whether the interface has an IPv4 address, read from the interface itself: unlike
+// Current, it does not wait on the supplicant, which can be busy or slow to answer.
+func HasAddress() bool { return address() != "" }
+
 // address is the interface's IPv4 address, empty without one.
 func address() string {
 	i, err := net.InterfaceByName(iface())

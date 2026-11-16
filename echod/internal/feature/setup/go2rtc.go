@@ -19,8 +19,9 @@ func init() { saves["go2rtc"] = saveGo2RTC }
 // address is never shown again: the address is shown without it.
 func go2rtcSection(w http.ResponseWriter, token string) {
 	g := config.Get().Home.Go2RTC
-	fmt.Fprint(w, `<fieldset><legend>go2rtc cameras</legend><form method="post" action="/setup/save">`)
-	hidden(w, token, "go2rtc", "connections")
+	fieldsetOpen(w, "go2rtc", "go2rtc cameras")
+	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
+	hidden(w, token, "go2rtc")
 	shown := ""
 	if g.Base != "" {
 		var names []string
@@ -45,7 +46,8 @@ func go2rtcSection(w http.ResponseWriter, token string) {
 	 <input id="g2r" name="address" value="%s" placeholder="192.168.x.y:1984" autocomplete="off">
 	 <p class="note">Every stream go2rtc has becomes a camera here, by its name in go2rtc: its picture
 	  from go2rtc, and live video from go2rtc's RTSP port (8554) with Live camera video on. A go2rtc with
-	  a login takes it in the address, as http://user:password@host:1984; saved, it is not shown again.
+	  a login takes it in the address, as http://user:password@host:1984. <strong>The login is shown as
+	  you type it</strong>, since it is part of the address; saved, it is not shown again.
 	  A stream can have a name of its own to show and say ("show the doorbell"); it changes nothing in
 	  go2rtc. Left empty, the stream is called by its name in go2rtc. Clear the address and save to take
 	  the cameras away.</p>
