@@ -489,6 +489,14 @@ cameras: the password itself is never sent, but anyone who can watch your Wi-Fi 
 captured login to the same page for a few minutes, and could see the pictures anyway. `/screen.png`
 (Screen web access) has no login: if the screen is showing the camera, a screenshot shows it too.
 
+To see the screen in Home Assistant without that page, turn on **Screen camera** (a switch of the
+device's in Home Assistant, under its configuration, or **Screen in Home Assistant** on the Security
+tab). The device's **Screen** camera entity then shows what the screen shows, as a JPEG sent over Home
+Assistant's own link, which the device key encrypts; no port is opened for it, and it does not need
+Screen web access, nor Screen web access it. While the switch is off the entity stays listed and has no
+picture. ESPHome's picture request does not say which camera it is for, so on a device with a camera,
+Home Assistant asking for the screen also takes a still from the camera, and the green dot shows it.
+
 ## 5. Music
 
 - **Music Assistant.** Each device is a Sendspin player, on from the first boot. Music Assistant

@@ -227,6 +227,7 @@ var registered = []string{
 	"screen_turn_style",
 	"screen_weather_animation",
 	"screen_web_access",
+	"screen_camera",
 	"segment_1",
 	"segment_10",
 	"segment_11",

@@ -8,6 +8,11 @@ type Security struct {
 	Camera bool `json:"camera_web"`
 	Screen bool `json:"screen_web"`
 
+	// ScreenCamera answers Home Assistant's requests for the Screen camera entity (feature/camera
+	// screen_entity.go) over the API link, which the device key encrypts. Its own switch, apart from
+	// Screen: either the page on the network or the entity can be on without the other.
+	ScreenCamera bool `json:"screen_camera,omitempty"`
+
 	// TalkBack lets the camera page send the microphones to a camera's speaker (config.TalkBack).
 	TalkBack bool `json:"talk_back,omitempty"`
 
@@ -58,6 +63,10 @@ func (w SecurityWriter) Camera(v bool) error {
 
 func (w SecurityWriter) Screen(v bool) error {
 	return w.st.Update(func(c *Config) { c.Security.Screen = v })
+}
+
+func (w SecurityWriter) ScreenCamera(v bool) error {
+	return w.st.Update(func(c *Config) { c.Security.ScreenCamera = v })
 }
 
 func (w SecurityWriter) LockPIN(v string) error {

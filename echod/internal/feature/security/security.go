@@ -38,6 +38,7 @@ const recheck = time.Minute
 // Feature is the switches and what they control.
 type Feature struct {
 	ssh, camera, screen, talk *esphome.Switch
+	screenCam                 *esphome.Switch // the Screen camera entity (feature/camera)
 	takes                     *esphome.Switch // recording takes of a word (feature/takes)
 	baby                      *esphome.Switch // the baby monitor page (feature/babymon)
 	lockSw                    *esphome.Switch // the settings lock (lock.go)
@@ -55,6 +56,7 @@ type State struct {
 	Keys         []string // one label per authorized key: its comment, or its type
 	Camera       bool
 	Screen       bool
+	ScreenCamera bool
 	TalkBack     bool
 	Takes        bool
 	Baby         bool
@@ -75,6 +77,7 @@ func build() *Feature {
 	f.ssh = sw("ssh", "SSH", "mdi:ssh", f.SetSSH)
 	f.camera = sw("camera_web_access", "Camera web access", "mdi:webcam", f.SetCamera)
 	f.screen = sw("screen_web_access", "Screen web access", "mdi:monitor-screenshot", f.SetScreen)
+	f.screenCam = sw("screen_camera", "Screen camera", "mdi:monitor-eye", f.SetScreenCamera)
 	f.talk = sw("talk_back", "Talk through cameras", "mdi:account-voice", f.SetTalkBack)
 	f.takes = sw("record_takes", "Record takes of a word", "mdi:microphone-message", f.SetTakes)
 	f.baby = sw("baby_monitor", "Baby monitor", "mdi:baby-face-outline", f.SetBaby)
@@ -93,7 +96,7 @@ func (f *Feature) Entities() []esphome.Entity {
 		out = append(out, f.camera)
 	}
 	if webPages {
-		out = append(out, f.screen, f.talk, f.lockSw)
+		out = append(out, f.screen, f.screenCam, f.talk, f.lockSw)
 	}
 	// On a Dot too: its action button is the press that starts each recording.
 	if layout.HasMicrophone() {
@@ -106,6 +109,7 @@ func (f *Feature) Restore(c config.Config) {
 	f.ssh.Set(c.Security.SSH)
 	f.camera.Set(c.Security.Camera)
 	f.screen.Set(c.Security.Screen)
+	f.screenCam.Set(c.Security.ScreenCamera)
 	f.talk.Set(c.Security.TalkBack)
 	f.takes.Set(c.Security.Takes)
 	f.baby.Set(c.Security.Baby)
@@ -178,6 +182,12 @@ func (f *Feature) SetSSH(on bool) {
 func (f *Feature) SetCamera(on bool) { f.set(f.camera, on, config.Set().Security().Camera) }
 func (f *Feature) SetScreen(on bool) { f.set(f.screen, on, config.Set().Security().Screen) }
 
+// SetScreenCamera lets Home Assistant have the screen's picture through the Screen camera entity, over
+// its encrypted link and not on the web port: a switch of its own, so Screen web access can stay off.
+func (f *Feature) SetScreenCamera(on bool) {
+	f.set(f.screenCam, on, config.Set().Security().ScreenCamera)
+}
+
 // SetTalkBack allows the camera page's Talk, or ends a talk and takes Talk away.
 func (f *Feature) SetTalkBack(on bool) { f.set(f.talk, on, config.Set().Security().TalkBack) }
 
@@ -230,7 +240,7 @@ func (f *Feature) set(s *esphome.Switch, on bool, save func(bool) error) {
 // State is read by the screen each frame; a few small file reads.
 func (f *Feature) State() State {
 	c := config.Get().Security
-	st := State{SSHAvailable: sshAvailable(), SSH: c.SSH, Camera: c.Camera, Screen: c.Screen, TalkBack: c.TalkBack, Takes: c.Takes, Baby: c.Baby, Encrypted: encrypted()}
+	st := State{SSHAvailable: sshAvailable(), SSH: c.SSH, Camera: c.Camera, Screen: c.Screen, ScreenCamera: c.ScreenCamera, TalkBack: c.TalkBack, Takes: c.Takes, Baby: c.Baby, Encrypted: encrypted()}
 	if st.SSHAvailable {
 		st.SSHRunning = sshRunning()
 		for _, k := range readKeys() {

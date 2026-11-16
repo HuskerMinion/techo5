@@ -18,7 +18,7 @@ import (
 // readOnly is every entity the API may read and not change.
 var readOnly = []string{
 	// Doors on the network, and this API itself.
-	"remote_api", "ssh", "setup_page", "camera_web_access", "screen_web_access", "remote_adb", "insecure_tls",
+	"remote_api", "ssh", "setup_page", "camera_web_access", "screen_web_access", "screen_camera", "remote_adb", "insecure_tls",
 	"airplay", "airplay_2", "spotify_connect", "dlna", "dlna_video", "video", "sendspin", "bluetooth_proxy",
 	"bluetooth_proxy_connections", "snapcast", "snapcast_server",
 	// Off the network for hours: a caller could take the device out of its own reach (Wi-Fi quiet hours).

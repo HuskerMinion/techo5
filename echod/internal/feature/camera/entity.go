@@ -53,16 +53,22 @@ func (f *Feature) DescribesEntities() {}
 func (f *Feature) Handle(ctx context.Context, c *esphome.Conn, msg proto.Message) error {
 	switch m := msg.(type) {
 	case *api.ListEntitiesRequest:
-		if !camera.Available() {
-			return nil
+		if camera.Available() {
+			if err := c.Send(&api.ListEntitiesCameraResponse{
+				ObjectId: objectID,
+				Key:      key(objectID),
+				Name:     "Camera",
+				Icon:     "mdi:camera",
+			}); err != nil {
+				return err
+			}
 		}
-		return c.Send(&api.ListEntitiesCameraResponse{
-			ObjectId: objectID,
-			Key:      key(objectID),
-			Name:     "Camera",
-			Icon:     "mdi:camera",
-		})
+		if screenShot != nil {
+			return c.Send(screenListing())
+		}
 	case *api.CameraImageRequest:
+		// The request names no entity, so the screen answers it too (screen_entity.go).
+		screenRequest(c, m)
 		if !camera.Available() {
 			return nil
 		}

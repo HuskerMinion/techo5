@@ -168,6 +168,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.label, row.sub = tr("ui_secure_connections"), tr("ui_off_if_a_phone_pairs_then_drops")
 		case row.id == "screenweb":
 			row.label = tr("screen_on_network")
+		case row.id == "screencam":
+			row.label = tr("screen_in_ha")
 		case row.id == "camweb":
 			row.label = tr("camera_on_network")
 		case row.id == "talkback":

@@ -406,6 +406,7 @@ var uiEnglish = map[string]string{
 	"screen_language":                       "Screen language",
 	"screen_off_when_nobody_is_near":        "Screen off when nobody is near",
 	"screen_on_the_network":                 "Screen on the network",
+	"screen_in_home_assistant":              "Screen in Home Assistant",
 	"screensaver":                           "Screensaver",
 	"seconds_option":                        "%d seconds",
 	"sent_from_home_assistant":              "Sent from Home Assistant",
@@ -731,6 +732,7 @@ var uiEnglish = map[string]string{
 	"ui_d_calendars":                "%d calendars",
 	"one_hour":                      "1 hour",
 	"screen_on_network":             "Screen on network",
+	"screen_in_ha":                  "Screen in HA",
 	"camera_on_network":             "Camera on network",
 	"update_channel":                "Update channel",
 	// Chips while music plays (display/clock_layout.go).
@@ -1387,6 +1389,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                "%d calendarios",
 		"one_hour":                      "1 hora",
 		"screen_on_network":             "Pantalla en la red",
+		"screen_in_ha":                  "Pantalla en HA",
+		"screen_in_home_assistant":      "Pantalla en Home Assistant",
 		"camera_on_network":             "Cámara en la red",
 		"update_channel":                "Canal de actualizaciones",
 		// Chips while music plays (display/clock_layout.go).
@@ -1968,6 +1972,7 @@ var uiTranslations = map[string]map[string]string{
 		"same_as_default":                           "Identique à la valeur par défaut (%s)",
 		"screen_off_when_nobody_is_near":            "Éteindre l'écran quand personne n'est à proximité",
 		"screen_on_the_network":                     "Écran sur le réseau",
+		"screen_in_home_assistant":                  "Écran dans Home Assistant",
 		"sent_from_home_assistant":                  "Envoyé depuis Home Assistant",
 		"settings_lock":                             "Verrouillage des paramètres",
 		"shown_as_you_change_it_at_night":           "Aperçu pendant le réglage, la nuit",
@@ -2262,6 +2267,7 @@ var uiTranslations = map[string]map[string]string{
 		"camera_on_network":                                    "Caméra sur le réseau",
 		"one_hour":                                             "1 heure",
 		"screen_on_network":                                    "Écran sur le réseau",
+		"screen_in_ha":                                         "Écran dans HA",
 		"ui_all_calendars_shown":                               "Tous les calendriers affichés",
 		"ui_d_calendars":                                       "%d calendriers",
 		"ui_glance_chip_size":                                  "Taille des pastilles",
@@ -2902,6 +2908,7 @@ var uiTranslations = map[string]map[string]string{
 		"screen_language":                       "Idioma da pantalla",
 		"screen_off_when_nobody_is_near":        "Pantalla apagada cando non hai ninguén preto",
 		"screen_on_the_network":                 "Pantalla na rede",
+		"screen_in_home_assistant":              "Pantalla en Home Assistant",
 		"screensaver":                           "Protector de pantalla",
 		"seconds_option":                        "%d segundos",
 		"sent_from_home_assistant":              "Enviado desde Home Assistant",
@@ -3226,6 +3233,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                 "%d calendarios",
 		"one_hour":                       "1 hora",
 		"screen_on_network":              "Pantalla na rede",
+		"screen_in_ha":                   "Pantalla en HA",
 		"camera_on_network":              "Cámara na rede",
 		"update_channel":                 "Canle de actualizacións",
 		"ui_chips_while_music_plays":     "Etiquetas mentres soa a música",
@@ -3855,6 +3863,7 @@ var uiTranslations = map[string]map[string]string{
 		"screen_language":                       "Lingua dello schermo",
 		"screen_off_when_nobody_is_near":        "Spegni lo schermo quando non c'è nessuno nelle vicinanze",
 		"screen_on_the_network":                 "Schermo accessibile in rete",
+		"screen_in_home_assistant":              "Schermo in Home Assistant",
 		"screensaver":                           "Salvaschermo",
 		"seconds_option":                        "%d secondi",
 		"sent_from_home_assistant":              "Inviato da Home Assistant",
@@ -4180,6 +4189,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                "%d calendari",
 		"one_hour":                      "1 ora",
 		"screen_on_network":             "Schermo accessibile in rete",
+		"screen_in_ha":                  "Schermo in HA",
 		"camera_on_network":             "Telecamera in rete",
 		"update_channel":                "Canale di aggiornamento",
 		// Chips while music plays (display/clock_layout.go).
@@ -5273,8 +5283,10 @@ var uiTranslations = map[string]map[string]string{
 		"screen_off_when_nobody_is_near": "Scherm uit als er niemand in de buurt is",
 		// Screen on network
 		"screen_on_network": "Scherm op het netwerk",
+		"screen_in_ha": "Scherm in HA",
 		// Screen on the network
 		"screen_on_the_network": "Scherm op het netwerk",
+		"screen_in_home_assistant": "Scherm in Home Assistant",
 		// Screensaver
 		"screensaver": "Schermbeveiliging",
 		// %d seconds
@@ -6524,6 +6536,7 @@ var uiTranslations = map[string]map[string]string{
 		"screen_language":                       "画面の言語",
 		"screen_off_when_nobody_is_near":        "近くに人がいなければ画面を消す",
 		"screen_on_the_network":                 "ネットワーク経由の画面共有",
+		"screen_in_home_assistant":              "Home Assistantで画面を表示",
 		"screensaver":                           "スクリーンセーバー",
 		"seconds_option":                        "%d秒",
 		"sent_from_home_assistant":              "Home Assistantから取得",
@@ -6849,6 +6862,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                "%d件のカレンダー",
 		"one_hour":                      "1時間",
 		"screen_on_network":             "画面をネットワークに",
+		"screen_in_ha":                  "HAで画面を表示",
 		"camera_on_network":             "カメラをネットワークに",
 		"update_channel":                "アップデートチャネル",
 		// Chips while music plays (display/clock_layout.go).
@@ -7794,6 +7808,7 @@ var uiTranslations = map[string]map[string]string{
 		"screen_off_when_nobody_is_near": "Bildschirm aus, wenn niemand in der Nähe ist",
 		// Screen on the network
 		"screen_on_the_network": "Bildschirm im Netzwerk",
+		"screen_in_home_assistant": "Bildschirm in Home Assistant",
 		// Screensaver
 		"screensaver": "Bildschirmschoner",
 		// %d seconds
@@ -8424,6 +8439,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                "%d Kalender",
 		"one_hour":                      "1 Stunde",
 		"screen_on_network":             "Bildschirm im Netz",
+		"screen_in_ha":                  "Bildschirm in HA",
 		"camera_on_network":             "Kamera im Netz",
 		"update_channel":                "Update-Kanal",
 		// Chips while music plays (display/clock_layout.go).
@@ -9070,6 +9086,7 @@ var uiTranslations = map[string]map[string]string{
 		"screen_language":                       "Ekran dili",
 		"screen_off_when_nobody_is_near":        "Kimse yakında değilken ekranı kapat",
 		"screen_on_the_network":                 "Ağdaki ekran",
+		"screen_in_home_assistant":              "Home Assistant'ta ekran",
 		"screensaver":                           "Ekran koruyucu",
 		"seconds_option":                        "%d saniye",
 		"sent_from_home_assistant":              "Home Assistant'tan gönderildi",
@@ -9391,6 +9408,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_d_calendars":                "%d takvim",
 		"one_hour":                      "1 saat",
 		"screen_on_network":             "Ağdaki ekran",
+		"screen_in_ha":                  "HA'da ekran",
 		"camera_on_network":             "Ağdaki kamera",
 		"update_channel":                "Güncelleme kanalı",
 		// Chips while music plays (display/clock_layout.go).

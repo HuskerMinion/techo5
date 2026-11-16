@@ -20,6 +20,7 @@ var keptByRestore = map[string]keptSetting{
 	"ssh":                              {func(c *config.Config) { c.Security.SSH = true }, func(c config.Config) bool { return c.Security.SSH }},
 	"camera_web_access":                {func(c *config.Config) { c.Security.Camera = true }, func(c config.Config) bool { return c.Security.Camera }},
 	"screen_web_access":                {func(c *config.Config) { c.Security.Screen = true }, func(c config.Config) bool { return c.Security.Screen }},
+	"screen_camera":                    {func(c *config.Config) { c.Security.ScreenCamera = true }, func(c config.Config) bool { return c.Security.ScreenCamera }},
 	"talk_back":                        {func(c *config.Config) { c.Security.TalkBack = true }, func(c config.Config) bool { return c.Security.TalkBack }},
 	"record_takes":                     {func(c *config.Config) { c.Security.Takes = true }, func(c config.Config) bool { return c.Security.Takes }},
 	"baby_monitor":                     {func(c *config.Config) { c.Security.Baby = true }, func(c config.Config) bool { return c.Security.Baby }},

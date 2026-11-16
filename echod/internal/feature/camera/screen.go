@@ -4,6 +4,7 @@ package camera
 
 import (
 	"context"
+	"image"
 	"image/png"
 	"net/http"
 	"time"
@@ -94,3 +95,8 @@ func (f *Feature) registerScreen() {
 }
 
 func screenOpen() bool { return config.Get().Security.Screen }
+
+// The Screen camera entity's picture (screen_entity.go): the next frame drawn, as /screen.png sends it.
+func init() {
+	screenShot = func(ctx context.Context) (image.Image, error) { return display.Get().Screenshot(ctx) }
+}

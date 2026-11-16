@@ -354,6 +354,7 @@ func securityRows(sv sheetView) []settingRow {
 	rows = append(rows,
 		settingRow{id: "camweb", label: tr("camera_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Camera},
 		settingRow{id: "screenweb", label: tr("screen_on_the_network"), sub: tr("no_login"), kind: ctlToggle, on: sec.Screen},
+		settingRow{id: "screencam", label: tr("screen_in_home_assistant"), sub: tr("encrypted_with_this_device_s_key"), kind: ctlToggle, on: sec.ScreenCamera},
 		settingRow{id: "talkback", label: tr("talk_through_cameras"), sub: tr("talk_on_the_camera_page"), kind: ctlToggle, on: sec.TalkBack})
 	if layout.HasMicrophone() {
 		rows = append(rows, settingRow{id: "takes", label: tr("record_takes_of_a_word"), sub: tr("on_the_setup_page_started_here"),
@@ -1327,6 +1328,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetCamera(!config.Get().Security.Camera)
 	case "screenweb":
 		security.Get().SetScreen(!config.Get().Security.Screen)
+	case "screencam":
+		security.Get().SetScreenCamera(!config.Get().Security.ScreenCamera)
 	case "talkback":
 		security.Get().SetTalkBack(!config.Get().Security.TalkBack)
 	case "takes":

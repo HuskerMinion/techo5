@@ -3,6 +3,9 @@
 package camera
 
 import (
+	"context"
+	"errors"
+	"image"
 	"image/png"
 	"net/http"
 	"time"
@@ -46,3 +49,15 @@ func (f *Feature) registerScreen() {
 }
 
 func screenOpen() bool { return config.Get().Security.Screen }
+
+// The Screen camera entity's picture (screen_entity.go): the round panel as last drawn, as /screen.png
+// sends it.
+func init() {
+	screenShot = func(context.Context) (image.Image, error) {
+		img := display.Get().Screenshot()
+		if img == nil {
+			return nil, errors.New("the screen is not open")
+		}
+		return img, nil
+	}
+}
