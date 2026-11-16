@@ -346,25 +346,30 @@ func (f *Feature) takeParked() *parkedJoin {
 }
 
 // waitParked waits for the download to finish and the client to answer, joins once with the held key,
-// and lets go of it on every way out: joined, failed, the download failed, ten minutes, NetBird off.
+// and lets go of it on every way out: joined, failed, the download failed, ten minutes, NetBird off. It
+// ends only when, under the lock that park takes, no key is held: a Join while it was deciding to stop,
+// or while it was joining, is never left without a waiter.
 func (f *Feature) waitParked() {
-	defer func() {
-		f.pk.Lock()
-		f.waiting = false
-		f.pk.Unlock()
-	}()
+	for f.joinParked() {
+	}
+}
+
+// joinParked waits for the key held now and joins with it; false, with the waiter marked done, when none
+// is held.
+func (f *Feature) joinParked() bool {
 	deadline := time.Now().Add(parkTimeout)
 	for {
 		f.pk.Lock()
-		held := f.parked != nil
-		f.pk.Unlock()
-		if !held {
-			return // switched off, or taken
+		if f.parked == nil {
+			f.waiting = false
+			f.pk.Unlock()
+			return false // switched off, or taken
 		}
+		f.pk.Unlock()
 		st := f.State()
 		if !st.On {
 			f.dropParked("")
-			return
+			return true
 		}
 		if !st.Downloading {
 			if _, err := status(context.Background()); err == nil {
@@ -372,29 +377,36 @@ func (f *Feature) waitParked() {
 			}
 			if st.Problem != "" {
 				f.dropParked("NetBird did not download: " + st.Problem + "; give the key again")
-				return
+				return true
 			}
 		}
 		if time.Now().After(deadline) {
 			f.dropParked("NetBird did not finish downloading in ten minutes; give the key again")
-			return
+			return true
 		}
 		time.Sleep(parkPoll)
 	}
 	p := f.takeParked()
 	if p == nil {
-		return
+		return true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), joinTimeout)
 	defer cancel()
 	err := f.login(ctx, p.key, p.mgmt, true)
 	p.key = ""
+	why := ""
 	if err != nil {
 		slog.Warn("netbird: the join that waited for the download failed", "err", err.Error())
-		f.dropParked(err.Error() + "; give the key again")
-		return
+		why = err.Error() + "; give the key again"
 	}
-	f.dropParked("")
+	// A newer key held while this one joined stays, for the next turn; only with none is the join over.
+	f.pk.Lock()
+	newer := f.parked != nil
+	f.pk.Unlock()
+	if !newer {
+		f.dropParked(why)
+	}
+	return true
 }
 
 // managementURL is a management server's URL as the client takes it: NetBird's own for none, and only
