@@ -196,3 +196,4 @@ spot/saver-spot-small-bottom.png
 spot/saver-spot-medium-bottom-weather.png
 spot/saver-spot-medium-center.png
 spot/saver-spot-clock-bottom-weather.png
+show/dashboard-drawer-call-show8.png

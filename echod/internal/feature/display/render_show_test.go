@@ -64,6 +64,11 @@ func TestShowScenesDraw(t *testing.T) {
 			callees: []phone.Callee{{Name: "a", Device: true}, {Name: "b", Device: true}, {Name: "c", Device: true},
 				{Name: "d", Number: "15551234567"}, {Name: "e", Number: "106"}}},
 		"drawer-call-empty": {now: at, phase: "idle", weather: sky, showDrawer: true, drawerTab: drawerCall},
+		// The drawer over the dashboard: the page stays behind it, not the clock.
+		"dashboard-drawer-call": {now: at, phase: "idle", weather: sky, showDash: true, dashMode: config.DashboardDrawn, drawn: fourControls(),
+			showDrawer: true, drawerTab: drawerCall, demo: true,
+			callees: []phone.Callee{{Name: "a", Device: true}, {Name: "b", Device: true}, {Name: "c", Device: true},
+				{Name: "d", Number: "15551234567"}, {Name: "e", Number: "106"}}},
 		"nowplaying": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
 			radio: home.Radio{Now: "KXYZ 101.1", Title: "Take It Easy", Artist: "Eagles"}},
 		// Words in a script none of the screen's fonts has: boxes, unless a font of one's own has it.

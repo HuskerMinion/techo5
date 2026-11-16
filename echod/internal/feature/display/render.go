@@ -819,6 +819,11 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showDash {
 		r.dashboardPage(s)
+		if s.showDrawer {
+			// Over the dashboard as over the clock: the page stays behind it.
+			r.press.on = false
+			r.drawer(s)
+		}
 		if s.showVolume {
 			r.volumeBar(s)
 		}

@@ -130,8 +130,9 @@ func (d *Display) dashboardAsked(up bool) {
 }
 
 // dashScene decides whether the dashboard is the page, and fetches what it shows. Everything else
-// that takes the screen - a sheet, the drawer, a camera, the weather, a turn - comes first; music
-// comes first only when the dashboard is standing in for the clock rather than asked for.
+// that takes the screen - a sheet, a camera, the weather, a turn - comes first; music comes first only
+// when the dashboard is standing in for the clock rather than asked for. The drawer does not: it slides
+// in over the page that is up, the dashboard as much as the clock, and takes every finger while it is in.
 func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	f := dashboard.Get()
 	mode := f.Mode()
@@ -192,7 +193,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	// drawn, to scroll and to slide a tile's level. The rest of the screen wants swipes.
 	// Not while the keyboard is over the streamed page: a key pressed with a finger that slid a little
 	// is still a tap on it.
-	follow := want && !d.dashKbd.up
+	follow := want && !d.dashKbd.up && !s.showDrawer
 	changed := follow != d.dashFollow
 	d.dashFollow = follow
 	// Drawn, a finger held still on a light is a long press for its colors (color_sheet.go), which
@@ -201,7 +202,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 	// and a release, which it does not answer, and which the page under it would.
 	// The Tessera page's long press opens the same sheets.
 	sheeted := want && (mode == config.DashboardDrawn || mode == config.DashboardTessera)
-	holds := sheeted && !over
+	holds := sheeted && !over && !s.showDrawer
 	holdsChanged := holds != d.dashHolds
 	d.dashHolds = holds
 	if !sheeted {

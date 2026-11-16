@@ -3030,7 +3030,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.customScene(&s, now)
 	// A call drawn over the page leaves the page as it was: the dashboard, the photos, the
 	// screensaver.
-	d.dashScene(&s, s.showSheet || s.showDrawer || ring.any() || s.callPageUp())
+	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp())
 	boring := s.phase == "idle" && !s.callPageUp() && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
 		!s.showDash && !s.showDeck && s.custom.name == ""
