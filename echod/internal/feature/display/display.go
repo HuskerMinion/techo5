@@ -480,6 +480,7 @@ type Display struct {
 	// showingSpoken is an audiobook or a podcast episode on the page or the strip as last drawn, with
 	// back and forward 30 seconds, and showingSpeed the speed button's word.
 	showingSpoken bool
+	showingSeek   bool
 	showingSpeed  string
 
 	// ringPreview shows the ringing page silently until then.
@@ -1600,7 +1601,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.mu.Lock()
 		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
 		modernMusic, libraryWord := d.showingModernMusic, d.showingLibraryWord
-		spokenOn, speedShown := d.showingSpoken, d.showingSpeed
+		spokenOn, speedShown, seekOn := d.showingSpoken, d.showingSpeed, d.showingSeek
 		d.mu.Unlock()
 		// Only while the word is really drawn, and only when the page is really away: this is the way back
 		// to it, so taking a tap out of the bottom-right corner of the clock is worth it only when there
@@ -1664,6 +1665,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			if d.r != nil {
 				back, _, next := d.r.musicButtons(modernMusic)
 				back, next = d.r.buttonReach(back), d.r.buttonReach(next)
+				seekBackBtn, seekFwdBtn := d.r.seekButtons(modernMusic)
 				at := image.Pt(g.X, g.Y)
 				switch {
 				case at.In(d.r.buttonReach(d.r.doneButton())):
@@ -1682,6 +1684,10 @@ func (d *Display) gesture(g touch.Gesture) {
 					transport(media.TransportPrevious)
 				case at.In(next):
 					transport(media.TransportNext)
+				case seekOn && at.In(d.r.buttonReach(seekBackBtn)):
+					spokenSkipBy(-seekBack)
+				case seekOn && at.In(d.r.buttonReach(seekFwdBtn)):
+					spokenSkipBy(seekForward)
 				default:
 					d.toggleMusic()
 				}
@@ -2981,18 +2987,21 @@ func (d *Display) frame() (next time.Duration) {
 	if s.nowPlaying {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)
 		s.modernMusic = config.Get().Screen.ModernNowPlaying && d.r.h >= d.r.s(380)
+		pos, _ := home.TrackPosition(s.radio)
 		if s.modernMusic {
-			s.musicPosition, _ = home.TrackPosition(s.radio)
+			s.musicPosition = pos
 			if !s.playing || s.paused {
 				s.musicPosition.Rate = 0
 			}
 		}
+		// Skip back and forward, where the track has a length and Music Assistant has it on a queue.
+		s.seek = !s.spoken && pos.Dur > 0 && seekable(s.radio, s.paused)
 	}
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
 	d.showingPaused = s.paused
 	d.showingModernMusic = s.modernMusic
 	d.showingLibraryWord = s.libraryWord
-	d.showingSpoken, d.showingSpeed = s.spoken, speedWord(s.speed)
+	d.showingSpoken, d.showingSpeed, d.showingSeek = s.spoken, speedWord(s.speed), s.seek
 	d.mu.Unlock()
 	if s.modernMusic {
 		cover, _ := d.r.modernMusicLayout()

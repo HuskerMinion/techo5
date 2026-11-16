@@ -170,6 +170,7 @@ func (r *renderer) musicFooter(s scene) {
 	}
 	// An audiobook's or an episode's playback speed, which a tap steps on.
 	r.drawSpeed(s)
+	r.drawSeek(s)
 }
 
 // libraryButton is the Library button with word on it, level with Done and as wide as its word needs:

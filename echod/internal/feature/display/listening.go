@@ -252,6 +252,69 @@ func (r *renderer) drawSpeed(s scene) {
 	r.text(face, word, b.Min.X+(b.Dx()-r.width(face, word))/2, b.Min.Y+b.Dy()/2+r.s(8), col)
 }
 
+// seekBack and seekForward are how far the buttons on a song or a podcast with no spoken-word skip go, in
+// seconds: back a little, to hear a missed line again, and forward more, to get past a stretch. These are
+// the usual pair of podcast apps.
+const (
+	seekBack    = 15
+	seekForward = 30
+)
+
+// seekable is whether the track on the page can be moved through from here: it is on this device's own
+// Music Assistant queue (Music Assistant answered for it, as spokenWord asks) and doing what the page
+// says, and it is not a radio stream, which has no length to move in. The queue is what the skip is sent
+// to (spokenSkipBy).
+func seekable(rd home.Radio, paused bool) bool {
+	if rd.Followed || rd.Title == "" {
+		return false
+	}
+	key := rd.Title + "\x00" + rd.Now
+	spoken.mu.Lock()
+	defer spoken.mu.Unlock()
+	s := spoken.s
+	if s.key != key || s.answered != key || s.queue == "" {
+		return false
+	}
+	want := "playing"
+	if paused {
+		want = "paused"
+	}
+	q := s.now
+	return q.Active && q.State == want && spokenNames(q, rd.Title) && q.MediaType != "" && q.MediaType != "radio"
+}
+
+// seekButtons are the back and forward buttons for a song: under the three on the modern page, which has
+// the room below them, and above the Library button at the right of the classic page's foot, where the
+// speed button goes for spoken word (the two are never up together).
+func (r *renderer) seekButtons(modern bool) (back, forward image.Rectangle) {
+	w, h, gap := r.s(96), r.s(46), r.s(14)
+	if modern {
+		_, details := r.modernMusicLayout()
+		b, _, _ := r.musicButtons(true)
+		x := details.Min.X + (details.Dx()-2*w-gap)/2
+		y := b.Max.Y + r.s(10)
+		return image.Rect(x, y, x+w, y+h), image.Rect(x+w+gap, y, x+2*w+gap, y+h)
+	}
+	y := r.doneButton().Min.Y - r.s(12) - h
+	forward = image.Rect(r.w-r.margin-w, y, r.w-r.margin, y+h)
+	return forward.Add(image.Pt(-(w + gap), 0)), forward
+}
+
+// drawSeek draws the back and forward buttons, if the page has them.
+func (r *renderer) drawSeek(s scene) {
+	if !s.seek {
+		return
+	}
+	back, forward := r.seekButtons(s.modernMusic)
+	for _, b := range []struct {
+		r    image.Rectangle
+		icon string
+	}{{back, "rewind-15"}, {forward, "fast-forward-30"}} {
+		col := r.buttonFace(b.r, float64(b.r.Dy())/2, btnSecondary)
+		r.iconIn(b.r, b.icon, 28, col)
+	}
+}
+
 // skipIcons are the back and forward buttons' icons: 30 seconds for spoken word, the track otherwise.
 func skipIcons(spokenWord bool) (back, next string) {
 	if spokenWord {

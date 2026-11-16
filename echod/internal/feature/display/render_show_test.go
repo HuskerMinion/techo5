@@ -91,6 +91,13 @@ func TestShowScenesDraw(t *testing.T) {
 			spoken: true, speed: 1,
 			radio:         home.Radio{Now: "Music Assistant", Title: "Northern Lights", Artist: "Ann Author", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 1500 * time.Second, Dur: 3600 * time.Second, Rate: 1}},
+		// A song Music Assistant can move through: back 15 and forward 30 seconds, above the Library button on
+		// the classic page and under the three buttons on the modern one.
+		"nowplaying-seek": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		"nowplaying-modern-seek": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		// A station tapped and not playing yet: the page is up at once and says so.

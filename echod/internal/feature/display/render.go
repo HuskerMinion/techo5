@@ -267,6 +267,10 @@ type scene struct {
 	// page's back and forward go 30 seconds, and Now Playing has its speed, as fast as speed.
 	spoken bool
 	speed  float64
+	// seek is a song, an episode or a stream with a length that Music Assistant can move through, which
+	// is not spoken word (that has back and forward in the transport row): Now Playing has buttons to
+	// go back seekBack seconds and forward seekForward (listening.go).
+	seek bool
 
 	// pin is the settings lock's PIN pad (pin.go), drawn over everything but a call or a ring while open.
 	pin pinView
