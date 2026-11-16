@@ -99,7 +99,7 @@ func loginBlock(ssid string, l Login) (string, error) {
 	}
 	h := func(s string) string { return hex.EncodeToString([]byte(s)) }
 	var b strings.Builder
-	b.WriteString("network={\n\tssid=" + h(ssid) + "\n")
+	b.WriteString("network={\n\tssid=" + h(ssid) + "\n\tscan_ssid=1\n")
 	b.WriteString("\tkey_mgmt=WPA-EAP\n\teap=" + eap + "\n")
 	b.WriteString("\tidentity=" + h(l.Identity) + "\n")
 	if l.Anonymous != "" {

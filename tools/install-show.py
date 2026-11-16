@@ -144,7 +144,7 @@ def lineage_board(zip_path):
 # name and WPA's key (both hex) as its two arguments: the same form boot.sh writes from Android's saved
 # networks. Sent as escapes rather than as the text itself, since a tab typed into the console's shell can
 # be taken for completion.
-WIFI_CONF_FORMAT = r'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tpsk=%s\n}\n'
+WIFI_CONF_FORMAT = r'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n'
 
 
 def wifi_keys(lines):

@@ -766,9 +766,9 @@ class SimulatedTWRP(unittest.TestCase):
         conf = 'data/techo5/techo5-linux/wpa_supplicant.conf'
         home = 'Home'.encode().hex()
         u.put(conf, 'ctrl_interface=/run/wpa\nupdate_config=0\n'
-                    'network={\n\tssid=%s\n\tpsk=%s\n}\n'
+                    'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n'
                     'network={\n\tssid="Home"\n\tpsk="an old one"\n}\n'
-                    'network={\n\tssid=%s\n\tpsk=%s\n}\n' % ('aa' * 4, 'bb' * 32, home, 'cc' * 32))
+                    'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('aa' * 4, 'bb' * 32, home, 'cc' * 32))
         passfile = os.path.join(self.tmp, 'pass.txt')
         with open(passfile, 'wb') as f:
             f.write(b'\xef\xbb\xbfcorrect horse\r\n')  # as Notepad saves it
@@ -777,8 +777,8 @@ class SimulatedTWRP(unittest.TestCase):
         got = u.get(conf).decode()
         want_psk = hashlib.pbkdf2_hmac('sha1', b'correct horse', b'Home', 4096, 32).hex()
         self.assertEqual(got, 'ctrl_interface=/run/wpa\nupdate_config=0\n'
-                              'network={\n\tssid=%s\n\tpsk=%s\n}\n'
-                              'network={\n\tssid=%s\n\tpsk=%s\n}\n' % ('aa' * 4, 'bb' * 32, home, want_psk))
+                              'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n'
+                              'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('aa' * 4, 'bb' * 32, home, want_psk))
 
     def test_nothing_unmounted_before_confirm(self):
         u = self.unit()
@@ -1222,7 +1222,7 @@ class MergeWifi(unittest.TestCase):
                     'network={\n\tssid=4f6c64\n\tkey_mgmt=NONE\n}\nnetwork={\n\tssid=4E6577\n\tpsk=%s\n}' % ('cd' * 32))
         self.assertEqual(inst.merge_wifi(existing, *self.NEW),
                          'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=4f6c64\n\tkey_mgmt=NONE\n}\n'
-                         'network={\n\tssid=4e6577\n\tpsk=%s\n}\n' % ('ab' * 32))
+                         'network={\n\tssid=4e6577\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('ab' * 32))
 
     def test_indented_braces(self):
         # An indented closing brace still closes its block: the next block is not swallowed with it.
@@ -1230,20 +1230,20 @@ class MergeWifi(unittest.TestCase):
                     'network={\n\tssid="Other"\n\tpsk="y"\n  }\n')
         self.assertEqual(inst.merge_wifi(existing, *self.NEW),
                          'ctrl_interface=/run/wpa\nnetwork={\n\tssid="Other"\n\tpsk="y"\n  }\n'
-                         'network={\n\tssid=4e6577\n\tpsk=%s\n}\n' % ('ab' * 32))
+                         'network={\n\tssid=4e6577\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('ab' * 32))
 
     def test_first_of_two_same_name(self):
         existing = ('# saved by hand\nnetwork={\n\tssid=4e6577\n\tpsk="old"\n}\n'
                     'network={\n\tssid="Next"\n\tkey_mgmt=NONE\n}\n')
         self.assertEqual(inst.merge_wifi(existing, *self.NEW),
                          '# saved by hand\nnetwork={\n\tssid="Next"\n\tkey_mgmt=NONE\n}\n'
-                         'network={\n\tssid=4e6577\n\tpsk=%s\n}\n' % ('ab' * 32))
+                         'network={\n\tssid=4e6577\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('ab' * 32))
 
     def test_p_ssid(self):
         for ssid in ('P"New"', 'P"N\\x65w"', 'P"\\x4e\\x65\\x77"'):
             existing = 'update_config=0\nnetwork={\n\tssid=%s\n\tpsk="old"\n}\n' % ssid
             self.assertEqual(inst.merge_wifi(existing, *self.NEW), 'update_config=0\n'
-                             'network={\n\tssid=4e6577\n\tpsk=%s\n}\n' % ('ab' * 32), ssid)
+                             'network={\n\tssid=4e6577\n\tscan_ssid=1\n\tpsk=%s\n}\n' % ('ab' * 32), ssid)
         self.assertEqual(inst.wifi_ssid_hex(['\tssid=P"a\\tb\\\\"']), b'a\tb\\'.hex())
         self.assertEqual(inst.wifi_ssid_hex(['\tssid="a"b"']), b'a"b'.hex())
 

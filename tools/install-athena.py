@@ -134,7 +134,7 @@ NOT_SAVED = {'cache', 'userdata'}
 
 # What wpa_supplicant reads (the format boot.sh writes from Android's saved networks): the name and
 # WPA's key, both as hex, so only the key ever reaches the unit, never the passphrase.
-WIFI_CONF = 'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tpsk=%s\n}\n'
+WIFI_CONF = 'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n'
 
 EXT4_MAGIC = b'\x53\xef'
 STORE_LABEL = b'techo5-store'
@@ -1578,7 +1578,7 @@ def merge_wifi(existing, ssid_hex, psk_hex):
         kept.extend(block)
     while kept and not kept[-1].strip():
         kept.pop()
-    return '\n'.join(kept) + '\n' + 'network={\n\tssid=%s\n\tpsk=%s\n}\n' % (ssid_hex, psk_hex)
+    return '\n'.join(kept) + '\n' + 'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n' % (ssid_hex, psk_hex)
 
 
 def wifi_ssid_hex(block):

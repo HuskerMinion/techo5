@@ -683,5 +683,54 @@ class CommandLine(unittest.TestCase):
             self.assertEqual(sh('sh -n /src/init.check'), (0, ''), f)
 
 
+class WifiConf(unittest.TestCase):
+    """techo5-lib.sh's t5_wifi_conf and t5_wifi_from_store."""
+
+    STORE = ('<WifiConfigStoreData><NetworkList>'
+             '<Network><WifiConfiguration>'
+             '<string name="ConfigKey">&quot;Cafe&quot;WPA_EAP</string>'
+             '<string name="SSID">&quot;Cafe&quot;</string>'
+             '</WifiConfiguration></Network>'
+             '<Network><WifiConfiguration>'
+             '<string name="ConfigKey">&quot;Hidden&quot;WPA_PSK</string>'
+             '<string name="SSID">&quot;Hidden&quot;</string>'
+             '<string name="PreSharedKey">&quot;hunter2hunter&quot;</string>'
+             '</WifiConfiguration></Network>'
+             '<Network><WifiConfiguration>'
+             '<string name="ConfigKey">&quot;Open&quot;NONE</string>'
+             '<string name="SSID">&quot;Open&quot;</string>'
+             '</WifiConfiguration></Network>'
+             '</NetworkList></WifiConfigStoreData>')
+    ONLY_EAP = ('<WifiConfigStoreData><NetworkList><Network><WifiConfiguration>'
+                '<string name="ConfigKey">&quot;Cafe&quot;WPA_EAP</string>'
+                '<string name="SSID">&quot;Cafe&quot;</string>'
+                '</WifiConfiguration></Network></NetworkList></WifiConfigStoreData>')
+
+    def conf(self, store, existing=None):
+        sh('rm -rf /w; mkdir -p /w')
+        put('/w/store.xml', store.encode())
+        if existing is not None:
+            put('/w/out/wpa.conf', existing.encode())
+        rc, out = sh('log() { echo "log: $*"; }; . /src/techo5-lib.sh; WIFI_STORES=/w/store.xml; '
+                     't5_wifi_conf /w/out/wpa.conf; echo rc=$?; ls /w/out')
+        return rc, out
+
+    def test_every_network_probes_for_its_name(self):
+        self.conf(self.STORE)
+        text = get('/w/out/wpa.conf').decode()
+        self.assertEqual(text.count('network={'), 2)
+        self.assertEqual(text.count('\tscan_ssid=1\n'), 2)
+
+    def test_a_store_with_nothing_joinable_still_leaves_a_configuration(self):
+        rc, out = self.conf(self.ONLY_EAP)
+        self.assertIn('rc=1', out)
+        self.assertEqual(get('/w/out/wpa.conf'), b'ctrl_interface=/run/wpa\nupdate_config=0\n')
+        self.assertNotIn('wpa.conf.tmp', out)
+
+    def test_nothing_joinable_leaves_an_existing_configuration_alone(self):
+        self.conf(self.ONLY_EAP, existing='ctrl_interface=/run/wpa\nupdate_config=0\n# mine\n')
+        self.assertIn(b'# mine', get('/w/out/wpa.conf'))
+
+
 if __name__ == '__main__':
     unittest.main()

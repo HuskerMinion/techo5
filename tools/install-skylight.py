@@ -116,7 +116,7 @@ STORE_LABEL = b'techo5-store'
 SECTOR = 512
 GPT_BYTES = 33 * SECTOR
 
-WIFI_CONF = 'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tpsk=%s\n}\n'
+WIFI_CONF = 'ctrl_interface=/run/wpa\nupdate_config=0\nnetwork={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n'
 
 
 def store_name(version):

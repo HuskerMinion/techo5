@@ -179,7 +179,7 @@ func TestAwkwardValuesAreWrittenSoTheSupplicantReadsThemBack(t *testing.T) {
 // the header, the name in hex, the key, one setting to a line.
 func TestAPlainNetworkIsWrittenAsTheBootScriptWritesIt(t *testing.T) {
 	want := "ctrl_interface=" + ctrlDir + "\nupdate_config=0\n" +
-		"network={\n\tssid=486f6d65\n\tpsk=" + psk("Home", "hunter2hunter") + "\n}\n"
+		"network={\n\tssid=486f6d65\n\tscan_ssid=1\n\tpsk=" + psk("Home", "hunter2hunter") + "\n}\n"
 	if got := conf([]string{block("Home", "hunter2hunter")}); got != want {
 		t.Errorf("wrote\n%s\nwant\n%s", got, want)
 	}
@@ -258,5 +258,15 @@ func TestForgetRemovesItFromTheFileAndTheCopy(t *testing.T) {
 	}
 	if _, err := os.Stat(Conf + ".tmp"); err == nil {
 		t.Error("a temporary file was left behind")
+	}
+}
+
+// Every network written asks the supplicant to probe for its name, which is the only way a hidden
+// network is ever joined (techo5-dot#47); a visible one is joined the same. Open or secured.
+func TestEveryBlockProbesForItsName(t *testing.T) {
+	for _, pass := range []string{"", "hunter2hunter"} {
+		if b := block("Hidden", pass); !strings.Contains(b, "\n\tscan_ssid=1\n") {
+			t.Errorf("block with passphrase %q has no scan_ssid=1:\n%s", pass, b)
+		}
 	}
 }

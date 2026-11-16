@@ -127,7 +127,7 @@ func conf(networks []string) string {
 // all, which is one less thing for the reader below to get wrong.
 func block(ssid, passphrase string) string {
 	var b strings.Builder
-	b.WriteString("network={\n\tssid=" + hex.EncodeToString([]byte(ssid)) + "\n")
+	b.WriteString("network={\n\tssid=" + hex.EncodeToString([]byte(ssid)) + "\n\tscan_ssid=1\n")
 	if passphrase == "" {
 		b.WriteString("\tkey_mgmt=NONE\n")
 	} else {

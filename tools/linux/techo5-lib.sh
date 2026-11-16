@@ -173,9 +173,9 @@ t5_wifi_from_store() {
 		esac
 		printf %s "$hexname" | grep -Eq '^([0-9a-fA-F]{2}){1,32}$' || continue
 		if [ -n "$key" ]; then
-			printf 'network={\n\tssid=%s\n\tpsk=%s\n}\n' "$hexname" "$key"
+			printf 'network={\n\tssid=%s\n\tscan_ssid=1\n\tpsk=%s\n}\n' "$hexname" "$key"
 		elif [ "$kind" = NONE ] || [ "$kind" = OWE ]; then
-			printf 'network={\n\tssid=%s\n\tkey_mgmt=NONE\n}\n' "$hexname"
+			printf 'network={\n\tssid=%s\n\tscan_ssid=1\n\tkey_mgmt=NONE\n}\n' "$hexname"
 		fi
 	done
 }
