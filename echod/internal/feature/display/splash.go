@@ -141,10 +141,9 @@ func (r *renderer) drawSplash(s *splash, elapsed time.Duration) {
 // of seconds, and telling that owner to go and do something they did not need to do would be worse
 // than saying nothing.
 func (r *renderer) splashWaiting(s *splash) {
-	const (
-		what  = "Waiting for Home Assistant"
-		where = "Settings > Devices & services > ESPHome"
-	)
+	// The path is Home Assistant's own menu, which follows Home Assistant's language, not the screen's.
+	const where = "Settings > Devices & services > ESPHome"
+	what := tr("ui_waiting_for_home_assistant")
 	// Below the mark, which reaches within about seventy pixels of the bottom on this panel: the two
 	// lines go in what is left rather than over the wordmark. If a panel ever leaves less room than
 	// they need, they sit on the bottom edge instead of climbing onto the mark.

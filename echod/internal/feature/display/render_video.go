@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -162,12 +163,12 @@ func (r *renderer) videoAskPage(s scene) {
 	if s.demo {
 		from, title = "192.168.1.30", "A film"
 	}
-	r.text(r.title, "Video", r.margin, r.s(96), amber)
-	r.text(r.body, r.fit(r.body, "Show a video from "+from+"?", r.w-2*r.margin), r.margin, r.s(176), cream)
+	r.text(r.title, tr("ui_video"), r.margin, r.s(96), amber)
+	r.text(r.body, r.fit(r.body, fmt.Sprintf(tr("ui_video_from_s"), from), r.w-2*r.margin), r.margin, r.s(176), cream)
 	if title != "" {
 		r.text(r.small, r.fit(r.small, title, r.w-2*r.margin), r.margin, r.s(224), dim)
 	}
-	r.text(r.tiny, "Allow remembers this address. Not now asks again later.", r.margin, r.s(268), dim)
+	r.text(r.tiny, fmt.Sprintf(tr("ui_video_hint"), tr("ui_allow"), tr("not_now")), r.margin, r.s(268), dim)
 
 	no, yes := r.actionHalves()
 	rad := float64(r.s(actionRadius))

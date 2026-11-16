@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
 // Alert shapes on the rain map, for both screens: a warning's own polygon, or the counties and zones an
@@ -215,19 +216,19 @@ func alertWhen(a home.Alert, now time.Time) string {
 	at := func(t time.Time) string {
 		t = t.Local()
 		if y, m, d := t.Date(); y != now.Year() || m != now.Month() || d != now.Day() {
-			return t.Format("Mon") + " " + clockText(t)
+			return locale.ShortWeekday(t, screenLang()) + " " + clockText(t)
 		}
 		return clockText(t)
 	}
 	switch {
 	case !a.Onset.IsZero() && a.Onset.After(now) && !a.Ends.IsZero():
-		return "From " + at(a.Onset) + " until " + at(a.Ends)
+		return fmt.Sprintf(tr("ui_alert_from_until"), at(a.Onset), at(a.Ends))
 	case !a.Onset.IsZero() && a.Onset.After(now):
-		return "From " + at(a.Onset)
+		return fmt.Sprintf(tr("ui_alert_from"), at(a.Onset))
 	case !a.Ends.IsZero():
-		return "Until " + at(a.Ends)
+		return fmt.Sprintf(tr("ui_alert_until"), at(a.Ends))
 	}
-	return "In force"
+	return tr("ui_alert_in_force")
 }
 
 // otherKinds is how many kinds of alert there are at home besides the first's: the "+N" beside it on
