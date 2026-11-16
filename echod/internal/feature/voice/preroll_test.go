@@ -89,6 +89,28 @@ func TestHistoryLeavesTheWakeWordOutWhenASoundPlays(t *testing.T) {
 	}
 }
 
+// With Microphone pre-roll with wake sound on, a turn with a wake sound keeps the 250 ms before the word
+// too, for a request said in one breath with the word. With the canceller off the sound is waited out
+// and nothing changes.
+func TestHistoryKeepsThePrerollWithASoundWhenAsked(t *testing.T) {
+	waited := 400 * time.Millisecond
+	for _, l := range []struct {
+		cancel bool
+		want   time.Duration
+	}{
+		{true, mic.History + waited},
+		{false, waited},
+	} {
+		config.Use(filepath.Join(t.TempDir(), "state.json"))
+		_ = config.Set().Wake(0).Tone(config.ToneHA)
+		_ = config.Set().Microphone().PrerollWithSound(true)
+		_ = config.Set().Microphone().Cancel(l.cancel)
+		if got := historyFor(0, false, false, waited, waited); got != l.want {
+			t.Errorf("cancel %v: history %v, want %v", l.cancel, got, l.want)
+		}
+	}
+}
+
 // A wake Home Assistant confirmed reaches back to when the device scored the word, with or without a
 // wake sound, as far as the microphones' history goes (#477).
 // A turn on a run Home Assistant heard the word in sends no history, its run has had it; one it

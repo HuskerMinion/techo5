@@ -45,6 +45,15 @@ type Microphone struct {
 	// television's words keep from ending.
 	EndPause int `json:"end_pause,omitempty"`
 
+	// PrerollWithSound sends a turn the 250 ms before the wake word was heard even when a wake sound
+	// plays, as a turn with no sound gets them. Off, which is the default, a turn with a sound starts
+	// where the word was heard, so the end of the wake word is not taken for the start of the request
+	// (#445). On is for a request said in one breath with the wake word, which can start before the word
+	// was heard: its first syllables are otherwise lost (a request to play an artist reached
+	// speech-to-text as its last two syllables). It needs Cancel: without it the turn waits the sound out
+	// and sends no history.
+	PrerollWithSound bool `json:"preroll_with_sound,omitempty"`
+
 	// Noise measures how loud the room is for the ambient noise sensor. Off unless somebody turns it on:
 	// it is a new use of the microphones, even if only a number leaves them.
 	Noise bool `json:"noise,omitempty"`
@@ -212,6 +221,11 @@ func (w MicrophoneWriter) Denoise(v bool) error {
 // DeviceEnds is whether the device ends a turn when it hears the speaker stop.
 func (w MicrophoneWriter) DeviceEnds(v bool) error {
 	return w.st.Update(func(c *Config) { c.Microphone.PipelineEnds = !v })
+}
+
+// PrerollWithSound is whether a turn with a wake sound keeps the 250 ms before the wake word.
+func (w MicrophoneWriter) PrerollWithSound(v bool) error {
+	return w.st.Update(func(c *Config) { c.Microphone.PrerollWithSound = v })
 }
 
 // EndPause is how long the speaker has to stay quiet before the device ends a turn, in tenths of a

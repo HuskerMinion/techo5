@@ -135,6 +135,7 @@ var registered = []string{
 	"microphone_leveling",
 	"microphone_mixing",
 	"microphone_noise_reduction",
+	"microphone_preroll_with_sound",
 	"microphone_sensitivity",
 	"min_cores",
 	"missed_ring",

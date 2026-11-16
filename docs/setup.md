@@ -1258,6 +1258,14 @@ speaking detection** to **Relaxed**, 1.25 seconds. In a quiet room nothing longe
 effect with Home Assistant. With realtime voice and voice without Home Assistant it applies to every
 turn.
 
+**Microphone pre-roll with wake sound** (off by default; the device's microphone settings in Home
+Assistant) is for a request said in one breath with the wake word. With a wake sound, a request starts
+where the wake word was heard, so the end of the word stays out of it. The device hears the word a
+moment after it ends, though, and the first syllables of a request said without any break can fall
+before that moment and be lost. Turn this on to reach back a quarter of a second further, as a request
+with no wake sound does. It needs **Microphone echo cancellation**, and the end of the wake word then
+reaches speech-to-text with the request.
+
 On the setup page (Sound) or in Home Assistant, **Night volume** turns the device down to that
 level as quiet hours start, if it is louder, and back to where it was as they end. Turned up or down
 during the night, it stays where it was put. Changing Night volume during the night moves the device to
@@ -1991,11 +1999,12 @@ The timer and mute files play where **Home Assistant sounds** is on, and an alar
 Home Assistant sound plays `timer_finished.wav` either way. A file has to be 16-bit, at
 48 kHz, mono or stereo, and at most 10 seconds long. It plays at the level it was recorded at, as the
 stock sounds do. The microphones stay open while the wake sound plays, and echo cancellation takes most
-of the sound out of what is sent, so words said straight after the wake word are kept. Some of a loud or
-long wake sound can still reach speech-to-text, mostly in the first request after a restart, before the
-canceller has learned the speaker, so a short, quiet wake sound works best. If you turn **Microphone
-echo cancellation** off, the device goes back to waiting for the wake sound to fade before it listens,
-and a long one then cuts off the first words. The wake word is not acted on while the unmute
+of the sound out of what is sent, so words said straight after the wake word are kept (and, with
+**Microphone pre-roll with wake sound**, the ones said before the device had heard the word). Some of a
+loud or long wake sound can still reach speech-to-text, mostly in the first request after a restart,
+before the canceller has learned the speaker, so a short, quiet wake sound works best. If you turn
+**Microphone echo cancellation** off, the device goes back to waiting for the wake sound to fade before
+it listens, and a long one then cuts off the first words. The wake word is not acted on while the unmute
 sound plays and for a moment after, so the device does not take its own sound for the word: a long
 `mute_switch_off.wav` keeps it deaf for as long. ffmpeg converts anything else:
 

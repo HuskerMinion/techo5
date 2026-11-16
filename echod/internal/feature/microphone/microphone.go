@@ -31,6 +31,7 @@ type Microphone struct {
 	engine      *esphome.Select
 	denoise     *esphome.Switch
 	ends        *esphome.Switch
+	preroll     *esphome.Switch // the 250 ms before the wake word, with a wake sound too
 	pause       *esphome.Number // how long a pause ends a turn
 	sensitivity *esphome.Number
 }
@@ -103,6 +104,14 @@ func build() *Microphone {
 				Category: esphome.CategoryConfig,
 			},
 		},
+		preroll: &esphome.Switch{
+			Base: esphome.Base{
+				ObjectID: "microphone_preroll_with_sound",
+				Name:     "Microphone pre-roll with wake sound",
+				Icon:     "mdi:account-voice",
+				Category: esphome.CategoryConfig,
+			},
+		},
 		pause: &esphome.Number{
 			Base: esphome.Base{
 				ObjectID: "microphone_end_of_speech_pause",
@@ -138,7 +147,7 @@ func build() *Microphone {
 	for _, b := range []*esphome.Base{
 		&m.aspSelected.Base, &m.aspActive.Base,
 		&m.mixing.Base, &m.gain.Base, &m.leveling.Base, &m.cancel.Base, &m.engine.Base, &m.denoise.Base,
-		&m.ends.Base, &m.pause.Base, &m.sensitivity.Base,
+		&m.ends.Base, &m.preroll.Base, &m.pause.Base, &m.sensitivity.Base,
 	} {
 		b.DeviceID = component.DeviceMicrophone
 	}
@@ -196,6 +205,14 @@ func build() *Microphone {
 		}
 	}
 
+	// Read by each turn as it opens, like the end of speech switch.
+	m.preroll.OnCommand = func(on bool) {
+		m.preroll.Set(on)
+		if err := config.Set().Microphone().PrerollWithSound(on); err != nil {
+			slog.Error("saving the pre-roll with wake sound setting failed", "err", err)
+		}
+	}
+
 	// Read by each turn as it opens too.
 	m.pause.OnCommand = func(v float32) {
 		tenths := config.Microphone{EndPause: int(math.Round(float64(v) * 10))}.EndPauseTenths()
@@ -225,8 +242,8 @@ func build() *Microphone {
 func (m *Microphone) Name() string { return "microphone settings" }
 
 func (m *Microphone) Entities() []esphome.Entity {
-	return append([]esphome.Entity{m.aspSelected, m.aspActive, m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.pause,
-		m.sensitivity},
+	return append([]esphome.Entity{m.aspSelected, m.aspActive, m.mixing, m.gain, m.leveling, m.cancel, m.engine, m.denoise, m.ends, m.preroll,
+		m.pause, m.sensitivity},
 		buildEntities()...)
 }
 
@@ -262,6 +279,9 @@ func (m *Microphone) Restore(c config.Config) {
 
 	m.ends.Set(!c.Microphone.PipelineEnds)
 	slog.Info("restored", "what", m.ends.ObjectID, "using", !c.Microphone.PipelineEnds)
+
+	m.preroll.Set(c.Microphone.PrerollWithSound)
+	slog.Info("restored", "what", m.preroll.ObjectID, "using", c.Microphone.PrerollWithSound)
 
 	m.pause.Set(float32(c.Microphone.EndPauseTenths()) / 10)
 	slog.Info("restored", "what", m.pause.ObjectID, "using", c.Microphone.EndPauseTenths())

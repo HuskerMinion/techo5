@@ -1659,6 +1659,8 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 // wake word itself ("Google. What time is it?", #445), and it reaches back only to the moment the
 // word was heard: what was said after it, while the sound played or while the wake was confirmed.
 // heard is how long ago that was, for a wake word's turn; never more than the reach without a sound.
+// A request said in one breath with the word can start before it was heard; prerollWithSound gives
+// such a turn the reach without a sound.
 //
 // A wake Home Assistant confirmed is the exception (#477): the turn opens most of a second after the
 // device's engine scored the word, and the request said straight after it went to Home Assistant's wake
@@ -1668,10 +1670,18 @@ func historyFor(slot int, followUp, confirmed bool, waited, heard time.Duration)
 	if confirmed {
 		return min(max(heard+mic.History, mic.History+waited), mic.Confirming)
 	}
-	if wakeword.Tones(slot, followUp) {
+	if wakeword.Tones(slot, followUp) && !prerollWithSound() {
 		return min(max(waited, heard), mic.History+waited)
 	}
 	return mic.History + waited
+}
+
+// prerollWithSound is whether a turn with a wake sound keeps the 250 ms before the word anyway
+// (Microphone pre-roll with wake sound): only with the canceller on, since with it off the turn waits
+// the sound out and sends no history at all (holdsForTone).
+func prerollWithSound() bool {
+	c := config.Get().Microphone
+	return c.PrerollWithSound && c.Cancel
 }
 
 // holdsForTone is whether a turn keeps the microphones from its wake sound, as it did before the
