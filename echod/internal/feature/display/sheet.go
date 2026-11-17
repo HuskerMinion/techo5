@@ -127,6 +127,10 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				}
 				rows = append(rows, settingRow{id: "nightinfo", label: tr("night_clock_next_up_and_alerts"),
 					sub: tr("dim_red_and_no_brighter"), kind: ctlToggle, on: config.Get().Screen.NightInfo})
+				if nightAlarmHere() {
+					rows = append(rows, settingRow{id: "nightalarm", label: tr("night_clock_next_alarm"),
+						sub: tr("dim_red_and_no_brighter"), kind: ctlToggle, on: !config.Get().Screen.NoNightAlarm})
+				}
 			}
 			if hasNightTap && config.Get().Screen.NightLight {
 				rows = append(rows, settingRow{id: "nighttap", label: tr("tap_lifts_the_night_light"),
@@ -1202,6 +1206,9 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		safe.Go("lyrics from the screen", func() { home.Get().SetLyricsOn(!home.LyricsOn()) })
 	case "nightinfo":
 		d.setNightInfo(!config.Get().Screen.NightInfo)
+	case "nightalarm":
+		// Saved as left off, so turning it on is what was off.
+		d.setNightAlarm(config.Get().Screen.NoNightAlarm)
 	case "nighttap":
 		d.setNightTapLifts(!config.Get().Screen.NightTapLifts)
 	case "roomlights":

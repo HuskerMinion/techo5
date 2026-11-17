@@ -510,6 +510,7 @@ var uiEnglish = map[string]string{
 	"on_the_setup_page_started_here":        "Asked on the setup page, started here",
 	"tap_lifts_the_night_light":             "Tap lifts the night light",
 	"night_clock_next_up_and_alerts":        "Night clock shows Next up and notifications",
+	"night_clock_next_alarm":                "Night clock shows the next alarm",
 	"dim_red_and_no_brighter":               "Drawn in dim red; the screen gets no brighter",
 	"tap_on_the_clock":                      "Tap on the clock",
 	"tap_to_go_back":                        "Tap to go back",
@@ -1374,6 +1375,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_cal_n_more":                 "%d más",
 		"ui_cal_all_day_s":              "Todo el día, %s",
 		"night_clock":                   "Reloj nocturno",
+		"night_clock_next_alarm":        "El reloj nocturno muestra la próxima alarma",
 		"night_hours":                   "Horario nocturno",
 		"not_connected":                 "Sin conexión",
 		"not_now":                       "Ahora no",
@@ -2235,6 +2237,7 @@ var uiTranslations = map[string]map[string]string{
 		"on_the_setup_page_started_here":            "Demandé depuis la page de configuration, démarré ici",
 		"tap_lifts_the_night_light":                 "Touchez l'écran pour augmenter la luminosité de la veilleuse",
 		"night_clock_next_up_and_alerts":            "L'horloge de nuit affiche Prochain événement et les notifications",
+		"night_clock_next_alarm":                    "L'horloge de nuit affiche le prochain réveil",
 		"dim_red_and_no_brighter":                   "En rouge tamisé ; l'écran ne s'éclaire pas davantage",
 		"tap_on_the_clock":                          "Touchez l'horloge",
 		"tap_to_go_back":                            "Touchez pour revenir",
@@ -3247,6 +3250,7 @@ var uiTranslations = map[string]map[string]string{
 		"on_the_setup_page_started_here":        "Pedido na páxina de configuración, iniciado aquí",
 		"tap_lifts_the_night_light":             "Un toque quita a luz de noite",
 		"night_clock_next_up_and_alerts":        "O reloxo de noite mostra Seguinte e as notificacións",
+		"night_clock_next_alarm":                "O reloxo de noite mostra a seguinte alarma",
 		"dim_red_and_no_brighter":               "En vermello tenue; a pantalla non brilla máis",
 		"tap_on_the_clock":                      "Toque no reloxo",
 		"tap_to_go_back":                        "Toca para volver",
@@ -4280,6 +4284,7 @@ var uiTranslations = map[string]map[string]string{
 		"on_the_setup_page_started_here":        "Richiesta dalla pagina di configurazione, avviata qui",
 		"tap_lifts_the_night_light":             "Tocca per riattivare lo schermo",
 		"night_clock_next_up_and_alerts":        "L'orologio notturno mostra Prossimo evento e le notifiche",
+		"night_clock_next_alarm":                "L'orologio notturno mostra la prossima sveglia",
 		"dim_red_and_no_brighter":               "In rosso tenue; lo schermo non diventa più luminoso",
 		"tap_on_the_clock":                      "Azione al tocco dell'orologio",
 		"tap_to_go_back":                        "Tocca per tornare indietro",
@@ -5411,6 +5416,7 @@ var uiTranslations = map[string]map[string]string{
 		"night_clock_brightness": "Helderheid van de nachtklok",
 		// Night clock shows Next up and notifications
 		"night_clock_next_up_and_alerts": "Nachtklok toont Volgende en meldingen",
+		"night_clock_next_alarm":         "Nachtklok toont de volgende wekker",
 		// Custom…
 		"night_custom": "Aangepast…",
 		// Dark, a faint glow, or a clock alone until touched
@@ -7109,6 +7115,7 @@ var uiTranslations = map[string]map[string]string{
 		"on_the_setup_page_started_here":        "セットアップ画面で依頼、ここで開始",
 		"tap_lifts_the_night_light":             "タップで通常表示に戻る",
 		"night_clock_next_up_and_alerts":        "ナイトクロックに次の予定と通知を表示",
+		"night_clock_next_alarm":                "ナイトクロックに次のアラームを表示",
 		"dim_red_and_no_brighter":               "暗い赤で表示。画面は明るくなりません",
 		"tap_on_the_clock":                      "時計をタップ",
 		"tap_to_go_back":                        "タップして戻る",
@@ -8491,6 +8498,7 @@ var uiTranslations = map[string]map[string]string{
 		// Tap lifts the night light
 		"tap_lifts_the_night_light":      "Tippen hebt das Nachtlicht an",
 		"night_clock_next_up_and_alerts": "Nachtuhr zeigt Als Nächstes und Benachrichtigungen",
+		"night_clock_next_alarm":         "Nachtuhr zeigt den nächsten Wecker",
 		"dim_red_and_no_brighter":        "In mattem Rot; der Bildschirm wird nicht heller",
 		// Tap on the clock
 		"tap_on_the_clock": "Tippen auf die Uhr",
@@ -9815,6 +9823,7 @@ var uiTranslations = map[string]map[string]string{
 		"on_the_setup_page_started_here":        "Kurulum sayfasından istenir, burada başlatılır",
 		"tap_lifts_the_night_light":             "Dokunmak gece lambasını yükseltir",
 		"night_clock_next_up_and_alerts":        "Gece saati Sıradaki ve bildirimleri gösterir",
+		"night_clock_next_alarm":                "Gece saati sonraki alarmı gösterir",
 		"dim_red_and_no_brighter":               "Loş kırmızıyla çizilir; ekran daha parlak olmaz",
 		"tap_on_the_clock":                      "Saate dokun",
 		"tap_to_go_back":                        "Geri dönmek için dokun",

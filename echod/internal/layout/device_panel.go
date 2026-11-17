@@ -119,6 +119,9 @@ func Checkers() bool { return false }
 
 func Crown() bool { return false }
 
+// Show5 is false: a panel is not an Echo Show 5.
+func Show5() bool { return false }
+
 // Show8 is false: a panel's canvas is whatever size the app asked for (hardware/screen), and the
 // display tells home that size once the screen has opened (home.SetPanelSize), so camera frames,
 // photos, the now-playing picture and the rain map are made at it rather than at a board's.

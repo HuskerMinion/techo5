@@ -192,6 +192,8 @@ type scene struct {
 	// nightInfo adds the Next up card, the glance chips and a notification to the red clock, drawn in the
 	// night's palette (render_night_info.go).
 	nightInfo bool
+	// nightAlarm adds the next alarm under the red clock, on an Echo Show 5 (night_alarm.go).
+	nightAlarm bool
 
 	// demo puts placeholders in for the owner's details, for screenshots that will be published.
 	demo bool

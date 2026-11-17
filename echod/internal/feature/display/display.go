@@ -179,6 +179,8 @@ type Display struct {
 	nightTapSw *esphome.Switch
 	// nightInfoSw is Night clock shows Next up and notifications (night_info.go).
 	nightInfoSw *esphome.Switch
+	// nightAlarmSw is Night clock shows the next alarm (night_alarm.go): an Echo Show 5's alone.
+	nightAlarmSw *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
 	weatherFx *esphome.Switch
 	lang      *esphome.Select
@@ -573,6 +575,7 @@ func build() *Display {
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.nightTapSw = nightTapSwitch(d)
 	d.nightInfoSw = nightInfoSwitch(d)
+	d.nightAlarmSw = nightAlarmSwitch(d)
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.strip = stripSelect(d.wake)
 	d.themeSel, d.lightThemeSel = themeSelect(false, d.wake), themeSelect(true, d.wake)
@@ -694,6 +697,9 @@ func (d *Display) Entities() []esphome.Entity {
 	if liftOffered() {
 		ents = append(ents, d.liftSw)
 	}
+	if nightAlarmHere() {
+		ents = append(ents, d.nightAlarmSw)
+	}
 	if len(offeredScreens()) > 0 {
 		ents = append(ents, d.idleScreenSel)
 	}
@@ -731,6 +737,7 @@ func (d *Display) Restore(c config.Config) {
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	d.nightTapSw.Set(c.Screen.NightTapLifts)
 	d.nightInfoSw.Set(c.Screen.NightInfo)
+	d.nightAlarmSw.Set(!c.Screen.NoNightAlarm)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	d.strip.Set(stripOptions[stripIndex()])
 	d.themeModeSel.Set(themeModesHere()[themeModeIndex()].label)
@@ -2949,6 +2956,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.redClock = d.nightGlow && config.Get().Screen.NightRed && !d.askedUp(now)
 	s.redStyle = config.Get().Screen.NightClockStyle
 	s.nightInfo = s.redClock && config.Get().Screen.NightInfo
+	s.nightAlarm = s.redClock && nightAlarmHere() && !config.Get().Screen.NoNightAlarm
 	s.nightDim = d.nightGlow
 	d.mu.Unlock()
 	s.camtest = d.cameraTestView(now)

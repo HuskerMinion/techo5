@@ -52,6 +52,14 @@ func (r *renderer) redClockPage(s scene) {
 	if reserve := r.nightInfoReserve(s); reserve > 0 {
 		area.Max.Y -= reserve
 	}
+	// With Night clock shows the next alarm, its line takes a band under the time and above that foot
+	// (night_alarm.go), and the clock keeps clear of it the same way.
+	var alarmBand image.Rectangle
+	alarmLine := nightAlarmLine(s)
+	if alarmLine != "" {
+		alarmBand = image.Rect(0, area.Max.Y-r.nightAlarmBand(), r.w, area.Max.Y)
+		area.Max.Y = alarmBand.Min.Y
+	}
 	shrunk := area != r.dst.Rect
 	switch s.redStyle {
 	case nightStyleLED:
@@ -69,6 +77,7 @@ func (r *renderer) redClockPage(s scene) {
 	default:
 		r.plainRedClock(s.now, (area.Min.Y+area.Max.Y)/2)
 	}
+	r.nightAlarmOver(s, alarmLine, alarmBand)
 	r.nightInfoOver(s)
 }
 

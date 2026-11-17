@@ -40,6 +40,10 @@ type Screen struct {
 	// waits for a touch. (#397)
 	NightInfo bool `json:"night_info,omitempty"`
 
+	// NoNightAlarm leaves the next alarm off an Echo Show 5's night clock, which otherwise shows it under
+	// the time in the night's own dim red (on unless this is set; display/night_alarm.go, #619).
+	NoNightAlarm bool `json:"no_night_alarm,omitempty"`
+
 	// IgnoreRoomLights has the screen's light in Home Assistant described as a configuration entity, so
 	// it stands apart from the room's lights, and the Screen power switch is what a voice names
 	// (feature/display, screen_room.go). Off, the usual, the light stands with the room's lights as it
@@ -333,6 +337,10 @@ func (w ScreenWriter) NightLight(v bool) error {
 
 func (w ScreenWriter) NightInfo(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.NightInfo = v })
+}
+
+func (w ScreenWriter) NoNightAlarm(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoNightAlarm = v })
 }
 
 func (w ScreenWriter) NightTapLifts(v bool) error {

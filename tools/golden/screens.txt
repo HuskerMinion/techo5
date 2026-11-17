@@ -64,6 +64,9 @@ show/firstrun-name-show8.png
 show/firstrun-wifi-show8.png
 show/firstrun-done-show8.png
 show/night-info-led-card-show8.png
+show/night-alarm-red-show5.png
+show/night-alarm-led-chips-show5.png
+show/night-alarm-flip-card-show5.png
 show/notice-card-Paper-show8.png
 show/deck-show8.png
 show/style-Agenda-show8.png

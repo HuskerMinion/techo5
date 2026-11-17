@@ -76,3 +76,16 @@ func TestTheShowNamesDoNotContainEachOther(t *testing.T) {
 		}
 	}
 }
+
+// Show5 is both generations of the Echo Show 5 and nothing else: the Show 8s and the Skylight are not
+// on a bedside table's 960 by 480 panel.
+func TestShow5IsBothGenerations(t *testing.T) {
+	was := Board
+	t.Cleanup(func() { Board = was })
+	for board, want := range map[string]bool{boardCronos: true, boardCheckers: true, boardCrown: false, boardAthena: false, boardSkylight: false} {
+		Board = board
+		if got := Show5(); got != want {
+			t.Errorf("%s: Show5 is %v, want %v", board, got, want)
+		}
+	}
+}
