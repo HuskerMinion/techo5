@@ -26,21 +26,6 @@ const (
 
 var roleNames = [roles]string{"Ground", "Accent", "Text", "Dim text", "Rules"}
 
-// roleLabel is a role's name in the screen's language, read when a row is drawn.
-func roleLabel(role int) string {
-	switch role {
-	case roleGround:
-		return tr("ui_role_ground")
-	case roleAccent:
-		return tr("ui_role_accent")
-	case roleText:
-		return tr("ui_role_text")
-	case roleDim:
-		return tr("ui_role_dim")
-	}
-	return tr("ui_role_rules")
-}
-
 func rgb(v uint32) color.RGBA { return color.RGBA{uint8(v >> 16), uint8(v >> 8), uint8(v), 0xff} }
 
 func preset(name string, ground, accent, text, dim, rules uint32) theme {

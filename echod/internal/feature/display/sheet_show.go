@@ -211,3 +211,18 @@ func (d *Display) showForecast() { d.ShowWeather(false) }
 func restartNow() { restart() }
 
 func atNightSubText() string { return tr("night_description_show") }
+
+// roleLabel is a role's name in the screen's language, read when a row is drawn. Only the Show draws the theme rows.
+func roleLabel(role int) string {
+	switch role {
+	case roleGround:
+		return tr("ui_role_ground")
+	case roleAccent:
+		return tr("ui_role_accent")
+	case roleText:
+		return tr("ui_role_text")
+	case roleDim:
+		return tr("ui_role_dim")
+	}
+	return tr("ui_role_rules")
+}
