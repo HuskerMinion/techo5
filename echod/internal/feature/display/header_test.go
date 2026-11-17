@@ -62,6 +62,7 @@ func showPanels() []struct {
 // on the camera or in setup — and the ringing page is the one where it matters most, because an
 // alarm that cannot hear "stop" looks exactly like one that can.
 func TestTheMicrophoneLineIsOnEveryPage(t *testing.T) {
+	noMuteLight(t)
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
 	sky := home.Weather{Condition: "partlycloudy", Temp: "72°"}
 
@@ -112,6 +113,7 @@ func TestTheSettingsSheetKeepsItsOwnTop(t *testing.T) {
 // The header goes over the page rather than under it, so a page that fills the panel to the top edge
 // cannot bury it.
 func TestTheHeaderIsDrawnOverAFullScreenPage(t *testing.T) {
+	noMuteLight(t)
 	at := time.Date(2026, 9, 16, 6, 40, 0, 0, time.Local)
 	sunrise := scene{now: at, phase: "idle", sunrise: 0.6, sunriseFace: true, muted: true}
 

@@ -15,6 +15,7 @@ import (
 // something - the header's "microphone off" pill, Talk red while live - and only then: a muted device
 // on the settings sheet, which has no pill, and Talk not yet tapped keep the skin.
 func TestTheShowUnskinsOnlyWhileItsMarksAreUp(t *testing.T) {
+	noMuteLight(t)
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
 	const door = "camera.front_door"
 	view := home.CameraView{Entity: door, Name: "Front door", Frame: testPhoto("sky", 860, 430), Until: at.Add(time.Hour)}
