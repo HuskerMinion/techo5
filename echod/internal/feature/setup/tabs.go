@@ -127,7 +127,7 @@ func head(w http.ResponseWriter) {
  nav.rail .toc{list-style:none;margin:.1rem 0 .4rem;padding:0 0 0 .8rem;border-left:1px solid var(--line);margin-left:.8rem}
  nav.rail .toc a{padding:.3rem .6rem;font-size:.88rem;color:var(--dimtext);line-height:1.3}
  nav.rail .toc a:hover{color:var(--text)}
- .wrap:has(.cards){max-width:96rem}
+ .wrap:has(.cards){max-width:96rem} .cards .note{max-width:none}
  .cardbar{display:flex;gap:1.2rem;flex-wrap:wrap;margin:-.4rem 0 .8rem;font-size:.9rem}
  .cardbar a{display:inline-flex;align-items:center;min-height:var(--tap)}
  .cards{display:grid;grid-template-columns:minmax(0,1fr);column-gap:1rem;align-items:start}
