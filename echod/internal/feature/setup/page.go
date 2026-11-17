@@ -168,8 +168,13 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 	}
 	// First run still to do opens on its own page (firstrun_page.go); "all" is the way past it to
 	// every setting.
-	if firstrun.Pending() && q.Get("all") == "" && q.Get("tab") == "" {
+	if firstrun.Pending() && q.Get("all") == "" && q.Get("tab") == "" && q.Get("find") == "" {
 		http.Redirect(w, r, firstRunPath, http.StatusSeeOther)
+		return
+	}
+	// A find with words in it is answered with what it found (find.go); one with none is the tab.
+	if words := findWords(q.Get("find")); len(words) > 0 {
+		f.findPage(r.Context(), w, token, findShown(q.Get("find")), words)
 		return
 	}
 	f.settingsPage(r.Context(), w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"),
@@ -559,7 +564,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		fmt.Fprint(page, `<section>`)
 		for _, t := range shownTabs() {
 			if t.id == tab {
-				fmt.Fprintf(page, `<h2>%s</h2>`, html.EscapeString(t.title))
+				tabHead(page, tab, "", html.EscapeString(t.title))
 			}
 		}
 		if renamed != "" {
@@ -594,7 +599,12 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		}
 		pageScript(page) // last, after everything it reaches for (script.go)
 	}()
+	f.drawTab(ctx, w, token, tab, scan)
+}
 
+// drawTab draws a tab's sections into w. The tab's page draws them (settingsPage), and so does a find,
+// to search them (find.go): what a find finds is what the tab has on this device, drawn the same way.
+func (f *Feature) drawTab(ctx context.Context, w http.ResponseWriter, token, tab string, scan bool) {
 	// Within a tab, what is changed most comes first; a long tab is split under group headings, with
 	// what few will need at its foot, under More.
 	switch tab {
@@ -882,14 +892,20 @@ func wifiSummary(connected bool, ssid string, remembered int) []string {
 	return out
 }
 
+// wifiScan looks for networks in range; a variable for the tests.
+var wifiScan = wifi.Scan
+
 // wifiJoinForm is the form that adds a network. Joining holds the request until the network is up or
 // has been given up on, which can be over a minute, so the form says it is at work (script.go).
 func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan bool) {
 	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyWifi))
 	hidden(w, token, "wifi")
 	fmt.Fprint(w, `<label for="ssid">Network</label><select id="ssid" name="ssid">`)
+	if s, ok := w.(*sectionWriter); ok && s.finding {
+		scan = false // a find never scans (find.go)
+	}
 	if scan {
-		nets, err := wifi.Scan(ctx)
+		nets, err := wifiScan(ctx)
 		if err != nil {
 			fmt.Fprint(w, `<option value="">(the scan failed)</option>`)
 		}

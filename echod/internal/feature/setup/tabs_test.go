@@ -112,7 +112,7 @@ func TestWhatHappenedIsSaidAboveWhenItsSectionIsNotThere(t *testing.T) {
 	f, c := in(t)
 	for _, at := range []string{"", "house", "nonsense", `%22%3E%3Cb%3Ehello`} {
 		body := get(f, "/setup?tab=system&saved=1&at="+at, c).Body.String()
-		top := strings.Index(body, `</h2><div class="banner ok" role="status">Saved.</div>`)
+		top := strings.Index(body, `</h2></div><div class="banner ok" role="status">Saved.</div>`)
 		if top < 0 || strings.Count(body, `class="banner ok"`) != 1 {
 			t.Errorf("at=%q: Saved is not said once, above the sections", at)
 		}

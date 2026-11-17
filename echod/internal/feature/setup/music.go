@@ -35,7 +35,7 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	if m.Set() {
 		// Asked through a lookup (lookup.go), so a Music Assistant that is slow or down does not hold
 		// the tab up on every draw.
-		got, ok := musicLookup.get(ctx, lookupKey(m.URL, m.Token), func(ctx context.Context) musicAnswer { return askMusic(ctx, m) })
+		got, ok := musicLookup.get(waitFor(ctx, w), lookupKey(m.URL, m.Token), func(ctx context.Context) musicAnswer { return askMusic(ctx, m) })
 		if a = got; !ok {
 			a = musicAnswer{status: "still being asked; reload the page in a moment for its answer", perr: errors.New("it has not answered yet")}
 		}

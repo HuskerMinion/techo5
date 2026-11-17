@@ -84,7 +84,7 @@ func immichSummary(srv config.Immich, source string) []string {
 // showing now chosen.
 func immichAlbumForm(w http.ResponseWriter, token string, srv config.Immich) {
 	// Asked through a lookup (lookup.go): an Immich that is down does not hold the page up.
-	a, ok := immichLookup.get(context.Background(), lookupKey(srv.Server, srv.Key), func(ctx context.Context) immichAnswer {
+	a, ok := immichLookup.get(waitFor(context.Background(), w), lookupKey(srv.Server, srv.Key), func(ctx context.Context) immichAnswer {
 		albums, err := home.ImmichAlbums(ctx, srv)
 		return immichAnswer{albums, err}
 	})
