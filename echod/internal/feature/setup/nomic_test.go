@@ -16,7 +16,7 @@ func TestNoVoiceSectionsWithoutAMicrophone(t *testing.T) {
 	f, c := in(t)
 	voice := []string{`<span class="ttl">Voice assistant</span>`, `<span class="ttl">Realtime voice</span>`,
 		`<span class="ttl">Listening after an answer</span>`, `<span class="ttl">Wake words of your own</span>`,
-		"<legend>Wake word scores</legend>",
+		`<span class="ttl">Wake word scores</span>`,
 		`<span class="ttl">Record takes of a word</span>`,
 		`<span class="ttl">Talk through cameras</span>`, `href="/setup?tab=voice"`}
 	page := func() string {

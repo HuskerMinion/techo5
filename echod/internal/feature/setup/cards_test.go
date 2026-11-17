@@ -112,10 +112,16 @@ func TestTheRailListsTheTabsSections(t *testing.T) {
 		t.Error("no Open all and Close all, or no script to keep cards open")
 	}
 
+	// Status's cards are always open: nothing to open or shut all, nothing to remember.
 	status := get(f, "/setup?tab=status", c).Body.String()
-	for _, s := range []string{`class="toc"`, `class="cards"`, `class="cardbar"`, `class="card"`, "localStorage"} {
+	for _, s := range []string{`class="cardbar"`, "localStorage"} {
 		if strings.Contains(status, s) {
 			t.Errorf("Status has %s", s)
+		}
+	}
+	for _, s := range []string{`id="sec-now" open data-keep`, `id="sec-switchedon" open data-keep`, `id="sec-diagnostics" open data-keep`} {
+		if !strings.Contains(status, s) {
+			t.Errorf("Status has no %s", s)
 		}
 	}
 }

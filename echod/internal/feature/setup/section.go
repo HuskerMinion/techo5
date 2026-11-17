@@ -83,7 +83,19 @@ type card struct{ name, title string }
 // alwaysOpen are the sections that are drawn open whatever the address says: lists that are what their
 // tab is for, not settings. Alarms & Timers is opened to see what goes off next, and a shut card there
 // would hide the one thing the tab is opened for.
-var alwaysOpen = map[string]bool{"alarm_edit": true}
+var alwaysOpen = map[string]bool{"alarm_edit": true, "haalarms": true,
+	"now": true, "switchedon": true, "diagnostics": true}
+
+// anyClosable is whether a tab has a card that can be shut, and so wants the links that open or shut
+// them all and the script that remembers which were opened.
+func anyClosable(cards []card) bool {
+	for _, c := range cards {
+		if !alwaysOpen[c.name] {
+			return true
+		}
+	}
+	return false
+}
 
 // openOf is which cards an address's open= asks for: all of them ("all"), none and forget the ones
 // this browser keeps open ("none"), one section the page knows, or nothing. Anything else is nothing:

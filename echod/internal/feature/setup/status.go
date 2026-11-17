@@ -35,7 +35,7 @@ func statusLine(w http.ResponseWriter, dot, about, said string) {
 }
 
 func statusSection(w http.ResponseWriter) {
-	fmt.Fprint(w, `<fieldset><legend>Now</legend>`)
+	sectionOpen(w, "now", "Now")
 
 	if statusHome() {
 		statusLine(w, "ok", "Home Assistant", "is connected.")
@@ -83,7 +83,7 @@ func statusSection(w http.ResponseWriter) {
 	statusLine(w, "", "This page", fmt.Sprintf(`closes by itself when it is left alone for %d minutes, and
 	 after %s at most. To come back in, ask again and %s.`,
 		int(idle/time.Minute), longest, letInBy))
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 // statusAlarms writes what goes off next: the next alarm and the timers running, or that every alarm is

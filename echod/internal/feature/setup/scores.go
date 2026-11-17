@@ -56,7 +56,8 @@ func (f *Feature) scores(w http.ResponseWriter, r *http.Request) {
 // they come. Reading it for the table does not start the engine keeping the peaks: only watching does.
 func scoresSection(w http.ResponseWriter) {
 	sc := readScores(0, 0, false)
-	fmt.Fprint(w, `<fieldset id="scores"><legend>Wake word scores</legend>
+	sectionOpen(w, "scores", "Wake word scores")
+	fmt.Fprint(w, `<div id="scores">
 	 <style>
 	  table.scores{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 	  table.scores th,table.scores td{text-align:left;padding:.3rem .4rem;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -110,10 +111,11 @@ func scoresSection(w http.ResponseWriter) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `</ul>
-	 <div class="btns"><button type="button" id="scwatch">Watch</button><a href="/setup?tab=voice&amp;scores=%d#scores">Refresh</a>
+	 <div class="btns"><button type="button" id="scwatch">Watch</button><a href="/setup?tab=voice&amp;scores=%d&amp;open=scores#sec-scores">Refresh</a>
 	  <span id="scsays" class="note"></span></div>`, time.Now().Unix())
 	fmt.Fprint(w, scoresScript)
-	fmt.Fprint(w, `</fieldset>`)
+	fmt.Fprint(w, `</div>`)
+	sectionClose(w)
 }
 
 // scoreRow is one word's line in the table. The phrase and the model's id are the model's own text, so

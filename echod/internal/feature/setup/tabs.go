@@ -216,10 +216,10 @@ var tabFor = map[string]string{
 
 	"brain": "voice", "replyplayer": "voice", "realtime": "voice", "listening": "voice",
 	"house": "voice", "phonebook": "voice", "wakecall": "voice", "wakeword-remove": "voice",
-	"wakewords": "voice", "takes": "voice", "history": "voice", "wakeclips": "voice", "wakeclips-test": "voice", "wakeclips-trust": "voice", "wakeclips-keep": "voice",
+	"wakewords": "voice", "takes": "voice", "history": "voice", "wakeclips": "voice", "wakeclips-test": "voice", "wakeclips-trust": "voice", "wakeclips-keep": "voice", "scores": "voice",
 
 	"alarm_add": "alarms", "alarm_edit": "alarms", "alarm_prefs": "alarms",
-	"timer_cancel": "alarms", "snoozes_cancel": "alarms",
+	"timer_cancel": "alarms", "snoozes_cancel": "alarms", "haalarms": "alarms",
 
 	"screen": "screen", "themes": "screen", "theme-colors": "screen", "font-remove": "screen", "fonts": "screen",
 	"dashpanel": "screen", "dashboard": "screen", "calendar-look": "screen", "todo": "screen",
@@ -234,7 +234,9 @@ var tabFor = map[string]string{
 	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "haaccess": "network", "timeserver": "network",
 	"tailscale": "network", "netbird": "network", "wallclock": "network",
 
-	"lock": "privacy", "screenpage": "privacy", "screenkey": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
+	"now": "status", "switchedon": "status", "diagnostics": "status",
+
+	"lock": "privacy", "screenpage": "privacy", "screenkey": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy", "thispage": "privacy",
 
 	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",

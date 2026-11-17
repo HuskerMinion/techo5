@@ -61,8 +61,8 @@ func alarmsSection(w http.ResponseWriter, token string) {
 	addDrawer(w, token)
 
 	if len(v.Followed) > 0 {
-		fmt.Fprint(w, `<fieldset><legend>From Home Assistant</legend>
-		 <p class="note" style="margin-top:0">Helpers this device follows as alarms. Change them in Home Assistant.</p>`)
+		sectionOpen(w, "haalarms", "From Home Assistant")
+		fmt.Fprint(w, `<p class="note" style="margin-top:0">Helpers this device follows as alarms. Change them in Home Assistant.</p>`)
 		for _, f := range v.Followed {
 			when := "not set"
 			if !f.At.IsZero() {
@@ -75,7 +75,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 			fmt.Fprintf(w, `<p style="margin:.3rem 0"><span class="chip">Alarm</span> <strong>%s</strong> %s <span class="where">· %s</span></p>`,
 				html.EscapeString(when), html.EscapeString(cmpOr(f.Label, f.Entity)), state)
 		}
-		fmt.Fprint(w, `</fieldset>`)
+		sectionClose(w)
 	}
 
 	prefsSection(w, token)

@@ -570,15 +570,20 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 			banner(page, saved, problem)
 		}
 		// A tab of cards has them laid out side by side where there is room (head), and the links that
-		// open or shut them all. Status has none, and is drawn as it always was.
+		// open or shut them all. Status's cards are always open, so it has no links and nothing to keep.
+		closable := anyClosable(sections.cards)
 		if len(sections.cards) > 0 {
-			cardBar(page, tab)
+			if closable {
+				cardBar(page, tab)
+			}
 			fmt.Fprint(page, `<div class="cards">`)
 		}
 		_, _ = page.Write(sections.body.Bytes())
 		if len(sections.cards) > 0 {
 			fmt.Fprint(page, `</div>`)
-			cardScript(page, tab)
+			if closable {
+				cardScript(page, tab)
+			}
 		}
 		fmt.Fprint(page, `</section></div></div>`)
 		// A refused form comes back as it was typed, secrets aside (stash.go).
@@ -662,8 +667,10 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		if wifi.Available() {
 			f.wifiSection(w, token, scan)
 		} else {
-			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
-			 is not one this page can change.</p></fieldset>`)
+			sectionOpen(w, "wifi", "Wi-Fi")
+			fmt.Fprint(w, `<p class="note" style="margin:0">This device's network
+			 is not one this page can change.</p>`)
+			sectionClose(w)
 		}
 		haAccessSection(w, token)
 		homeAssistantSection(w, token)
@@ -777,22 +784,24 @@ func switchedOnSection(w http.ResponseWriter) {
 	if !sshHere || !cameraWebHere {
 		missing = " " + notHereWhy
 	}
-	fmt.Fprintf(w, `<fieldset><legend>What is switched on</legend>
-	 <p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
+	sectionOpen(w, "switchedon", "What is switched on")
+	fmt.Fprintf(w, `<p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
 	 <p class="note">Shown here, not changed here. Change them on the device's own screen, or in Home
-	  Assistant.%s</p></fieldset>`, ssh, camera, onOff(s.Screen), missing)
+	  Assistant.%s</p>`, ssh, camera, onOff(s.Screen), missing)
+	sectionClose(w)
 }
 
 // thisPageSection is what this page will never do, and the few things it can that reach past a setting.
 func thisPageSection(w http.ResponseWriter) {
-	fmt.Fprint(w, `<fieldset><legend>This page</legend>
-	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
+	sectionOpen(w, "thispage", "This page")
+	fmt.Fprint(w, `<p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
 	  is left alone. It is on your own network, without encryption. It never touches SSH keys or the
 	  software the device runs, and never shows the Home Assistant key. It can let a Home Assistant add
 	  the device for 15 minutes (Network), which sets a new key. It can record takes of a word from the
 	  microphones (Voice) only while Record takes of a word is switched on, and only after a
 	  press on the device for each recording; the takes stay in memory, and come to you over this page.
-	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p></fieldset>`)
+	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p>`)
+	sectionClose(w)
 }
 
 // wifiSection is the networks: what the device is on, what it remembers, and how to add another.
@@ -877,13 +886,13 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 // diagnosticsSection offers the bundle. It is on Status, where the page opens, because somebody who
 // came here to ask for help should not have to look through the tabs to find it.
 func diagnosticsSection(w http.ResponseWriter) {
-	fmt.Fprint(w, `<fieldset><legend>Something wrong?</legend>
-	 <p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
+	sectionOpen(w, "diagnostics", "Something wrong?")
+	fmt.Fprint(w, `<p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
 	  itself, the last of its log, its recent wake words, and what it is set to.</p>
 	 <p class="note">Addresses, network names, keys and serial numbers are replaced before you get it,
 	  so it can go straight into an issue. Worth a look before you send it all the same.</p>
-	 <p><a href="/setup/log">Follow the log live</a> — the same log, with the same parts replaced, as it is written.</p>
-	 </fieldset>`)
+	 <p><a href="/setup/log">Follow the log live</a> — the same log, with the same parts replaced, as it is written.</p>`)
+	sectionClose(w)
 }
 
 // stationsSection is the radio stations kept on the device: a name and the address of the stream,
