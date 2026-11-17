@@ -223,6 +223,11 @@ func (c *clips) roomChanged() {
 }
 
 // enable turns the recorder on or off. Off lets go of every clip, kept and pending.
+// kept is whether clips are being kept now, the one question the sender asks before it takes a clip
+// and again before it sends it: asked two ways, the two answers could part, and a clip let in by one
+// and refused by the other would be skipped over and over without a wait.
+func (c *clips) kept() bool { return c.on.Load() }
+
 func (c *clips) enable(on bool) {
 	if on {
 		c.mu.Lock()

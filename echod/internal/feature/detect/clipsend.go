@@ -420,7 +420,7 @@ func (s *sender) drain(ctx context.Context) {
 			s.report(0, "")
 			return
 		}
-		if !s.c.on.Load() {
+		if !s.c.kept() {
 			s.report(0, statusKeepOff)
 			return
 		}
@@ -670,8 +670,8 @@ func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (s
 		return outRetry, err.Error()
 	}
 	defer f.Close()
-	if !s.c.on.Load() {
-		return outSkip, "" // turned off while it was being opened
+	if !s.c.kept() {
+		return outSkip, "" // not kept any more while it was being opened
 	}
 	st, err := f.Stat()
 	if err != nil {
