@@ -44,6 +44,7 @@ func newSendRig(t *testing.T, target, url string) *sendRig {
 	r.cfg = config.WakeSend{Target: target, URL: url, Since: r.base.Add(-time.Hour).Format(time.RFC3339)}
 	r.s = newSender(c)
 	r.s.cfg = func() config.WakeSend { return r.cfg }
+	c.wantsTakes = func() bool { return r.cfg.Target == config.SendWakesmith && r.cfg.On() }
 	r.s.device = func() string { return "Kitchen" }
 	r.s.allow = func(ip net.IP) bool { return ip.IsLoopback() || homeAddress(ip) }
 	r.s.wait = func(ctx context.Context, d time.Duration, _ <-chan struct{}) bool {

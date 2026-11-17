@@ -324,6 +324,143 @@ func TestAWordSaidPromptlyAfterTheBeepIsKept(t *testing.T) {
 	settled(t, f, Idle)
 }
 
+// Something else played during a capture (an announcement, a reminder, a chime, the music) is the
+// device's own sound and is never kept as a take, a second after the beep or any time after it.
+func TestOtherPlaybackDuringACaptureIsNotATake(t *testing.T) {
+	d, f, kept := runDevice(t)
+	if err := f.StartRun(5, 2); err != nil {
+		t.Fatal(err)
+	}
+	m := d.listening(t)
+	if !d.say(m, room, framesIn(2*time.Second)) {
+		t.Fatal("the run stopped in the gap")
+	}
+	chimed(t, d, 2)
+	second := framesIn(time.Second)
+	if !d.say(m, room, second) {
+		t.Fatal("the run stopped in the capture")
+	}
+	d.playing.Store(true) // a reminder, word-length and loud, a second after the beep
+	ok := d.say(m, word, 25)
+	d.playing.Store(false)
+	if !ok || !d.say(m, room, framesIn(runListen)-second-25) {
+		t.Fatal("the run stopped in the capture")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for c := f.Card(); !c.Missed; c = f.Card() {
+		if time.Now().After(deadline) {
+			t.Fatalf("the capture with only playback in it was not a miss: %+v", c)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	select {
+	case c := <-kept:
+		t.Errorf("playback was kept as take %d", c.Index)
+	default:
+	}
+	f.Stop()
+	settled(t, f, Idle)
+}
+
+// A run asked for on the setup page goes on when the page closes by itself while it runs: it was
+// started at the device and its takes go to wakesmith. One still waiting for the press goes.
+func TestASetupPageRunOutlivesThePage(t *testing.T) {
+	d, f, _ := runDevice(t)
+	if err := f.ArmRun(5, 2, "browser"); err != nil {
+		t.Fatal(err)
+	}
+	if !f.Begin(0) {
+		t.Fatal("the press did not start it")
+	}
+	m := d.listening(t)
+	f.DiscardPage("the setup page closed")
+	if st := f.State("browser"); st.Phase != Recording {
+		t.Fatalf("the page closing ended its run: %v", st.Phase)
+	}
+	f.Stop()
+	settled(t, f, Idle)
+	stopped(t, m)
+
+	if err := f.ArmRun(5, 2, "browser"); err != nil {
+		t.Fatal(err)
+	}
+	f.DiscardPage("the setup page closed")
+	if st := settled(t, f, Idle); st.Why != "the setup page closed" {
+		t.Errorf("a run waiting for the press ended saying %q", st.Why)
+	}
+}
+
+// A run ends when its takes would have nowhere to go: Send wake clips to moving off wakesmith, or to
+// another address; and when Record takes of a word goes off, however it was started.
+func TestARunEndsWhenItsTakesLoseTheirWay(t *testing.T) {
+	for _, c := range []struct {
+		name, says string
+		change     func(d *fake)
+	}{
+		{"off wakesmith", "no longer goes to that wakesmith", func(d *fake) { d.wakesmith.Store(false) }},
+		{"another address", "no longer goes to that wakesmith", func(d *fake) {
+			a := "http://other.test:8765"
+			d.address.Store(&a)
+		}},
+		{"the switch off", "switched off", func(d *fake) { d.on.Store(false) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d, f, _ := runDevice(t)
+			if err := f.StartRun(5, 2); err != nil { // the switch is on: it going off ends even this one
+				t.Fatal(err)
+			}
+			m := d.listening(t)
+			c.change(d)
+			f.poke <- struct{}{}
+			stopped(t, m)
+			settled(t, f, Idle)
+			if r := f.LastRun(); !strings.Contains(r.Why, c.says) {
+				t.Errorf("ended saying %q", r.Why)
+			}
+		})
+	}
+}
+
+// A ring ends a run with no stop note over the alarm.
+func TestARingEndsARunWithoutTheStopNote(t *testing.T) {
+	d, f, _ := runDevice(t)
+	if err := f.StartRun(5, 2); err != nil {
+		t.Fatal(err)
+	}
+	m := d.listening(t)
+	chimed(t, d, 1) // the start note
+	d.ringing.Store(true)
+	f.poke <- struct{}{}
+	stopped(t, m)
+	settled(t, f, Idle)
+	if r := f.LastRun(); !strings.Contains(r.Why, "rang") {
+		t.Errorf("ended saying %q", r.Why)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := d.chimes.Load(); n != 1 {
+		t.Errorf("%d notes, want only the start note: the stop note played over the ring", n)
+	}
+}
+
+// Start in the settings while the setup page's asking waits for its press is refused, and says why: it
+// neither takes the asking over nor is taken for the page's.
+func TestTheScreensStartWaitsForThePagesAsking(t *testing.T) {
+	_, f, _ := runDevice(t)
+	if err := f.Arm("Hey Jarvis", Word, "browser"); err != nil {
+		t.Fatal(err)
+	}
+	err := f.StartRun(5, 2)
+	if err == nil || !strings.Contains(err.Error(), "setup page is waiting") {
+		t.Fatalf("the screen's Start over the page's asking: %v", err)
+	}
+	if c := f.Card(); c.Phase != Armed || c.Run || c.Word != "Hey Jarvis" {
+		t.Errorf("the page's asking became %+v", c)
+	}
+	if st := f.State("browser"); !st.Mine || st.Run {
+		t.Errorf("the page sees %+v", st)
+	}
+}
+
 // A capture with nothing said in it is never handed on, and three in a row end the run.
 func TestARunThatHearsNothingThreeTimesEnds(t *testing.T) {
 	d, f, kept := runDevice(t)

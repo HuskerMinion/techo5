@@ -19,7 +19,12 @@ type fake struct {
 	clock time.Time
 
 	on, muted, muteUnread, call, talk, silent, announcing, ringing, turn, audible, wakesmith atomic.Bool
-	canceled, chimes                                                                         atomic.Int32
+
+	// address is where takes go while wakesmith is set; playing is something other than the
+	// recorder's own notes coming out of the speaker.
+	address          atomic.Pointer[string]
+	playing          atomic.Bool
+	canceled, chimes atomic.Int32
 
 	// down and downAt are the action button: down, and when it went down.
 	down   atomic.Bool
@@ -68,9 +73,18 @@ func newDevice(t *testing.T) (*fake, *Feature) {
 			d.chimes.Add(1)
 			d.heardUntil.Store(d.now().Add(time.Second).UnixNano())
 		},
-		now:         d.now,
-		pressing:    func() (bool, time.Time) { return d.down.Load(), time.Unix(0, d.downAt.Load()) },
-		toWakesmith: d.wakesmith.Load,
+		now:      d.now,
+		pressing: func() (bool, time.Time) { return d.down.Load(), time.Unix(0, d.downAt.Load()) },
+		sendTo: func() string {
+			if !d.wakesmith.Load() {
+				return ""
+			}
+			if a := d.address.Load(); a != nil {
+				return *a
+			}
+			return "http://wakesmith.test:8765"
+		},
+		playing: func() bool { return d.playing.Load() || d.audible.Load() },
 	}, epoch: d.clock}
 	f.watched.Do(func() {}) // the real mute, phone and the rest are not listened to
 	return d, f

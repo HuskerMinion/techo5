@@ -152,6 +152,10 @@ type clips struct {
 
 	// takesOn is Record takes of a word as last seen (takesSwitched).
 	takesOn atomic.Bool
+
+	// takesDropped is when the takes waiting were last let go of (dropTakes, or a purge that took them):
+	// a take captured before then and still on its way to keepTake is not written. Held with disk.
+	takesDropped time.Time
 }
 
 // clipKinds are the folders, in the order the sensor lists them.
@@ -235,6 +239,9 @@ func firstWakeWord(e *Engine) (string, string) {
 // want of a wake word.
 func wireTakeWord(e *Engine, keep func(takes.Capture), rec *takes.Feature) {
 	rec.SetWakeWord(func() (string, string) { return firstWakeWord(e) }, keep)
+	// Under the engine's lock, which slotsChanged reads it under.
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	prevSlots := e.OnSlots
 	e.OnSlots = func() {
 		if prevSlots != nil {
@@ -335,6 +342,9 @@ func (c *clips) purge() {
 	entries, err := os.ReadDir(c.dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		slog.Warn("wake clips: not removed", "err", err)
+	}
+	if !keepTakes {
+		c.takesDropped = c.now()
 	}
 	for _, e := range entries {
 		if e.Name() == takeKind && keepTakes {
@@ -574,6 +584,16 @@ func (c *clips) keepTake(t takes.Capture) {
 		Run: run, Frame: t.Frame, Front: t.Front})
 	c.disk.Lock()
 	defer c.disk.Unlock()
+	// Not when takes have nowhere to go, nor one captured before the takes were let go of: it was
+	// handed on from its own goroutine, and may arrive after them.
+	if c.wantsTakes != nil && !c.wantsTakes() {
+		slog.Info("wake word take: not kept, Send wake clips to is not wakesmith")
+		return
+	}
+	if !t.At.After(c.takesDropped) {
+		slog.Info("wake word take: not kept, the takes were let go of after it was recorded")
+		return
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		slog.Warn("wake word take: no folder", "err", err)
 		return
@@ -601,6 +621,7 @@ func (c *clips) keepTake(t takes.Capture) {
 // cut short after they are gone, so the sender finds none to start again.
 func (c *clips) dropTakes(why string) {
 	c.disk.Lock()
+	c.takesDropped = c.now()
 	err := os.RemoveAll(filepath.Join(c.dir, takeKind))
 	c.disk.Unlock()
 	if err != nil {
