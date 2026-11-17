@@ -121,7 +121,7 @@ func (r *renderer) musicStrip(s scene) {
 		sub = joinDot(sub, station)
 	}
 	if s.paused {
-		sub = joinDot("Paused", sub)
+		sub = joinDot(tr("drawer_paused"), sub)
 	}
 	back, play, next, closeX := r.stripButtons()
 	tx := art.Max.X + r.s(14)

@@ -220,6 +220,22 @@ func optionLabel(english string) string {
 		return tr("ui_alarm_sound_own")
 
 	// The weather source the device itself offers; other sources are Home Assistant's names.
+	case "Full screen":
+		return tr("option_full_screen")
+	case "Hang-up button":
+		return tr("option_hang_up_button")
+	case "Hang-up button and details":
+		return tr("option_hang_up_button_details")
+	case "Chirp":
+		return tr("option_chirp")
+	case "Ding":
+		return tr("option_ding")
+	case "Rise":
+		return tr("option_rise")
+	case "Stable":
+		return tr("option_stable")
+	case "Dev":
+		return tr("option_dev")
 	case "Home Assistant forecast":
 		return tr("weather_ha_forecast")
 	}
@@ -248,7 +264,7 @@ func weekdayInitials() []string {
 func builtinOptionRow(id string) bool {
 	switch id {
 	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_dashboard_events", "cal_next_up_within", "cal_month_details", "cal_chip_size", "calpopallday", "calpopwhen",
-		"skin", "weather":
+		"skin", "weather", "callscreen", "waketone", "updates":
 		return true
 	}
 	return false

@@ -76,11 +76,11 @@ func pictureNote(p dashboard.Picture) (string, bool) {
 	case p.Image != nil && !p.Image.Bounds().Empty():
 		return "", false
 	case p.TooLarge:
-		return "Too large to show here", true
+		return tr("ui_pic_too_large"), true
 	case p.Failed:
-		return "The picture would not load", true
+		return tr("ui_pic_failed"), true
 	}
-	return "Loading the picture…", true
+	return tr("ui_pic_loading"), true
 }
 
 // shapeOf is a picture's shape: the picture's own, its size when it is known but not drawn (a

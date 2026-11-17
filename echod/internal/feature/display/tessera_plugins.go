@@ -35,7 +35,7 @@ func (r *paint) tessPlugin(b image.Rectangle, t tessera.Placed, pal dashPal, car
 	fc := r.faces()
 	pad := r.s(cardPad + 4)
 	r.text(fc.labelBold, r.fit(fc.labelBold, t.Name, b.Dx()-2*pad), b.Min.X+pad, b.Min.Y+pad+fc.labelBold.Metrics().Ascent.Ceil(), pal.text)
-	r.text(fc.sub, r.fit(fc.sub, "Plugin missing", b.Dx()-2*pad), b.Min.X+pad, b.Max.Y-pad, pal.sub)
+	r.text(fc.sub, r.fit(fc.sub, tr("ui_plugin_missing"), b.Dx()-2*pad), b.Min.X+pad, b.Max.Y-pad, pal.sub)
 }
 
 // tessPluginTap is a tap on a plugin tile: a world clock turns its dials to digits and back, as the

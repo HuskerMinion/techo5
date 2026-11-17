@@ -25,6 +25,14 @@ var themes = func() []theme {
 
 const customName = "Custom"
 
+// themeLabel is a theme's name as the screen shows it: the presets keep their names, Custom is translated.
+func themeLabel(name string) string {
+	if name == customName {
+		return tr("ui_custom")
+	}
+	return name
+}
+
 // themeIndex finds a preset by name; unknown names (and Custom) are the first.
 func themeIndex(name string) int {
 	for i, t := range themes {

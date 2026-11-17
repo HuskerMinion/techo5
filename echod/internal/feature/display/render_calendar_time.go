@@ -208,7 +208,7 @@ func (r *renderer) calendarTimeline(v calendarView, l calLook) {
 	r.scrollBar(top, bottom, start/24, (end-start)/24)
 	if len(later) > 0 {
 		e := later[0].ev
-		t := "▼  Later: " + e.Summary + " · " + clockText(e.Start)
+		t := "▼  " + tr("ui_cal_later") + " " + e.Summary + " · " + clockText(e.Start)
 		maxW := right - gx - r.s(60)
 		t = clipText(r, r.micro, t, maxW)
 		w := r.width(r.micro, t) + r.s(28)
@@ -449,14 +449,22 @@ func intoWeek(day time.Time) int {
 // "October 25 – November 1".
 func weekTitle(first time.Time, short bool) string {
 	last := first.AddDate(0, 0, 6)
-	layout := "January 2"
+	lang := screenLang()
+	if lang == "" || lang == "en" {
+		layout := "January 2"
+		if short {
+			layout = "Jan 2"
+		}
+		if first.Month() == last.Month() {
+			return first.Format(layout) + " – " + last.Format("2")
+		}
+		return first.Format(layout) + " – " + last.Format(layout)
+	}
+	date := locale.MonthDay
 	if short {
-		layout = "Jan 2"
+		date = locale.ShortMonthDay
 	}
-	if first.Month() == last.Month() {
-		return first.Format(layout) + " – " + last.Format("2")
-	}
-	return first.Format(layout) + " – " + last.Format(layout)
+	return date(first, lang) + " – " + date(last, lang)
 }
 
 // calendarWeek is the week on its hours: a column a day, Sunday or Monday first, under its name, its number and
@@ -529,7 +537,7 @@ func (r *renderer) calendarWeek(v calendarView, l calLook) {
 		if today {
 			r.roundRect(image.Rect(cx0+r.s(2), hy, cx0+colW-r.s(2), bottom), r.s(10), lerp(walnut, amber, 0.09))
 		}
-		wd, num := day.Format("Mon"), day.Format("2")
+		wd, num := locale.ShortWeekday(day, screenLang()), day.Format("2")
 		nf := r.tiny
 		if today {
 			nf = bold

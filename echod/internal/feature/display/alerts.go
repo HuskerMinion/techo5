@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"log/slog"
@@ -159,13 +160,13 @@ func (r *renderer) alertPage(s scene) {
 
 	foot := ""
 	if n := len(s.alerts.Here); n > 1 {
-		foot = itoa(s.alertIdx+1) + " of " + itoa(n) + "  ·  swipe for the next"
+		foot = fmt.Sprintf(tr("ui_alert_n_of_n"), s.alertIdx+1, n) + "  ·  " + tr("ui_alert_swipe_next")
 	}
 	if first < most {
 		if foot != "" {
 			foot += "  ·  "
 		}
-		foot += "swipe up for more"
+		foot += tr("ui_alert_swipe_more")
 	}
 	r.text(r.micro, foot, x, r.h-r.s(62), dim)
 	b := r.alertCloseButton()

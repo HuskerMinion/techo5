@@ -129,9 +129,9 @@ func ccParse(line string) (ccPart, bool) {
 func ccParts(data map[string]any) (parts []ccPart, note string) {
 	if wait, _ := data["wait"].(string); wait != "" {
 		if wait == "wrong_entity" {
-			return nil, "Choose a sensor that describes a card"
+			return nil, tr("ui_cc_wrong_entity")
 		}
-		return nil, "Waiting for the sensor"
+		return nil, tr("ui_cc_waiting")
 	}
 	attrs, _ := data["attributes"].(map[string]any)
 	state, _ := data["state"].(string)
@@ -145,17 +145,17 @@ func ccParts(data map[string]any) (parts []ccPart, note string) {
 			}
 		}
 		if len(parts) == 0 {
-			return nil, "No parts in elements"
+			return nil, tr("ui_cc_no_parts")
 		}
 		return parts, ""
 	case string:
 		if p, ok := ccParse(e); ok {
 			return []ccPart{p}, ""
 		}
-		return nil, "No parts in elements"
+		return nil, tr("ui_cc_no_parts")
 	}
 	if state == "" {
-		return nil, "Choose a sensor in the tile's settings"
+		return nil, tr("ui_cc_choose_sensor")
 	}
 	unit, _ := attrs["unit_of_measurement"].(string)
 	return []ccPart{{kind: ccValue, value: state, unit: unit, min: 0, max: 100}}, ""

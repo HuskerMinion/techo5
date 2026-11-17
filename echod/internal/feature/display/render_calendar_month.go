@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"slices"
@@ -10,11 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/image/font"
-	"golang.org/x/image/vector"
-
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
+	"golang.org/x/image/font"
+	"golang.org/x/image/vector"
 )
 
 // calendarMonth is the month as a grid, Sunday first. An event of several days is one bar across its
@@ -306,7 +306,7 @@ func (r *renderer) monthBar(v calendarView, l calLook, sp span, cells []image.Re
 	label := clipText(r, r.micro, sp.ev.Summary, room)
 	r.text(r.micro, label, tx, b.Max.Y-r.s(4), ink(cream))
 	if sp.after && multiDay(sp.ev) {
-		extra := "  until " + lastDay(sp.ev).Format("Jan 2")
+		extra := "  " + fmt.Sprintf(tr("ui_cal_until_s"), locale.ShortMonthDay(lastDay(sp.ev), screenLang()))
 		if lw := r.width(r.micro, label); label == sp.ev.Summary && lw+r.width(r.micro, extra) < room {
 			r.text(r.micro, extra, tx+lw, b.Max.Y-r.s(4), fade(lerp(cream, evFill(c), 0.35)))
 		}
@@ -382,7 +382,7 @@ func (r *renderer) monthTimed(v calendarView, l calLook, e hass.Event, in image.
 
 // monthMore is a day's "+2 more", for the events there was no room for; a tap on the day lists them.
 func (r *renderer) monthMore(n int, in image.Rectangle, y, lh int) {
-	t := "+" + strconv.Itoa(n) + " more"
+	t := "+" + fmt.Sprintf(tr("ui_cal_n_more"), n)
 	w := r.width(r.micro, t) + r.s(14)
 	b := image.Rect(in.Min.X+r.s(4), y+r.s(1), in.Min.X+r.s(4)+w, y+lh-r.s(2))
 	if b.Max.X > in.Max.X {

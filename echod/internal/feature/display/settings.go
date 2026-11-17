@@ -60,7 +60,10 @@ func (d *Display) gather(s scene, restartArm time.Time) settings {
 	st.wifiOK = wifi.Available()
 	if st.wifiOK {
 		if wifi.AddressSupported() {
-			st.addressSet = wifi.LoadAddress().String()
+			st.addressSet = tr("ui_address_mode_automatic")
+			if a := wifi.LoadAddress(); a.Fixed {
+				st.addressSet = a.String()
+			}
 		}
 	}
 	st.btProxy = bluetooth.Get().Enabled()
