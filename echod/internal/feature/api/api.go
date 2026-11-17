@@ -72,6 +72,10 @@ type API struct {
 	key     *esphome.PSK
 	unkeyed bool
 
+	// firstWindow is closed when adoptOnFirstStart's wait for a network is over (adopt_first.go);
+	// nil when it started none.
+	firstWindow chan struct{}
+
 	// keyed is what kind of key is in force, for the mDNS record (mdns.go): keyNone (plaintext),
 	// keyZero (the all-zeros key a Home Assistant may replace, adopt.go) or keyReal.
 	keyed atomic.Int32
@@ -190,6 +194,9 @@ func (a *API) Start(ctx context.Context) error {
 	}
 	psk = a.resumeAdoption(psk)
 	psk = a.firstStart(psk)
+	// A device installed with --let-home-assistant-add serves with the zero key from here until a
+	// Home Assistant sets one: the window the marker turns into once there is a network bounds it.
+	a.adoptOnFirstStart(ctx, psk)
 	a.mu.Lock()
 	a.useKey(psk)
 	a.mu.Unlock()

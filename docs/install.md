@@ -284,6 +284,12 @@ Settings → Devices & services: the unit appears under Discovered as an ESPHome
 from step 5. Add it and paste the key printed in step 5 when asked. If it does not appear, add the
 ESPHome integration by hand with host `<address>` and port 6053.
 
+Installed with `install-show.py --let-home-assistant-add`, there is no key: choose Add within 30
+minutes of the unit's first start on the network, with nothing to type, and Home Assistant sets one.
+By hand, the same comes from leaving out the key in step 5 and writing an empty marker instead
+(`: > /data/misc/techo5/adopt-on-first-start`); the daemon honors it once, and ignores it on a unit
+that has a key. SSH, with `--ssh-key`, starts once Home Assistant has added the device: the device keeps SSH off while it has no key. Home Assistant sends the key it sets over your network unencrypted, as it does for ESPHome devices, so use it on a network you trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9).
+
 Then:
 
 - **Time zone**: nothing to set. The unit starts on UTC and takes Home Assistant's zone as soon as it

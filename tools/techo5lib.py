@@ -556,6 +556,60 @@ def check_gift(a, **given):
              % ', '.join(clash))
 
 
+# --let-home-assistant-add: the marker echod reads in its state directory (layout.StateDir) on its first
+# start with a network, and the window it then opens for a Home Assistant to add the device
+# (echod/internal/feature/api/adopt_first.go).
+LET_ADD_MARKER = 'adopt-on-first-start'
+LET_ADD_MINUTES = 30
+# The first release whose daemon turns that marker into a window. An older daemon ignores the marker,
+# so a device installed from it with --let-home-assistant-add would have no key and no window, and
+# serve the zero key until somebody opened a window by hand.
+LET_ADD_MIN_RELEASE = (1, 6, 44)
+LET_ADD_HELP = ('write no Home Assistant key: Home Assistant adds the device with nothing typed, within %d minutes '
+                'of its first start on the network; name, Wi-Fi and SSH key are kept' % LET_ADD_MINUTES)
+
+
+def check_let_add(a, **given):
+    """--let-home-assistant-add writes no Home Assistant key and lets the first Home Assistant to add the
+    device set one, so it cannot be combined with a switch that names a key, or with --for-someone-else,
+    which leaves the key to the device's own setup already. given maps each switch to what it was given,
+    as for check_gift."""
+    if not a.let_home_assistant_add:
+        return
+    clash = sorted(sw for sw, v in given.items() if v)
+    if clash:
+        fail('--let-home-assistant-add writes no key and lets Home Assistant set one, so it cannot be used with %s'
+             % ', '.join(clash))
+
+
+def check_let_add_release(a, version):
+    """--let-home-assistant-add needs a release whose daemon knows the marker (LET_ADD_MIN_RELEASE).
+    version is the release's (vX.Y.Z), or None for images of one's own, which say nothing about it: those
+    are taken as they are, with a note."""
+    if not a.let_home_assistant_add:
+        return
+    if version is None:
+        note('--let-home-assistant-add: your own images must carry a daemon from v%d.%d.%d or later, '
+             'or the device ignores the marker and waits with no key' % LET_ADD_MIN_RELEASE)
+        return
+    m = re.match(r'^v(\d+)\.(\d+)\.(\d+)$', version)
+    if not m or tuple(int(x) for x in m.groups()) < LET_ADD_MIN_RELEASE:
+        fail('--let-home-assistant-add needs release v%d.%d.%d or later, and %s is older: its daemon does not '
+             'know the marker, and the device would wait with no key. Install a newer release with '
+             '--release, or leave the switch out and add the device with its key' % (LET_ADD_MIN_RELEASE + (version,)))
+
+
+def let_add_done(name):
+    """The closing words of an install with --let-home-assistant-add."""
+    return ("Home Assistant finds '%s' under Discovered: choose Add, with nothing to type, within %d minutes\n"
+            'of its first start on the network. Home Assistant sends the key it sets over your network\n'
+            'unencrypted, as it does for ESPHome devices, so do this on a network you trust. If the time runs\n'
+            "out, the device's setup page (Network, Let a Home Assistant add this device) opens another window.\n"
+            'Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9). SSH, when\n'
+            'given a key, starts once Home Assistant has added the device: not while it has no key.'
+            % (name, LET_ADD_MINUTES))
+
+
 def confirm(force, lines, word='ERASE'):
     """Asks once before something that cannot be undone from here, after saying what it is. --force
     answers for somebody who is not there to; without it and without a person, it stops."""

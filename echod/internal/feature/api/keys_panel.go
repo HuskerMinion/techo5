@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
-	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 )
@@ -26,8 +25,8 @@ func (a *API) firstStart(psk *esphome.PSK) *esphome.PSK {
 	if _, ok := readAdopt(); ok {
 		return psk // resumeAdoption has it
 	}
-	until := time.Now().Add(adoptWindow).Truncate(time.Second)
-	if err := os.WriteFile(adoptPath, []byte(until.UTC().Format(time.RFC3339)+"\n"), 0o600); err != nil {
+	until, err := writeAdoptUntil(adoptWindow)
+	if err != nil {
 		slog.Error("api: opening the first window a Home Assistant could add this device in", "err", err)
 		return psk
 	}

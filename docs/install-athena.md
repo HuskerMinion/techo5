@@ -109,6 +109,16 @@ python3 tools/install-athena.py --for-someone-else
 
 It asks for no Wi-Fi network, name or key, and writes none. It also clears any name, key and saved network an earlier install left, so the new owner starts fresh. The Show's screen then shows its own setup, so it can be unplugged and given away as it is, and the new owner's Home Assistant can add it with nothing typed. Everything else (backups, image, first boot) is the same. It cannot be used with `--name`, `--wifi` or `--key-file`.
 
+### Letting Home Assistant add it
+
+Add `--let-home-assistant-add` to install a Show for yourself that Home Assistant adds with nothing typed:
+
+```
+python3 tools/install-athena.py --name "Kitchen" --let-home-assistant-add
+```
+
+Name, Wi-Fi and SSH key are written as usual, but no Home Assistant key: none is printed or kept in `backups/<serial>/`, and a key an earlier install left on the unit is removed. On its first start with a network the Show lets a Home Assistant add it for 30 minutes; choose Add under Discovered and Home Assistant sets the key. If nobody does in time, the setup page (Network, Let a Home Assistant add this device) opens another window. SSH, with `--ssh-key`, starts once Home Assistant has added the device: the device keeps SSH off while it has no key. Home Assistant sends the key it sets over your network unencrypted, as it does for ESPHome devices, so use it on a network you trust. Adding a device with nothing typed needs a recent Home Assistant (tested with 2026.9). It cannot be used with `--key-file` or `--for-someone-else`.
+
 ### Wi-Fi
 
 Without `--wifi`, the unit takes the network Fire OS saved. If there is none, pick one on the Show's

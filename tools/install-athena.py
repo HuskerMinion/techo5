@@ -19,6 +19,12 @@ one folder on userdata (userdata/techo5); nothing else of Fire OS's data is touc
 and marks the Show to start its own setup when it is next powered on; the new owner's Home Assistant can then
 add it with nothing typed. It cannot be used with --name, --wifi, --wifi-passphrase-file or --key-file.
 
+--let-home-assistant-add is for a Show you install for yourself and want Home Assistant to add with nothing
+typed. Name, Wi-Fi and SSH key are written as usual, but no Home Assistant key: a key already on the unit
+is removed, and none is kept in backups/<serial>/. On its first start with a network the Show lets a Home
+Assistant add it for 30 minutes; that Home Assistant sets the key. It cannot be used with --key-file or
+--for-someone-else.
+
 The kernel's speaker amp needs Amazon's tuning for it (a TI TAS5805M register sequence). TECHO5
 doesn't ship it: Amazon's kernel on the unit's own `boot` partition carries it. The installer reads it
 out of the backup it makes, checks it against the known tunings by sha256, and puts it into a slot
@@ -88,9 +94,10 @@ import time
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from techo5lib import (CONSOLE_TECHO5, Adb, Console, Fail, Release, ask_name, ask_wifi, check_gift, confirm,  # noqa: E402
-                       default_dir, fail, need, new_api_key, note, pick_unit, run_main, step, valid_api_key,
-                       wifi_conf, write_private)
+from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Adb, Console, Fail, Release,  # noqa: E402
+                       ask_name, ask_wifi, check_gift, check_let_add, check_let_add_release, confirm,
+                       default_dir, fail, let_add_done, need, new_api_key, note, pick_unit, run_main, step,
+                       valid_api_key, wifi_conf, write_private)
 
 REPO = 'HuskerMinion/techo5'
 BOARD_NAME = 'Echo Show 8 2nd gen'
@@ -1639,6 +1646,7 @@ def main(argv=None):
     ap.add_argument('--wifi-passphrase-file', help='a file holding the --wifi passphrase, for running from a script')
     ap.add_argument('--for-someone-else', action='store_true',
                     help='a gift install: no Wi-Fi, name or key is asked for or written; the Show starts its own setup when next powered on')
+    ap.add_argument('--let-home-assistant-add', action='store_true', help=LET_ADD_HELP)
     ap.add_argument('--dry-run', action='store_true', help='check the unit and the images; write nothing')
     ap.add_argument('--force', action='store_true', help='do not ask before writing')
     ap.add_argument('--replace-uboot', action='store_true',
@@ -1659,7 +1667,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     check_gift(a, **{'--name': a.name, '--wifi': a.wifi, '--wifi-passphrase-file': a.wifi_passphrase_file,
                      '--key-file': a.key_file, '--ssh-key': a.ssh_key})
+    check_let_add(a, **{'--key-file': a.key_file, '--for-someone-else': a.for_someone_else})
     gift = a.for_someone_else
+    let_add = a.let_home_assistant_add
     global MMC
     mainline = a.kernel == 'mainline'
 
@@ -1807,12 +1817,14 @@ def main(argv=None):
         src = os.path.abspath(a.image)
         boot_src = os.path.abspath(a.boot) if a.boot else None
         version = 'your images'
+        check_let_add_release(a, None)
         note('store image: your own, %s' % src)
         if boot_src:
             note('boot image: your own, %s' % boot_src)
     else:
         rel = Release(REPO, a.release, a.work)
         version = rel.version
+        check_let_add_release(a, rel.version)
         src = rel.asset(image_name(rel.version))
         note('store image %s checked against the signed manifest' % os.path.basename(src))
         boot_src = None
@@ -1899,7 +1911,9 @@ def main(argv=None):
     # ------------------------------------------------------------------------------------ 6. settings
     step('settings')
     psk = None
-    if not gift:
+    if let_add:
+        note('Home Assistant key: none; Home Assistant sets one when it adds the Show')
+    elif not gift:
         os.makedirs(os.path.dirname(key_file) or '.', exist_ok=True)
         local_psk = None
         if os.path.exists(key_file):
@@ -1937,6 +1951,14 @@ def main(argv=None):
         put_file(adb, a.work, 'ctrl_interface=/run/wpa\nupdate_config=0\n', linux_dir + '/wpa_supplicant.conf', '600', ready)
         put_file(adb, a.work, '', linux_dir + '/.wifi-imported', '600', ready)
         done = ['first-run marker', 'name, key and Wi-Fi cleared']
+    elif let_add:
+        # No key, and the marker echod turns into a window for a Home Assistant to add the Show on its
+        # first start with a network (api/adopt_first.go). A key from an earlier install would make it
+        # ignore the marker, so that goes.
+        put_file(adb, a.work, a.name + '\n', state_dir + '/name', '644', ready)
+        adb.sh('rm -f %s' % quote(state_dir + '/psk'))
+        put_file(adb, a.work, '', state_dir + '/' + LET_ADD_MARKER, '644', ready)
+        done = ['name', 'marker to let Home Assistant add it']
     else:
         put_file(adb, a.work, a.name + '\n', state_dir + '/name', '644', ready)
         put_file(adb, a.work, psk + '\n', state_dir + '/psk', '600', ready)
@@ -1995,6 +2017,9 @@ def main(argv=None):
         print('\nDone. TECHO5 is on slot a; the slot commits itself after five healthy minutes.')
         print("\nThe Show's screen is now showing its own setup. It can be unplugged and given away as it is.")
         print("Its owner's Home Assistant can add it with nothing typed.")
+    elif let_add:
+        print("\nDone. '%s' runs TECHO5 from slot a; the slot commits itself after five healthy minutes." % a.name)
+        print(let_add_done(a.name))
     else:
         print("\nDone. '%s' runs TECHO5 from slot a; the slot commits itself after five healthy minutes." % a.name)
         print('Home Assistant finds it as an ESPHome device. When it asks for the encryption key, paste:\n\n    %s\n\n'
