@@ -17,7 +17,7 @@ import (
 // addresses are secrets, so what is kept is listed by name only.
 func calendarLinksSection(w http.ResponseWriter, token string) {
 	links := config.Get().Calendar.Links
-	sectionOpen(w, "calendar", "Calendars from a link")
+	sectionOpen(w, "calendar", "Calendars from a link", calendarLinksSummary(links)...)
 	if len(links) == 0 {
 		fmt.Fprint(w, `<p style="margin:0">None yet.</p>`)
 	}
@@ -39,6 +39,19 @@ func calendarLinksSection(w http.ResponseWriter, token string) {
 	  can read the calendar, so this page never shows it again. The device reads it every 15 minutes.</p>
 	 <p><button type="submit">Add</button></p></form>`)
 	sectionClose(w)
+}
+
+// calendarLinksSummary is the line on the shut card: the calendars by name. Their addresses are secrets
+// and are never on it.
+func calendarLinksSummary(links []config.CalendarLink) []string {
+	if len(links) == 0 {
+		return []string{"None added"}
+	}
+	var names []string
+	for _, l := range links {
+		names = append(names, l.Name)
+	}
+	return []string{strings.Join(names, ", ")}
 }
 
 func saveCalendarLink(r *http.Request) string {

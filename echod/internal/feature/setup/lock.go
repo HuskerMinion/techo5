@@ -14,7 +14,7 @@ func lockSection(w http.ResponseWriter, token string) {
 	if !hasScreen {
 		return
 	}
-	sectionOpen(w, "lock", "Settings lock")
+	sectionOpen(w, "lock", "Settings lock", onOff(security.LockSet()))
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "lock")
 	state := "Off: anyone can change the settings on the screen."

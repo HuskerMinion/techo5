@@ -33,7 +33,7 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	if !wc.Here() {
 		return
 	}
-	sectionOpen(w, "wallclock", "Echo Wall Clock")
+	sectionOpen(w, "wallclock", "Echo Wall Clock", wallClockSummary(wc.Enabled(), wc.Status())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "wallclock")
 	fmt.Fprintf(w, `
@@ -55,6 +55,17 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	  <button type="submit" name="pair" value="yes" class="quiet">Pair the clock</button></p>
 	 </form>`)
 	sectionClose(w)
+}
+
+// wallClockSummary is the line on the shut card: on or off, and what the clock is doing when it is on.
+func wallClockSummary(on bool, status string) []string {
+	if !on {
+		return []string{"Off"}
+	}
+	if status == "" {
+		return []string{"On"}
+	}
+	return []string{"On", status}
 }
 
 func saveWallClock(r *http.Request) string {

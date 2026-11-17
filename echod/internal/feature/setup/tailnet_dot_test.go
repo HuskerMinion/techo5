@@ -6,7 +6,7 @@ import "net/http"
 
 // tailnetForm is a form that joins a tailnet, and what it says while it does.
 type tailnetForm struct {
-	draw func(w http.ResponseWriter, token, where string)
+	draw func(w http.ResponseWriter, token, where string, summary ...string)
 	says string
 }
 

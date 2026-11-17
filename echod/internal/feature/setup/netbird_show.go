@@ -44,17 +44,40 @@ func netbirdSection(w http.ResponseWriter, token string) {
 	case st.On:
 		where = "Starting."
 	}
-	netbirdForm(w, token, where)
+	netbirdForm(w, token, where, netbirdSummary(st)...)
+}
+
+// netbirdSummary is the line on the shut card: where the device stands on NetBird, in a word or two and
+// its name there. No setup key is kept to say.
+func netbirdSummary(st netbird.Status) []string {
+	switch {
+	case st.State == "Connected" && st.Name != "":
+		return []string{"On as " + st.Name}
+	case st.Joining && st.Downloading:
+		return []string{"Downloading", fmt.Sprintf("%d%%", int(st.Got*100))}
+	case st.Joining:
+		return []string{"Joining"}
+	case st.JoinProblem != "":
+		return []string{"Could not join"}
+	case st.On && st.Downloading:
+		return []string{"On", fmt.Sprintf("downloading %d%%", int(st.Got*100))}
+	case st.On && st.Problem != "":
+		return []string{"On", "not connected"}
+	case st.On:
+		return []string{"Starting"}
+	}
+	return []string{"Off"}
 }
 
 // joiningReload reloads the page every 3 s while a join is under way, but not once anything on the page
 // has been typed or changed: a reload would lose it.
 const joiningReload = `<script>var nbDirty=false;addEventListener('input',()=>{nbDirty=true});addEventListener('change',()=>{nbDirty=true});setInterval(()=>{if(!nbDirty)location.reload()},3000)</script>`
 
-// netbirdForm is the section's form, with where the device stands said above it (as HTML). Joining
-// holds the request for up to two minutes, so the form says it is at work (script.go).
-func netbirdForm(w http.ResponseWriter, token, where string) {
-	sectionOpen(w, "netbird", "NetBird")
+// netbirdForm is the section's form, with where the device stands said above it (as HTML) and on its
+// shut card (summary). Joining holds the request for up to two minutes, so the form says it is at work
+// (script.go).
+func netbirdForm(w http.ResponseWriter, token, where string, summary ...string) {
+	sectionOpen(w, "netbird", "NetBird", summary...)
 	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyNetbird))
 	hidden(w, token, "netbird")
 	fmt.Fprintf(w, `<p class="note">%s</p>

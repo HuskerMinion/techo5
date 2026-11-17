@@ -21,7 +21,7 @@ import (
 // where there is a Home Assistant; this is what a device without one goes by.
 func placeSection(w http.ResponseWriter, token string) {
 	h := config.Get().Home
-	sectionOpen(w, "place", "Where this device is")
+	sectionOpen(w, "place", "Where this device is", placeSummary(h)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "place")
 	if h.Place.Set() {
@@ -49,6 +49,22 @@ func placeSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`,
 		units(""), units(config.UnitsF), units(config.UnitsC))
 	sectionClose(w)
+}
+
+// placeSummary is the line on the shut card: the place, or Home Assistant's when there is none, and the
+// units when they were chosen.
+func placeSummary(h config.Home) []string {
+	out := []string{"Not set"}
+	if h.Place.Set() {
+		out = []string{h.Place.Name}
+	}
+	switch h.Units {
+	case config.UnitsF:
+		out = append(out, "Fahrenheit")
+	case config.UnitsC:
+		out = append(out, "Celsius")
+	}
+	return out
 }
 
 // savePlace looks the place up and keeps the first match. A bare five-digit number is a U.S. ZIP

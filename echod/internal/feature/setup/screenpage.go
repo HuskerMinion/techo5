@@ -19,8 +19,9 @@ func screenPageSection(w http.ResponseWriter, token string) {
 	if !security.ScreenPage() {
 		return
 	}
-	sectionOpen(w, "screenpage", "Screen page")
 	s := config.Get().Security
+	// The key is never on the card's line: the address it makes is as good as a password.
+	sectionOpen(w, "screenpage", "Screen page", onOff(s.Screen && s.ScreenKey != ""))
 	if !s.Screen || s.ScreenKey == "" {
 		fmt.Fprint(w, `<p style="margin:0">The screen page is off. Turn on <strong>Screen web access</strong> under
 		 Privacy &amp; Security, on the device's screen or in Home Assistant, and its address shows here.</p>`)
