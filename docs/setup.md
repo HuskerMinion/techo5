@@ -486,8 +486,16 @@ Assistant's ONVIF integration lists it among the discovered devices. The answer 
 network who asks the device's name, model and MAC address, which is why it is off by default; without
 it, give the recorder the device's address. ONVIF and the pages are a login digest over plain HTTP, as on most
 cameras: the password itself is never sent, but anyone who can watch your Wi-Fi traffic could replay a
-captured login to the same page for a few minutes, and could see the pictures anyway. `/screen.png`
-(Screen web access) has no login: if the screen is showing the camera, a screenshot shows it too.
+captured login to the same page for a few minutes, and could see the pictures anyway.
+
+To see the screen in Home Assistant, turn on **Screen web access** and add a Generic Camera with
+`http://<device address>:8181/screen.png?key=<key>` as its still image URL. The setup page has the
+address with its key under Privacy, **Screen page**, and a **New key** button that stops the old one
+working. Without the key the page answers nothing but "403", except to a browser the setup page has let
+in. `/screen.png` used to answer without a key: a Generic Camera set up with the plain address gets
+"403" until you give it the address from the setup page. Keep the address private: if the
+screen is showing the camera, a screenshot shows it too, and like the camera pages it travels over plain
+HTTP.
 
 ## 5. Music
 

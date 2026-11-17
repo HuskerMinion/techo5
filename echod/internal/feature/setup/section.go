@@ -27,6 +27,7 @@ var sectionFor = map[string]string{
 	"immich-album": "immich", "immich-show": "immich", "immich-forget": "immich",
 	"photos-remove": "photos",
 	"babylink":      "baby", "babylight": "baby",
+	"screenkey":      "screenpage",
 	"update-install": "updates", "update-check": "updates", "update-auto": "updates",
 	"sound-play": "sounds", "sound-remove": "sounds",
 	"wakeword-remove": "wakewords",

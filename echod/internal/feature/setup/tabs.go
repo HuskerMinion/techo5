@@ -210,7 +210,7 @@ var tabFor = map[string]string{
 	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "haaccess": "network", "timeserver": "network",
 	"tailscale": "network", "netbird": "network", "wallclock": "network",
 
-	"lock": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
+	"lock": "privacy", "screenpage": "privacy", "screenkey": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
 
 	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",

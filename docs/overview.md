@@ -135,7 +135,7 @@ needs no external helper.
   is the real path: it builds a rootfs and installs it into the spare slot, on trial.
 - **See the screen from the PC**: turn on Screen web access, then `http://<device>:8181/screen.png` with `?sheet=<category>`
   (or `cameras`/`radio` for the drawer), `?list=<row>` for a row's list of choices, `?theme=<name>`, `?radio=<station>`, `?wifi=list|keyboard` to put pages up first.
-  The plain screenshot needs only the switch; the options that put those pages up change what the
+  The plain screenshot needs the key the setup page shows (`?key=`, under Privacy, Screen page); the options that put those pages up change what the
   device is doing, so they need a browser the setup page has let in — open the setup page in the same
   browser and press the button on the device first, or they answer 403.
 - **Logs**: `/data/techo5-linux/techo5.log` on the device (`echod.log` on the Dot); `dmesg` for the

@@ -19,13 +19,12 @@ import (
 // opens the alarm editor, ?ring=preview shows the ringing page silently, ?demo=1 hides the owner's
 // details behind placeholders, and ?theme= switches the palette,
 // so the sheet and the themes can be looked at without a finger on the device. The whole path is
-// off unless the Screen web access switch is on, and the options above need the setup page's press
-// as well: see driving.
+// off unless the Screen web access switch is on; a plain screenshot then needs the page's key
+// (?key=, from the setup page), and the options above need the setup page's press: see screenRefused.
 func (f *Feature) registerScreen() {
 	web.Handle("/screen.png", "Screen", screenOpen, func(w http.ResponseWriter, r *http.Request) {
-		if driving(r) && !web.LetIn(r) {
-			http.Error(w, "those options need a browser the setup page has let in",
-				http.StatusForbidden)
+		if why := screenRefused(r); why != "" {
+			http.Error(w, why, http.StatusForbidden)
 			return
 		}
 		if r.URL.Query().Get("demo") != "" {
