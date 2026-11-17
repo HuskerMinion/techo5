@@ -346,9 +346,21 @@ func (f *Feature) pair(known string) {
 
 	// The agent says no to pairings outside pairing mode; this is the one device it should say yes
 	// to for the length of this attempt.
+	// The adapter is not pairable outside pairing mode, and then the kernel turns this pairing into one
+	// with no bond: the clock asks for a bond, gets none and stops answering until the link times out
+	// (techo5#511). Pairable for this attempt only, as it was afterwards.
+	wasPairable, perr := a.SetPairable(true)
+	if perr != nil {
+		slog.Warn("wall clock: could not make the adapter pairable", "err", perr)
+	}
 	done := bluez.AllowPairing(d.Path)
 	err = a.Pair(ctx, d.Address)
 	done()
+	if perr == nil && !wasPairable {
+		if _, err := a.SetPairable(false); err != nil {
+			slog.Warn("wall clock: could not make the adapter unpairable again", "err", err)
+		}
+	}
 	if err != nil {
 		// bluetoothd can report an error after the bond was made, so the clock's own state is what
 		// decides whether to go on.

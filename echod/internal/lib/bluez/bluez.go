@@ -620,6 +620,17 @@ func (a *Adapter) Pairing(on bool) error {
 	return a.set("Discoverable", on)
 }
 
+// SetPairable sets whether the adapter bonds, and says what it was so the caller can put it back. Off,
+// a pairing the device starts itself still completes, but the kernel answers it as "no bonding" and
+// keeps no key: a peer that asked for a bond can then drop the link (the Echo Wall Clock, techo5#511).
+// The agent still refuses pairings nobody asked for, so on for one attempt lets in only that one.
+func (a *Adapter) SetPairable(on bool) (was bool, err error) {
+	if v, err := a.get("Pairable"); err == nil {
+		was, _ = v.Value().(bool)
+	}
+	return was, a.set("Pairable", on)
+}
+
 // Discover starts or stops looking for devices. Scanning shares the antenna with Wi-Fi, so it is
 // only on while someone is pairing.
 func (a *Adapter) Discover(on bool) error {
