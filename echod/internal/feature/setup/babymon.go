@@ -24,7 +24,7 @@ func babySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fieldsetOpen(w, "baby", "Baby monitor")
+	sectionOpen(w, "baby", "Baby monitor")
 	s := config.Get().Security
 	if !s.Baby || s.BabyKey == "" {
 		fmt.Fprint(w, `<p style="margin:0">The baby monitor is off. Turn on <strong>Baby monitor</strong> under
@@ -47,7 +47,7 @@ func babySection(w http.ResponseWriter, token string) {
 	 sensor, and the mute button stops the sound at once. A new link ends every listener and stops the old
 	 link working. Voice keeps working while someone listens.</p>`)
 	babyLightForm(w, token, s.BabyLight)
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 // babyLightForm is the Baby monitor light choice, with what Dimmest and Off give up.

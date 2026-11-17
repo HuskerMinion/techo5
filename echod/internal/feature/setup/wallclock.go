@@ -33,7 +33,7 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	if !wc.Here() {
 		return
 	}
-	fieldsetOpen(w, "wallclock", "Echo Wall Clock")
+	sectionOpen(w, "wallclock", "Echo Wall Clock")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "wallclock")
 	fmt.Fprintf(w, `
@@ -53,7 +53,8 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `
 	 <p><button type="submit">Save</button>
 	  <button type="submit" name="pair" value="yes" class="quiet">Pair the clock</button></p>
-	 </form></fieldset>`)
+	 </form>`)
+	sectionClose(w)
 }
 
 func saveWallClock(r *http.Request) string {

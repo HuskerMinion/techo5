@@ -17,7 +17,7 @@ import (
 // addresses are secrets, so what is kept is listed by name only.
 func calendarLinksSection(w http.ResponseWriter, token string) {
 	links := config.Get().Calendar.Links
-	fieldsetOpen(w, "calendar", "Calendars from a link")
+	sectionOpen(w, "calendar", "Calendars from a link")
 	if len(links) == 0 {
 		fmt.Fprint(w, `<p style="margin:0">None yet.</p>`)
 	}
@@ -37,7 +37,8 @@ func calendarLinksSection(w http.ResponseWriter, token string) {
 	  iCloud: share the calendar as a <strong>Public Calendar</strong> and copy the link. Outlook: Settings,
 	  Calendar, Shared calendars, <strong>Publish a calendar</strong>, the ICS link. Anyone with the address
 	  can read the calendar, so this page never shows it again. The device reads it every 15 minutes.</p>
-	 <p><button type="submit">Add</button></p></form></fieldset>`)
+	 <p><button type="submit">Add</button></p></form>`)
+	sectionClose(w)
 }
 
 func saveCalendarLink(r *http.Request) string {
@@ -79,7 +80,7 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 	if s == nil || len(s.Calendar) == 0 {
 		return
 	}
-	fieldsetOpen(w, "calendar-look", "The calendar's look")
+	sectionOpen(w, "calendar-look", "The calendar's look")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "calendar-look")
 	for _, c := range s.Calendar {
@@ -93,7 +94,8 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprint(w, `<p class="note">Also on the screen, under Settings, Display, Calendar, and in Home Assistant.
 	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 func saveCalendarLook(r *http.Request) string {

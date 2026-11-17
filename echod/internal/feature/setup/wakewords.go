@@ -27,7 +27,7 @@ var models = wake.Lib
 // wakeWordsSection lists the wake words on the device, with Remove for the ones sent from here, and
 // takes a new one.
 func wakeWordsSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "wakewords", "Wake words of your own")
+	sectionOpen(w, "wakewords", "Wake words of your own")
 	ours := models().Ours()
 	if len(ours) == 0 {
 		fmt.Fprint(w, `<p style="margin-top:0">None on the device yet.</p>`)
@@ -66,7 +66,8 @@ func wakeWordsSection(w http.ResponseWriter, token string) {
 	     if (r.ok) setTimeout(() => location.reload(), 1500);
 	   } catch (e) { say.textContent = 'It could not be sent.'; }
 	 });
-	 </script></fieldset>`, token)
+	 </script>`, token)
+	sectionClose(w)
 }
 
 // tooLarge is whether err is a request body stopped at the most it may be (http.MaxBytesReader).

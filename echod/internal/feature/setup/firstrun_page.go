@@ -331,7 +331,7 @@ func isRoom(room string) bool {
 
 // resetSection clears the device for somebody else and starts first run (firstrun.Reset).
 func resetSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "giftreset", "Reset for someone else")
+	sectionOpen(w, "giftreset", "Reset for someone else")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "giftreset")
 	fmt.Fprint(w, `<p style="margin:0">Clears this device for whoever has it next, and starts first run:
@@ -349,5 +349,6 @@ func resetSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `
 	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
 	  I know everything on the device is cleared</label></p>
-	 <p><button type="submit">Reset and restart</button></p></form></fieldset>`)
+	 <p><button type="submit">Reset and restart</button></p></form>`)
+	sectionClose(w)
 }

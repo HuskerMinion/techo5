@@ -50,7 +50,7 @@ func historySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fieldsetOpen(w, "history", "Recent voice requests")
+	sectionOpen(w, "history", "Recent voice requests")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">The last 10 voice requests this device took, newest first: when, which
 	  assistant, the wake word's score, what was heard, the reply, how it ended and how long each part took. Kept
 	  in memory only: never saved, never in the diagnostics download, and gone when the device restarts. Like
@@ -78,8 +78,9 @@ func historySection(w http.ResponseWriter, token string) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `<form method="post" action="/setup/history/clear" class="btns"><input type="hidden" name="token" value="%s">
-	 <a href="/setup?tab=voice&amp;history=1#sec-history">Refresh</a>
-	 <button type="submit">Clear</button></form></fieldset>`, html.EscapeString(token))
+	 <a href="/setup?tab=voice&amp;history=1&amp;open=history#sec-history">Refresh</a>
+	 <button type="submit">Clear</button></form>`, html.EscapeString(token))
+	sectionClose(w)
 }
 
 // took is the parts of a turn that have a time, in seconds.

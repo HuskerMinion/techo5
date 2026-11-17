@@ -42,7 +42,7 @@ var soundTitles = map[string][2]string{
 // soundsSection lists the sounds, whether each is the device's own or one sent here, and takes a file
 // for any of them.
 func soundsSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "sounds", "Sounds of your own")
+	sectionOpen(w, "sounds", "Sounds of your own")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">A recording of your own plays in place of the device's sound. Play
 	  tries what plays now, quietly. To change one, choose a file beside it and press Upload.</p>`)
 	for _, name := range speaker.OwnSounds() {
@@ -83,7 +83,8 @@ func soundsSection(w http.ResponseWriter, token string) {
 	  (2 seconds for the volume, button, Bluetooth, listening-ended and Drop In sounds).
 	  Other formats are not converted here; ffmpeg makes one from anything:
 	  <code>ffmpeg -i chime.mp3 -ac 1 -ar 48000 -c:a pcm_s16le chime.wav</code>. Keep the wake sound short: the
-	  device listens for the request only once it has played.</p></fieldset>`)
+	  device listens for the request only once it has played.</p>`)
+	sectionClose(w)
 }
 
 // sound takes one recording from a row's form: the token, then which sound it is for, then the file.

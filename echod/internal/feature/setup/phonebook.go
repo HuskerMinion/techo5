@@ -24,7 +24,7 @@ func init() { saves["phonebook"] = savePhoneBook }
 func phoneBookSection(w http.ResponseWriter, token string) {
 	book := phone.FormatContacts(phone.Get().Contacts())
 	byVoice := phone.CallByVoice()
-	fieldsetOpen(w, "phonebook", "Phone book")
+	sectionOpen(w, "phonebook", "Phone book")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "phonebook")
 	fmt.Fprintf(w, `<label for="contacts">Contacts, one to a line</label>
@@ -37,8 +37,9 @@ func phoneBookSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="byvoice" value="yes" style="width:auto"%s> Call contacts by voice:
 	  "call Mom" said to this device calls Mom's number, after saying whom it is calling. The stop word or
 	  Hang up within a few seconds calls it off.</label><input type="hidden" name="was_byvoice" value="%t"></p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(book), html.EscapeString(book), phone.MaxContacts, checkedIf(byVoice), byVoice)
+	sectionClose(w)
 }
 
 // savePhoneBook keeps the book when it was changed on the page, and the switch when it was.

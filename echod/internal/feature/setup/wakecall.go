@@ -26,7 +26,7 @@ var (
 func wakeCallSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	book := wakeCallBook()
-	fieldsetOpen(w, "wakecall", "Call on a wake word")
+	sectionOpen(w, "wakecall", "Call on a wake word")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "wakecall")
 	fmt.Fprint(w, `<p class="note"><strong>A wake word chosen here calls that contact as soon as it is heard,
@@ -64,7 +64,8 @@ func wakeCallSection(w http.ResponseWriter, token string) {
 			fmt.Fprint(w, `<p class="note">Answered by realtime voice.</p>`)
 		}
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 // saveWakeCall changes the slots whose choice was changed on the page.

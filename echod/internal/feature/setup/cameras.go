@@ -34,7 +34,7 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	for _, c := range list {
 		names = append(names, html.EscapeString(c.Name))
 	}
-	fieldsetOpen(w, "hacameras", "Home Assistant cameras")
+	sectionOpen(w, "hacameras", "Home Assistant cameras")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "hacameras")
 	var now string
@@ -65,9 +65,10 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	  or a list, so it does not show the other homes' cameras. Cameras set up below (Reolink, go2rtc) and
 	  the device's own camera are listed either way. An automation can still put any camera up with
 	  home_show_camera.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		checkedIf(mode == "none"), checkedIf(mode == "all"), checkedIf(mode == "these"), mode,
 		html.EscapeString(text), html.EscapeString(text))
+	sectionClose(w)
 }
 
 // isHACamera is whether a camera on the list is one of Home Assistant's: not the device's own, a
@@ -115,7 +116,7 @@ func saveHACameras(r *http.Request) string {
 // password is never shown: it is written, or left alone.
 func reolinkSection(w http.ResponseWriter, token string) {
 	r := config.Get().Home.Reolink
-	fieldsetOpen(w, "reolink", "Reolink cameras")
+	sectionOpen(w, "reolink", "Reolink cameras")
 	// Saving logs in to the recorder and lists its cameras before it answers (home.SetReolink).
 	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyReolink))
 	hidden(w, token, "reolink")
@@ -137,9 +138,10 @@ func reolinkSection(w http.ResponseWriter, token string) {
 	  Reolink app. A user of its own with only "view" rights is the tidy way. Clear the address and save
 	  to take the cameras away. Removing the saved password leaves the cameras on the list, but they
 	  cannot be read until one is typed again.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(host), html.EscapeString(r.User),
 		secretField("rlpass", "Password", "pass", r.Pass != "", "nopass"))
+	sectionClose(w)
 }
 
 func saveReolink(r *http.Request) string {

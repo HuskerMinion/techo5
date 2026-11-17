@@ -30,7 +30,7 @@ func todoSection(w http.ResponseWriter, token string) {
 			offered = append(offered, hass.Entity{ID: id})
 		}
 	}
-	fieldsetOpen(w, "todo", "To-do lists")
+	sectionOpen(w, "todo", "To-do lists")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "todo")
 	if len(offered) == 0 {
@@ -47,7 +47,8 @@ func todoSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p class="note">The lists the To-do tab in the drawer shows, with their open items. A tap on
 	 an item marks it done in Home Assistant. None ticked leaves the tab off. Also the
 	 <code>todo_lists</code> action in Home Assistant.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 func saveTodo(r *http.Request) string {

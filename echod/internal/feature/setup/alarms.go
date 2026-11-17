@@ -30,7 +30,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 	v := alarm.Get().View(now)
 	timers := timer.Get().List(now)
 
-	fieldsetOpen(w, "alarm_edit", "Coming up")
+	sectionOpen(w, "alarm_edit", "Coming up")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">A reminder says its words once and stays on the screen until it is
 	  dismissed; an alarm with words says them when it starts ringing.</p>`)
 	shown := 0
@@ -56,7 +56,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `<button type="submit" class="quiet">Cancel snoozes</button></form>`)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 
 	addDrawer(w, token)
 
@@ -152,7 +152,7 @@ func alarmDrawer(w http.ResponseWriter, token string, a config.Alarm) {
 }
 
 func addDrawer(w http.ResponseWriter, token string) {
-	// The drawer is not in a fieldset of its own, so it is the section: it stays open when the page comes
+	// The drawer is not in a card of its own, so it is the section: it stays open when the page comes
 	// back from it, with what happened said inside.
 	open := ""
 	if cameBackTo(w, "alarm_add") {
@@ -185,7 +185,7 @@ func addDrawer(w http.ResponseWriter, token string) {
 
 func prefsSection(w http.ResponseWriter, token string) {
 	c := config.Get()
-	fieldsetOpen(w, "alarm_prefs", "For every alarm on this device")
+	sectionOpen(w, "alarm_prefs", "For every alarm on this device")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "alarm_prefs")
 	fmt.Fprintf(w, `<div class="row">
@@ -214,7 +214,8 @@ func prefsSection(w http.ResponseWriter, token string) {
 	  default wake light is for alarms that don't choose their own. Gets louder starts an alarm 30 dB under its
 	  ring volume and brings it up to it. What an alarm says is spoken by Home
 	  Assistant, after the first chime.</p>
-	 <div class="btns"><button type="submit">Save</button></div></form></fieldset>`)
+	 <div class="btns"><button type="submit">Save</button></div></form>`)
+	sectionClose(w)
 }
 
 // whenFields are an alarm's time and words.

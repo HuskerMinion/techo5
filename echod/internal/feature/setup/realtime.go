@@ -27,7 +27,7 @@ var providerNames = map[string]string{"openai": "OpenAI", "xai": "xAI (Grok)", "
 func realtimeSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	rt := c.Realtime
-	fieldsetOpen(w, "realtime", "Realtime voice")
+	sectionOpen(w, "realtime", "Realtime voice")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "realtime")
 	who := "the provider chosen"
@@ -76,7 +76,8 @@ func realtimeSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<label><input type="checkbox" name="slot%d" value="yes" style="width:auto"%s> %s</label><br>`,
 			i, checkedIf(on), html.EscapeString(name))
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 // realtimeChoices is the slots there are to choose: those with a wake word, the first always. Ticking

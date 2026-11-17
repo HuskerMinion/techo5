@@ -23,7 +23,7 @@ func streamingSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	fieldsetOpen(w, "streaming", "Play to this device")
+	sectionOpen(w, "streaming", "Play to this device")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "streaming")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play to this device from other apps. It shows up under its
@@ -71,7 +71,8 @@ func streamingSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprint(w, `</p>
 	 <p class="note">New, and not yet tried with every app: if something does not work, say so on GitHub.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 // spotifyQuality names a Spotify Connect quality as the Spotify app does.

@@ -56,7 +56,7 @@ func shareDevices() []string {
 func shareSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	s := c.Share
-	fieldsetOpen(w, "share", "Shared settings")
+	sectionOpen(w, "share", "Shared settings")
 	devices := shareDevices()
 	// Requests first, each a form of its own, ahead of the settings' form.
 	if s.On && len(s.Requests) > 0 {
@@ -145,7 +145,7 @@ func shareSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `<p><button type="submit">Copy</button></p></form>`)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 func checked(b bool) string {

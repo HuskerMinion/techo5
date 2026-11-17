@@ -21,7 +21,7 @@ import (
 // an action by hand. The key once saved is never shown again, only whether there is one.
 func dashboardSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fieldsetOpen(w, "dashboard", "Dashboard server")
+	sectionOpen(w, "dashboard", "Dashboard server")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashboard")
 	fmt.Fprintf(w, `<label for="dashaddr">Address</label>
@@ -30,8 +30,9 @@ func dashboardSection(w http.ResponseWriter, token string) {
 	 <p class="note">Only for a <strong>streamed</strong> dashboard, which a dashcast server draws: set
 	  <strong>Dashboard</strong> to <strong>Streamed</strong> above, or in Home Assistant.
 	  A dashboard drawn on the device needs no server.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
+	sectionClose(w)
 }
 
 // serverCheck is the dashboard server as the last save found it (dashboard.Check).
@@ -65,7 +66,7 @@ func checkNote(server string) string {
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fieldsetOpen(w, "dashpanel", "Dashboard")
+	sectionOpen(w, "dashpanel", "Dashboard")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashpanel")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
@@ -115,7 +116,8 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
 	 %s
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, handle, tesseraNote, tokenNote())
+	 <p><button type="submit">Save</button></p></form>`, idle, handle, tesseraNote, tokenNote())
+	sectionClose(w)
 }
 
 // tokenNote says whether the device has the Home Assistant access a drawn dashboard is read with, and
@@ -124,12 +126,12 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 func tokenNote() string {
 	if hass.Get().Ready() {
 		return `<p class="note">This device has access to Home Assistant. It is on the
-	  <a href="/setup?tab=network#sec-haaccess">Network</a> tab.</p>`
+	  <a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Network</a> tab.</p>`
 	}
 	return `<p class="bad"><strong>This device has no access to Home Assistant yet</strong>, so a drawn
 	  dashboard can't be shown.</p>
 	 <p class="note">Choose <strong>Connect to Home Assistant</strong> on the
-	  <a href="/setup?tab=network#sec-haaccess">Network</a> tab and sign in.</p>`
+	  <a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Network</a> tab and sign in.</p>`
 }
 
 // saveDashboardPanel keeps what dashboardPanelSection asked, refusing a choice the page did not offer.

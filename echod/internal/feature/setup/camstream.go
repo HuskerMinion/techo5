@@ -28,7 +28,7 @@ func camStreamSection(w http.ResponseWriter, token string) {
 	case c.On:
 		state = "on, but waiting for a password"
 	}
-	fieldsetOpen(w, "camstream", "Camera streaming")
+	sectionOpen(w, "camstream", "Camera streaming")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "camstream")
 	fmt.Fprintf(w, `<p style="margin:0">Camera streaming is %s. Turn it on or off with the Camera streaming
@@ -41,10 +41,11 @@ func camStreamSection(w http.ResponseWriter, token string) {
 	  turning it off, a new login and the lens cover cut viewers off, and the mute button stops the
 	  picture. A Show shows a green dot while it is watched. Use a long password of its own. The picture
 	  is a series of JPEGs, not H.264: a recorder that wants H.264 re-encodes it.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(state), html.EscapeString(user), config.DefaultCamStreamUser,
 		secretField("cspass", fmt.Sprintf("Password (at least %d characters)", camstream.MinPass), "pass", c.Pass != "", ""),
 		camstream.Port, camstream.Path)
+	sectionClose(w)
 }
 
 func saveCamStream(r *http.Request) string {

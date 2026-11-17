@@ -27,7 +27,7 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 	if s == nil || s.OwnFonts == nil {
 		return
 	}
-	fieldsetOpen(w, "fonts", "Fonts of your own")
+	sectionOpen(w, "fonts", "Fonts of your own")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">For characters the screen's fonts do not have, such as Korean, Chinese
 	  and Japanese: the screen draws any character its font and Go lack from these, in the order of their
 	  file names. They are never the font for everything; that is Font, above.</p>`)
@@ -64,7 +64,8 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 	     if (r.ok) setTimeout(() => location.reload(), 1200);
 	   } catch (e) { say.textContent = 'It could not be sent.'; }
 	 });
-	 </script></fieldset>`, s.MaxFont>>20, token)
+	 </script>`, s.MaxFont>>20, token)
+	sectionClose(w)
 }
 
 // font takes one font file from the page's script. The form's token comes first and is checked

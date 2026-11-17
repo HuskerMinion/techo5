@@ -23,7 +23,7 @@ func videoSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	fieldsetOpen(w, "video", "Video")
+	sectionOpen(w, "video", "Video")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "video")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play a video full screen, with its sound, from an
@@ -55,7 +55,8 @@ func videoSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `</ul><p><label><input type="checkbox" name="forget" value="yes" style="width:auto"> Forget the %d %s
 		 allowed to send videos, so each asks again</label></p>`, n, plural(n, "address", "addresses"))
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 func plural(n int, one, many string) string {

@@ -25,7 +25,7 @@ import (
 func speakerSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	p := media.Get()
-	fieldsetOpen(w, "speaker", "Speaker and voice")
+	sectionOpen(w, "speaker", "Speaker and voice")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "speaker")
 	vol := p.Volume()
@@ -102,7 +102,8 @@ func speakerSection(w http.ResponseWriter, token string) {
 	dnd := c.Home.DoNotDisturb
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="dnd" value="yes" style="width:auto"%s> Do not disturb: intercom
 	  calls from other rooms are turned away</label><input type="hidden" name="was_dnd" value="%t"></p>`, checkedIf(dnd), dnd)
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 // choiceField is a list of choices with what the page showed beside it.

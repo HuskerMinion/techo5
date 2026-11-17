@@ -36,7 +36,7 @@ func bluetoothSection(w http.ResponseWriter, token string) {
 	if !sc && !vol {
 		return
 	}
-	fieldsetOpen(w, "bluetooth", "Bluetooth")
+	sectionOpen(w, "bluetooth", "Bluetooth")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "bluetooth")
 	if vol {
@@ -56,7 +56,8 @@ func bluetoothSection(w http.ResponseWriter, token string) {
 	 <p class="note">Changing it turns Bluetooth off and on again: whatever is connected drops for a moment.</p>`, checkedIf(bt.SecureConnections()))
 	}
 	fmt.Fprint(w, `
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 func saveBluetooth(r *http.Request) string {

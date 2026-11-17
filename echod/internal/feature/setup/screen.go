@@ -127,7 +127,7 @@ func screenSection(w http.ResponseWriter, token string) {
 	if s == nil {
 		return
 	}
-	fieldsetOpen(w, "screen", "The screen")
+	sectionOpen(w, "screen", "The screen")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "screen")
 	fmt.Fprint(w, `<label for="clockstyle">Clock style</label><select id="clockstyle" name="clockstyle">`)
@@ -232,7 +232,8 @@ func screenSection(w http.ResponseWriter, token string) {
 	  screensaver clock</label></p>
 	 <p class="note">On the screensaver, a swipe left or right goes to the next photo or the one before, and that
 	  photo stays up for five minutes.</p></div>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, checked(home.Get().SlideshowWeather()))
+	 <p><button type="submit">Save</button></p></form>`, checked(home.Get().SlideshowWeather()))
+	sectionClose(w)
 }
 
 func saveScreen(r *http.Request) string {

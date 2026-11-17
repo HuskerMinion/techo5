@@ -17,10 +17,11 @@ import (
 func doorbellSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	r := c.Home.Reolink
-	fieldsetOpen(w, "doorbell", "Doorbell")
+	sectionOpen(w, "doorbell", "Doorbell")
 	if r.Base == "" {
 		fmt.Fprint(w, `<p class="note" style="margin:0">Set up a Reolink Home Hub or NVR above first: a press of a
-		 Reolink doorbell reaches the device through it.</p></fieldset>`)
+		 Reolink doorbell reaches the device through it.</p>`)
+		sectionClose(w)
 		return
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
@@ -62,7 +63,8 @@ func doorbellSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`, c.Doorbell.ONVIFPort(), does)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "doorbell-chime")
-	fmt.Fprint(w, `<p><button type="submit">Play the chime</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Play the chime</button></p></form>`)
+	sectionClose(w)
 }
 
 // chimeDoorbell plays the chime, for hearing it from the page.

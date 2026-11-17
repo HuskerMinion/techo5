@@ -55,7 +55,7 @@ const signInsMost = 4
 // haAccessSection is the device's own access to Home Assistant: whether it has one and which kind, and
 // the Connect button.
 func haAccessSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "haaccess", "Home Assistant access")
+	sectionOpen(w, "haaccess", "Home Assistant access")
 	c := hass.Get()
 	base := c.Address()
 	switch {
@@ -90,8 +90,9 @@ func haAccessSection(w http.ResponseWriter, token string) {
 	 <input id="ha-url" name="url" value="%s" autocomplete="off" spellcheck="false">
 	 <p class="note">Home Assistant's sign-in page opens. Sign in as the user this device should act as:
 	  a user made for the devices, without administrator rights, is best. Then you come back here.</p>
-	 <p><button type="submit">%s</button></p></form></fieldset>`,
+	 <p><button type="submit">%s</button></p></form>`,
 		html.EscapeString(token), html.EscapeString(base), label)
+	sectionClose(w)
 }
 
 // haConnect starts a sign-in: a state for it, and the browser sent to Home Assistant's login.
@@ -200,7 +201,7 @@ func haBackPage(w http.ResponseWriter, code int, title, said string) {
 	w.WriteHeader(code)
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p><p>%s</p>
-	 <p><a href="/setup?tab=network#sec-haaccess">Back to the setup page</a></p></div>`,
+	 <p><a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Back to the setup page</a></p></div>`,
 		html.EscapeString(title), html.EscapeString(said))
 }
 

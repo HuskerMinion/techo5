@@ -12,7 +12,7 @@ import (
 // replyPlayerSection is where the assistant's spoken replies play: this device, or another Home
 // Assistant media player.
 func replyPlayerSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "replyplayer", "Replies play on")
+	sectionOpen(w, "replyplayer", "Replies play on")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "replyplayer")
 	fmt.Fprintf(w, `<label for="player">Media player</label>
@@ -26,7 +26,8 @@ func replyPlayerSection(w http.ResponseWriter, token string) {
 	  the length of the reply plus a couple of seconds. If the player is in the same room, turn
 	  continued conversation off. A player that does not answer is skipped for that reply, and it plays
 	  here.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, html.EscapeString(config.Get().Brain.ReplyPlayer))
+	 <p><button type="submit">Save</button></p></form>`, html.EscapeString(config.Get().Brain.ReplyPlayer))
+	sectionClose(w)
 }
 
 // saveReplyPlayer keeps the player, or says why it is not one.

@@ -48,7 +48,7 @@ const wakeSendPlaceholder = "http://192.168.1.20:8765"
 
 func wakeClipsSendSection(w http.ResponseWriter, token string) {
 	cur := config.Get().Wake.Send
-	fieldsetOpen(w, "wakeclips", "Send wake clips to")
+	sectionOpen(w, "wakeclips", "Send wake clips to")
 	keeping := wakeClipsKept()
 	on, off := "", ` selected`
 	if keeping {
@@ -120,7 +120,7 @@ func wakeClipsSendSection(w http.ResponseWriter, token string) {
 		}
 		wakeSendState(w)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 // wakeSendState says what sending is doing.

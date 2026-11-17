@@ -91,7 +91,7 @@ func themeSection(w http.ResponseWriter, token string) {
 		return
 	}
 	sc := config.Get().Screen
-	fieldsetOpen(w, "themes", "Themes")
+	sectionOpen(w, "themes", "Themes")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "themes")
 	fmt.Fprint(w, `<label for="darktheme">Dark theme</label><select id="darktheme" name="dark">`)
@@ -164,7 +164,8 @@ func themeSection(w http.ResponseWriter, token string) {
 	     } catch (e) { say.textContent = 'The colors could not be worked out.'; }
 	   });
 	 })();
-	 </script></fieldset>`)
+	 </script>`)
+	sectionClose(w)
 }
 
 // saveThemes saves the dark and light themes and the mode.

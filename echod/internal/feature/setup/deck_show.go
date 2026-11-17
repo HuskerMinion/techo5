@@ -21,7 +21,7 @@ import (
 func deckSection(w http.ResponseWriter, token string) {
 	d := config.Get().Deck
 	st := deck.Get().OBS()
-	fieldsetOpen(w, "deck", "Deck")
+	sectionOpen(w, "deck", "Deck")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Buttons for OBS Studio on this screen. Swipe up from the bottom
 	  edge of the clock to open it, swipe down to put it away; swipe left and right for the pages.</p>`)
 
@@ -101,7 +101,8 @@ func deckSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p class="note"><strong>Scene or input</strong> is the scene to switch to, the input to mute, or
 	 the scene a source is in. <strong>Icon</strong> is a Material Design icon name (pictogrammers.com/library/mdi),
 	 like <code>microphone-off</code>; empty uses the button's own. Home Assistant can press a button with the
-	 <code>deck_press</code> action.</p></fieldset>`)
+	 <code>deck_press</code> action.</p>`)
+	sectionClose(w)
 }
 
 func deckNames(w http.ResponseWriter, id string, names []string) {
