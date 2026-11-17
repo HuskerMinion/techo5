@@ -15,6 +15,31 @@ import (
 // afford. This costs 6.4% of a core, and only while something is playing.
 const cancelTaps = 1024
 
+// cancelTapsJack is the filter's reach while the sound leaves by the headphone jack, 256 ms. A
+// powered speaker on the jack sits across the room, not a few centimeters from the microphones, and
+// its echo comes back late and spread out: measured on a Dot driving a portable speaker over AUX
+// (2026-11-15, white noise, the seven microphones averaged), the path peaks at 22-33 ms and holds 90%
+// of its energy by 88 ms and 99% by 185 ms. An ideal filter takes 7 dB off it at 1024 taps, 13 at
+// 2048 and 19 at 4096, while a fixed delay in front of 1024 taps buys only 1.5 dB: the filter was too
+// short, not too late. The capture replayed through this filter, six seconds of noise, gave 8.6, 14.5
+// and 15.4 dB, the last still rising. On the device, replies and sounds had 6-8 dB taken off before,
+// and a song 20.8 after. The filter's cost grows with its length, so this is about four times
+// cancelTaps' 6.4% of a core, and only while the jack plays, on the builds where longJack is set.
+const cancelTapsJack = 4096
+
+// LongEchoPath reports whether playback currently leaves by a path whose echo needs cancelTapsJack:
+// the speaker package sets it to "the output is the headphone jack". Nil, as in tests and tools that
+// never start a speaker, keeps cancelTaps. Read when a run starts, never during one.
+var LongEchoPath func() bool
+
+// tapsWanted is the filter length for the run about to start.
+func tapsWanted() int {
+	if longJack && LongEchoPath != nil && LongEchoPath() {
+		return cancelTapsJack
+	}
+	return cancelTaps
+}
+
 // cancelMu is how fast the filter adapts. It still takes 10 dB off the music within half a second of a
 // reply, and keeps what it learned between replies, so the first second is not where it matters.
 //
@@ -50,7 +75,11 @@ const refHold = Rate
 // once measured exactly as well as seven cancellers averaged, and 5 dB better than the center microphone
 // alone. Which path it reads is cancelInput's choice.
 type canceller struct {
-	filter *aec.Canceller
+	// filter is swapped by fitTaps from the capture loop while SetAdapting reaches it from elsewhere.
+	filter atomic.Pointer[aec.Canceller]
+
+	// adapting is what SetAdapting last asked for, so a filter built by fitTaps starts the same way.
+	adapting atomic.Bool
 
 	// ext is WebRTC's canceller in a helper process (webrtc.go), used instead of filter while it is
 	// set and healthy. engine names which one the user asked for.
@@ -81,7 +110,29 @@ func newCanceller() *canceller {
 		slog.Error("echo cancellation unavailable", "err", err)
 		return nil
 	}
-	return &canceller{filter: f, engine: "builtin"}
+	c := &canceller{engine: "builtin"}
+	c.filter.Store(f)
+	c.adapting.Store(f.Adapting())
+	return c
+}
+
+// fitTaps rebuilds the filter at taps long when it is another length, keeping whether it learns. What
+// it had learned goes: a new length comes with a new output, and the path it knew is not this one.
+// Called only as a run starts, so no block is ever canceled by half a filter.
+func (c *canceller) fitTaps(taps int) {
+	old := c.filter.Load()
+	if old.Taps() == taps {
+		return
+	}
+	f, err := aec.New(aec.Config{Taps: taps, Mu: cancelMu})
+	if err != nil {
+		slog.Error("echo cancellation: keeping the filter as it is", "taps", taps, "err", err)
+		return
+	}
+	f.SetAdapting(c.adapting.Load())
+	c.filter.Store(f)
+	f.SetAdapting(c.adapting.Load()) // a SetAdapting between the two lines above reached the old filter
+	slog.Info("echo cancellation filter length", "from", old.Taps(), "to", taps)
 }
 
 // setEngine picks the canceller: "builtin" is the LMS filter above, "webrtc" the helper process.
@@ -119,11 +170,12 @@ func (c *canceller) process(mic, ref []int16) ([]int16, float64, error) {
 		c.ext = nil
 		c.engine = "builtin"
 	}
-	out, err := c.filter.Process(mic, ref)
+	f := c.filter.Load()
+	out, err := f.Process(mic, ref)
 	if err != nil {
 		return nil, 0, err
 	}
-	return out, c.filter.ERLE(), nil
+	return out, f.ERLE(), nil
 }
 
 // apply returns mic, one fixed path (see cancelInput), with the echo removed, or nil when there is
@@ -155,8 +207,12 @@ func (c *canceller) apply(raw []byte, mic []int16) []int16 {
 	}
 
 	if !c.active.Swap(true) {
-		slog.Info("echo cancellation running", "engine", c.engine, "taps", cancelTaps,
-			"ref_dbfs", blockDBFS(c.ref), "mic_dbfs", blockDBFS(mic))
+		c.fitTaps(tapsWanted())
+		attrs := []any{"engine", c.engine, "ref_dbfs", blockDBFS(c.ref), "mic_dbfs", blockDBFS(mic)}
+		if c.engine == "builtin" {
+			attrs = append(attrs, "taps", c.filter.Load().Taps()) // WebRTC's canceller has its own
+		}
+		slog.Info("echo cancellation running", attrs...)
 	}
 
 	out, erleDB, err := c.process(mic, c.ref)
@@ -274,6 +330,7 @@ func (s *Source) CancelEngine() string {
 // not change because somebody spoke.
 func (s *Source) SetAdapting(on bool) {
 	if s.cancel != nil {
-		s.cancel.filter.SetAdapting(on)
+		s.cancel.adapting.Store(on)
+		s.cancel.filter.Load().SetAdapting(on)
 	}
 }
