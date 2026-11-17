@@ -108,6 +108,8 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			rows = append(rows, settingRow{id: "idledim", label: tr("dim_after_idle"), sub: tr("down_to_dimmest_until_touched_spoken_to_or_somebody_near"),
 				kind: ctlChoice, value: idleDims[idleDimIndex()].label})
 		}
+		rows = append(rows, settingRow{id: "idleoff", label: tr("screen_off_after_idle"), sub: tr("lights_again_when_touched_or_spoken_to"),
+			kind: ctlChoice, value: awayLabel(awayChoices[idleOffIndex()])})
 		// Beside the light's own rows: it is about who else may put the screen out (screen_room.go). The
 		// label is Screen ignores room light commands cut to what fits on the Spot, and the line under it
 		// says only what the setting does, which is true whether or not Home Assistant already exposed
@@ -805,6 +807,8 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: tr("answer_time"), opts: answerTimeOptions(), cur: answerTimeIndex()}, true
 	case "idledim":
 		return pickerView{title: tr("dim_after_idle"), opts: idleDimOptions(), cur: idleDimIndex()}, true
+	case "idleoff":
+		return pickerView{title: tr("screen_off_after_idle"), opts: awayLabels(), cur: idleOffIndex()}, true
 	case "timerstyle":
 		return pickerView{title: tr("timers"), opts: timerStyleOptions(), cur: timerStyleIndex()}, true
 	case "turnstyle":
@@ -965,6 +969,8 @@ func (d *Display) choose(id string, i int) {
 		setAnswerTime(d.answerTime, i)
 	case "idledim":
 		d.setIdleDim(i)
+	case "idleoff":
+		d.setIdleOff(i)
 	case "callring":
 		if i >= 0 && i < len(phone.RingSounds) {
 			go phone.Get().SetRingSound(phone.RingSounds[i])
@@ -1442,7 +1448,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "idleoff", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap", "callscreen", "musiclayout":
 		d.openPicker(id)
 	}

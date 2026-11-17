@@ -221,6 +221,7 @@ var registered = []string{
 	"screen_weekend_night_end",
 	"screen_weekend_night_start",
 	"screen_now_playing",
+	"screen_off_after_idle",
 	"screen_power",
 	"screen_theme",
 	"screen_skin",

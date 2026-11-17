@@ -862,6 +862,14 @@ other Shows don't have the switches.
   nobody seen near, the screen fades down to its **Dimmest** share of the brightness. A touch, a turn
   or somebody coming near brings it straight back. Not at night, which has its own rules, and not
   while a call, an alarm, a timer or the settings are up.
+- **Screen off after idle** (Show and Spot, Never by default; Settings > Display, or **Screen off
+  after idle** in Home Assistant): after 1 to 60 minutes with no touch, no voice turn and, with
+  Presence detection on, nobody seen near, the screen goes out. It needs no camera. A tap or the wake
+  word lights it again, and it waits the full time again from then. Not at night, and not while a
+  call, an alarm, a timer, a video or the settings are up. It works on the device, so it sees every
+  touch: a Home Assistant timer on the **Screen** light can't, and would put the screen out while
+  somebody is using it. A screen turned off from Home Assistant is left as it is: the wake word doesn't light it.
+  With **Dim after idle** set shorter, the screen dims first and goes out later.
 - **Font**: the font of every word the screen draws: the clock, the date, the weather, the settings
   and the rest (not the icons). *Go*, the screen's own and the default, *Inter*, *MuseoModerno*,
   *Exo*, *Overpass*, *Saira*, *Comic Neue*, *Open Sans*, *Google Sans Flex* or *Go Mono*. Each is sized so a line

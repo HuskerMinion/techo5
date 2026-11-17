@@ -180,7 +180,9 @@ type Display struct {
 	// camDot and idleRing are the quieter rims of #431 (rimdot_spot.go).
 	camDot   *esphome.Select
 	idleRing *esphome.Switch
-	lang     *esphome.Select
+	// idleOffSel is Screen off after idle (idle_off.go).
+	idleOffSel *esphome.Select
+	lang       *esphome.Select
 
 	mu      sync.Mutex
 	on      bool
@@ -420,6 +422,7 @@ func build() *Display {
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.muteRing = muteRingSwitch(d.wake)
 	d.camDot, d.idleRing = cameraDotSelect(d.wake), idleRingSwitch(d.wake)
+	d.idleOffSel = idleOffSelect(d)
 	d.nightHours = nightHoursSelect(d)
 	d.nightStart, d.nightEnd = nightEndSelect(d, true), nightEndSelect(d, false)
 	d.weekendStart, d.weekendEnd = weekendEndSelect(d, true), weekendEndSelect(d, false)
@@ -496,7 +499,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
 	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
-		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
+		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw, d.idleOffSel}
 }
 
 // Restore lights the panel the way it was left.
@@ -519,6 +522,7 @@ func (d *Display) Restore(c config.Config) {
 	setMuteRingSubtle(d.muteRing, c.Screen.MuteRingSubtle)
 	setCameraDotWatchedOnly(d.camDot, c.Screen.CameraDotWatchedOnly)
 	setIdleRing(d.idleRing, !c.Screen.NoIdleRing)
+	d.idleOffSel.Set(idleOffName(awayChoices[idleOffIndex()]))
 	d.nightHoursChanged()
 	d.atNight.Set(atNightOptions[atNightIndex()])
 	d.nightStyle.Set(nightStyleOptions[nightStyleIndex()])

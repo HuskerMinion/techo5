@@ -115,6 +115,10 @@ type Screen struct {
 	// turn or anybody seen near it, 0 for never (#275).
 	DimAfterMinutes int `json:"dim_after_minutes,omitempty"`
 
+	// OffAfterMinutes puts the screen out once it has gone that long without a touch, a turn or, with
+	// presence detection on, anybody seen near it, 0 for never. A tap or the wake word lights it again.
+	OffAfterMinutes int `json:"off_after_minutes,omitempty"`
+
 	// ClockPosition is where the home screen's clock sits: empty for the center, "bottom-left",
 	// "bottom-center" or "bottom-right" on a Show, "bottom" on the Spot; DateColor the date's color,
 	// empty for the theme's (display/clock_position.go, clock_layout.go).
@@ -462,6 +466,10 @@ func (w ScreenWriter) GlanceWithMusic(v string) error {
 
 func (w ScreenWriter) DimAfterMinutes(v int) error {
 	return w.st.Update(func(c *Config) { c.Screen.DimAfterMinutes = max(v, 0) })
+}
+
+func (w ScreenWriter) OffAfterMinutes(v int) error {
+	return w.st.Update(func(c *Config) { c.Screen.OffAfterMinutes = max(v, 0) })
 }
 
 func (w ScreenWriter) AnswerSeconds(v int) error {
