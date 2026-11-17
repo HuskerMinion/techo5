@@ -194,6 +194,10 @@ func (d *Detect) setSend(ctx context.Context, change func(cur config.WakeSend) (
 	if err := config.Set().SendUpdate(func(w *config.WakeSend) { *w = next }); err != nil {
 		return fmt.Errorf("could not keep it: %w", err)
 	}
+	if cur.Target == config.SendWakesmith && (next.Target != config.SendWakesmith || next.URL != cur.URL) {
+		// Takes were recorded for that wakesmith: they don't wait for another target, or another address.
+		d.sender.c.dropTakes("Send wake clips to no longer goes to that wakesmith")
+	}
 	if next.URL != cur.URL {
 		// The refused certificate belonged to the old address; Trust must not show it for the new one.
 		d.sender.mu.Lock()

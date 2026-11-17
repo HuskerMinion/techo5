@@ -1489,8 +1489,10 @@ func (r *renderer) playingButton() image.Rectangle {
 func (r *renderer) footer(s scene) {
 	y := r.h - r.s(24)
 	switch {
+	case s.setupAsking && s.takes.Up() && s.takes.Run:
+		r.text(r.tiny, tr("record_wake_word"), r.margin, y, amber)
 	case s.setupAsking && s.takes.Up():
-		r.text(r.tiny, "setup: takes of a word", r.margin, y, amber)
+		r.text(r.tiny, tr("record_takes_of_a_word"), r.margin, y, amber)
 	case s.setupAsking:
 		r.text(r.tiny, tr("ui_setup_footer_asking"), r.margin, y, amber)
 	case s.missed != "":

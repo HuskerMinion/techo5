@@ -223,12 +223,16 @@ type Feature struct {
 	// starts from: memory only, a new start is the defaults again.
 	run                *run
 	lastRun            RunResult
+	refused            RunResult // the last start from the screen that could not be made
 	lastCount, lastGap int
 
 	// keepTake is where a run's takes go, and wakeWord the word they are of and the front end it is
 	// scored on: both feature/detect's, set as it starts (SetWakeWord), since this package cannot call it.
 	keepTake atomic.Pointer[func(Capture)]
 	wakeWord atomic.Pointer[func() (word, front string)]
+	// wordNow is the word as wakeWord last said it (WakeWordChanged), for RunBlocked, which the screen
+	// asks on every frame of its settings and which must not wait on the wake word engine for it.
+	wordNow atomic.Pointer[string]
 
 	// running and tailUntil are read on every frame of the wake word's stream to Home Assistant
 	// (through voice.YieldTo) and by detect for every word heard, so they are not behind mu. running is
@@ -357,11 +361,11 @@ func (f *Feature) arm(word string, kind Kind, session string, r *run) error {
 	switch {
 	case !layout.HasMicrophone():
 		return errors.New("this device has no microphones")
-	case !f.dev.switchedOn():
+	case !f.dev.switchedOn() && !(r != nil && session == ""):
 		return errOff
 	}
 	f.watch()
-	if why := f.refusal(); why != "" {
+	if why := f.refusalFor(r != nil && session == ""); why != "" {
 		return errors.New(why)
 	}
 	if f.dev.turnOpen() {
@@ -379,6 +383,10 @@ func (f *Feature) arm(word string, kind Kind, session string, r *run) error {
 	case f.phase == Recording:
 		f.mu.Unlock()
 		return errors.New("a recording is running; stop it first")
+	case r != nil && f.phase == Kept:
+		// A run's takes go to the clip store, but asking for one would let go of these (forget).
+		f.mu.Unlock()
+		return errors.New(RunTakesKept.Text())
 	case f.phase == Armed:
 		// Another word is another card: a Start tapped on the one with the old word on it starts
 		// nothing. The minute goes on as it was.
@@ -471,12 +479,16 @@ func (f *Feature) waitPress(id uint64) {
 // refusal is why a recording cannot start, or must stop waiting for the press: empty when it can.
 // Everything it asks fails closed, but for the recorder's own notes (asked for, started, stopped): they
 // are not something playing, for as long as they may be heard (ownHeard).
-func (f *Feature) refusal() string {
+func (f *Feature) refusal() string { return f.refusalFor(f.atDevice()) }
+
+// refusalFor is refusal for a run started on the device's own screen (atDevice), which needs no switch,
+// or anything else.
+func (f *Feature) refusalFor(atDevice bool) string {
 	t := f.dev.now()
 	f.mu.Lock()
 	own := t.Before(f.ownUntil)
 	f.mu.Unlock()
-	if !f.dev.switchedOn() {
+	if !f.dev.switchedOn() && !atDevice {
 		return "Record takes of a word was switched off"
 	}
 	// A mute that cannot be read is taken as one: the microphones are what this is about.
@@ -656,6 +668,15 @@ func (f *Feature) Discard(why string) {
 	}
 }
 
+// atDevice is whether what the recorder has is a run started on the device's own screen: Start there
+// is the press and the consent at once, so the Record takes of a word switch, which is about what a
+// browser may ask for, does not hold it back.
+func (f *Feature) atDevice() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.phase != Idle && f.session == "" && f.run != nil
+}
+
 // DiscardPage is the setup page throwing away what it asked for, as it closes: everything but a run
 // started on the device's own screen, which the page has no part in.
 func (f *Feature) DiscardPage(why string) {
@@ -770,11 +791,11 @@ func (f *Feature) watch() {
 		announce.Get().Changed.Listen(func(struct{}) { poke() })
 		micsilent.Changed.Listen(func(bool) { poke() })
 		// The switch going off throws away the takes too, not only a recording: it is the owner taking
-		// the permission back.
+		// the permission back. Not a run started on the screen, which never needed it.
 		security.Get().Changed.Listen(func(struct{}) {
 			poke()
 			if !f.dev.switchedOn() {
-				f.Discard("Record takes of a word was switched off")
+				f.DiscardPage("Record takes of a word was switched off")
 			}
 		})
 	})

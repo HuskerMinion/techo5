@@ -74,7 +74,7 @@ func TestARunNeedsTheSwitchWakesmithAndAWakeWord(t *testing.T) {
 	if err := f.StartRun(20, 3); err == nil || err.Error() != "Set Send wake clips to wakesmith first" {
 		t.Errorf("started with no wakesmith: %v", err)
 	}
-	if r := f.LastRun(); !r.Refused {
+	if r := f.LastRefusal(); !r.Refused {
 		t.Error("the refusal was not kept for the screen to say")
 	}
 	d.wakesmith.Store(true)
@@ -95,6 +95,120 @@ func TestARunNeedsTheSwitchWakesmithAndAWakeWord(t *testing.T) {
 	}
 	if f.Card().Up() || f.Holding() {
 		t.Error("a refused run went on anyway")
+	}
+}
+
+// Start on the device's own screen is the consent: a run starts there with Record takes of a word off,
+// and the switch does not end it. Asked for on the setup page, the switch is needed, as for any
+// recording a browser asks for.
+func TestTheScreensStartNeedsNoSwitchAndThePagesDoes(t *testing.T) {
+	d, f, kept := runDevice(t)
+	d.on.Store(false)
+	if b := f.RunBlocked(); b != RunReady {
+		t.Errorf("the screen is blocked %v with the switch off", b)
+	}
+	if b := f.PageRunBlocked(); b != RunSwitchOff {
+		t.Errorf("the page is blocked %v with the switch off", b)
+	}
+	if err := f.ArmRun(5, 2, "browser"); err == nil || err.Error() != errOff.Error() {
+		t.Errorf("the page asked with the switch off: %v", err)
+	}
+	if err := f.StartRun(5, 2); err != nil {
+		t.Fatalf("the screen's Start with the switch off: %v", err)
+	}
+	m := d.listening(t)
+	f.poke <- struct{}{}
+	d.capture(t, m, 2, true)
+	took(t, kept)
+	if st := f.State(""); st.Phase != Recording {
+		t.Fatalf("the run ended with the switch off: %v", st.Phase)
+	}
+	f.DiscardPage("Record takes of a word was switched off") // what the switch going off does
+	if st := f.State(""); st.Phase != Recording {
+		t.Fatal("the switch going off ended the screen's run")
+	}
+	f.Stop()
+	settled(t, f, Idle)
+}
+
+// A device whose clock is not set yet stamps nothing 1970: no run starts until it is.
+func TestARunWaitsForTheClock(t *testing.T) {
+	d, f, _ := runDevice(t)
+	d.mu.Lock()
+	d.clock = time.Unix(600, 0)
+	d.mu.Unlock()
+	if b := f.RunBlocked(); b != RunClockNotSet {
+		t.Errorf("blocked %v with the clock at 1970", b)
+	}
+	if err := f.StartRun(5, 2); err == nil || err.Error() != "The clock isn't set yet" {
+		t.Errorf("started with no clock: %v", err)
+	}
+}
+
+// Takes of a word kept for the setup page to download are not let go of by a run: it waits until they
+// are downloaded or thrown away, and says so.
+func TestARunLeavesKeptTakesAlone(t *testing.T) {
+	d, f, _ := runDevice(t)
+	m := d.recording(t, f, "Hey Jarvis")
+	d.takesOf(t, m, 2)
+	f.Stop()
+	settled(t, f, Kept)
+	if b := f.RunBlocked(); b != RunTakesKept {
+		t.Errorf("blocked %v with takes kept", b)
+	}
+	if err := f.ArmRun(5, 2, "browser"); err == nil {
+		t.Error("a run was asked for over the kept takes")
+	}
+	if err := f.StartRun(5, 2); err == nil {
+		t.Error("a run started over the kept takes")
+	}
+	if st := f.State("browser"); st.Phase != Kept || st.Takes != 2 {
+		t.Errorf("the kept takes are now %+v", st)
+	}
+}
+
+// A Start refused while a run goes on is kept apart, and says nothing about the run.
+func TestAStartRefusedDuringARunLeavesItsResult(t *testing.T) {
+	d, f, kept := runDevice(t)
+	if err := f.StartRun(5, 2); err != nil {
+		t.Fatal(err)
+	}
+	m := d.listening(t)
+	d.capture(t, m, 2, true)
+	took(t, kept)
+	if err := f.StartRun(5, 2); err == nil {
+		t.Fatal("a second run started over the first")
+	}
+	if r := f.LastRun(); r.Refused || r.Of != 0 {
+		t.Errorf("the refusal became the run's result: %+v", r)
+	}
+	if r := f.LastRefusal(); !r.Refused || r.Why == "" {
+		t.Errorf("the refusal was not kept: %+v", r)
+	}
+	f.Stop()
+	settled(t, f, Idle)
+	if r := f.LastRun(); r.Kept != 1 || r.Of != 5 || r.Refused {
+		t.Errorf("the run ended as %+v", r)
+	}
+}
+
+// RunBlocked reads the copy of the wake word, taken again only when it changes.
+func TestRunBlockedReadsTheCopyOfTheWord(t *testing.T) {
+	_, f, _ := runDevice(t)
+	calls := 0
+	word := "hey_jarvis_v2"
+	f.SetWakeWord(func() (string, string) { calls++; return word, "tflm" }, func(Capture) {})
+	calls = 0
+	for range 10 {
+		f.RunBlocked()
+	}
+	if calls != 0 {
+		t.Errorf("RunBlocked asked for the word %d times", calls)
+	}
+	word = ""
+	f.WakeWordChanged()
+	if b := f.RunBlocked(); b != RunNoWakeWord {
+		t.Errorf("blocked %v once the word went", b)
 	}
 }
 

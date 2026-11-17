@@ -105,22 +105,24 @@ func recordWordRows() []settingRow {
 const recordWordRefusedFor = 15 * time.Second
 
 // recordWordSub is what Record wake word says under its name: what has to be set first, a start just
-// refused, how the last run went, or where the takes go.
+// refused, how the last run went, or where the takes go. Start here needs no Record takes of a word
+// switch: the tap at the device is the consent (takes.RunBlocked).
 func recordWordSub() string {
 	rec := takes.Get()
 	switch rec.RunBlocked() {
-	case takes.RunSwitchOff:
-		return tr("ui_record_turn_on_takes_first")
 	case takes.RunNotWakesmith:
 		return tr("ui_record_set_wakesmith_first")
+	case takes.RunClockNotSet:
+		return tr("ui_record_clock_not_set")
 	case takes.RunNoWakeWord:
 		return tr("ui_record_no_wake_word")
+	case takes.RunTakesKept:
+		return tr("ui_record_takes_kept_first")
 	}
-	last := rec.LastRun()
-	switch {
-	case last.Refused && time.Since(last.At) < recordWordRefusedFor:
+	if r := rec.LastRefusal(); r.Refused && time.Since(r.At) < recordWordRefusedFor {
 		return tr("ui_record_busy")
-	case !last.Refused && last.Of > 0:
+	}
+	if last := rec.LastRun(); last.Of > 0 {
 		return fmt.Sprintf(tr("ui_record_last_run"), last.Kept, last.Of)
 	}
 	return tr("ui_record_sends_to_wakesmith")

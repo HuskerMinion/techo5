@@ -144,7 +144,7 @@ loop:
 // nothing to do with them and must stay stoppable; the rest have the microphones a better claim, or
 // take them away.
 func (f *Feature) over() (why string, keep bool) {
-	if !f.dev.switchedOn() {
+	if !f.dev.switchedOn() && !f.atDevice() {
 		return "Record takes of a word was switched off", false
 	}
 	if m, err := f.dev.muted(); err != nil || m {

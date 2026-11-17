@@ -1760,7 +1760,8 @@ What is sent, and when:
   turn sending on or off once an address is saved on the setup page, and can't set the address or the
   token.
 - **Turning Keep wake clips off deletes every clip on the device, the ones not yet sent with them.**
-  Takes from **Record wake word** are not wake clips and stay until they reach wakesmith.
+  Takes from **Record wake word** waiting to be sent go with them, unless **Send wake clips to** is
+  **wakesmith**: then they stay until they reach it.
 
 #### Record wake word
 
@@ -1769,9 +1770,12 @@ an example of the word. Start it with **Record wake word** under **Sound & Voice
 Show or a Spot (choose **Takes to record**, 5 to 50, 20 to begin with, and **Seconds between takes**, 2
 to 10, 3 to begin with, then **Start**), or under **Record takes of a word** on the setup page, which on
 a Dot is the only way in: the device then waits a minute for **Start** on its screen or a press of the
-action button. It needs **Record takes of a word** switched on (Privacy & Security) and **Send wake
-clips to** set to **wakesmith**; until then it says which one to set first. The count and the gap are
-remembered until the device restarts.
+action button. It needs **Send wake clips to** set to **wakesmith** and the device's clock set; until
+then it says which to set first. **Start** in the device's own settings is the consent by itself; a run
+asked for on the setup page also needs **Record takes of a word** switched on (Privacy & Security), as
+any recording a browser asks for does. While takes of a word recorded on the setup page wait there to be
+downloaded, a run waits until they are downloaded or thrown away. The count and the gap are remembered
+until the device restarts.
 
 Before each take the device beeps; say the wake word after the beep. The screen says which take it is
 ("Take 7 of 20") and when to say it, and has **Stop**; a Dot's ring pulses amber for the whole run.
@@ -1785,7 +1789,10 @@ Each take is the frame the wake word scores (after the noise reduction while it 
 the room either side, cut to one take, and sent the same way as a clip, with the same address checks,
 pacing and backoff, to wakesmith only (not Tater Trainer or Custom), whether or not **Keep wake clips**
 is on. They wait in a `take/` folder beside the clip folders until they are sent, the newest 100 at
-most, and each is deleted once wakesmith has it. Their `meta` is `name`, `device`, `"kind": "take"`,
+most, and each is deleted once wakesmith has it, or refuses it for good (400, 415 or 422). All the
+takes still waiting are deleted when **Send wake clips to** moves off wakesmith or to another address,
+when **Record takes of a word** is turned off, and when **Keep wake clips** is turned off while takes
+have no wakesmith to go to. Their `meta` is `name`, `device`, `"kind": "take"`,
 `at`, `word` (the wake word's model name, what a clip sends as `model`), `index` (which take of the run,
 from 1), `run` (one id for the whole run), `frame` (`"heard"` with the noise reduction on, `"plain"`
 with it off) and `front` (the wake word's front end: `"tflm"`, `"zserge"` or `"oww"`).

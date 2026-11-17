@@ -214,7 +214,7 @@ func TestKeepWakeClipsIsOnThePageAndOffNeedsTheBoxTicked(t *testing.T) {
 	t.Cleanup(func() { setKeepClips = was })
 
 	body := get(f, "/setup?tab=voice", c).Body.String()
-	for _, want := range []string{`name="keep"`, "Delete every clip on this device", "deletes every kept clip", "Tailscale network"} {
+	for _, want := range []string{`name="keep"`, "Delete the wake clips on this device", "deletes every kept clip", "Tailscale network"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the section has no %q", want)
 		}
@@ -228,7 +228,7 @@ func TestKeepWakeClipsIsOnThePageAndOffNeedsTheBoxTicked(t *testing.T) {
 	}
 	// Off without the box: refused, and nothing changes.
 	p := post(t, f, c, url.Values{"what": {"wakeclips-keep"}, "keep": {"off"}}).Query().Get("problem")
-	if !strings.Contains(p, "tick Delete every clip") || !fk.kept || len(calls) != 1 {
+	if !strings.Contains(p, "tick Delete the wake clips") || !fk.kept || len(calls) != 1 {
 		t.Fatalf("off without the box: %q kept=%v calls=%v", p, fk.kept, calls)
 	}
 	// Off with it: done.

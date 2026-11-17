@@ -463,6 +463,9 @@ func (s *sender) drain(ctx context.Context) {
 			failures++
 			slog.Warn("wake clip: the trainer refused it", "clip", item.meta.Kind+"/"+item.name, "why", why)
 			s.settle(item, func(m *clipMeta) { m.SendFailed = failedStatus(why) }, n-1)
+			if item.meta.Kind == takeKind {
+				s.c.dropTake(item.wav) // a take wakesmith will never take is not kept either
+			}
 			if failures >= sendFailuresMax {
 				why = fmt.Sprintf("the trainer refused %d clips in a row (%s): check the address and settings", failures, why)
 				s.halt(cfg, why)
@@ -788,12 +791,12 @@ func cleanErr(err error) string {
 // addrInText is an IPv4 address, with a port when it has one, in an error's text.
 var addrInText = regexp.MustCompile(`\b\d{1,3}(\.\d{1,3}){3}(:\d+)?\b`)
 
-// abortSend cuts short the upload under way, if any, as wake clips are purged: not a take's, which the
-// purge leaves.
-func (s *sender) abortSend() {
+// abortSend cuts short the upload under way, if there is one of a kind which says yes to: a clip's as the
+// clips are purged, a take's as the takes are let go of.
+func (s *sender) abortSend(which func(kind string) bool) {
 	s.mu.Lock()
 	cancel := s.abort
-	if s.abortKind == takeKind {
+	if !which(s.abortKind) {
 		cancel = nil
 	}
 	s.mu.Unlock()

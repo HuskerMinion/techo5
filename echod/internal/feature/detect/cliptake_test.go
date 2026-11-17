@@ -21,6 +21,18 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 )
 
+// takesFollowTheRig has the rig's clips ask the rig's settings whether takes still go to wakesmith.
+func (r *sendRig) takesFollowTheRig() *sendRig {
+	r.c.wantsTakes = func() bool { return r.cfg.Target == config.SendWakesmith && r.cfg.On() }
+	return r
+}
+
+// takesLeft is how many takes are on the device.
+func (r *sendRig) takesLeft() int {
+	files, _ := filepath.Glob(filepath.Join(r.c.dir, takeKind, "*.wav"))
+	return len(files)
+}
+
 // take keeps take n of a run, n seconds after the rig's start, and says where.
 func (r *sendRig) take(n int) string {
 	r.t.Helper()
@@ -220,8 +232,11 @@ func TestATakeThatCannotGoIsBackedOffFromWithKeepOff(t *testing.T) {
 	tr.mu.Unlock()
 	r.stopAt, r.waits = 0, nil
 	r.drainBy(5 * time.Second)
-	if m := r.meta(wav); m.SendFailed != http.StatusUnprocessableEntity {
-		t.Errorf("a refused take is %+v", m)
+	if _, err := os.Stat(wav); err == nil {
+		t.Error("a take wakesmith refused for good is still on the device")
+	}
+	if _, err := os.Stat(sidecar(wav)); err == nil {
+		t.Error("a refused take's sidecar is still on the device")
 	}
 	n := len(tr.got())
 	r.drainBy(5 * time.Second)
@@ -249,10 +264,11 @@ func TestTakesGoOnlyToWakesmith(t *testing.T) {
 	}
 }
 
-// Turning Keep wake clips off deletes the clips and leaves the takes waiting to go, which are then sent.
+// Turning Keep wake clips off deletes the clips and, while wakesmith is where takes go, leaves the takes
+// waiting, which are then sent.
 func TestTurningKeepOffLeavesTheTakes(t *testing.T) {
 	var tr trainer
-	r := newSendRig(t, config.SendWakesmith, tr.serve(t).URL)
+	r := newSendRig(t, config.SendWakesmith, tr.serve(t).URL).takesFollowTheRig()
 	clipWav := r.clip("wake", 1, "m")
 	takeWav := r.take(2)
 	if _, n := r.s.next(r.cfg); n != 2 {
@@ -271,6 +287,90 @@ func TestTurningKeepOffLeavesTheTakes(t *testing.T) {
 	r.drainBy(5 * time.Second)
 	if got := tr.got(); len(got) != 1 || got[0]["kind"] != "take" {
 		t.Errorf("sent %v", got)
+	}
+}
+
+// With takes going nowhere (the target is not wakesmith), turning Keep wake clips off deletes them too.
+func TestTurningKeepOffWithNowhereForTakesDeletesThem(t *testing.T) {
+	for _, target := range []string{config.SendOff, config.SendTater, config.SendCustom} {
+		r := newSendRig(t, config.SendWakesmith, "http://127.0.0.1:1").takesFollowTheRig()
+		r.clip("wake", 1, "m")
+		r.take(2)
+		r.cfg.Target = target
+		r.c.enable(false)
+		if n := r.takesLeft(); n != 0 {
+			t.Errorf("%q: %d takes left after Keep went off", target, n)
+		}
+		if _, err := os.Stat(r.c.dir); err == nil {
+			t.Errorf("%q: folders left behind", target)
+		}
+	}
+}
+
+// Takes don't linger once they have nowhere to go: the target moving off wakesmith, or its address
+// changing, deletes them; saving wakesmith again at the same address does not.
+func TestTakesGoWhenTheTargetOrItsAddressChanges(t *testing.T) {
+	ctx := context.Background()
+	for _, c := range []struct {
+		name string
+		next config.WakeSend
+		left int
+	}{
+		{"saved again", config.WakeSend{Target: config.SendWakesmith, URL: "http://trainer.local:8765"}, 1},
+		{"another address", config.WakeSend{Target: config.SendWakesmith, URL: "http://other.local:8765"}, 0},
+		{"Tater", config.WakeSend{Target: config.SendTater, URL: "http://trainer.local:8789"}, 0},
+		{"Custom", config.WakeSend{Target: config.SendCustom, URL: "http://trainer.local:8765"}, 0},
+		{"Off", config.WakeSend{}, 0},
+	} {
+		d := setupSend(t)
+		if err := d.SetSend(ctx, config.WakeSend{Target: config.SendWakesmith, URL: "http://trainer.local:8765"}); err != nil {
+			t.Fatal(err)
+		}
+		d.sender.c.keepTake(takes.Capture{Run: "ab", Index: 1, Word: "w", At: time.Now(), PCM: []int16{1}})
+		if err := d.SetSend(ctx, c.next); err != nil {
+			t.Fatal(err)
+		}
+		files, _ := filepath.Glob(filepath.Join(d.sender.c.dir, takeKind, "*.wav"))
+		if len(files) != c.left {
+			t.Errorf("%s: %d takes left, want %d", c.name, len(files), c.left)
+		}
+	}
+}
+
+// Record takes of a word going from on to off deletes the takes waiting; it staying off, or coming on,
+// does not.
+func TestTheTakesSwitchGoingOffDeletesTheTakes(t *testing.T) {
+	r := newSendRig(t, config.SendWakesmith, "http://127.0.0.1:1")
+	r.take(1)
+	r.c.takesSwitched(false) // it was off: nothing changed
+	r.c.takesSwitched(true)
+	if n := r.takesLeft(); n != 1 {
+		t.Fatalf("%d takes left with the switch coming on", n)
+	}
+	r.c.takesSwitched(false)
+	if n := r.takesLeft(); n != 0 {
+		t.Errorf("%d takes left after the switch went off", n)
+	}
+}
+
+// Letting go of the takes cuts short a take's upload, never a clip's.
+func TestDroppingTheTakesCutsOnlyATakesUpload(t *testing.T) {
+	r := newSendRig(t, config.SendWakesmith, "http://127.0.0.1:1")
+	cut := ""
+	r.s.mu.Lock()
+	r.s.abort, r.s.abortKind = func() { cut = "wake" }, "wake"
+	r.s.mu.Unlock()
+	r.c.abortSend = r.s.abortSend
+	r.c.dropTakes("test")
+	if cut != "" {
+		t.Error("dropping the takes cut a clip's upload")
+	}
+	r.s.mu.Lock()
+	r.s.abort, r.s.abortKind = func() { cut = takeKind }, takeKind
+	r.s.mu.Unlock()
+	r.c.dropTakes("test")
+	if cut != takeKind {
+		t.Error("dropping the takes left a take's upload going")
 	}
 }
 
@@ -296,7 +396,7 @@ func TestKeepGoingOffBetweenTheQueueAndTheSendSkipsOnlyTheClip(t *testing.T) {
 // Keep wake clips going off cuts short a clip's upload, never a take's.
 func TestAPurgeDoesNotCutATakesUploadShort(t *testing.T) {
 	tr := trainer{hold: make(chan struct{})}
-	r := newSendRig(t, config.SendWakesmith, tr.serve(t).URL)
+	r := newSendRig(t, config.SendWakesmith, tr.serve(t).URL).takesFollowTheRig()
 	r.c.abortSend = r.s.abortSend
 	r.take(1)
 	done := make(chan struct{})

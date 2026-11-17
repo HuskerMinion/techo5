@@ -3,9 +3,10 @@ package takes
 // Record wake word: a counted run of takes of the device's own wake word, one after each short beep,
 // each sent to the owner's wakesmith as a positive example (feature/detect clipsend.go, kind "take").
 //
-// It is the recorder's, with everything that goes with it: the Record takes of a word switch, a start
-// at the device (Start in the screen's settings or on the card the setup page puts up, or the action
-// button on a Dot), the microphones held from the start to the end, gaps and all, so that no take opens
+// It is the recorder's, with everything that goes with it: a start at the device (Start in the
+// screen's settings or on the card the setup page puts up, or the action button on a Dot), the Record
+// takes of a word switch when the setup page asked for it (Start in the screen's own settings is the
+// consent by itself), the microphones held from the start to the end, gaps and all, so that no take opens
 // a turn, reaches Home Assistant's wake word stream or keeps a wake clip, and everything that throws a
 // recording away ending the run. What differs is the cutting: one capture at a time, a second of the
 // room before the beep and a few seconds after it, of which exactly one take is kept. A capture with
@@ -95,7 +96,9 @@ const (
 	RunNoMicrophone
 	RunSwitchOff
 	RunNotWakesmith
+	RunClockNotSet
 	RunNoWakeWord
+	RunTakesKept
 )
 
 // Text is the block in the setup page's words.
@@ -107,8 +110,12 @@ func (b RunBlock) Text() string {
 		return errOff.Error()
 	case RunNotWakesmith:
 		return "Set Send wake clips to wakesmith first"
+	case RunClockNotSet:
+		return "The clock isn't set yet"
 	case RunNoWakeWord:
 		return "no wake word is loaded yet; try again in a minute"
+	case RunTakesKept:
+		return "takes of a word are kept on this device for the setup page to download; download or throw them away first"
 	}
 	return ""
 }
@@ -126,26 +133,56 @@ type RunResult struct {
 func (f *Feature) SetWakeWord(word func() (word, front string), keep func(Capture)) {
 	f.wakeWord.Store(&word)
 	f.keepTake.Store(&keep)
+	f.WakeWordChanged()
 }
 
-// RunBlocked is why a run cannot be asked for, RunReady when it can.
+// WakeWordChanged is feature/detect saying the wake word was loaded, cleared or dropped: the copy
+// RunBlocked reads is taken again.
+func (f *Feature) WakeWordChanged() {
+	w := ""
+	if p := f.wakeWord.Load(); p != nil {
+		w, _ = (*p)()
+	}
+	f.wordNow.Store(&w)
+	f.Changed.Emit(struct{}{})
+}
+
+// The clock is set once it reads this year or later; before, a take would be stamped 1970 (the same
+// rule as the moment the sender counts from, feature/detect clipsendset.go).
+const clockSetYear = 2025
+
+// RunBlocked is why a run cannot be started on the device's own screen, RunReady when it can. Start
+// there is the press at the device and the consent, so the Record takes of a word switch is not asked;
+// a run asked for on the setup page is (PageRunBlocked). The screen asks this each frame of its
+// settings, so it reads only copies: nothing in it waits on the wake word engine.
 func (f *Feature) RunBlocked() RunBlock {
 	switch {
 	case !layout.HasMicrophone():
 		return RunNoMicrophone
-	case !f.dev.switchedOn():
-		return RunSwitchOff
 	case f.dev.toWakesmith == nil || !f.dev.toWakesmith():
 		return RunNotWakesmith
+	case f.dev.now().Year() < clockSetYear:
+		return RunClockNotSet
 	}
-	w, k := f.wakeWord.Load(), f.keepTake.Load()
-	if w == nil || k == nil {
+	if w := f.wordNow.Load(); w == nil || *w == "" || f.keepTake.Load() == nil {
 		return RunNoWakeWord
 	}
-	if word, _ := (*w)(); word == "" {
-		return RunNoWakeWord
+	f.mu.Lock()
+	kept := f.phase == Kept
+	f.mu.Unlock()
+	if kept {
+		return RunTakesKept
 	}
 	return RunReady
+}
+
+// PageRunBlocked is why a run cannot be asked for on the setup page: what RunBlocked says, and the
+// Record takes of a word switch before it, since a browser is asking.
+func (f *Feature) PageRunBlocked() RunBlock {
+	if layout.HasMicrophone() && !f.dev.switchedOn() {
+		return RunSwitchOff
+	}
+	return f.RunBlocked()
 }
 
 // ClampRun is a count and a gap in seconds made into ones a run takes.
@@ -183,12 +220,28 @@ func (f *Feature) LastRun() RunResult {
 	return f.lastRun
 }
 
-// plan is a run of count takes gap seconds apart, if one can be asked for. With op held.
-func (f *Feature) plan(count, gap int) (*run, error) {
-	if b := f.RunBlocked(); b != RunReady {
+// LastRefusal is the last start from the screen that could not be made, and why. Kept apart from
+// LastRun, so that a Start refused while a run goes on says nothing about that run.
+func (f *Feature) LastRefusal() RunResult {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.refused
+}
+
+// plan is a run of count takes gap seconds apart, if one can be asked for: on the screen, or with
+// page on the setup page. With op held.
+func (f *Feature) plan(count, gap int, page bool) (*run, error) {
+	b := f.RunBlocked()
+	if page {
+		b = f.PageRunBlocked()
+	}
+	if b != RunReady {
 		return nil, errors.New(b.Text())
 	}
-	word, front := (*f.wakeWord.Load())()
+	word, front := (*f.wakeWord.Load())() // asked afresh: the copy may be a moment behind
+	if word == "" {
+		return nil, errors.New(RunNoWakeWord.Text())
+	}
 	count, gap = ClampRun(count, gap)
 	f.mu.Lock()
 	f.lastCount, f.lastGap = count, gap
@@ -222,7 +275,7 @@ func (f *Feature) ArmRun(count, gap int, session string) error {
 	}
 	f.op.Lock()
 	defer f.op.Unlock()
-	r, err := f.plan(count, gap)
+	r, err := f.plan(count, gap, true)
 	if err != nil {
 		return err
 	}
@@ -234,7 +287,7 @@ func (f *Feature) ArmRun(count, gap int, session string) error {
 func (f *Feature) StartRun(count, gap int) error {
 	f.op.Lock()
 	err := func() error {
-		r, err := f.plan(count, gap)
+		r, err := f.plan(count, gap, false)
 		if err != nil {
 			return err
 		}
@@ -255,7 +308,7 @@ func (f *Feature) StartRun(count, gap int) error {
 	f.op.Unlock()
 	if err != nil {
 		f.mu.Lock()
-		f.lastRun = RunResult{Refused: true, Why: err.Error(), At: f.dev.now()}
+		f.refused = RunResult{Refused: true, Why: err.Error(), At: f.dev.now()}
 		f.mu.Unlock()
 		slog.Info("takes: a run of the wake word not started", "why", err)
 		f.Changed.Emit(struct{}{})
@@ -279,6 +332,31 @@ func framesIn(d time.Duration) int { return int(d / frameTime) }
 // which is a handful of seconds of levels.
 func (f *Feature) runTakes(ctx context.Context, id uint64, finish <-chan struct{}, r *run) {
 	frameCh, stop := f.dev.listen("takes")
+	t := time.NewTicker(check)
+	// Let go of the microphones however this ends: a panic must not leave them the recorder's, with no
+	// turn ever opening again. Done by hand on the way out below, and here only if that was never reached.
+	let := false
+	letGo := func() {
+		if let {
+			return
+		}
+		let = true
+		t.Stop()
+		stop()
+		f.release(id)
+	}
+	defer func() {
+		if let {
+			return
+		}
+		letGo()
+		f.mu.Lock()
+		if f.id == id {
+			f.phase, f.why, f.cancel, f.run = Idle, "the run failed", nil, nil
+		}
+		f.mu.Unlock()
+		f.Changed.Emit(struct{}{})
+	}()
 	f.note(startNotes...)
 
 	preN, listenN, echoN, gapN := framesIn(runPreRoll), framesIn(runListen), framesIn(runEcho), framesIn(r.gap)
@@ -290,7 +368,6 @@ func (f *Feature) runTakes(ctx context.Context, id uint64, finish <-chan struct{
 	take, kept, misses := 1, 0, 0
 
 	last := f.dev.now()
-	t := time.NewTicker(check)
 	why := ""
 	look := func() bool {
 		if w, _ := f.over(); w != "" {
@@ -388,9 +465,7 @@ loop:
 			}
 		}
 	}
-	t.Stop()
-	stop()
-	f.release(id)
+	letGo()
 	f.note(stopNotes...)
 
 	var said string

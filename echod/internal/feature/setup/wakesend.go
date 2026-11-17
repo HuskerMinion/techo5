@@ -62,8 +62,9 @@ func wakeClipsSendSection(w http.ResponseWriter, token string) {
 	 <select id="wckeep" name="keep"><option value="on"%s>On</option><option value="off"%s>Off</option></select>
 	 <p class="note">While it is on the device keeps the four seconds around each wake, each near miss and each
 	  wake that looks like a mistake, the newest 100 of each kind. <strong>Turning it off deletes every kept clip on this device</strong>, the ones not yet sent with them.
-	  Takes from Record wake word are not wake clips: they stay until they reach wakesmith.</p>
-	 <p><label><input type="checkbox" name="confirm" value="yes" style="width:auto"> Delete every clip on this device (tick this to turn it off)</label></p>
+	  Takes from Record wake word waiting to be sent go with them, unless Send wake clips to is wakesmith: then
+	  they stay until they reach it.</p>
+	 <p><label><input type="checkbox" name="confirm" value="yes" style="width:auto"> Delete the wake clips on this device (tick this to turn it off)</label></p>
 	 <p><button type="submit">Save</button></p></form>`, on, off)
 	fmt.Fprint(w, `<p style="margin-bottom:0">Nothing is sent unless you choose where below, and only clips kept after
 	 you do. It works while Keep wake clips is on, and only to an address on your home network or your
@@ -217,7 +218,7 @@ func sameAddress(a, b string) bool {
 func saveKeepWake(r *http.Request) string {
 	on := r.PostFormValue("keep") == "on"
 	if !on && wakeClipsKept() && r.PostFormValue("confirm") != "yes" {
-		return "to turn Keep wake clips off, tick Delete every clip on this device: it deletes every clip that was kept, the ones not yet sent too"
+		return "to turn Keep wake clips off, tick Delete the wake clips on this device: it deletes every wake clip that was kept, the ones not yet sent too"
 	}
 	if on == wakeClipsKept() {
 		return ""

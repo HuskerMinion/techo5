@@ -49,8 +49,9 @@ func TestRecordWakeWordRows(t *testing.T) {
 	if len(rows) != 3 || rows[0].id != "recordword" || rows[0].kind != ctlButton || rows[1].id != "recordcount" || rows[2].id != "recordgap" {
 		t.Fatalf("rows %+v", rows)
 	}
-	if rows[0].sub != tr("ui_record_turn_on_takes_first") {
-		t.Errorf("with Record takes of a word off it says %q", rows[0].sub)
+	// Record takes of a word is off and Send wake clips to is not set: the switch is not asked for here.
+	if rows[0].sub != tr("ui_record_set_wakesmith_first") {
+		t.Errorf("with nothing set it says %q", rows[0].sub)
 	}
 	takes.Get().SetRunPlan(takes.RunCountMax, takes.RunGapMin)
 	t.Cleanup(func() { takes.Get().SetRunPlan(takes.RunCountDefault, takes.RunGapDefault) })
@@ -66,6 +67,6 @@ func TestRecordWakeWordRows(t *testing.T) {
 	}
 	recordWordTap("recordword", partMain)
 	if takes.Get().Card().Up() {
-		t.Error("Start began a run with Record takes of a word off")
+		t.Error("Start began a run with nowhere to send the takes")
 	}
 }

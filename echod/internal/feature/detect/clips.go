@@ -45,9 +45,11 @@ import (
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/recording"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
@@ -142,7 +144,14 @@ type clips struct {
 	changed func()
 	// abortSend cuts short the upload under way, so a purge is not streamed from an open file. Nil until
 	// wired.
-	abortSend func()
+	abortSend func(which func(kind string) bool)
+
+	// wantsTakes is whether takes waiting to be sent still have somewhere to go: Send wake clips to is
+	// wakesmith, with an address. Turning Keep wake clips off spares them only then.
+	wantsTakes func() bool
+
+	// takesOn is Record takes of a word as last seen (takesSwitched).
+	takesOn atomic.Bool
 }
 
 // clipKinds are the folders, in the order the sensor lists them.
@@ -158,7 +167,7 @@ func newClips(dir string) *clips {
 	c := &clips{ring: make([]int16, clipRate*clipSeconds), dir: dir, keep: clipsKept, shortest: clipShortest,
 		blocked: clipsBlocked, model: func(int) string { return "" }, cutoff: func(int) float64 { return 0 },
 		now: time.Now, after: func(d time.Duration, f func()) { time.AfterFunc(d, f) },
-		counts: map[string]int{}}
+		counts: map[string]int{}, wantsTakes: takesWanted}
 	c.save = func(cl clip) { safe.Go("wake clip", func() { c.write(cl) }) }
 	return c
 }
@@ -207,7 +216,24 @@ func startClips(e *Engine, publish func(total int, kinds string)) *clips {
 		}
 		return m.ID, e.FrontOf(0)
 	}, c.keepTake)
+	// Record takes of a word going from on to off is the owner taking the permission back: every take
+	// still waiting goes, whichever way its run was started.
+	c.takesOn.Store(config.Get().Security.Takes)
+	security.Get().Changed.Listen(func(struct{}) { c.takesSwitched(config.Get().Security.Takes) })
 	return c
+}
+
+// takesSwitched is Record takes of a word as it is now: going from on to off drops the takes waiting.
+func (c *clips) takesSwitched(on bool) {
+	if c.takesOn.Swap(on) && !on {
+		c.dropTakes("Record takes of a word was switched off")
+	}
+}
+
+// takesWanted is whether Send wake clips to is wakesmith with an address: where takes go.
+func takesWanted() bool {
+	s := config.Get().Wake.Send
+	return s.Target == config.SendWakesmith && s.On()
 }
 
 // clipsBlocked is whether a call, the intercom, a talk through a camera or takes being recorded has the
@@ -264,24 +290,33 @@ func (c *clips) enable(on bool) {
 	c.purge()
 }
 
-// purge lets go of every clip, kept and pending.
+// purge lets go of every clip, kept and pending, and of the takes waiting to be sent unless they still
+// have wakesmith to go to (wantsTakes).
 func (c *clips) purge() {
+	keepTakes := c.wantsTakes != nil && c.wantsTakes()
 	if c.abortSend != nil {
-		c.abortSend() // an upload under way would go on reading a clip that is being deleted
+		// An upload under way would go on reading a clip that is being deleted.
+		c.abortSend(func(kind string) bool { return kind != takeKind })
 	}
+	defer func() {
+		// A take's upload after the takes are gone, so the sender, cut short, finds none to start again.
+		if !keepTakes && c.abortSend != nil {
+			c.abortSend(func(kind string) bool { return kind == takeKind })
+		}
+	}()
 	c.mu.Lock()
 	c.pending = nil
 	c.reset()
 	c.mu.Unlock()
 	c.disk.Lock()
 	defer c.disk.Unlock()
-	// Everything but the takes waiting to be sent, which Keep wake clips has no say over.
+	// Everything but the takes waiting to go to wakesmith, when it is still where they go.
 	entries, err := os.ReadDir(c.dir)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		slog.Warn("wake clips: not removed", "err", err)
 	}
 	for _, e := range entries {
-		if e.Name() == takeKind {
+		if e.Name() == takeKind && keepTakes {
 			continue
 		}
 		if err := os.RemoveAll(filepath.Join(c.dir, e.Name())); err != nil {
@@ -535,6 +570,26 @@ func (c *clips) keepTake(t takes.Capture) {
 	}
 	slog.Info("wake word take saved", "take", t.Index)
 	prune(dir, c.keep)
+	if c.changed != nil {
+		c.changed()
+	}
+}
+
+// dropTakes lets go of every take waiting to be sent, saying why: they are not to linger once where
+// they were going, or the permission they were recorded under, has gone. The upload of one under way is
+// cut short after they are gone, so the sender finds none to start again.
+func (c *clips) dropTakes(why string) {
+	c.disk.Lock()
+	err := os.RemoveAll(filepath.Join(c.dir, takeKind))
+	c.disk.Unlock()
+	if err != nil {
+		slog.Warn("wake word takes: not removed", "err", err)
+	} else {
+		slog.Info("wake word takes waiting to be sent: deleted", "why", why)
+	}
+	if c.abortSend != nil {
+		c.abortSend(func(kind string) bool { return kind == takeKind })
+	}
 	if c.changed != nil {
 		c.changed()
 	}

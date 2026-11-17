@@ -38,7 +38,7 @@ var (
 	takesTookPress = func() bool { return takes.Get().TookPress() }
 	discardTakes   = func(why string) { takes.Get().DiscardPage(why) }
 	armRun         = func(count, gap int, session string) error { return takes.Get().ArmRun(count, gap, session) }
-	runBlocked     = func() takes.RunBlock { return takes.Get().RunBlocked() }
+	runBlocked     = func() takes.RunBlock { return takes.Get().PageRunBlocked() }
 )
 
 // takesWait is how long a download may take to write: three and a half megabytes over the slowest Wi-Fi
@@ -222,8 +222,10 @@ func takesSection(w http.ResponseWriter, token string) {
 	  hears them, and cuts it into one take each time the word is said. Each recording starts %s.</p>`,
 		onThisDevice("at the device, with a tap on Start on its screen", "with a press of the action button on the device"))
 	if !config.Get().Security.Takes {
-		fmt.Fprint(w, `<p class="note">It is off. Turn on <strong>Record takes of a word</strong> under Privacy &amp;
-		  Security, on the device's screen or in Home Assistant.</p></fieldset>`)
+		fmt.Fprintf(w, `<p class="note">It is off. Turn on <strong>Record takes of a word</strong> under Privacy &amp;
+		  Security, on the device's screen or in Home Assistant.%s</p></fieldset>`,
+			onThisDevice(` <strong>Record wake word</strong> can still be started on the device itself, under
+		  Sound &amp; Voice in its settings: Start there needs no switch.`, ""))
 		return
 	}
 	st := recorder().State(token)
@@ -292,7 +294,8 @@ func runForm(w http.ResponseWriter, token string) {
 	 <input id="rungap" name="gap" type="number" min="%d" max="%d" value="%d" required>
 	 <p><button type="submit">Record wake word</button></p></form>
 	 <p class="note">It starts %s. They are kept on the device until they reach wakesmith, whether or not
-	  Keep wake clips is on.</p>`,
+	  Keep wake clips is on, and deleted if wakesmith refuses one, if Send wake clips to moves off wakesmith
+	  or to another address, or if Record takes of a word is turned off.</p>`,
 		html.EscapeString(token), takes.RunCountMin, takes.RunCountMax, count, takes.RunGapMin, takes.RunGapMax, gap,
 		onThisDevice("with a tap on Start on the device's screen", "with a press of the action button on the device"))
 }
