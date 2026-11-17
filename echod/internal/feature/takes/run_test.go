@@ -412,8 +412,15 @@ func TestATakeIsTheWordAfterTheBeep(t *testing.T) {
 	} else if n := len(pcm) / mic.FrameSamples; n < 25 || n > 25+2*framesIn(pad)+4 {
 		t.Errorf("the take is %d frames", n)
 	}
-	if _, ok := pickTake(capture(pre, echo, [2]int{pre + echo - 5, 25}), pre); ok {
-		t.Error("a word said over the beep's echo was taken")
+	// A word begun as the beep fades is kept from where the beep's sound ends, without any of it.
+	if pcm, ok := pickTake(capture(pre, echo, [2]int{pre + echo - 5, 25}), pre); !ok {
+		t.Error("a word begun as the beep faded was not taken")
+	} else if n := len(pcm) / mic.FrameSamples; n < 20 || n > 20+framesIn(pad)+2 {
+		t.Errorf("the take of a word begun as the beep faded is %d frames", n)
+	}
+	// One that is mostly under the beep leaves too little to be a word.
+	if _, ok := pickTake(capture(pre, echo, [2]int{pre, echo + framesIn(shortest)/2}), pre); ok {
+		t.Error("a word said under the beep was taken")
 	}
 	if _, ok := pickTake(capture(pre, echo, [2]int{15, 25}), pre); ok {
 		t.Error("talk before the beep was taken")

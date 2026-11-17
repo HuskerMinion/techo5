@@ -53,10 +53,12 @@ const (
 	// after the beep, with its padding.
 	runListen = 3500 * time.Millisecond
 
-	// runEcho is how long from the beep its own sound may still be heard: the note, the playback buffer
-	// after it (speaker.HardwareTail) and the way back into the microphones. Its frames count as the
-	// device making a sound, so a take is never the beep, and "say it now" is shown once it is over.
-	runEcho = 450 * time.Millisecond
+	// runEcho is how long from the beep its own sound may still be heard: the 70 ms note, the playback
+	// buffer after it (speaker.HardwareTail, 150 ms) and a little for the way back into the microphones.
+	// Its frames count as the device making a sound, so a take is never the beep, and "say it now" is
+	// shown once it is over. It was 450 ms at first; on a Show 8 people said the word sooner than that
+	// and most captures were thrown away (pickTake now also keeps a word that began inside it).
+	runEcho = 250 * time.Millisecond
 
 	// runMisses is how many captures in a row may hear no take before the run is given up: nobody is
 	// saying it, or not near enough to be heard.
@@ -499,9 +501,10 @@ func (f *Feature) store(c Capture) {
 }
 
 // pickTake is the take in a capture whose beep is at beepAt, and whether it has one: the loudest take
-// heard after the beep. One the cutter left out only for being near the beep is taken too, when the
-// word itself is clear of it (by widen, as the cutter asks), its padding cut short at the beep's end. A
-// take before the beep is somebody talking over the gap, and is not the one asked for.
+// heard after the beep. One the cutter left out only for being near the beep is taken too, from where
+// the beep's sound ends: a word said as the beep fades loses only the start that overlapped it, and is
+// kept when what is left is still a word (shortest). A take before the beep is somebody talking over
+// the gap, and is not the one asked for.
 func pickTake(c []heard, beepAt int) ([]int16, bool) {
 	n := len(c)
 	level, over := make([]float32, n), make([]bool, n)
@@ -509,7 +512,7 @@ func pickTake(c []heard, beepAt int) ([]int16, bool) {
 		level[i], over[i] = h.level, h.over
 	}
 	found, left := cut(level, over)
-	padF, widenF := framesIn(pad), framesIn(widen)
+	padF := framesIn(pad)
 
 	best, loudest := span{}, float32(-1)
 	consider := func(s, word span) {
@@ -522,13 +525,30 @@ func pickTake(c []heard, beepAt int) ([]int16, bool) {
 			consider(s, s)
 		}
 	}
+	shortestF := framesIn(shortest)
 	for _, l := range left {
-		if l.why != whySpeaker || l.from < beepAt {
+		if l.why != whySpeaker || l.to <= beepAt {
 			continue
 		}
-		if slices.Contains(over[max(l.from-widenF, 0):min(l.to+widenF, n)], true) {
+		// The word as far as it is clear of the device's own sound: it starts after the last such frame
+		// inside it, and ends at the first after that.
+		word := span{max(l.from, beepAt), l.to}
+		for i := word.to - 1; i >= word.from; i-- {
+			if over[i] {
+				word.from = i + 1
+				break
+			}
+		}
+		for i := word.from; i < word.to; i++ {
+			if over[i] {
+				word.to = i
+				break
+			}
+		}
+		if word.to-word.from < shortestF {
 			continue
 		}
+		l.span = word
 		from := max(l.from-padF, 0)
 		for i := l.from - 1; i >= from; i-- {
 			if over[i] {
