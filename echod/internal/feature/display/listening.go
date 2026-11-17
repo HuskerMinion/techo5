@@ -225,7 +225,13 @@ func speedWord(speed float64) string {
 func (r *renderer) speedButton(word, libraryWord string, modern bool) image.Rectangle {
 	done := r.doneButton()
 	face := r.faces().button
-	w := max(r.width(face, word)+2*r.s(22), r.s(84))
+	// As wide as the widest speed, whichever one is on it: sized to its own word, 0.75× and 1.25× made
+	// it wide enough to move above Library and back as the speed went round (techo5#613).
+	w := r.s(84)
+	for _, sp := range spokenSpeeds {
+		w = max(w, r.width(face, speedWord(sp))+2*r.s(22))
+	}
+	w = max(w, r.width(face, word)+2*r.s(22))
 	if modern {
 		return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
 	}

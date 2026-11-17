@@ -241,3 +241,21 @@ func TestTheSpeedButtonFits(t *testing.T) {
 		}
 	}
 }
+
+// The speed button stays where it is as the speed goes round: one size for every speed (techo5#613).
+func TestTheSpeedButtonStaysPut(t *testing.T) {
+	for _, size := range []image.Point{{showWide, showHigh}, {show8Wide, show8High}} {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, size.X, size.Y)))
+		for _, modern := range []bool{false, true} {
+			for _, lib := range []string{"", "Library", "Bibliothèque"} {
+				first := r.speedButton(speedWord(spokenSpeeds[0]), lib, modern)
+				for _, sp := range spokenSpeeds[1:] {
+					if b := r.speedButton(speedWord(sp), lib, modern); b != first {
+						t.Errorf("%v modern %v %q: %s at %v, %s at %v", size, modern, lib,
+							speedWord(spokenSpeeds[0]), first, speedWord(sp), b)
+					}
+				}
+			}
+		}
+	}
+}
