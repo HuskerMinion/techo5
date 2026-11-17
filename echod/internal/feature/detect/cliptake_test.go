@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -249,8 +250,9 @@ func TestATakeThatCannotGoIsBackedOffFromWithKeepOff(t *testing.T) {
 func TestTakesGoOnlyToWakesmith(t *testing.T) {
 	for _, target := range []string{config.SendTater, config.SendCustom} {
 		var tr trainer
-		r := newSendRig(t, target, tr.serve(t).URL)
-		r.take(1)
+		r := newSendRig(t, config.SendWakesmith, tr.serve(t).URL)
+		r.take(1) // kept while it was wakesmith; then the target moved, as by hand in the settings file
+		r.cfg.Target = target
 		for _, keep := range []bool{true, false} {
 			r.c.on.Store(keep)
 			r.drainBy(5 * time.Second)
@@ -450,6 +452,87 @@ func TestWritingATakeWakesTheSender(t *testing.T) {
 	case <-r.s.nudge:
 	default:
 		t.Fatal("the take did not wake the sender")
+	}
+}
+
+// A take is not kept when takes have nowhere to go: Send wake clips to is not wakesmith.
+func TestATakeIsNotKeptWhenTakesHaveNowhereToGo(t *testing.T) {
+	for _, target := range []string{config.SendOff, config.SendTater, config.SendCustom} {
+		r := newSendRig(t, target, "http://127.0.0.1:1")
+		r.c.keepTake(takes.Capture{Run: "ab", Index: 1, Word: "w", At: r.base, PCM: []int16{1}})
+		if n := r.takesLeft(); n != 0 {
+			t.Errorf("%q: a take was kept with nowhere to go", target)
+		}
+	}
+}
+
+// A take recorded before the takes were let go of, and handed on late from its own goroutine, is not
+// written after them; one recorded after is.
+func TestATakeArrivingAfterTheTakesWentIsNotKept(t *testing.T) {
+	r := newSendRig(t, config.SendWakesmith, "http://127.0.0.1:1")
+	clock := r.base.Add(time.Minute)
+	r.c.now = func() time.Time { return clock }
+	recorded := clock.Add(-time.Second)
+	r.c.dropTakes("the target moved")
+	r.c.keepTake(takes.Capture{Run: "ab", Index: 1, Word: "w", At: recorded, PCM: []int16{1}})
+	if n := r.takesLeft(); n != 0 {
+		t.Error("a take recorded before the drop was written after it")
+	}
+	r.c.keepTake(takes.Capture{Run: "ab", Index: 2, Word: "w", At: clock.Add(time.Second), PCM: []int16{1}})
+	if n := r.takesLeft(); n != 1 {
+		t.Errorf("%d takes after one recorded after the drop", n)
+	}
+	// The same for a purge that took the takes (Keep off with the target moved).
+	clock = clock.Add(time.Minute)
+	r.cfg.Target = config.SendTater
+	r.c.enable(false)
+	r.cfg.Target = config.SendWakesmith
+	r.c.keepTake(takes.Capture{Run: "ab", Index: 3, Word: "w", At: clock.Add(-time.Second), PCM: []int16{1}})
+	if n := r.takesLeft(); n != 0 {
+		t.Error("a take recorded before the purge was written after it")
+	}
+}
+
+// Takes refused for good don't count toward stopping the sending: an older wakesmith refusing every
+// take must not halt the wake clips behind them.
+func TestRefusedTakesDoNotHaltTheClips(t *testing.T) {
+	var refused atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
+		_, params, _ := mime.ParseMediaType(q.Header.Get("Content-Type"))
+		mr := multipart.NewReader(q.Body, params["boundary"])
+		kind := ""
+		for {
+			p, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			blob, _ := io.ReadAll(p)
+			if p.FormName() == "meta" {
+				var m map[string]any
+				json.Unmarshal(blob, &m)
+				kind, _ = m["kind"].(string)
+			}
+		}
+		if kind == takeKind {
+			refused.Add(1)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer srv.Close()
+	r := newSendRig(t, config.SendWakesmith, srv.URL)
+	for n := 1; n <= sendFailuresMax+2; n++ {
+		r.take(n)
+	}
+	wav := r.clip("wake", sendFailuresMax+5, "m")
+	r.drainBy(10 * time.Second)
+	if n := refused.Load(); n != sendFailuresMax+2 {
+		t.Errorf("%d takes refused, want all %d tried", n, sendFailuresMax+2)
+	}
+	if r.meta(wav).SentAt == "" {
+		t.Error("the wake clip behind the refused takes was not sent")
+	}
+	if why, halted := r.s.isHalted(r.cfg); halted {
+		t.Errorf("sending stopped: %s", why)
 	}
 }
 

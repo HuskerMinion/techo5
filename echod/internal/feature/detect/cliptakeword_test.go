@@ -34,6 +34,19 @@ func TestARunsWordIsTheFirstLoadedSlots(t *testing.T) {
 	}
 }
 
+// The hook is set under the engine's lock, which slotsChanged reads it under: a word loading as the
+// recorder is wired up is not a race.
+func TestWiringTheWordWhileAWordLoadsIsNotARace(t *testing.T) {
+	fakes(t)
+	e := New(2, nil)
+	rec := takes.Get()
+	t.Cleanup(func() { rec.SetWakeWord(func() (string, string) { return "", "" }, func(takes.Capture) {}) })
+	done := make(chan struct{})
+	go func() { e.Use(0, model("alexa", wake.KindMicroWakeWord)); close(done) }()
+	wireTakeWord(e, func(takes.Capture) {}, rec)
+	<-done
+}
+
 // The recorder's copy of the wake word is taken again when a word loads: a word that loads after the
 // clip store was wired up lets a run start, where the copy taken at the start had none.
 func TestAWordLoadedLaterLetsARunStart(t *testing.T) {

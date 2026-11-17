@@ -1783,7 +1783,11 @@ Between takes, move around the room or turn on a fan or the TV, so the takes are
 the device didn't hear (nothing stood out from the room, or the word was said over the beep) is asked
 for again with the same number, and nothing is sent for it; three in a row end the run. The device
 doesn't answer its wake word during the run, and nothing said in it becomes a wake clip. Stop, the
-action button, a mute, a call or a ring end it, and the takes so far still go.
+action button, a mute, a call or a ring end it, and the takes so far still go. **Send wake
+clips to** moving off that wakesmith or its address, or **Record takes of a word** being turned off,
+ends it too, and deletes the takes still waiting. Anything else the device plays during a take (an announcement, a
+reminder, a chime, the music) is never kept as one. The setup page closing doesn't end a run that has
+started.
 
 Each take is the frame the wake word scores (after the noise reduction while it is on) with a little of
 the room either side, cut to one take, and sent the same way as a clip, with the same address checks,

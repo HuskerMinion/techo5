@@ -232,7 +232,7 @@ type Feature struct {
 	wakeWord atomic.Pointer[func() (word, front string)]
 	// wordNow is the word as wakeWord last said it (WakeWordChanged), for RunBlocked, which the screen
 	// asks on every frame of its settings and which must not wait on the wake word engine for it.
-	wordNow atomic.Pointer[string]
+	wordNow atomic.Pointer[wakeWordNow]
 
 	// running and tailUntil are read on every frame of the wake word's stream to Home Assistant
 	// (through voice.YieldTo) and by detect for every word heard, so they are not behind mu. running is
@@ -287,8 +287,15 @@ type device struct {
 	// audible is whether the device is making a sound the microphones would carry into the takes.
 	audible func() bool
 
-	// toWakesmith is whether Send wake clips to is wakesmith, with an address: where a run's takes go.
-	toWakesmith func() bool
+	// sendTo is the address takes go to: Send wake clips to's, while it is wakesmith with an address, and
+	// empty otherwise. A run ends when it is no longer the one the run started with.
+	sendTo func() string
+
+	// playing is whether something other than the recorder's own notes is coming out of the speaker:
+	// something holding it (an announcement, a reply, a reminder) or anything queued or streaming on it
+	// (a chime, a doorbell, the music). Not the echo canceller, which goes on working for a second after
+	// any sound, the recorder's own beep too, and so says nothing about what is playing now.
+	playing func() bool
 }
 
 var thisDevice = device{
@@ -307,9 +314,16 @@ var thisDevice = device{
 	},
 	now:      time.Now,
 	pressing: func() (bool, time.Time) { return buttons.Get().Pressed(buttons.Action) },
-	toWakesmith: func() bool {
+	sendTo: func() string {
 		s := config.Get().Wake.Send
-		return s.Target == config.SendWakesmith && s.On()
+		if s.Target != config.SendWakesmith || !s.On() {
+			return ""
+		}
+		return s.URL
+	},
+	playing: func() bool {
+		s, p := speaker.Sound(), speaker.Get()
+		return (s != nil && s.Busy()) || (p != nil && p.Sounding())
 	},
 
 	// Something holding the speaker (an announcement, a reply), anything else on its way out of it (the
@@ -374,6 +388,11 @@ func (f *Feature) arm(word string, kind Kind, session string, r *run) error {
 	t := f.dev.now()
 	f.mu.Lock()
 	switch {
+	case session == "" && f.phase == Armed:
+		// The setup page's asking waits for its own Start: a run started in the settings must neither
+		// take it over nor be taken for the page's.
+		f.mu.Unlock()
+		return errors.New("the setup page is waiting for a press on the device: answer it first")
 	case f.phase != Idle && f.session != session:
 		f.mu.Unlock()
 		if f.phase == Kept {
@@ -679,11 +698,14 @@ func (f *Feature) atDevice() bool {
 
 // DiscardPage is the setup page throwing away what it asked for, as it closes: everything but a run
 // started on the device's own screen, which the page has no part in.
+//
+// Nor a run that is running, whoever asked for it: it was started at the device, it goes on for minutes,
+// longer than the page waits before closing itself, and its takes go to wakesmith, not to the page.
 func (f *Feature) DiscardPage(why string) {
 	f.mu.Lock()
-	atDevice := f.phase != Idle && f.session == "" && f.run != nil
+	spared := f.run != nil && (f.phase == Recording || (f.phase != Idle && f.session == ""))
 	f.mu.Unlock()
-	if !atDevice {
+	if !spared {
 		f.Discard(why)
 	}
 }

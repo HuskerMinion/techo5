@@ -460,7 +460,11 @@ func (s *sender) drain(ctx context.Context) {
 		case outSkip:
 			// Looked at again from the top: the clip is no longer in the queue, or sending is off.
 		case outFailed:
-			failures++
+			// A take refused for good says nothing about the settings (an older wakesmith refuses every
+			// take): it never counts toward stopping the wake clips.
+			if item.meta.Kind != takeKind {
+				failures++
+			}
 			slog.Warn("wake clip: the trainer refused it", "clip", item.meta.Kind+"/"+item.name, "why", why)
 			s.settle(item, func(m *clipMeta) { m.SendFailed = failedStatus(why) }, n-1)
 			if item.meta.Kind == takeKind {

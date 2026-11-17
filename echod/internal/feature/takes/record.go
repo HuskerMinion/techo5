@@ -144,8 +144,19 @@ loop:
 // nothing to do with them and must stay stoppable; the rest have the microphones a better claim, or
 // take them away.
 func (f *Feature) over() (why string, keep bool) {
-	if !f.dev.switchedOn() && !f.atDevice() {
+	f.mu.Lock()
+	r := f.run
+	f.mu.Unlock()
+	switch {
+	case r == nil && !f.dev.switchedOn():
 		return "Record takes of a word was switched off", false
+	// A run: the switch going off ends it however it was started (one started on the screen with the
+	// switch off goes on), and so does Send wake clips to no longer going to the wakesmith it started
+	// with, since its takes would have nowhere to go.
+	case r != nil && r.switchWas && !f.dev.switchedOn():
+		return "Record takes of a word was switched off", false
+	case r != nil && (f.dev.sendTo == nil || f.dev.sendTo() == "" || f.dev.sendTo() != r.sendTo):
+		return "Send wake clips to no longer goes to that wakesmith", false
 	}
 	if m, err := f.dev.muted(); err != nil || m {
 		return "the microphones were muted", false

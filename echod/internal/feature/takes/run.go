@@ -77,6 +77,9 @@ type run struct {
 
 	take, kept        int  // the take asked for now, from 1, and how many are on their way
 	missed, listening bool // the last capture heard none; the beep is over and the word is to be said
+
+	sendTo    string // the wakesmith it started sending to: a run ends when that changes (over)
+	switchWas bool   // Record takes of a word was on as it started: it going off ends the run
 }
 
 // Capture is one take of a run, for feature/detect to keep until it is sent to wakesmith.
@@ -138,12 +141,16 @@ func (f *Feature) SetWakeWord(word func() (word, front string), keep func(Captur
 	f.WakeWordChanged()
 }
 
+// wakeWordNow is the wake word and its front end as feature/detect last said them.
+type wakeWordNow struct{ word, front string }
+
 // WakeWordChanged is feature/detect saying the wake word was loaded, cleared or dropped: the copy
-// RunBlocked reads is taken again.
+// RunBlocked and a run's start read is taken again. Asked here, off the screen's tap: the engine holds
+// its lock across a model load.
 func (f *Feature) WakeWordChanged() {
-	w := ""
+	var w wakeWordNow
 	if p := f.wakeWord.Load(); p != nil {
-		w, _ = (*p)()
+		w.word, w.front = (*p)()
 	}
 	f.wordNow.Store(&w)
 	f.Changed.Emit(struct{}{})
@@ -161,12 +168,12 @@ func (f *Feature) RunBlocked() RunBlock {
 	switch {
 	case !layout.HasMicrophone():
 		return RunNoMicrophone
-	case f.dev.toWakesmith == nil || !f.dev.toWakesmith():
+	case f.dev.sendTo == nil || f.dev.sendTo() == "":
 		return RunNotWakesmith
 	case f.dev.now().Year() < clockSetYear:
 		return RunClockNotSet
 	}
-	if w := f.wordNow.Load(); w == nil || *w == "" || f.keepTake.Load() == nil {
+	if w := f.wordNow.Load(); w == nil || w.word == "" || f.keepTake.Load() == nil {
 		return RunNoWakeWord
 	}
 	f.mu.Lock()
@@ -240,15 +247,18 @@ func (f *Feature) plan(count, gap int, page bool) (*run, error) {
 	if b != RunReady {
 		return nil, errors.New(b.Text())
 	}
-	word, front := (*f.wakeWord.Load())() // asked afresh: the copy may be a moment behind
-	if word == "" {
+	// The copy, not the engine: a tap on Start must not wait on a model loading.
+	w := f.wordNow.Load()
+	if w == nil || w.word == "" {
 		return nil, errors.New(RunNoWakeWord.Text())
 	}
+	word, front := w.word, w.front
 	count, gap = ClampRun(count, gap)
 	f.mu.Lock()
 	f.lastCount, f.lastGap = count, gap
 	f.mu.Unlock()
-	return &run{id: newRunID(), count: count, gap: time.Duration(gap) * time.Second, word: word, front: front, take: 1}, nil
+	return &run{id: newRunID(), count: count, gap: time.Duration(gap) * time.Second, word: word, front: front, take: 1,
+		sendTo: f.dev.sendTo(), switchWas: f.dev.switchedOn()}, nil
 }
 
 // newRunID is a run's id: random hex, which says nothing about the device.
@@ -371,9 +381,10 @@ func (f *Feature) runTakes(ctx context.Context, id uint64, finish <-chan struct{
 
 	last := f.dev.now()
 	why := ""
+	rang := false // a ring ended it: no stop note over the alarm
 	look := func() bool {
-		if w, _ := f.over(); w != "" {
-			why = w
+		if w, ringing := f.over(); w != "" {
+			why, rang = w, ringing
 			return true
 		}
 		if f.dev.now().Sub(last) > gap {
@@ -420,11 +431,12 @@ loop:
 				f.note(beepNotes...)
 				continue
 			}
-			// From the beep on, the device's own sound is the beep and its echo, and nothing else: the run
-			// holds the microphones, so nothing else plays. The speaker says it is still playing for about a
-			// second after a note (its stream stays open), and taking its word for it threw away the words
-			// said promptly after the beep (seen on a Show 8: 58 frames counted as its own sound, not 12).
-			h.over = len(capture)-beepAt < echoN
+			// From the beep on, the device's own sound is the beep and its echo, and anything else playing:
+			// an announcement, a reminder, a chime or the music must never be kept as a take. Not the echo
+			// canceller's word for it, which stays on for about a second after the beep's note and threw
+			// away the words said promptly after it (seen on a Show 8: 58 frames counted as its own sound,
+			// not 12).
+			h.over = len(capture)-beepAt < echoN || (f.dev.playing != nil && f.dev.playing())
 			capture = append(capture, h)
 			if len(capture)-beepAt == echoN {
 				set(func(r *run) { r.listening = true })
@@ -473,7 +485,9 @@ loop:
 		}
 	}
 	letGo()
-	f.note(stopNotes...)
+	if !rang {
+		f.note(stopNotes...)
+	}
 
 	var said string
 	switch why {
