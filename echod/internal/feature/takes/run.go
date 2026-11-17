@@ -441,6 +441,7 @@ loop:
 			} else {
 				misses++
 				slog.Info("takes: no take heard; asking for it again", "take", take)
+				missLog(capture, beepAt)
 			}
 			done := kept >= r.count
 			set(func(r *run) {
@@ -573,4 +574,33 @@ func pickTake(c []heard, beepAt int) ([]int16, bool) {
 		pcm = append(pcm, h.pcm...)
 	}
 	return pcm, true
+}
+
+// missLog says what a capture with no take in it held, for tuning the capture on real devices: how
+// much of it counted as the device's own sound, the room and the loudest after the beep, and why each
+// stretch the cutter found was left out.
+func missLog(c []heard, beepAt int) {
+	level, over := make([]float32, len(c)), make([]bool, len(c))
+	overN := 0
+	for i, h := range c {
+		level[i], over[i] = h.level, h.over
+		if h.over {
+			overN++
+		}
+	}
+	var before, after float32
+	for i, v := range level {
+		if i < beepAt {
+			before = max(before, v)
+		} else {
+			after = max(after, v)
+		}
+	}
+	found, left := cut(level, over)
+	whys := make([]string, 0, len(left))
+	for _, l := range left {
+		whys = append(whys, fmt.Sprintf("%d-%d %s", l.from-beepAt, l.to-beepAt, l.why))
+	}
+	slog.Info("takes: the capture", "frames", len(c), "beep_at", beepAt, "own_sound", overN,
+		"loudest_before", before, "loudest_after", after, "found", len(found), "left", whys)
 }
