@@ -667,6 +667,7 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		wallClockSection(w, token)
 	case "privacy":
 		lockSection(w, token)
+		screenPageSection(w, token)
 		babySection(w, token)
 		remoteSection(w, token)
 		thisPageSection(w)

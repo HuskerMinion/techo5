@@ -17,7 +17,7 @@ into a feature of its own that runs everywhere, with each path gated by its own 
 | Path | Gate | Today |
 |---|---|---|
 | `/camera.jpg`, `/camera.mjpeg` | Camera web access | in `feature/camera` |
-| `/screen.png` | Screen web access | in `feature/camera` |
+| `/screen.png` | Screen web access, and its key or this page's session | in `feature/camera` |
 | `/setup` and its posts | Setup page, new | — |
 
 One port (8181), three gates, none of them on by default, and the port closed when all three are off.
