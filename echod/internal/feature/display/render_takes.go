@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
@@ -15,9 +16,15 @@ import (
 func (r *renderer) takesPage(s scene) {
 	c := s.takes
 	if c.Phase == takes.Armed {
-		r.text(r.title, tr("record_takes_of_a_word"), r.margin, r.s(96), amber)
-		r.text(r.body, takesWhat(c, 28), r.margin, r.s(176), cream)
-		r.text(r.small, tr("ui_takes_setup_request_limit"), r.margin, r.s(224), dim)
+		if c.Run {
+			r.text(r.title, tr("record_wake_word"), r.margin, r.s(96), amber)
+			r.text(r.body, fmt.Sprintf(tr("ui_record_plan"), c.Of, int(c.Gap.Seconds())), r.margin, r.s(176), cream)
+			r.text(r.small, tr("ui_record_after_beep"), r.margin, r.s(224), dim)
+		} else {
+			r.text(r.title, tr("record_takes_of_a_word"), r.margin, r.s(96), amber)
+			r.text(r.body, takesWhat(c, 28), r.margin, r.s(176), cream)
+			r.text(r.small, tr("ui_takes_setup_request_limit"), r.margin, r.s(224), dim)
+		}
 
 		no, yes := r.actionHalves()
 		rad := float64(r.s(actionRadius))
@@ -29,9 +36,15 @@ func (r *renderer) takesPage(s scene) {
 		return
 	}
 
-	r.text(r.title, tr("ui_recording_takes"), r.margin, r.s(96), amber)
-	r.text(r.body, takesWhat(c, 28)+"   "+takesTime(c.Elapsed), r.margin, r.s(176), cream)
-	r.text(r.small, tr("ui_takes_repeat_instructions"), r.margin, r.s(224), dim)
+	if c.Run {
+		r.text(r.title, fmt.Sprintf(tr("ui_take_n_of_m"), c.Take, c.Of), r.margin, r.s(96), amber)
+		r.text(r.body, runLine(c), r.margin, r.s(176), cream)
+		r.text(r.small, tr("record_wake_word"), r.margin, r.s(224), dim)
+	} else {
+		r.text(r.title, tr("ui_recording_takes"), r.margin, r.s(96), amber)
+		r.text(r.body, takesWhat(c, 28)+"   "+takesTime(c.Elapsed), r.margin, r.s(176), cream)
+		r.text(r.small, tr("ui_takes_repeat_instructions"), r.margin, r.s(224), dim)
+	}
 
 	y0, y1 := r.actionBand()
 	stop := image.Rect(r.margin, y0, r.w-r.margin, y1)

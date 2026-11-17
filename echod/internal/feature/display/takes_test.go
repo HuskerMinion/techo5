@@ -41,3 +41,31 @@ func TestEachSetupPageAskingIsItsOwnPage(t *testing.T) {
 		t.Error("Stop never answered")
 	}
 }
+
+// Record wake word is Start with the count and the gap under it, says what has to be set first, and
+// its steppers keep to a run's range.
+func TestRecordWakeWordRows(t *testing.T) {
+	rows := recordWordRows()
+	if len(rows) != 3 || rows[0].id != "recordword" || rows[0].kind != ctlButton || rows[1].id != "recordcount" || rows[2].id != "recordgap" {
+		t.Fatalf("rows %+v", rows)
+	}
+	if rows[0].sub != tr("ui_record_turn_on_takes_first") {
+		t.Errorf("with Record takes of a word off it says %q", rows[0].sub)
+	}
+	takes.Get().SetRunPlan(takes.RunCountMax, takes.RunGapMin)
+	t.Cleanup(func() { takes.Get().SetRunPlan(takes.RunCountDefault, takes.RunGapDefault) })
+	recordWordTap("recordcount", partPlus)
+	recordWordTap("recordgap", partMinus)
+	if c, g := takes.Get().RunPlan(); c != takes.RunCountMax || g != takes.RunGapMin {
+		t.Errorf("stepped past the ends: %d, %d", c, g)
+	}
+	recordWordTap("recordcount", partMinus)
+	recordWordTap("recordgap", partPlus)
+	if c, g := takes.Get().RunPlan(); c != takes.RunCountMax-5 || g != takes.RunGapMin+1 {
+		t.Errorf("stepped to %d, %d", c, g)
+	}
+	recordWordTap("recordword", partMain)
+	if takes.Get().Card().Up() {
+		t.Error("Start began a run with Record takes of a word off")
+	}
+}

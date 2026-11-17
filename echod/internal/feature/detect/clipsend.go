@@ -111,6 +111,7 @@ type sender struct {
 	status    string
 	cert      string             // see Untrusted
 	abort     context.CancelFunc // cancels the upload under way, for turning Keep wake clips off
+	abortKind string             // the kind of clip it is: a take is not cut short by Keep going off
 }
 
 func newSender(c *clips) *sender {
@@ -420,11 +421,8 @@ func (s *sender) drain(ctx context.Context) {
 			s.report(0, "")
 			return
 		}
-		if !s.c.kept() {
-			s.report(0, statusKeepOff)
-			return
-		}
 		// One look at the clips for each clip sent: it is both what to send and how many are waiting.
+		// With Keep wake clips off only takes are in it (sendable), and with none of those it is said.
 		queue := s.queue(cfg)
 		n := len(queue)
 		if why, ok := s.isHalted(cfg); ok {
@@ -432,7 +430,11 @@ func (s *sender) drain(ctx context.Context) {
 			return
 		}
 		if n == 0 {
-			s.report(0, "")
+			if !s.c.kept() {
+				s.report(0, statusKeepOff)
+			} else {
+				s.report(0, "")
+			}
 			return
 		}
 		item := queue[0]
@@ -448,6 +450,9 @@ func (s *sender) drain(ctx context.Context) {
 		case outSent:
 			backoff, failures = 0, 0
 			s.settle(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) }, n-1)
+			if item.meta.Kind == takeKind {
+				s.c.dropTake(item.wav) // kept only until it was sent
+			}
 			// Paced: not woken by anything, so a trainer is never asked faster than this.
 			if !s.wait(ctx, sendEvery, nil) {
 				return
@@ -565,8 +570,8 @@ func (s *sender) queue(cfg config.WakeSend) []*sendItem {
 	done := maps.Clone(s.done)
 	s.mu.Unlock()
 	var out []*sendItem
-	for _, kind := range clipKinds {
-		if !cfg.Sends(kind) {
+	for _, kind := range sendKinds(cfg) {
+		if !cfg.Sends(kind) || !s.c.sendable(kind) {
 			continue
 		}
 		files, _ := filepath.Glob(filepath.Join(s.c.dir, kind, "*.json"))
@@ -601,6 +606,15 @@ func (s *sender) queue(cfg config.WakeSend) []*sendItem {
 		return strings.Compare(a.name, b.name)
 	})
 	return out
+}
+
+// sendKinds is the folders a target is sent from: the wake clips, and a Record wake word run's takes
+// for wakesmith alone, the one trainer that knows what a take is.
+func sendKinds(cfg config.WakeSend) []string {
+	if cfg.Target == config.SendWakesmith {
+		return append(slices.Clone(clipKinds), takeKind)
+	}
+	return clipKinds
 }
 
 // next is the oldest clip to send, and how many there are.
@@ -655,11 +669,11 @@ func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (s
 	ctx, cancel := context.WithTimeout(ctx, sendAsk)
 	defer cancel()
 	s.mu.Lock()
-	s.abort = cancel
+	s.abort, s.abortKind = cancel, it.meta.Kind
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		s.abort = nil
+		s.abort, s.abortKind = nil, ""
 		s.mu.Unlock()
 	}()
 	f, err := os.Open(it.wav)
@@ -670,7 +684,7 @@ func (s *sender) send(ctx context.Context, cfg config.WakeSend, it *sendItem) (s
 		return outRetry, err.Error()
 	}
 	defer f.Close()
-	if !s.c.kept() {
+	if !s.c.sendable(it.meta.Kind) {
 		return outSkip, "" // not kept any more while it was being opened
 	}
 	st, err := f.Stat()
@@ -774,10 +788,14 @@ func cleanErr(err error) string {
 // addrInText is an IPv4 address, with a port when it has one, in an error's text.
 var addrInText = regexp.MustCompile(`\b\d{1,3}(\.\d{1,3}){3}(:\d+)?\b`)
 
-// abortSend cuts short the upload under way, if any.
+// abortSend cuts short the upload under way, if any, as wake clips are purged: not a take's, which the
+// purge leaves.
 func (s *sender) abortSend() {
 	s.mu.Lock()
 	cancel := s.abort
+	if s.abortKind == takeKind {
+		cancel = nil
+	}
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -865,15 +883,37 @@ type sendMeta struct {
 	Cutoff float64 `json:"cutoff"`
 }
 
+// takeMeta is the meta part of a take's upload (wakesmith 0.4.12): the word in place of the model, and no
+// score, which a take has none of. Word is the model id the wake clips send as "model", which wakesmith
+// matches against the word's model-name filter; Run keeps a run's takes together, Index is which of it.
+type takeMeta struct {
+	Name   string `json:"name"`
+	Device string `json:"device"`
+	Kind   string `json:"kind"`
+	At     string `json:"at"`
+	Word   string `json:"word"`
+	Index  int    `json:"index"`
+	Run    string `json:"run"`
+	Frame  string `json:"frame"`
+	Front  string `json:"front,omitempty"`
+}
+
 // multipartRequest is the upload to wakesmith or a custom receiver, the clip streamed through a pipe
 // from its file.
 func (s *sender) multipartRequest(ctx context.Context, cfg config.WakeSend, it *sendItem, f io.Reader) (*http.Request, error) {
 	model := it.meta.Model
+	if it.meta.Kind == takeKind {
+		model = it.meta.Word
+	}
 	if model == "" {
 		model = "unknown" // wakesmith wants one
 	}
 	meta, _ := json.Marshal(sendMeta{Name: it.name, Device: s.device(), Kind: it.meta.Kind, At: it.meta.At,
 		Slot: it.meta.Slot, Model: model, Score: it.meta.Score, Cutoff: it.meta.Cutoff})
+	if it.meta.Kind == takeKind {
+		meta, _ = json.Marshal(takeMeta{Name: it.name, Device: s.device(), Kind: takeKind, At: it.meta.At,
+			Word: model, Index: it.meta.Index, Run: it.meta.Run, Frame: it.meta.Frame, Front: it.meta.Front})
+	}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {

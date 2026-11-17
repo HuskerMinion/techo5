@@ -113,6 +113,8 @@ show/radar-alerts-show8.png
 show/alert-page-show8.png
 show/drawer-call-show8.png
 show/setup-ask-show8.png
+show/record-word-take-show8.png
+show/record-word-again-show8.png
 show/photo-sky-show8.png
 show/video-controls-show8.png
 show/welcome-show8.png
@@ -206,3 +208,4 @@ show/dashboard-drawer-call-show8.png
 show/library-artists-playing-1280x800.png
 show/nowplaying-seek-show8.png
 show/nowplaying-modern-seek-show8.png
+spot/record-word-take.png

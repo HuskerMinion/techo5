@@ -244,6 +244,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				{id: "hasounds", label: tr("home_assistant_sounds"), sub: tr("for_muting_and_timers"), kind: ctlToggle, on: !config.Get().Speaker.ClassicSounds},
 				{id: "louder", label: tr("louder_speech"), sub: tr("replies_and_announcements"), kind: ctlToggle, on: config.Get().Speaker.LouderSpeech},
 			}...)
+			rows = append(rows, recordWordRows()...)
 		} else {
 			rows = append(rows,
 				settingRow{label: tr("sounds"), kind: ctlHeading},
@@ -1248,6 +1249,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		}
 	case "mic":
 		mute.Get().Flip()
+	case "recordword", "recordcount", "recordgap":
+		recordWordTap(id, p)
 	case "speakergain":
 		v := media.Get().SpeakerGain()
 		switch p {

@@ -61,12 +61,14 @@ func wakeClipsSendSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<label for="wckeep">Keep wake clips</label>
 	 <select id="wckeep" name="keep"><option value="on"%s>On</option><option value="off"%s>Off</option></select>
 	 <p class="note">While it is on the device keeps the four seconds around each wake, each near miss and each
-	  wake that looks like a mistake, the newest 100 of each kind. <strong>Turning it off deletes every kept clip on this device</strong>, the ones not yet sent with them.</p>
+	  wake that looks like a mistake, the newest 100 of each kind. <strong>Turning it off deletes every kept clip on this device</strong>, the ones not yet sent with them.
+	  Takes from Record wake word are not wake clips: they stay until they reach wakesmith.</p>
 	 <p><label><input type="checkbox" name="confirm" value="yes" style="width:auto"> Delete every clip on this device (tick this to turn it off)</label></p>
 	 <p><button type="submit">Save</button></p></form>`, on, off)
 	fmt.Fprint(w, `<p style="margin-bottom:0">Nothing is sent unless you choose where below, and only clips kept after
 	 you do. It works while Keep wake clips is on, and only to an address on your home network or your
-	 Tailscale network.</p>
+	 Tailscale network. Takes from Record wake word, under Record takes of a word, go to wakesmith alone,
+	 with Keep wake clips on or off.</p>
 	 <form method="post" action="/setup/save"`+busy(busyTrainer)+`>`)
 	hidden(w, token, "wakeclips")
 	fmt.Fprint(w, `<label for="wcto">Send to</label><select id="wcto" name="target">`)
@@ -122,11 +124,19 @@ func wakeClipsSendSection(w http.ResponseWriter, token string) {
 
 // wakeSendState says what sending is doing.
 func wakeSendState(w http.ResponseWriter) {
+	n, status := wakeClipsUnsent()
 	if !wakeClipsKept() {
-		fmt.Fprint(w, `<p class="note">Keep wake clips is off, so nothing is kept or sent.</p>`)
+		if n == 0 {
+			fmt.Fprint(w, `<p class="note">Keep wake clips is off, so nothing is kept or sent.</p>`)
+			return
+		}
+		fmt.Fprintf(w, `<p class="note">Keep wake clips is off: only takes from Record wake word are sent. %d waiting to be sent.`, n)
+		if status != "" {
+			fmt.Fprintf(w, ` Last problem: %s.`, html.EscapeString(status))
+		}
+		fmt.Fprint(w, `</p>`)
 		return
 	}
-	n, status := wakeClipsUnsent()
 	fmt.Fprintf(w, `<p class="note">%d clips waiting to be sent.`, n)
 	if status != "" {
 		fmt.Fprintf(w, ` Last problem: %s.`, html.EscapeString(status))

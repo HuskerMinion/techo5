@@ -1704,7 +1704,7 @@ Instead of copying clips off by hand, the device can upload each new one to a wa
 your home network or your Tailscale network. It is off by default. Choose where under **Voice**,
 **Send wake clips to** on the setup page. Home Assistant can turn sending on or off with the **Send wake
 clips to** select once an address is saved on the setup page, but it can't set the address or the token.
-It only works while **Keep wake clips** is on.
+It only works while **Keep wake clips** is on, except for the takes **Record wake word** makes (below).
 
 - **Off**: nothing is sent.
 - **Tater Trainer**: run its Docker image
@@ -1760,6 +1760,35 @@ What is sent, and when:
   turn sending on or off once an address is saved on the setup page, and can't set the address or the
   token.
 - **Turning Keep wake clips off deletes every clip on the device, the ones not yet sent with them.**
+  Takes from **Record wake word** are not wake clips and stay until they reach wakesmith.
+
+#### Record wake word
+
+For wakesmith, the device can record a counted run of takes of its own wake word and send each one as
+an example of the word. Start it with **Record wake word** under **Sound & Voice** on the screen of a
+Show or a Spot (choose **Takes to record**, 5 to 50, 20 to begin with, and **Seconds between takes**, 2
+to 10, 3 to begin with, then **Start**), or under **Record takes of a word** on the setup page, which on
+a Dot is the only way in: the device then waits a minute for **Start** on its screen or a press of the
+action button. It needs **Record takes of a word** switched on (Privacy & Security) and **Send wake
+clips to** set to **wakesmith**; until then it says which one to set first. The count and the gap are
+remembered until the device restarts.
+
+Before each take the device beeps; say the wake word after the beep. The screen says which take it is
+("Take 7 of 20") and when to say it, and has **Stop**; a Dot's ring pulses amber for the whole run.
+Between takes, move around the room or turn on a fan or the TV, so the takes are not all alike. A take
+the device didn't hear (nothing stood out from the room, or the word was said over the beep) is asked
+for again with the same number, and nothing is sent for it; three in a row end the run. The device
+doesn't answer its wake word during the run, and nothing said in it becomes a wake clip. Stop, the
+action button, a mute, a call or a ring end it, and the takes so far still go.
+
+Each take is the frame the wake word scores (after the noise reduction while it is on) with a little of
+the room either side, cut to one take, and sent the same way as a clip, with the same address checks,
+pacing and backoff, to wakesmith only (not Tater Trainer or Custom), whether or not **Keep wake clips**
+is on. They wait in a `take/` folder beside the clip folders until they are sent, the newest 100 at
+most, and each is deleted once wakesmith has it. Their `meta` is `name`, `device`, `"kind": "take"`,
+`at`, `word` (the wake word's model name, what a clip sends as `model`), `index` (which take of the run,
+from 1), `run` (one id for the whole run), `frame` (`"heard"` with the noise reduction on, `"plain"`
+with it off) and `front` (the wake word's front end: `"tflm"`, `"zserge"` or `"oww"`).
 
 **The format a custom receiver gets**, for anyone building one. For each clip:
 

@@ -324,6 +324,33 @@ func (e *Engine) Loaded(n int) (wake.Model, bool) {
 	return e.slots[n].model, e.slots[n].loaded
 }
 
+// FrontOf is the front end the model in slot n is scored on: "tflm" (microWakeWord's exact one,
+// mwwfront), "zserge" (its approximation) or "oww" (openWakeWord), or "" with nothing loaded there. All
+// of them read the same frame here (mic.Listen); a run of wake word takes says which one its word is
+// on (feature/takes run.go).
+func (e *Engine) FrontOf(n int) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if n < 0 || n >= len(e.slots) || !e.slots[n].loaded {
+		return ""
+	}
+	m := e.slots[n].model
+	switch b := e.backends[m.Kind].(type) {
+	case *microBackend:
+		k, ok := b.step[m.ID]
+		if !ok {
+			return ""
+		}
+		if k.exact {
+			return "tflm"
+		}
+		return "zserge"
+	case *owwBackend:
+		return "oww"
+	}
+	return ""
+}
+
 // Crossing is the score a slot's latest detection crossed its threshold at: what OnDetect fired on.
 // The peak the utterance went on to reach is only known when the hold ends (OnScored).
 func (e *Engine) Crossing(n int) float64 {

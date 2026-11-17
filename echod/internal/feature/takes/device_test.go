@@ -18,8 +18,8 @@ type fake struct {
 	mu    sync.Mutex
 	clock time.Time
 
-	on, muted, muteUnread, call, talk, silent, announcing, ringing, turn, audible atomic.Bool
-	canceled, chimes                                                              atomic.Int32
+	on, muted, muteUnread, call, talk, silent, announcing, ringing, turn, audible, wakesmith atomic.Bool
+	canceled, chimes                                                                         atomic.Int32
 
 	// down and downAt are the action button: down, and when it went down.
 	down   atomic.Bool
@@ -68,8 +68,9 @@ func newDevice(t *testing.T) (*fake, *Feature) {
 			d.chimes.Add(1)
 			d.heardUntil.Store(d.now().Add(time.Second).UnixNano())
 		},
-		now:      d.now,
-		pressing: func() (bool, time.Time) { return d.down.Load(), time.Unix(0, d.downAt.Load()) },
+		now:         d.now,
+		pressing:    func() (bool, time.Time) { return d.down.Load(), time.Unix(0, d.downAt.Load()) },
+		toWakesmith: d.wakesmith.Load,
 	}, epoch: d.clock}
 	f.watched.Do(func() {}) // the real mute, phone and the rest are not listened to
 	return d, f

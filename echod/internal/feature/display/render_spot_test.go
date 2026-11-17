@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -133,7 +134,11 @@ func TestRoundScenesDraw(t *testing.T) {
 		"menu-timers":   {now: at, phase: "idle", menuOpen: true, menuMode: modeMain, menuSel: 6, menuRot: restFor(6, len(mainItems)) + 0.3, timers: []timer.Countdown{{Left: 272 * time.Second, Total: 600 * time.Second, Active: true}}},
 		"jog-volume":    {now: at, phase: "idle", menuOpen: true, menuMode: modeVolume, volume: 14, maxVolume: 30},
 		"setup-ask":     {now: at, phase: "idle", setupAsking: true},
-		"announcement":  {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
+		"record-word-take": {now: at, phase: "idle", setupAsking: true,
+			takes: takes.Card{ID: 2, Phase: takes.Recording, Run: true, Take: 7, Of: 20, Gap: 3 * time.Second, Listening: true}},
+		"record-word-again": {now: at, phase: "idle", setupAsking: true,
+			takes: takes.Card{ID: 2, Phase: takes.Recording, Run: true, Take: 7, Of: 20, Gap: 3 * time.Second, Missed: true}},
+		"announcement": {now: at, phase: "idle", showAnnouncement: true, announcement: announce.Message{From: "Guest's Desk", Text: "dinner is ready, come down"}},
 		"announcement-voice": {now: at, phase: "idle", showAnnouncement: true,
 			announcement: announce.Message{From: "Laundry Room"}},
 		"notification": {now: at, phase: "idle", weather: sky, showNotification: true,

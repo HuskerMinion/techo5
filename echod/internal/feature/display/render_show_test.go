@@ -22,6 +22,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/takes"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
@@ -117,6 +118,13 @@ func TestShowScenesDraw(t *testing.T) {
 		"weather-partly-night": {now: at, phase: "idle", weather: home.Weather{Condition: home.PartlyCloudyNight, Temp: "58°"}, forecast: week, showWeather: true},
 		"weather-clear-night":  {now: at, phase: "idle", weather: home.Weather{Condition: "clear-night", Temp: "58°"}, forecast: week, showWeather: true},
 		"setup-ask":            {now: at, phase: "idle", weather: sky, setupAsking: true},
+		// Record wake word: asked for on the setup page, a take to say now, and one not heard and asked again.
+		"record-word-armed": {now: at, phase: "idle", weather: sky, setupAsking: true,
+			takes: takes.Card{ID: 2, Phase: takes.Armed, Run: true, Take: 1, Of: 20, Gap: 3 * time.Second}},
+		"record-word-take": {now: at, phase: "idle", weather: sky, setupAsking: true,
+			takes: takes.Card{ID: 2, Phase: takes.Recording, Run: true, Take: 7, Of: 20, Gap: 3 * time.Second, Listening: true}},
+		"record-word-again": {now: at, phase: "idle", weather: sky, setupAsking: true,
+			takes: takes.Card{ID: 2, Phase: takes.Recording, Run: true, Take: 7, Of: 20, Gap: 3 * time.Second, Missed: true}},
 		"announcement": {now: at, phase: "idle", weather: sky, showAnnouncement: true,
 			announcement: announce.Message{From: "Kitchen", Text: "dinner is ready"}},
 		"announcement-voice": {now: at, phase: "idle", weather: sky, showAnnouncement: true,

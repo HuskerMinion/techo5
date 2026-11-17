@@ -87,6 +87,89 @@ func takesWhat(c takes.Card, most int) string {
 	return fmt.Sprintf(tr("ui_takes_of_word"), word)
 }
 
+// Record wake word (feature/takes run.go), in the Voice group of the Sound card: Start, with how many
+// takes and how far apart above it. The tap on Start is the press at the device, so the run starts at
+// once; behind the settings lock, as starting the setup page's recording is.
+
+// recordWordRows are the rows: Start, the count and the gap.
+func recordWordRows() []settingRow {
+	count, gap := takes.Get().RunPlan()
+	return []settingRow{
+		{id: "recordword", label: tr("record_wake_word"), sub: recordWordSub(), kind: ctlButton, button: tr("ui_start")},
+		{id: "recordcount", label: tr("ui_record_takes"), kind: ctlStepper, value: fmt.Sprint(count)},
+		{id: "recordgap", label: tr("ui_record_seconds_between"), kind: ctlStepper, value: fmt.Sprintf("%d s", gap)},
+	}
+}
+
+// recordWordRefusedFor is how long a start that could not be made is said under Record wake word.
+const recordWordRefusedFor = 15 * time.Second
+
+// recordWordSub is what Record wake word says under its name: what has to be set first, a start just
+// refused, how the last run went, or where the takes go.
+func recordWordSub() string {
+	rec := takes.Get()
+	switch rec.RunBlocked() {
+	case takes.RunSwitchOff:
+		return tr("ui_record_turn_on_takes_first")
+	case takes.RunNotWakesmith:
+		return tr("ui_record_set_wakesmith_first")
+	case takes.RunNoWakeWord:
+		return tr("ui_record_no_wake_word")
+	}
+	last := rec.LastRun()
+	switch {
+	case last.Refused && time.Since(last.At) < recordWordRefusedFor:
+		return tr("ui_record_busy")
+	case !last.Refused && last.Of > 0:
+		return fmt.Sprintf(tr("ui_record_last_run"), last.Kept, last.Of)
+	}
+	return tr("ui_record_sends_to_wakesmith")
+}
+
+// recordWordTap is a tap on one of the rows: Start, or a step of the count (by five) or the gap.
+func recordWordTap(id string, p part) {
+	rec := takes.Get()
+	count, gap := rec.RunPlan()
+	step := 0
+	switch p {
+	case partMinus:
+		step = -1
+	case partPlus:
+		step = 1
+	}
+	switch id {
+	case "recordcount":
+		if step != 0 {
+			rec.SetRunPlan(count+5*step, gap)
+		}
+	case "recordgap":
+		if step != 0 {
+			rec.SetRunPlan(count, gap+step)
+		}
+	case "recordword":
+		start := func() { _ = takes.Get().StartRun(takes.Get().RunPlan()) }
+		if security.Locked() {
+			openPIN(tr("record_wake_word"), func() {
+				start()
+				security.Relock()
+			})
+			return
+		}
+		start()
+	}
+}
+
+// runLine is what a run's card says now: say the word, it wasn't heard, or get ready for the beep.
+func runLine(c takes.Card) string {
+	switch {
+	case c.Listening:
+		return tr("ui_say_the_wake_word_now")
+	case c.Missed:
+		return fmt.Sprintf(tr("ui_didnt_hear_take_again"), c.Take)
+	}
+	return tr("ui_record_get_ready")
+}
+
 // takesTime is how far a recording has come, against its ceiling.
 func takesTime(d time.Duration) string {
 	s, most := int(d.Seconds()), int(takes.Longest.Seconds())
