@@ -119,3 +119,100 @@ func TestDrawerRowsAreAsTallAsTheirWordsInEveryLanguage(t *testing.T) {
 		}
 	}
 }
+
+// A long name with no line under it, a radio station's in the drawer, is drawn on the lines it takes
+// in the row grown for them, not on one cut line in its middle.
+func TestALongNameWithNoLineUnderItTakesItsLines(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	for _, panel := range showPanels() {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
+		side := image.Rect(r.w-r.cardIn()-r.drawerW(), r.cardIn(), r.w-r.cardIn(), r.h-r.cardIn())
+		row := settingRow{id: "station:0", label: "Radio Bremen Eins Oldies und Schlager rund um die Uhr", kind: ctlButton, button: tr("play"), rowTap: true}
+		labels, subs := r.wordLines(side, row)
+		if len(labels) < 2 {
+			t.Fatalf("%s: the name was meant to take two lines, it takes %d", panel.name, len(labels))
+		}
+		top, rh := 100, r.rowHeight(side, row)
+		lines, _, _ := r.rowLines(top, rh, row, r.labelFace(row), labels, subs)
+		var drawn []string
+		for _, l := range lines {
+			m := l.face.Metrics()
+			if l.y-m.Ascent.Ceil() < top || l.y+m.Descent.Ceil() > top+rh {
+				t.Errorf("%s: the line %q at %d runs out of the row %d..%d", panel.name, l.text, l.y, top, top+rh)
+			}
+			drawn = append(drawn, l.text)
+		}
+		if got := strings.Join(drawn, " "); got != row.label {
+			t.Errorf("%s: the name is drawn as %q", panel.name, got)
+		}
+	}
+}
+
+// In a row grown for its words, a control sits in the row's middle, and the lower half of it is as
+// much its tap target as the upper: the switch of a row tapped as a whole, a choice's button, a
+// button and a danger button, and the days.
+func TestAGrownRowsControlsAreTappedWhole(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	long := "A line under the name long enough to take three lines in the room beside any control on the row"
+	for _, panel := range showPanels() {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
+		card := r.nextCard(r.w, r.h)
+		right := card.Max.X - r.s(26)
+		cases := []struct {
+			row  settingRow
+			part part
+			x    func(settingRow) int // where on the row the control is, across
+		}{
+			{settingRow{id: "t", label: "Toggle", sub: long, kind: ctlToggle, rowTap: true}, partMain, func(settingRow) int { return right - r.s(33) }},
+			{settingRow{id: "b", label: "Button", sub: long, kind: ctlButton, button: "Go"}, partMain, func(settingRow) int { return right - r.s(20) }},
+			{settingRow{id: "d", label: "Danger", sub: long, kind: ctlDanger, button: "Erase"}, partMain, func(settingRow) int { return right - r.s(20) }},
+			{settingRow{id: "w", label: "Days", sub: long, kind: ctlDays, days: 1}, partDay, func(settingRow) int {
+				w, gap := r.dayChip()
+				return right - 7*w - 6*gap + w/2
+			}},
+		}
+		for _, c := range cases {
+			top := 100
+			rh := r.rowHeight(card, c.row)
+			if rh <= r.rowH() && c.row.kind != ctlDays {
+				t.Fatalf("%s: %s did not grow", panel.name, c.row.id)
+			}
+			r.pending = nil
+			r.settingRow(card, top, c.row)
+			at := image.Pt(c.x(c.row), top+rh/2+r.s(15)) // the lower half of the control
+			if z, ok := zoneIn(r.pending, at, 0); !ok || z.part != c.part {
+				t.Errorf("%s: a tap on the lower half of %s's control (%v) misses it", panel.name, c.row.id, at)
+			}
+		}
+	}
+}
+
+// A choice whose words take more lines stacks its button over its chip (a choice with a button never
+// grows with the two beside each other): the lower half of the button runs the button, the lower half
+// of the chip opens the choice.
+func TestAStackedChoiceIsTappedWhere(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	for _, panel := range showPanels() {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
+		card := r.nextCard(r.w, r.h)
+		row := settingRow{id: "c", label: "Choice", kind: ctlChoice, value: "Home Assistant forecast", button: "Show",
+			sub: "A line under the name long enough to take more lines in the room beside any control on the row"}
+		if !r.stacked(card, row) {
+			t.Fatalf("%s: the choice does not stack", panel.name)
+		}
+		top := 100
+		cy := top + r.rowHeight(card, row)/2
+		half := r.s(stackStep) / 2
+		r.pending = nil
+		r.settingRow(card, top, row)
+		x := card.Max.X - r.s(26) - r.s(20)
+		for _, c := range []struct {
+			at   image.Point
+			want part
+		}{{image.Pt(x, cy-half+r.s(15)), partExtra}, {image.Pt(x, cy+half+r.s(15)), partMain}} {
+			if z, ok := zoneIn(r.pending, c.at, 0); !ok || z.part != c.want {
+				t.Errorf("%s: a tap at %v is part %d (found %v), want %d", panel.name, c.at, z.part, ok, c.want)
+			}
+		}
+	}
+}

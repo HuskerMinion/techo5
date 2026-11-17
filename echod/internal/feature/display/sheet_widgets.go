@@ -753,15 +753,8 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		labels, subs = r.wordLines(card, row)
 		row.label, row.sub, labelEnd = r.rowWords(card, row, face)
 	}
-	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
-	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
-	// A row grown for large text keeps them in its middle.
-	mid := top + (rh-r.s(rowHBase))/2
-	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
-	base := line(40, 30)
-	lastLabel := row.label
-	switch {
-	case planned && plan.baseL != nil:
+	base, lastLabel := 0, row.label
+	if planned && plan.baseL != nil {
 		// More than one line of words: laid out from the top of a row grown to hold them.
 		for i, l := range plan.label {
 			r.text(face, l, card.Min.X+r.rowIn(), top+plan.baseL[i], cream)
@@ -770,34 +763,12 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			r.text(fc.sub, l, card.Min.X+r.rowIn(), top+plan.baseS[i], dim)
 		}
 		base, lastLabel = top+plan.baseL[len(plan.baseL)-1], plan.label[len(plan.label)-1]
-	case row.sub == "":
-		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
-	case len(labels) > 1 || len(subs) > 1:
-		// Words on more than one line: the row grew for them, and they stay in its middle.
-		if labels == nil {
-			labels = []string{row.label}
+	} else {
+		var lines []rowLine
+		lines, base, lastLabel = r.rowLines(top, rh, row, face, labels, subs)
+		for _, l := range lines {
+			r.text(l.face, l.text, card.Min.X+r.rowIn(), l.y, l.col)
 		}
-		if subs == nil && row.sub != "" {
-			subs = []string{row.sub}
-		}
-		lhL, lhS := face.Metrics().Height.Ceil(), fc.sub.Metrics().Height.Ceil()
-		up := r.extraLines(row, labels, subs) / 2
-		base = line(30, 40) - up
-		if len(subs) == 0 {
-			base = line(40, 30) - up
-		}
-		for i, l := range labels {
-			r.text(face, l, card.Min.X+r.rowIn(), base+i*lhL, cream)
-		}
-		base += (len(labels) - 1) * lhL
-		lastLabel = labels[len(labels)-1]
-		for i, l := range subs {
-			r.text(fc.sub, l, card.Min.X+r.rowIn(), line(53, 40)-up+(len(labels)-1)*lhL+i*lhS, dim)
-		}
-	default:
-		base = line(30, 40)
-		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
-		r.text(fc.sub, row.sub, card.Min.X+r.rowIn(), line(53, 40), dim)
 	}
 	if row.locked {
 		x := card.Min.X + r.rowIn() + r.width(face, lastLabel) + r.s(lockGap)
@@ -829,7 +800,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		}
 		if row.rowTap {
 			add(whole, partRow)
-			add(image.Rect(x-r.s(14), top, card.Max.X-r.s(8), top+r.rowH()), partMain)
+			add(image.Rect(x-r.s(14), top, card.Max.X-r.s(8), top+rh), partMain)
 			break
 		}
 		add(whole, partMain) // the whole row flips the switch: a small target otherwise
@@ -851,7 +822,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			}
 			r.text(fc.button, name, b.Min.X+(chipW-r.width(fc.button, name))/2, cy+r.s(8), ink)
 			if row.id != "" {
-				r.addZone(zone{r: image.Rect(b.Min.X-chipGap/2, top, b.Max.X+chipGap/2, top+r.rowH()), kind: zoneRow, id: row.id, part: partDay, opt: i, label: row.label})
+				r.addZone(zone{r: image.Rect(b.Min.X-chipGap/2, top, b.Max.X+chipGap/2, top+rh), kind: zoneRow, id: row.id, part: partDay, opt: i, label: row.label})
 			}
 		}
 	case ctlStepper:
@@ -875,7 +846,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		if row.button != "" {
 			bx := r.pillButton(x-r.s(12), cy, row.button, btnSecondary)
 			add(whole, partMain)
-			add(image.Rect(bx-r.s(6), top, x-r.s(6), top+r.rowH()), partExtra)
+			add(image.Rect(bx-r.s(6), top, x-r.s(6), top+rh), partExtra)
 			break
 		}
 		add(whole, partMain)
@@ -891,8 +862,56 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		if row.rowTap {
 			add(whole, partMain) // the whole row does what its button does
 		}
-		add(image.Rect(x-r.s(8), top+r.s(4), card.Max.X-r.s(12), top+r.rowH()-r.s(4)), partMain)
+		add(image.Rect(x-r.s(8), top+r.s(4), card.Max.X-r.s(12), top+rh-r.s(4)), partMain)
 	}
+}
+
+// rowLine is one line of a row's words as drawn: its face, its text, its baseline and its color.
+type rowLine struct {
+	face font.Face
+	text string
+	y    int
+	col  color.RGBA
+}
+
+// rowLines lays out a row's name and the line under it in a row top..top+rh tall: labels and subs are
+// their lines when they take more than one (wordLines), else row.label and row.sub are drawn on one
+// each. It returns the lines, the last name line's baseline and its text, for the padlock after it.
+func (r *paint) rowLines(top, rh int, row settingRow, face font.Face, labels, subs []string) (lines []rowLine, base int, lastLabel string) {
+	fc := r.faces()
+	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
+	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
+	// A row grown for large text, or for words on more than one line, keeps them in its middle.
+	mid := top + (rh-r.s(rowHBase))/2
+	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
+	switch {
+	case len(labels) > 1 || len(subs) > 1:
+		// Words on more than one line, with or without a line under the name: the row grew for them.
+		if labels == nil {
+			labels = []string{row.label}
+		}
+		if subs == nil && row.sub != "" {
+			subs = []string{row.sub}
+		}
+		lhL, lhS := face.Metrics().Height.Ceil(), fc.sub.Metrics().Height.Ceil()
+		up := r.extraLines(row, labels, subs) / 2
+		base = line(30, 40) - up
+		if len(subs) == 0 {
+			base = line(40, 30) - up
+		}
+		for i, l := range labels {
+			lines = append(lines, rowLine{face, l, base + i*lhL, cream})
+		}
+		for i, l := range subs {
+			lines = append(lines, rowLine{fc.sub, l, line(53, 40) - up + (len(labels)-1)*lhL + i*lhS, dim})
+		}
+		return lines, base + (len(labels)-1)*lhL, labels[len(labels)-1]
+	case row.sub == "":
+		base = line(40, 30)
+		return []rowLine{{face, row.label, base, cream}}, base, row.label
+	}
+	base = line(30, 40)
+	return []rowLine{{face, row.label, base, cream}, {fc.sub, row.sub, line(53, 40), dim}}, base, row.label
 }
 
 // rowGap is the space a row keeps between its words and its value or control.
