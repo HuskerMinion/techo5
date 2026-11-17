@@ -420,9 +420,11 @@ loop:
 				f.note(beepNotes...)
 				continue
 			}
-			if len(capture)-beepAt < echoN {
-				h.over = true
-			}
+			// From the beep on, the device's own sound is the beep and its echo, and nothing else: the run
+			// holds the microphones, so nothing else plays. The speaker says it is still playing for about a
+			// second after a note (its stream stays open), and taking its word for it threw away the words
+			// said promptly after the beep (seen on a Show 8: 58 frames counted as its own sound, not 12).
+			h.over = len(capture)-beepAt < echoN
 			capture = append(capture, h)
 			if len(capture)-beepAt == echoN {
 				set(func(r *run) { r.listening = true })
