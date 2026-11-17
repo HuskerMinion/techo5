@@ -631,6 +631,17 @@ func (a *Adapter) SetPairable(on bool) (was bool, err error) {
 	return was, a.set("Pairable", on)
 }
 
+// Discoverable is whether the adapter is findable now: Bluetooth audio's pairing mode makes it so
+// (Pairing), and a pairing the device starts itself does not.
+func (a *Adapter) Discoverable() bool {
+	v, err := a.get("Discoverable")
+	if err != nil {
+		return false
+	}
+	on, _ := v.Value().(bool)
+	return on
+}
+
 // Discover starts or stops looking for devices. Scanning shares the antenna with Wi-Fi, so it is
 // only on while someone is pairing.
 func (a *Adapter) Discover(on bool) error {

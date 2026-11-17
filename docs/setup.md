@@ -888,7 +888,7 @@ other Shows don't have the switches.
   its own, are kept for when the skin is taken off, and their rows say so. The red night clock stays
   red under any skin, and on the Spot so do the muted ring and the camera's mark: while one of them is
   up, E-ink's paper-and-ink filter is off. On the Show it's the same for the "microphone off" pill at
-  the top and the red Talk button while a camera's Talk is on: while either is on the screen, the
+  the top (on the Skylight and tablets, which have no red mute light to say it) and the red Talk button while a camera's Talk is on: while either is on the screen, the
   filter is off. **Big and plain** is white on black with yellow for what stands out, in Inter, with
   nothing behind the clock: the easiest to read across a room. **Control room** is near-white on dark
   gray with green, inside a thin console frame with three status lights at the top left. **Prairie**

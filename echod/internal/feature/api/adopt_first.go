@@ -32,8 +32,8 @@ import (
 // where nobody can reach it either. The window then bounds the rest.
 //
 // A device that already has a key ignores the marker and deletes it: the marker never takes a key
-// away. The idea of a fresh device handing itself to the first Home Assistant that asks is Andrej
-// Friesen's Dashboard Assistant (https://github.com/ajfriesen/DashboardAssistant/blob/feffd7de8b6880ceb7521a7b373425c38c845ed0/daemon/pairing.go);
+// away. The idea of a fresh device handing itself to the first Home Assistant that asks comes from
+// Dashboard Assistant (https://github.com/ajfriesen/DashboardAssistant/blob/feffd7de8b6880ceb7521a7b373425c38c845ed0/daemon/pairing.go);
 // none of its code is used here.
 
 const firstInstallWindow = 30 * time.Minute

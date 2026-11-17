@@ -356,7 +356,10 @@ func (f *Feature) pair(known string) {
 	done := bluez.AllowPairing(d.Path)
 	err = a.Pair(ctx, d.Address)
 	done()
-	if perr == nil && !wasPairable {
+	// Put it back as it was, unless Bluetooth audio's pairing mode began meanwhile (it makes the adapter
+	// findable as well as pairable): taking pairable away under it would leave a phone pairing there
+	// with no bond, as the clock's had (techo5#511).
+	if perr == nil && !wasPairable && !a.Discoverable() {
 		if _, err := a.SetPairable(false); err != nil {
 			slog.Warn("wall clock: could not make the adapter unpairable again", "err", err)
 		}
