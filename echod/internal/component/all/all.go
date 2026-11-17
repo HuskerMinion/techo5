@@ -62,6 +62,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/tessera"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/touched"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
