@@ -64,7 +64,13 @@ func sayGerman(t time.Time) SaidTime {
 	case five == 0:
 		s.Hour += " Uhr"
 	}
-	switch ph := partHour(h, said); {
+	// The evening lasts until the clock says eleven: "halb elf abends", "kurz vor elf Uhr abends", though
+	// the hour said is already eleven; "elf Uhr nachts" from 23:00.
+	ph := partHour(h, said)
+	if ph == 23 && t.Hour() == 22 {
+		ph = 22
+	}
+	switch {
 	case ph >= 5 && ph < 10:
 		s.Period = "morgens"
 	case ph >= 10 && ph < 12:
