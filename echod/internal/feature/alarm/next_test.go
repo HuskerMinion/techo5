@@ -67,3 +67,34 @@ func TestTheNextAlarmIsTheSoonerOfTheDevicesAndTheHelpers(t *testing.T) {
 		t.Errorf("with every alarm off the next is %+v", v.Next)
 	}
 }
+
+// A reminder is said, not rung: the next alarm a bedside night clock shows (NextAlarm) steps over one
+// due first, where the day clock's Next keeps it, and a snooze is still an alarm that rings. Reminders
+// stay on with every alarm off, and then there is no next alarm at all.
+func TestTheNextAlarmLeavesOutReminders(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	skipPut(t, config.Alarm{ID: "trash", Hour: 6, Minute: 0, Days: config.DaysEvery, Label: "Take out the trash", On: true, Remind: true})
+	skipPut(t, config.Alarm{ID: "work", Hour: 7, Minute: 30, Days: config.DaysEvery, On: true})
+	a := &Alarms{}
+	friday := at(18, 3, 0)
+	v := a.View(friday)
+	if v.Next == nil || v.Next.Key != "trash" || !v.Next.At.Equal(at(18, 6, 0)) {
+		t.Errorf("Next = %+v, want the reminder at 6:00", v.Next)
+	}
+	if v.NextAlarm == nil || v.NextAlarm.Key != "work" || !v.NextAlarm.At.Equal(at(18, 7, 30)) {
+		t.Errorf("NextAlarm = %+v, want the alarm at 7:30", v.NextAlarm)
+	}
+
+	a.snoozed = []source{{key: "snooze:work", once: at(18, 3, 9)}}
+	if v := a.View(friday); v.NextAlarm == nil || !v.NextAlarm.Snoozed || !v.NextAlarm.At.Equal(at(18, 3, 9)) {
+		t.Errorf("with a snooze, NextAlarm = %+v, want the snooze at 3:09", v.NextAlarm)
+	}
+	a.snoozed = nil
+
+	if err := config.Set().Alarms().AllOff(true); err != nil {
+		t.Fatal(err)
+	}
+	if v := a.View(friday); v.Next == nil || v.Next.Key != "trash" || v.NextAlarm != nil {
+		t.Errorf("with every alarm off: Next = %+v, NextAlarm = %+v, want the reminder and no alarm", v.Next, v.NextAlarm)
+	}
+}

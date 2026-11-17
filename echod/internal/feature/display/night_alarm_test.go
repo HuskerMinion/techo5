@@ -28,7 +28,8 @@ func nightAlarmFrame(style, foot string) scene {
 		s = nightInfoFrame(at, style, true, foot == "chips")
 	}
 	s.nightAlarm = true
-	s.alarms.Next = &alarm.Upcoming{Key: "a1", At: time.Date(2026, 11, 2, 7, 30, 0, 0, time.Local)}
+	s.alarms.NextAlarm = &alarm.Upcoming{Key: "a1", At: time.Date(2026, 11, 2, 7, 30, 0, 0, time.Local)}
+	s.alarms.Next = s.alarms.NextAlarm
 	return s
 }
 
@@ -78,7 +79,7 @@ func TestNightAlarmOffIsTheClockAsItWas(t *testing.T) {
 			alone := drawNight(showWide, showHigh, off)
 			for name, s := range map[string]scene{"off": off, "no alarm": nightAlarmFrame(style, foot)} {
 				if name == "no alarm" {
-					s.alarms.Next = nil
+					s.alarms.Next, s.alarms.NextAlarm = nil, nil
 				}
 				if got := drawNight(showWide, showHigh, s); !samePixels(got, alone) {
 					t.Errorf("%q foot %q, %s: the night clock changed", style, foot, name)
@@ -131,6 +132,23 @@ func TestNightAlarmKeepsClearOfTheClockAndTheFoot(t *testing.T) {
 				t.Errorf("%s: a pixel the night cannot make at %v: %v", name, p, c)
 			}
 		}
+	}
+}
+
+// A reminder before the alarm is not what the line says: it is said, not rung. The line is the alarm
+// after it, and with only a reminder ahead there is no line at all.
+func TestNightAlarmLeavesOutReminders(t *testing.T) {
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	clock24.Store(false)
+	s := nightAlarmFrame(nightStylePlain, "")
+	s.alarms.Next = &alarm.Upcoming{Key: "trash", Label: "Take out the trash", At: time.Date(2026, 11, 2, 6, 0, 0, 0, time.Local)}
+	if got, want := nightAlarmLine(s), "Alarm 7:30 AM"; got != want {
+		t.Errorf("with a reminder first: %q, want %q", got, want)
+	}
+	s.alarms.NextAlarm = nil
+	if got := nightAlarmLine(s); got != "" {
+		t.Errorf("with only a reminder ahead: %q, want no line", got)
 	}
 }
 

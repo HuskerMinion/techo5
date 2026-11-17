@@ -101,8 +101,11 @@ type Followed struct {
 type View struct {
 	Ringing *Ring
 	Next    *Upcoming
-	Snoozed []Upcoming
-	Local   []config.Alarm // by time of day
+	// NextAlarm is Next without the reminders, which are said rather than rung: the next alarm that will
+	// ring, a snooze included, as a bedside night clock shows it (#619).
+	NextAlarm *Upcoming
+	Snoozed   []Upcoming
+	Local     []config.Alarm // by time of day
 	// Skipped are the occurrences left out, so a caller showing a next time knows it is not one.
 	Skipped  []config.Skip
 	Followed []Followed
@@ -862,8 +865,12 @@ func (a *Alarms) View(now time.Time) View {
 		v.Snoozed = append(v.Snoozed, Upcoming{Key: s.key, Label: s.label, At: s.once, Snoozed: true})
 	}
 	a.mu.Unlock()
-	if s, at, ok := soonest(a.sources(now), now); ok {
-		v.Next = &Upcoming{Key: s.key, Label: s.label, At: at, Snoozed: strings.HasPrefix(s.key, "snooze:")}
+	sources := a.sources(now)
+	if s, at, ok := soonest(sources, now); ok {
+		v.Next = &Upcoming{Key: s.key, Label: s.label, At: at, Snoozed: isSnooze(s)}
+	}
+	if s, at, ok := soonest(slices.DeleteFunc(sources, func(s source) bool { return s.remind }), now); ok {
+		v.NextAlarm = &Upcoming{Key: s.key, Label: s.label, At: at, Snoozed: isSnooze(s)}
 	}
 	return v
 }

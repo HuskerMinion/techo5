@@ -809,7 +809,8 @@ other Shows don't have the switches.
   Display, on at first; it applies when **At night** is the clock alone): the night clock says, small
   and under the time, when the next alarm rings, such as *Alarm 7:30 AM*, with the day when it is not
   today or tomorrow (*Alarm Mon 7:30 AM*). It is the device's own alarms and the Home Assistant alarms
-  it follows, whichever comes first, over their weekdays and around a skipped one; with no alarm on,
+  it follows, whichever comes first, over their weekdays and around a skipped one, and a snoozed alarm
+  as *Snoozed until*; reminders are left out, since they are said rather than rung. With no alarm on,
   the line is not there. It is drawn in a dimmer shade of the night clock's red and moves a few pixels
   through the night, so the panel keeps no shadow of it.
 - **Night warmth** (Show, a switch in Home Assistant, off at first): a warmer, lamp-like white on the

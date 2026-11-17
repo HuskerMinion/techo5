@@ -19,9 +19,9 @@ import (
 // Night clock shows the next alarm (#619): an Echo Show 5 is the one on a bedside table, so its night
 // clock says, small and under the time, when the next alarm will ring - "Alarm 7:30 AM", with the day
 // as well when it is not today or tomorrow - without anybody leaving the night light to look. It is the
-// clock's own next alarm (alarm.View's Next, as the day clock puts after its date): the device's alarms
-// and the Home Assistant ones it follows, whichever comes first, over their weekdays and around an
-// occurrence left out. It is drawn in a dimmer shade of the night red, and with no alarm on it is not
+// clock's next alarm that rings (alarm.View's NextAlarm, the day clock's Next without the reminders):
+// the device's alarms and the Home Assistant ones it follows, whichever comes first, over their weekdays
+// and around an occurrence left out. It is drawn in a dimmer shade of the night red, and with no alarm on it is not
 // there at all. On unless turned off; the other screens are not by a bed, and do not offer it.
 
 // nightAlarmHere is whether this device offers the next alarm on its night clock: the Echo Show 5, either
@@ -76,12 +76,14 @@ func nightAlarmText(next *alarm.Upcoming, now time.Time, lang string) string {
 }
 
 // nightAlarmLine is what the night clock of s says of the next alarm, or "" for nothing: the setting
-// off, no alarm on, or a notification over the clock, which is then the one thing on it.
+// off, no alarm on, or a notification over the clock, which is then the one thing on it. A reminder is
+// not counted (View's NextAlarm, not its Next): it is said, not rung, and "Alarm 9:00 AM" by the bed for
+// one would be wrong. A snooze is, since it rings.
 func nightAlarmLine(s scene) string {
 	if !s.nightAlarm || s.showNotification {
 		return ""
 	}
-	return nightAlarmText(s.alarms.Next, s.now, screenLang())
+	return nightAlarmText(s.alarms.NextAlarm, s.now, screenLang())
 }
 
 // nightAlarmInk is the line's red: three quarters of the night clock's, so it reads as the time's
