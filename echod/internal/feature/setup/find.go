@@ -213,7 +213,8 @@ func isKeyword(keys []string, w string) bool {
 const findMaxOptions = 24
 
 var (
-	findSkip   = regexp.MustCompile(`(?is)<summary>.*?</summary>|<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>`)
+	findOwn    = regexp.MustCompile(`(?is)<summary>.*?</summary>`)
+	findSkip   = regexp.MustCompile(`(?is)<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>`)
 	findSelect = regexp.MustCompile(`(?is)<select\b.*?</select>`)
 	findTag    = regexp.MustCompile(`<[^>]*>`)
 )
@@ -221,7 +222,13 @@ var (
 // cardText is the words on a drawn card, lowercase: its labels, notes and choices, without its title
 // and line (matched on their own), its scripts, what is typed in its boxes, or a long list of choices.
 func cardText(drawn []byte) string {
-	s := findSkip.ReplaceAllString(string(drawn), " ")
+	// The card's own summary (its title and line) is the first; the ones inside it, an alarm's or a
+	// shared setting's, are words on the card.
+	s := string(drawn)
+	if at := findOwn.FindStringIndex(s); at != nil {
+		s = s[:at[0]] + " " + s[at[1]:]
+	}
+	s = findSkip.ReplaceAllString(s, " ")
 	s = findSelect.ReplaceAllStringFunc(s, func(sel string) string {
 		if strings.Count(sel, "<option") > findMaxOptions {
 			return " "
@@ -263,6 +270,11 @@ func (f *Feature) findPage(ctx context.Context, w http.ResponseWriter, token, sh
 			fmt.Fprintf(w, `<div class="hit"><p class="where">On <a href="/setup?tab=%s&amp;open=%s#sec-%s">%s</a></p>`,
 				h.tab.id, h.card.name, h.card.name, html.EscapeString(h.tab.title))
 			_, _ = w.Write(h.html)
+			// What is coming up is found by "alarm", "timer" and "reminder", which people mostly look
+			// for to add one: the drawer that adds them, which is not a card, comes with it.
+			if h.card.name == "alarm_edit" {
+				addDrawer(w, token)
+			}
 			fmt.Fprint(w, `</div>`)
 		}
 		fmt.Fprint(w, `</div>`)
