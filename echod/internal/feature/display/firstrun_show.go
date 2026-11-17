@@ -94,7 +94,11 @@ func (d *Display) firstRunTap(x, y int) {
 	if v.step == frLanguage {
 		for i, b := range d.r.frLangRects() {
 			if image.Pt(x, y).In(b) {
-				d.firstRunLanguage(frLangs[i].Code)
+				// The language already lit is left as it is: a tap to confirm keeps Match all, and the
+				// clock chosen.
+				if frLangs[i].Code != v.lang {
+					d.firstRunLanguage(frLangs[i].Code)
+				}
 				return
 			}
 		}

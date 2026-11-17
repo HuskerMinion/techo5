@@ -128,6 +128,33 @@ func TestFirstRunLanguageStep(t *testing.T) {
 	}
 }
 
+// A tap on the language already lit changes nothing: on Match all, English is lit, and tapping it to
+// confirm keeps Match all and the clock chosen, rather than making the screen English-only at 12 hours.
+func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	if err := config.Set().Screen().Clock24(true); err != nil {
+		t.Fatal(err)
+	}
+	setClock24(nil, true)
+	setStep(t, frLanguage)
+	v := d.firstRunView(time.Now())
+	if v.lang != "en" || config.Get().Screen.Language != "" {
+		t.Fatalf("want Match all shown as English, got %q (saved %q)", v.lang, config.Get().Screen.Language)
+	}
+	en := -1
+	for i, l := range frLangs {
+		if l.Code == "en" {
+			en = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[en])
+	if c := config.Get().Screen; c.Language != "" || !c.Clock24 || !clock24.Load() {
+		t.Fatalf("a tap on the lit English: language %q, 24 hours %v, drawn %v", c.Language, c.Clock24, clock24.Load())
+	}
+}
+
 // Japanese is named in its own script once a font here draws it, and romanized until then, rather
 // than as boxes: its font is fetched only once Japanese is chosen, and maybe not before the Wi-Fi.
 func TestFirstRunNamesJapaneseItCanDraw(t *testing.T) {

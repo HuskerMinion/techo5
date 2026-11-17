@@ -214,3 +214,38 @@ func TestSpotFirstRunDraws(t *testing.T) {
 		}
 	}
 }
+
+// A pick on the Spot is let go when the language step is left some other way, as the setup page's
+// first run does: back on the step, it shows what was saved there, and Next does not put the pick back.
+func TestSpotFirstRunPickGoesWhenTheStepIsLeft(t *testing.T) {
+	d, _ := spotFirstRun(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	setClock24(nil, false)
+	spotSetStep(t, frLanguage)
+	if !spotFRTap(d, "lang") {
+		t.Fatal("no language button")
+	}
+	picked := d.firstRunView(time.Now()).lang
+	// The phone chooses another language, keeping 12 hours, and goes on.
+	phone := "fr"
+	if picked == phone {
+		phone = "it"
+	}
+	if err := firstrun.SaveLanguage(phone, false); err != nil {
+		t.Fatal(err)
+	}
+	spotSetStep(t, stepAfter(frLanguage))
+	d.firstRunView(time.Now())
+	// Back on the language step.
+	spotSetStep(t, frLanguage)
+	if v := d.firstRunView(time.Now()); v.lang != phone || v.clock24 {
+		t.Fatalf("back on the step: %q, 24 hours %v; want the phone's %q, 12 hours", v.lang, v.clock24, phone)
+	}
+	if !spotFRTap(d, "next") {
+		t.Fatal("no Next button")
+	}
+	if c := config.Get().Screen; c.Language != phone || c.Clock24 {
+		t.Fatalf("Next saved %q, 24 hours %v; want the phone's %q, 12 hours", c.Language, c.Clock24, phone)
+	}
+}

@@ -131,8 +131,13 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 		fr.reading, read = true, true
 	}
 	v.wifi, v.showKey, v.renaming, v.phone = fr.wifi, fr.showKey, fr.renaming, fr.phone
-	if v.step == frLanguage && fr.picking {
+	switch {
+	case v.step == frLanguage && fr.picking:
 		v.lang, v.clock24 = fr.pickLang, fr.pickClock24
+	case v.step != frLanguage:
+		// The step was left some other way (the setup page's first run): the pick is let go, so the
+		// step shows what was saved if it comes back.
+		fr.picking, fr.pickedClock = false, false
 	}
 	v.typing, v.text, v.typeErr, v.shifted, v.symbols = fr.typing, fr.text, fr.typeErr, fr.shifted, fr.symbols
 	advance, chime := false, false
