@@ -16,17 +16,19 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 )
 
-// Night clock shows the next alarm (#619): an Echo Show 5 is the one on a bedside table, so its night
-// clock says, small and under the time, when the next alarm will ring - "Alarm 7:30 AM", with the day
+// Night clock shows the next alarm (#619): an Echo Show 5 or Show 8 is the one on a bedside table, so its
+// night clock says, small and under the time, when the next alarm will ring - "Alarm 7:30 AM", with the day
 // as well when it is not today or tomorrow - without anybody leaving the night light to look. It is the
 // clock's next alarm that rings (alarm.View's NextAlarm, the day clock's Next without the reminders):
 // the device's alarms and the Home Assistant ones it follows, whichever comes first, over their weekdays
-// and around an occurrence left out. It is drawn in a dimmer shade of the night red, and with no alarm on it is not
-// there at all. On unless turned off; the other screens are not by a bed, and do not offer it.
+// and around an occurrence left out. It is drawn in a dimmer shade of the night red, and with no alarm on
+// it is not there at all. On unless turned off. The Skylight hangs on a wall, a Panel is a tablet and
+// the Spot's round face has no room under its time, so they do not offer it.
 
-// nightAlarmHere is whether this device offers the next alarm on its night clock: the Echo Show 5, either
-// generation. A variable so a test can say which device it is.
-var nightAlarmHere = layout.Show5
+// nightAlarmHere is whether this device offers the next alarm on its night clock: every Echo Show 5 and
+// Show 8 board, either generation of each (the 2nd gen Show 8 on either kernel). A variable so a test
+// can say which device it is.
+var nightAlarmHere = func() bool { return layout.Show5() || layout.Show8() }
 
 // nightAlarmSwitch is the Home Assistant switch for the setting.
 func nightAlarmSwitch(d *Display) *esphome.Switch {
@@ -92,10 +94,11 @@ var nightAlarmInk = nightTone(color.RGBA{0xc0, 0xc0, 0xc0, 0xff})
 
 // The line stands under the time all night, and the Echo Show 5 2nd gen's panel keeps a shadow of what
 // stands still for an hour (#560, clock_drift.go). The night clock itself does not move, so the line
-// wanders on its own: a pixel a minute at most each way (on the Show 5), across out to
-// nightAlarmAcross either side and back every 48 minutes, down to nightAlarmDown and back every 16, so
-// the path repeats every 48 minutes and runs on through midnight without a jump. The path is the time
-// of day on the clock, so a frame is the same for the same time, previews and all.
+// wanders on its own, a pixel a minute at most each way, across out to nightAlarmAcross either side and
+// down to nightAlarmDown, both scaled to the screen. On the Show 5 that is back every 48 minutes across
+// and every 16 down, so the path repeats every 48 minutes; on the Show 8, drawn a third larger, every 64
+// and 20, repeating every 320. Either way it runs on through midnight without a jump. The path is the
+// time of day on the clock, so a frame is the same for the same time, previews and all.
 const (
 	nightAlarmAcross = 12
 	nightAlarmDown   = 4
@@ -103,10 +106,11 @@ const (
 	nightAlarmFoot = 16
 )
 
-// nightAlarmDrift is how far from its place the line is at now.
+// nightAlarmDrift is how far from its place the line is at now. The reach is scaled and the step is not,
+// so a larger screen takes longer over the path rather than stepping two pixels at a time.
 func (r *renderer) nightAlarmDrift(now time.Time) image.Point {
 	m := now.Hour()*60 + now.Minute()
-	return image.Pt(r.s(sway(m, nightAlarmAcross)), r.s(abs(sway(m, nightAlarmDown))))
+	return image.Pt(sway(m, r.s(nightAlarmAcross)), abs(sway(m, r.s(nightAlarmDown))))
 }
 
 // nightAlarmBand is how much of the screen's height the line takes under the clock: the words, the

@@ -40,7 +40,7 @@ type Screen struct {
 	// waits for a touch. (#397)
 	NightInfo bool `json:"night_info,omitempty"`
 
-	// NoNightAlarm leaves the next alarm off an Echo Show 5's night clock, which otherwise shows it under
+	// NoNightAlarm leaves the next alarm off an Echo Show 5's or Show 8's night clock, which otherwise shows it under
 	// the time in the night's own dim red (on unless this is set; display/night_alarm.go, #619).
 	NoNightAlarm bool `json:"no_night_alarm,omitempty"`
 

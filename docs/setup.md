@@ -805,7 +805,7 @@ other Shows don't have the switches.
   room. A picture notification still waits for a touch. A Spot has no Next up card or glance chips, so
   there the switch covers notifications only: the card takes the round face in dim red, and a tap puts it
   away and leaves the night clock.
-- **Night clock shows the next alarm** (Echo Show 5 only, a switch in Home Assistant and a row under
+- **Night clock shows the next alarm** (Echo Show 5 and Show 8, a switch in Home Assistant and a row under
   Display, on at first; it applies when **At night** is the clock alone): the night clock says, small
   and under the time, when the next alarm rings, such as *Alarm 7:30 AM*, with the day when it is not
   today or tomorrow (*Alarm Mon 7:30 AM*). It is the device's own alarms and the Home Assistant alarms

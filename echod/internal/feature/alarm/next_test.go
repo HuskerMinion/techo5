@@ -12,8 +12,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 )
 
-// The next alarm the clocks show (View's Next: after the day clock's date, and under an Echo Show 5's
-// night clock, #619) is the device's alarms and the Home Assistant helpers it follows together, whichever
+// The next alarm the clocks show (View's Next: after the day clock's date, and less the reminders under
+// an Echo Show 5's or Show 8's night clock, #619) is the device's alarms and the Home Assistant helpers it follows together, whichever
 // rings first, on the alarms' own weekdays. An alarm turned off is not it, and with every alarm turned
 // off there is none.
 func TestTheNextAlarmIsTheSoonerOfTheDevicesAndTheHelpers(t *testing.T) {

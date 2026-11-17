@@ -29,7 +29,7 @@ var notOnPanel = []string{
 	"min_cores",
 	// A tablet's Wi-Fi is Android's (wifiquiet).
 	"wifi_prefer_5ghz", "wifi_quiet_hours", "wifi_quiet_hours_end", "wifi_quiet_hours_start",
-	// The next alarm on the night clock is the Echo Show 5's (feature/display night_alarm.go).
+	// The next alarm on the night clock is the Echo Show 5's and Show 8's (feature/display night_alarm.go).
 	"screen_night_alarm",
 }
 

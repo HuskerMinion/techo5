@@ -179,7 +179,7 @@ type Display struct {
 	nightTapSw *esphome.Switch
 	// nightInfoSw is Night clock shows Next up and notifications (night_info.go).
 	nightInfoSw *esphome.Switch
-	// nightAlarmSw is Night clock shows the next alarm (night_alarm.go): an Echo Show 5's alone.
+	// nightAlarmSw is Night clock shows the next alarm (night_alarm.go): an Echo Show 5's or Show 8's alone.
 	nightAlarmSw *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
 	weatherFx *esphome.Switch

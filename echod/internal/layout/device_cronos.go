@@ -124,8 +124,8 @@ var soundCard string
 // without microphones.
 func HasMicrophone() bool { return !Skylight() }
 
-// Show5 is whether this is an Echo Show 5, either generation: the 960 by 480 panel on a bedside
-// table, which is what the night clock's next alarm is for (feature/display, night_alarm.go).
+// Show5 is whether this is an Echo Show 5, either generation: the 960 by 480 panel. With Show8, the
+// screens on a bedside table, which the night clock's next alarm is for (feature/display, night_alarm.go).
 func Show5() bool { return Board == boardCronos || Board == boardCheckers }
 
 // Show8 is whether the screen is the Show 8's: an 800 by 1280 portrait panel in a 1280 by 800
