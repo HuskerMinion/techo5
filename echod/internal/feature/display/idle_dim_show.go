@@ -20,7 +20,8 @@ import (
 func (d *Display) idleDimTick(now time.Time, on, busy, night bool) {
 	after := idleDimAfter()
 	d.mu.Lock()
-	if busy || presence.Present() || d.usedAt.IsZero() {
+	inUse := busy || presence.Present()
+	if inUse || d.usedAt.IsZero() {
 		d.usedAt = now
 	}
 	last := d.usedAt
@@ -30,6 +31,12 @@ func (d *Display) idleDimTick(now time.Time, on, busy, night bool) {
 	was := d.idleDimmed
 	// The button holds until the screen is next used; any use since forgets it, so a later idle wait
 	// is Dim after idle's own again.
+	// A press while the screen is in use is dropped outright: it is stamped on Home Assistant's
+	// goroutine, now at the start of the frame, so one landing between the two would otherwise look
+	// unused and dim the screen for a frame.
+	if inUse {
+		d.dimAskedAt = time.Time{}
+	}
 	asked := !d.dimAskedAt.IsZero() && !last.After(d.dimAskedAt)
 	if !asked {
 		d.dimAskedAt = time.Time{}
@@ -37,6 +44,11 @@ func (d *Display) idleDimTick(now time.Time, on, busy, night bool) {
 	// The night starts no dimming, and ends none either: a screen already down stays down into it
 	// rather than jumping up to its brightness as the night begins.
 	dim := on && (asked || after > 0 && now.Sub(last) >= after) && (!night || was)
+	if asked && !dim {
+		// Carried out at once or not at all: a press the night or a screen that is out kept from
+		// dimming is not saved up to dim it hours later.
+		d.dimAskedAt = time.Time{}
+	}
 	d.idleDimmed = dim
 	d.mu.Unlock()
 	if dim == was {

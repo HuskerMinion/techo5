@@ -167,3 +167,45 @@ func TestScreenDimmedSensorFollowsDimAfterIdle(t *testing.T) {
 		t.Fatal("the sensor stayed on with the screen back up")
 	}
 }
+
+// A press that lands after the frame took its now, with the screen in use (a turn going on), is
+// dropped: the screen never starts to fade and Screen dimmed never turns on, then or later.
+func TestDimScreenPressDuringUseIsDropped(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	d := &Display{on: true, ceiling: 100, poke: make(chan struct{}, 1), dimSensor: dimmedSensor()}
+	d.idleDimTick(time.Now().Add(-time.Minute), true, false, false)
+
+	d.dimScreen()
+	d.mu.Lock()
+	asked := d.dimAskedAt
+	d.mu.Unlock()
+	frame := asked.Add(-10 * time.Millisecond) // the frame's now, taken before the press
+	d.idleDimTick(frame, true, true, false)
+	if d.idleDimmed || d.dimSensor.Get() {
+		t.Fatal("a press during a turn dimmed the screen for a frame")
+	}
+	d.idleDimTick(asked.Add(time.Second), true, false, false)
+	if d.idleDimmed || d.dimSensor.Get() {
+		t.Fatal("a press dropped during a turn dimmed the screen once the turn was over")
+	}
+}
+
+// A press the night keeps from dimming is forgotten, not carried out when the night ends.
+func TestDimScreenPressIsNotSavedUpOverNight(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "config.json"))
+	d := &Display{on: true, ceiling: 100, poke: make(chan struct{}, 1), dimSensor: dimmedSensor()}
+	d.idleDimTick(time.Now().Add(-time.Minute), true, false, false)
+
+	d.dimScreen() // by day, a moment before the night starts
+	d.mu.Lock()
+	asked := d.dimAskedAt
+	d.mu.Unlock()
+	d.idleDimTick(asked.Add(time.Second), true, false, true) // the first look is already at night
+	if d.idleDimmed {
+		t.Fatal("dimmed at night")
+	}
+	d.idleDimTick(asked.Add(8*time.Hour), true, false, false) // the night is over, nobody used it
+	if d.idleDimmed || d.dimSensor.Get() {
+		t.Fatal("a press from before the night dimmed the screen when it ended")
+	}
+}
