@@ -232,8 +232,10 @@ func (a *API) Start(ctx context.Context) error {
 	}
 	// The handlers components answer for themselves rather than through an entity: the voice
 	// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
-	// Describers go first so what they add to the entity list lands before the library's Done.
-	a.handler = esphome.Chain(append(append(component.Default().Describers(), ents), component.Default().Handlers()...)...)
+	// Describers go first so what they add to the entity list lands before the library's Done, after
+	// the watch on a connection that lists the entities and never asks for their states (listed.go).
+	handlers := append([]esphome.Handler{newUnsubscribed()}, component.Default().Describers()...)
+	a.handler = esphome.Chain(append(append(handlers, ents), component.Default().Handlers()...)...)
 	a.srv.Store(a.serverFor(psk))
 	return nil
 }
