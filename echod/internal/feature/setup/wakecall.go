@@ -26,7 +26,7 @@ var (
 func wakeCallSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	book := wakeCallBook()
-	fieldsetOpen(w, "wakecall", "Call on a wake word")
+	sectionOpen(w, "wakecall", "Call on a wake word", wakeCallSummary(c)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "wakecall")
 	fmt.Fprint(w, `<p class="note"><strong>A wake word chosen here calls that contact as soon as it is heard,
@@ -64,7 +64,23 @@ func wakeCallSection(w http.ResponseWriter, token string) {
 			fmt.Fprint(w, `<p class="note">Answered by realtime voice.</p>`)
 		}
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// wakeCallSummary is the line on the shut card: whom the wake words call, or Off when none does.
+func wakeCallSummary(c config.Config) []string {
+	var whom []string
+	for _, i := range realtimeChoices(c) {
+		word := c.Wake.Slot(i)
+		if word.ID != "" && !word.Realtime && word.CallContact != "" {
+			whom = append(whom, word.CallContact)
+		}
+	}
+	if len(whom) == 0 {
+		return []string{"Off"}
+	}
+	return []string{"Calls " + strings.Join(whom, " and ")}
 }
 
 // saveWakeCall changes the slots whose choice was changed on the page.

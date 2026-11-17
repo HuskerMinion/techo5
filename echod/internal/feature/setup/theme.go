@@ -78,6 +78,21 @@ func themeNames(light bool) []string {
 	return out
 }
 
+// themeSummary is the line on the shut card: the mode, and the theme or themes it wears.
+func themeSummary(sc config.Screen, auto bool) []string {
+	dark, light := sc.ThemeFor(false), sc.ThemeFor(true)
+	if dark == "" {
+		dark = config.DefaultTheme
+	}
+	switch {
+	case sc.ThemeMode == config.ThemeModeLight:
+		return []string{"Light", light}
+	case sc.ThemeMode == config.ThemeModeAuto && auto:
+		return []string{"Auto", dark + " and " + light}
+	}
+	return []string{"Dark", dark}
+}
+
 // themeOptions writes a select's options for the themes, the one named selected.
 func themeOptions(w http.ResponseWriter, names []string, now string) {
 	for _, n := range names {
@@ -91,7 +106,7 @@ func themeSection(w http.ResponseWriter, token string) {
 		return
 	}
 	sc := config.Get().Screen
-	fieldsetOpen(w, "themes", "Themes")
+	sectionOpen(w, "themes", "Themes", themeSummary(sc, tc.Auto)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "themes")
 	fmt.Fprint(w, `<label for="darktheme">Dark theme</label><select id="darktheme" name="dark">`)
@@ -164,7 +179,8 @@ func themeSection(w http.ResponseWriter, token string) {
 	     } catch (e) { say.textContent = 'The colors could not be worked out.'; }
 	   });
 	 })();
-	 </script></fieldset>`)
+	 </script>`)
+	sectionClose(w)
 }
 
 // saveThemes saves the dark and light themes and the mode.

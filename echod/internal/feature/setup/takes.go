@@ -216,16 +216,17 @@ func takesSection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fieldsetOpen(w, "takes", "Record takes of a word")
+	sectionOpen(w, "takes", "Record takes of a word", onOff(config.Get().Security.Takes))
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">For training a wake word, or a command word, on what this
 	  device really hears: it records up to two minutes from its own microphones, exactly as the wake word
 	  hears them, and cuts it into one take each time the word is said. Each recording starts %s.</p>`,
 		onThisDevice("at the device, with a tap on Start on its screen", "with a press of the action button on the device"))
 	if !config.Get().Security.Takes {
 		fmt.Fprintf(w, `<p class="note">It is off. Turn on <strong>Record takes of a word</strong> under Privacy &amp;
-		  Security, on the device's screen or in Home Assistant.%s</p></fieldset>`,
+		  Security, on the device's screen or in Home Assistant.%s</p>`,
 			onThisDevice(` <strong>Record wake word</strong> can still be started on the device itself, under
 		  Sound &amp; Voice in its settings: Start there needs no switch.`, ""))
+		sectionClose(w)
 		return
 	}
 	st := recorder().State(token)
@@ -270,7 +271,7 @@ func takesSection(w http.ResponseWriter, token string) {
 		recordForm(w, token, st.Word)
 		runForm(w, token)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 // runForm is Record wake word: how many takes of the device's own wake word, how far apart, and the
@@ -393,7 +394,7 @@ func takesButtons(w http.ResponseWriter, token string, pairs ...string) {
 // takesPoll keeps the line up to date while a recording waits or runs, and reloads the section when it
 // has moved on from shown, the phase the page was drawn in. Without script, Check again does the same.
 func takesPoll(w http.ResponseWriter, shown takes.Phase) {
-	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=voice#sec-takes">Check again</a></p>
+	fmt.Fprintf(w, `<p class="note"><a href="/setup?tab=voice&amp;open=takes#sec-takes">Check again</a></p>
 	 <script>(()=>{const time=document.getElementById('takestime'),about=document.getElementById('takesabout');
 	 const t=s=>Math.floor(s/60)+':'+String(Math.floor(s%%60)).padStart(2,'0');const shown=%q;
 	 const tick=async()=>{try{const r=await fetch('/setup/takes/state',{cache:'no-store'});if(!r.ok){location.reload();return}

@@ -51,7 +51,7 @@ func forgetWaiting() {
 
 // settingsFileSection offers the file and takes one back.
 func settingsFileSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "settingsfile", "Settings")
+	sectionOpen(w, "settingsfile", "Settings")
 	fmt.Fprint(w, `<p><a href="/setup/settings.json">Download settings</a> — everything this device is set to, as a file.</p>
 	 <p class="note">Keys, passwords, the settings lock's PIN, the house word, calendars' private addresses
 	  and cameras' addresses are left out of it, and so are this device's privacy switches, what it lets in
@@ -65,8 +65,9 @@ func settingsFileSection(w http.ResponseWriter, token string) {
 	 <input id="settingsfile" name="file" type="file" accept=".json,application/json" required>
 	 <p class="note">You are shown what would change before anything does. Restoring keeps this device's
 	  own keys, passwords and privacy switches, then restarts it.</p>
-	 <div class="btns"><button type="submit">Look at this file</button></div></form></fieldset>`,
+	 <div class="btns"><button type="submit">Look at this file</button></div></form>`,
 		busy(busyLook), html.EscapeString(token))
+	sectionClose(w)
 }
 
 // settingsFile hands over the settings as a file.

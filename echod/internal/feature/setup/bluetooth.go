@@ -36,7 +36,7 @@ func bluetoothSection(w http.ResponseWriter, token string) {
 	if !sc && !vol {
 		return
 	}
-	fieldsetOpen(w, "bluetooth", "Bluetooth")
+	sectionOpen(w, "bluetooth", "Bluetooth", bluetoothSummary(bt, sc, vol)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "bluetooth")
 	if vol {
@@ -56,7 +56,28 @@ func bluetoothSection(w http.ResponseWriter, token string) {
 	 <p class="note">Changing it turns Bluetooth off and on again: whatever is connected drops for a moment.</p>`, checkedIf(bt.SecureConnections()))
 	}
 	fmt.Fprint(w, `
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// bluetoothSummary is the line on the shut card: the two settings, as far as this device has them.
+func bluetoothSummary(bt secureConnSetting, sc, vol bool) []string {
+	var out []string
+	if vol {
+		if bt.SetsVolume() {
+			out = append(out, "Sets the volume")
+		} else {
+			out = append(out, "Keeps its own volume")
+		}
+	}
+	if sc {
+		if bt.SecureConnections() {
+			out = append(out, "Secure Connections on")
+		} else {
+			out = append(out, "Secure Connections off")
+		}
+	}
+	return out
 }
 
 func saveBluetooth(r *http.Request) string {

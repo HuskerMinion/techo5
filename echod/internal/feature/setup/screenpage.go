@@ -19,8 +19,9 @@ func screenPageSection(w http.ResponseWriter, token string) {
 	if !security.ScreenPage() {
 		return
 	}
-	fieldsetOpen(w, "screenpage", "Screen page")
 	s := config.Get().Security
+	// The key is never on the card's line: the address it makes is as good as a password.
+	sectionOpen(w, "screenpage", "Screen page", onOff(s.Screen && s.ScreenKey != ""))
 	if !s.Screen || s.ScreenKey == "" {
 		fmt.Fprint(w, `<p style="margin:0">The screen page is off. Turn on <strong>Screen web access</strong> under
 		 Privacy &amp; Security, on the device's screen or in Home Assistant, and its address shows here.</p>`)
@@ -37,7 +38,8 @@ func screenPageSection(w http.ResponseWriter, token string) {
 	 the screen. Without the key the page answers nothing, so keep the address private, as you would a
 	 password: anyone on your home network who has it can see the screen, and the screen can show the camera.
 	 It is not encrypted on the way, as this page is not. A new key stops the old address working; give
-	 Home Assistant the new one.</p></fieldset>`)
+	 Home Assistant the new one.</p>`)
+	sectionClose(w)
 }
 
 func saveScreenKey(*http.Request) string {

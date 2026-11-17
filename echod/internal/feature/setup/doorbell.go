@@ -17,16 +17,22 @@ import (
 func doorbellSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	r := c.Home.Reolink
-	fieldsetOpen(w, "doorbell", "Doorbell")
+	var st *doorbell.Status
+	if r.Base != "" && c.Doorbell.Camera != "" {
+		s := doorbell.Get().Status()
+		st = &s
+	}
+	sectionOpen(w, "doorbell", "Doorbell", doorbellSummary(r, c.Doorbell.Camera, st)...)
 	if r.Base == "" {
 		fmt.Fprint(w, `<p class="note" style="margin:0">Set up a Reolink Home Hub or NVR above first: a press of a
-		 Reolink doorbell reaches the device through it.</p></fieldset>`)
+		 Reolink doorbell reaches the device through it.</p>`)
+		sectionClose(w)
 		return
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "doorbell")
-	if c.Doorbell.Camera != "" {
-		s := doorbell.Get().Status()
+	if st != nil {
+		s := *st
 		state := "Starting."
 		switch {
 		case s.Camera != c.Doorbell.Camera: // just saved: the doorbell has not caught up yet
@@ -62,7 +68,31 @@ func doorbellSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`, c.Doorbell.ONVIFPort(), does)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "doorbell-chime")
-	fmt.Fprint(w, `<p><button type="submit">Play the chime</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Play the chime</button></p></form>`)
+	sectionClose(w)
+}
+
+// doorbellSummary is the line on the shut card: Off with no doorbell camera chosen, or the camera and
+// whether the device is hearing it (s, nil when there is none to ask about).
+func doorbellSummary(r config.Reolink, camera string, s *doorbell.Status) []string {
+	if r.Base == "" || camera == "" {
+		return []string{"Off"}
+	}
+	name := camera
+	for _, cam := range r.Cameras {
+		if cam.Entity == camera && cam.Name != "" {
+			name = cam.Name
+		}
+	}
+	out := []string{name}
+	switch {
+	case s == nil || s.Camera != camera:
+	case s.Listening:
+		out = append(out, "listening")
+	case s.Problem != "":
+		out = append(out, "not hearing it")
+	}
+	return out
 }
 
 // chimeDoorbell plays the chime, for hearing it from the page.

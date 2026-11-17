@@ -24,13 +24,22 @@ func babySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fieldsetOpen(w, "baby", "Baby monitor")
 	s := config.Get().Security
-	if !s.Baby || s.BabyKey == "" {
+	on := s.Baby && s.BabyKey != ""
+	listening := 0
+	if on {
+		listening = babymon.Get().Count()
+	}
+	light := babymon.LightName(s.BabyLight)
+	if light == babymon.LightNames()[0] {
+		light = "" // as it comes: not worth the room on the card's line
+	}
+	sectionOpen(w, "baby", "Baby monitor", babySummary(on, listening, light)...)
+	if !on {
 		fmt.Fprint(w, `<p style="margin:0">The baby monitor is off. Turn on <strong>Baby monitor</strong> under
 		 Privacy &amp; Security, on the device's screen or in Home Assistant, and its link shows here.</p>`)
 	} else {
-		n := babymon.Get().Count()
+		n := listening
 		fmt.Fprintf(w, `<p style="margin:0">The baby monitor is <strong>on</strong>: %d listening now (up to %d).</p>
 		 <p>Open this link in a browser on your Wi-Fi, and tap Listen:</p>
 		 <p><a id="babylink" href="/baby?k=%s" style="word-break:break-all">/baby?k=%s</a></p>
@@ -47,7 +56,21 @@ func babySection(w http.ResponseWriter, token string) {
 	 sensor, and the mute button stops the sound at once. A new link ends every listener and stops the old
 	 link working. Voice keeps working while someone listens.</p>`)
 	babyLightForm(w, token, s.BabyLight)
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
+}
+
+// babySummary is the line on the shut card: Off, or On with how many are listening now and the light
+// it shows them by when that is not the light as it comes. The link, whose key is as good as a
+// password, is never on it.
+func babySummary(on bool, listening int, light string) []string {
+	if !on {
+		return []string{"Off"}
+	}
+	out := []string{"On", fmt.Sprintf("%d listening", listening)}
+	if light != "" {
+		out = append(out, "light "+light)
+	}
+	return out
 }
 
 // babyLightForm is the Baby monitor light choice, with what Dimmest and Off give up.

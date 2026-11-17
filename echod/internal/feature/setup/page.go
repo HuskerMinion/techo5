@@ -173,7 +173,7 @@ func (f *Feature) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.settingsPage(r.Context(), w, token, tabOf(q.Get("tab")), q.Get("saved"), q.Get("renamed"), q.Get("problem"),
-		sectionNamed(q.Get("at")), q.Get("scan") != "")
+		sectionNamed(q.Get("at")), openOf(q.Get("open")), q.Get("scan") != "")
 }
 
 // wait starts this browser waiting for a press and gives it the cookie the press will let in.
@@ -544,31 +544,47 @@ func (f *Feature) lockedPage(w http.ResponseWriter, mine bool, said string) {
 	 itself when it is left alone.</p>`)
 }
 
-func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token, tab, saved, renamed, problem, at string, scan bool) {
+// settingsPage draws a tab. open is which of its cards the address asks to be drawn open (openOf).
+func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token, tab, saved, renamed, problem, at, open string, scan bool) {
 	head(w)
 	pageTop(w, token)
-	fmt.Fprint(w, `<div class="layout">`)
-	nav(w, tab)
-	fmt.Fprint(w, `<section>`)
-	for _, t := range shownTabs() {
-		if t.id == tab {
-			fmt.Fprintf(w, `<h2>%s</h2>`, html.EscapeString(t.title))
-		}
-	}
-	if renamed != "" {
-		fmt.Fprint(w, `<div class="banner ok">Renamed. The device is restarting and will be back in a minute or
-		 so. Home Assistant keeps it as the same device, under its old entity ids.</div>`)
-	}
 	// What the last save did is said in the section it was made in (section.go). The sections are
 	// drawn first and sent after, so that when none of them is that section it can still be said here,
-	// above them.
-	page, sections := w, &sectionWriter{ResponseWriter: w, saved: saved, problem: problem, at: at}
+	// above them; and so that the rail, sent before them, can list the cards they drew.
+	page, sections := w, &sectionWriter{ResponseWriter: w, saved: saved, problem: problem, at: at, open: open}
 	w = sections
 	defer func() {
+		fmt.Fprint(page, `<div class="layout">`)
+		nav(page, tab, sections.cards)
+		fmt.Fprint(page, `<section>`)
+		for _, t := range shownTabs() {
+			if t.id == tab {
+				fmt.Fprintf(page, `<h2>%s</h2>`, html.EscapeString(t.title))
+			}
+		}
+		if renamed != "" {
+			fmt.Fprint(page, `<div class="banner ok">Renamed. The device is restarting and will be back in a minute or
+			 so. Home Assistant keeps it as the same device, under its old entity ids.</div>`)
+		}
 		if !sections.said {
 			banner(page, saved, problem)
 		}
+		// A tab of cards has them laid out side by side where there is room (head), and the links that
+		// open or shut them all. Status's cards are always open, so it has no links and nothing to keep.
+		closable := anyClosable(sections.cards)
+		if len(sections.cards) > 0 {
+			if closable {
+				cardBar(page, tab)
+			}
+			fmt.Fprint(page, `<div class="cards">`)
+		}
 		_, _ = page.Write(sections.body.Bytes())
+		if len(sections.cards) > 0 {
+			fmt.Fprint(page, `</div>`)
+			if closable {
+				cardScript(page, tab)
+			}
+		}
 		fmt.Fprint(page, `</section></div></div>`)
 		// A refused form comes back as it was typed, secrets aside (stash.go).
 		if problem != "" {
@@ -651,8 +667,10 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 		if wifi.Available() {
 			f.wifiSection(w, token, scan)
 		} else {
-			fmt.Fprint(w, `<fieldset><legend>Wi-Fi</legend><p class="note" style="margin:0">This device's network
-			 is not one this page can change.</p></fieldset>`)
+			sectionOpen(w, "wifi", "Wi-Fi", "Not changed here")
+			fmt.Fprint(w, `<p class="note" style="margin:0">This device's network
+			 is not one this page can change.</p>`)
+			sectionClose(w)
 		}
 		haAccessSection(w, token)
 		homeAssistantSection(w, token)
@@ -690,12 +708,24 @@ func (f *Feature) settingsPage(ctx context.Context, w http.ResponseWriter, token
 
 // timezoneSection is which zone the clock shows.
 func timezoneSection(w http.ResponseWriter, token string) {
+	sectionOpen(w, "timezone", "Time zone", timezoneSummary(timezone.Get().Current(), timezone.Get().SetHere())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	fieldsetOpen(w, "timezone", "Time zone")
 	hidden(w, token, "timezone")
 	zoneSelect(w)
 	fmt.Fprint(w, `<p class="note">The device's clock keeps time on its own; this is only
-	 which zone it shows.</p><p><button type="submit">Save</button></p></fieldset></form>`)
+	 which zone it shows.</p><p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// timezoneSummary is the line on the shut card: the zone in force, and whether it follows Home Assistant.
+func timezoneSummary(zone string, setHere bool) []string {
+	if setHere {
+		return []string{zone}
+	}
+	if zone == "" {
+		return []string{"Follow Home Assistant"}
+	}
+	return []string{"Follow Home Assistant", zone}
 }
 
 // zoneSelect is the list of zones, the one in force chosen: the System tab's and first run's.
@@ -729,8 +759,9 @@ func timeServerSection(w http.ResponseWriter, token string) {
 	if !timezone.ServerSettable {
 		return
 	}
+	server := timezone.Server()
+	sectionOpen(w, "timeserver", "Time server", timeServerSummary(server)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
-	fieldsetOpen(w, "timeserver", "Time server")
 	hidden(w, token, "timeserver")
 	fmt.Fprintf(w, `<label for="ntp">Your own time server (optional)</label>
 	 <input id="ntp" name="server" value="%s" placeholder="192.168.1.1" maxlength="253" autocomplete="off">
@@ -738,7 +769,17 @@ func timeServerSection(w http.ResponseWriter, token string) {
 	  reach them can use one on your network, like your router: it is asked first, and the internet's
 	  after it. %s Leave it empty for the internet's only. Without any time server, the clock is set
 	  from Home Assistant's when it connects.</p>
-	 <p><button type="submit">Save</button></p></fieldset></form>`, html.EscapeString(timezone.Server()), timezone.ServerWhen)
+	 <p><button type="submit">Save</button></p></form>`, html.EscapeString(server), timezone.ServerWhen)
+	sectionClose(w)
+}
+
+// timeServerSummary is the line on the shut card: the home's own time server, asked first, or the
+// internet's only.
+func timeServerSummary(server string) []string {
+	if server == "" {
+		return []string{"The internet's only"}
+	}
+	return []string{server, "then the internet's"}
 }
 
 // switchedOnSection says what the device has open. It shows and does not change: a web page that could
@@ -764,22 +805,24 @@ func switchedOnSection(w http.ResponseWriter) {
 	if !sshHere || !cameraWebHere {
 		missing = " " + notHereWhy
 	}
-	fmt.Fprintf(w, `<fieldset><legend>What is switched on</legend>
-	 <p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
+	sectionOpen(w, "switchedon", "What is switched on")
+	fmt.Fprintf(w, `<p style="margin:0">SSH: %s · Camera on the network: %s · Screen on the network: %s</p>
 	 <p class="note">Shown here, not changed here. Change them on the device's own screen, or in Home
-	  Assistant.%s</p></fieldset>`, ssh, camera, onOff(s.Screen), missing)
+	  Assistant.%s</p>`, ssh, camera, onOff(s.Screen), missing)
+	sectionClose(w)
 }
 
 // thisPageSection is what this page will never do, and the few things it can that reach past a setting.
 func thisPageSection(w http.ResponseWriter) {
-	fmt.Fprint(w, `<fieldset><legend>This page</legend>
-	 <p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
+	sectionOpen(w, "thispage", "This page")
+	fmt.Fprint(w, `<p class="note" style="margin:0">It opens only after a press on the device, and closes itself when it
 	  is left alone. It is on your own network, without encryption. It never touches SSH keys or the
 	  software the device runs, and never shows the Home Assistant key. It can let a Home Assistant add
 	  the device for 15 minutes (Network), which sets a new key. It can record takes of a word from the
 	  microphones (Voice) only while Record takes of a word is switched on, and only after a
 	  press on the device for each recording; the takes stay in memory, and come to you over this page.
-	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p></fieldset>`)
+	  It shows the baby monitor's link, and can replace it, but cannot switch the monitor on.</p>`)
+	sectionClose(w)
 }
 
 // wifiSection is the networks: what the device is on, what it remembers, and how to add another.
@@ -792,8 +835,9 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 	defer cancel()
 	st := wifi.Current(ctx)
+	saved := wifi.Saved()
 
-	fieldsetOpen(w, "wifi", "Wi-Fi")
+	sectionOpen(w, "wifi", "Wi-Fi", wifiSummary(st.Connected, st.SSID, len(saved))...)
 	switch {
 	case st.Connected:
 		fmt.Fprintf(w, `<p>On <strong>%s</strong>, at %s.</p>`, html.EscapeString(st.SSID), html.EscapeString(st.Address))
@@ -802,7 +846,7 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	}
 	macNote(w)
 
-	if saved := wifi.Saved(); len(saved) > 0 {
+	if len(saved) > 0 {
 		fmt.Fprint(w, `<p class="note">Remembered, in the order it tries them:</p><ul>`)
 		for _, ssid := range saved {
 			fmt.Fprintf(w, `<li>%s <form method="post" action="/setup/save" style="display:inline">`, html.EscapeString(ssid))
@@ -819,7 +863,23 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 	}
 
 	wifiJoinForm(ctx, w, token, scan)
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
+}
+
+// wifiSummary is the line on the shut card: the network the device is on, and how many it remembers.
+// Network names only; never a passphrase.
+func wifiSummary(connected bool, ssid string, remembered int) []string {
+	out := []string{"Not connected"}
+	if connected {
+		out = []string{"Connected"}
+		if ssid != "" {
+			out = []string{"Connected to " + ssid}
+		}
+	}
+	if remembered > 0 {
+		out = append(out, fmt.Sprintf("%d remembered", remembered))
+	}
+	return out
 }
 
 // wifiJoinForm is the form that adds a network. Joining holds the request until the network is up or
@@ -846,7 +906,7 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 	}
 	fmt.Fprint(w, `</select>`)
 	if !scan {
-		fmt.Fprint(w, `<p><a href="/setup?tab=network&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
+		fmt.Fprint(w, `<p><a href="/setup?tab=network&amp;scan=1&amp;open=wifi#sec-wifi">Scan for networks</a> — it takes a few seconds.</p>`)
 	}
 	// A passphrase typed wrong is only found out after the join has been waited for, so it can be
 	// looked at before it is sent (secret.go).
@@ -864,13 +924,13 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 // diagnosticsSection offers the bundle. It is on Status, where the page opens, because somebody who
 // came here to ask for help should not have to look through the tabs to find it.
 func diagnosticsSection(w http.ResponseWriter) {
-	fmt.Fprint(w, `<fieldset><legend>Something wrong?</legend>
-	 <p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
+	sectionOpen(w, "diagnostics", "Something wrong?")
+	fmt.Fprint(w, `<p><a href="/setup/diagnostics.txt">Download diagnostics</a> — what this device knows about
 	  itself, the last of its log, its recent wake words, and what it is set to.</p>
 	 <p class="note">Addresses, network names, keys and serial numbers are replaced before you get it,
 	  so it can go straight into an issue. Worth a look before you send it all the same.</p>
-	 <p><a href="/setup/log">Follow the log live</a> — the same log, with the same parts replaced, as it is written.</p>
-	 </fieldset>`)
+	 <p><a href="/setup/log">Follow the log live</a> — the same log, with the same parts replaced, as it is written.</p>`)
+	sectionClose(w)
 }
 
 // stationsSection is the radio stations kept on the device: a name and the address of the stream,
@@ -878,7 +938,8 @@ func diagnosticsSection(w http.ResponseWriter) {
 // its place. They play without Home Assistant, which is the only radio a device on its own has.
 func stationsSection(w http.ResponseWriter, token string) {
 	list := home.OwnStations()
-	fieldsetOpen(w, "stations", "Radio stations on this device")
+	station, playing := home.Get().NowPlaying()
+	sectionOpen(w, "stations", "Radio stations on this device", stationsSummary(len(list), station, playing)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "stations")
 	// One more row than there are stations, so there is always somewhere to add one; clearing a
@@ -898,7 +959,7 @@ func stationsSection(w http.ResponseWriter, token string) {
 
 	// What the device is doing, because a page with play buttons and no answer is a remote control
 	// with no display — and on a Dot it is the only place this can be seen at all.
-	if station, playing := home.Get().NowPlaying(); playing {
+	if playing {
 		if station == "" {
 			station = "something"
 		}
@@ -910,7 +971,28 @@ func stationsSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `<p class="note">Play uses what is typed in the row, saved or not, so an address can
 	 be tried before it is kept. Clear a name to take a station out. They show on the device under
 	 Radio, as "On this device".</p>
-	 <p><button type="submit">Save stations</button></p></form></fieldset>`)
+	 <p><button type="submit">Save stations</button></p></form>`)
+	sectionClose(w)
+}
+
+// stationsSummary is the stations' line on their shut card: how many are kept, and what plays.
+func stationsSummary(n int, station string, playing bool) []string {
+	var out []string
+	switch n {
+	case 0:
+		out = append(out, "None added")
+	case 1:
+		out = append(out, "1 station")
+	default:
+		out = append(out, fmt.Sprintf("%d stations", n))
+	}
+	if playing {
+		if station == "" {
+			station = "something"
+		}
+		out = append(out, "playing "+station)
+	}
+	return out
 }
 
 // playRow plays the row whose Play button was pressed, with the name and address as they stand in
@@ -981,7 +1063,7 @@ func saveStations(r *http.Request) string {
 // which is confusing enough to warn about, and reason to rename in Home Assistant as well.
 func nameSection(w http.ResponseWriter, token string) {
 	name := deviceName()
-	fieldsetOpen(w, "name", "Name")
+	sectionOpen(w, "name", "Name", name)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "name")
 	fmt.Fprintf(w, `<label for="name">This device is called</label>
@@ -995,22 +1077,25 @@ func nameSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
 	  I understand the entity ids in Home Assistant do not change with it</label></p>
 	 <p class="note">The device restarts to announce the new name, and this page goes with it.</p>
-	 <p><button type="submit">Rename and restart</button></p></form></fieldset>`,
+	 <p><button type="submit">Rename and restart</button></p></form>`,
 		html.EscapeString(name), html.EscapeString("media_player."+layout.EntitySlug(name)+"_speaker"))
+	sectionClose(w)
 }
 
 // homeAssistantSection lets a Home Assistant add the device: for a device that left the Home
 // Assistant it had, or came from somebody else's, so its key is one nobody here holds (api/adopt.go).
 func homeAssistantSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "adopt", "Home Assistant")
-	if until := api.Get().AdoptionOpenUntil(); !until.IsZero() {
+	until := api.Get().AdoptionOpenUntil()
+	sectionOpen(w, "adopt", "Home Assistant", adoptSummary(until, statusHome())...)
+	if !until.IsZero() {
 		fmt.Fprintf(w, `<p style="margin:0"><strong>Open until %s.</strong> In Home Assistant, go to
 		 <strong>Settings → Devices &amp; services</strong>. This device shows up under
 		 <strong>Discovered</strong>: choose <strong>Add</strong>. If it doesn't, choose <strong>Add
 		 integration → ESPHome</strong> and type this device's address, port 6053.</p>
 		 <p class="note">The first Home Assistant to add it sets its key, and the device keeps that key.
-		  If none does by then, it closes with a new key nobody has.</p></fieldset>`,
+		  If none does by then, it closes with a new key nobody has.</p>`,
 			html.EscapeString(until.Local().Format("3:04 PM")))
+		sectionClose(w)
 		return
 	}
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
@@ -1021,13 +1106,26 @@ func homeAssistantSection(w http.ResponseWriter, token string) {
 	 <p class="bad"><strong>A Home Assistant that has this device now loses it.</strong></p>
 	 <p><label><input type="checkbox" name="understood" value="yes">
 	  I know a Home Assistant that has this device now loses it</label></p>
-	 <p><button type="submit" class="danger">Let a Home Assistant add this device</button></p></form></fieldset>`)
+	 <p><button type="submit" class="danger">Let a Home Assistant add this device</button></p></form>`)
+	sectionClose(w)
+}
+
+// adoptSummary is the line on the shut card: open to be added until when, or whether a Home Assistant
+// is connected to the device now.
+func adoptSummary(until time.Time, connected bool) []string {
+	switch {
+	case !until.IsZero():
+		return []string{"Open to be added until " + until.Local().Format("3:04 PM")}
+	case connected:
+		return []string{"Connected"}
+	}
+	return []string{"Not connected"}
 }
 
 // ringWaitSection is whether the ring walks after a start while Home Assistant has not connected, for
 // a device used without one, such as an AirPlay speaker (techo5-dot#39).
 func ringWaitSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "ringwait", "Ring while starting")
+	sectionOpen(w, "ringwait", "Ring while starting", onOff(!config.Get().Ring.NoWaitWalk))
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "ringwait")
 	checked := ""
@@ -1038,7 +1136,8 @@ func ringWaitSection(w http.ResponseWriter, token string) {
 	  Walk around the ring after a start until Home Assistant connects</label></p>
 	 <p class="note">It stops by itself after five minutes. Turn it off for a device used without Home Assistant,
 	  such as an AirPlay speaker.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, checked)
+	 <p><button type="submit">Save</button></p></form>`, checked)
+	sectionClose(w)
 }
 
 // houseSection is the word the devices in one house share.
@@ -1049,7 +1148,7 @@ func ringWaitSection(w http.ResponseWriter, token string) {
 // than leaving as something guessable, and it means the same word has to go on every device here.
 func houseSection(w http.ResponseWriter, token string) {
 	word := config.Get().Home.HouseWord
-	fieldsetOpen(w, "house", "Announcements")
+	sectionOpen(w, "house", "Announcements", houseSummary(word)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "house")
 	fmt.Fprintf(w, `<label for="word">House word</label>
@@ -1063,9 +1162,19 @@ func houseSection(w http.ResponseWriter, token string) {
 	  Reminders set to go off on other devices use it too.</p>
 	 <p class="note">Make it a long phrase, %d characters or more. What the devices send each other is
 	  signed with it, and anything on the network that hears them can try words until one fits.</p>%s
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(word), otherWordNote(announce.OtherWords()), longHouseWord,
 		shortWordNote(word)+nearestWordNote(word, config.Get().Nearest.Enabled()))
+	sectionClose(w)
+}
+
+// houseSummary is the announcements' line on their shut card: on with a house word, off without one.
+// The word itself is never said: what the devices send each other is signed with it.
+func houseSummary(word string) []string {
+	if word == "" {
+		return []string{"Off"}
+	}
+	return []string{"On", "house word set"}
 }
 
 // nearestWordNote is the warning for Nearest device answers switched on with no house word, which

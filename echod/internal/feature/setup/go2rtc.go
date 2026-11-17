@@ -19,7 +19,7 @@ func init() { saves["go2rtc"] = saveGo2RTC }
 // address is never shown again: the address is shown without it.
 func go2rtcSection(w http.ResponseWriter, token string) {
 	g := config.Get().Home.Go2RTC
-	fieldsetOpen(w, "go2rtc", "go2rtc cameras")
+	sectionOpen(w, "go2rtc", "go2rtc cameras", go2rtcSummary(g)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "go2rtc")
 	shown := ""
@@ -51,7 +51,17 @@ func go2rtcSection(w http.ResponseWriter, token string) {
 	  A stream can have a name of its own to show and say ("show the doorbell"); it changes nothing in
 	  go2rtc. Left empty, the stream is called by its name in go2rtc. Clear the address and save to take
 	  the cameras away.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, html.EscapeString(shown))
+	 <p><button type="submit">Save</button></p></form>`, html.EscapeString(shown))
+	sectionClose(w)
+}
+
+// go2rtcSummary is the line on the shut card: how many streams the server has. Its address, which may
+// hold a login, is never said.
+func go2rtcSummary(g config.Go2RTC) []string {
+	if g.Base == "" {
+		return []string{"Not set up"}
+	}
+	return []string{count(len(g.Cameras), "stream", "streams")}
 }
 
 func saveGo2RTC(r *http.Request) string {
