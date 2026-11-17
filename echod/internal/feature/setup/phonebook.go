@@ -55,7 +55,7 @@ func phoneBookSummary(n int, byVoice bool) []string {
 	default:
 		out = append(out, fmt.Sprintf("%d contacts", n))
 	}
-	if byVoice {
+	if byVoice && n > 0 {
 		out = append(out, "call by voice on")
 	}
 	return out

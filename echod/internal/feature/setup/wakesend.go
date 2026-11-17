@@ -46,13 +46,11 @@ func init() {
 // wakeClipsSummary is the line on the shut card: whether clips are kept, and where they go; Off when
 // neither. The token is never said.
 func wakeClipsSummary(keeping bool, cur config.WakeSend) []string {
-	if !keeping && !cur.On() {
+	// Nothing is sent without clips kept, so a trainer set while keeping is off is still Off.
+	if !keeping {
 		return []string{"Off"}
 	}
 	out := []string{"Keeping clips"}
-	if !keeping {
-		out = []string{"Not keeping clips"}
-	}
 	if cur.On() {
 		out = append(out, "sent to "+config.SendLabel(cur.Target))
 	} else {
