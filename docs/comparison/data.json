@@ -1,5 +1,5 @@
 {
- "checked": "2026-11-16",
+ "checked": "2026-11-17",
  "sections": [
   "Basics",
   "Voice",
@@ -82,7 +82,8 @@
     "Thermostat app with 8 looks and an optional dashboard tab",
     "Music app for Music Assistant: browse, search, queue, speaker groups",
     "YouTube TV app on the Show: channel guide and a TV remote, needs the yttv-hacs integration (0.0.14)",
-    "On-screen keyboard for text fields on the HA dashboard (not in a stable release; in pre-releases since 0.0.15-dev.1794531849)"
+    "On-screen keyboard for text fields on the HA dashboard (not in a stable release; in pre-releases since 0.0.15-dev.1794531849)",
+    "Voice match: enroll people's voices and tell who is speaking (not in a stable release; in pre-releases since 0.0.15-dev.1794875562)"
    ]
   },
   {
@@ -192,7 +193,8 @@
     "Several HA dashboard views in one Compass layout (2026.11.18)",
     "Timers: full-screen Timers view, set and change timers by hand, Shared timers on several kiosks, own settings page and text to speech engine (2026.11.20)",
     "Genres list in the Music Library; Custom user agent for web pages (2026.11.20)",
-    "Adaptive volume: assistant, media and intercom volumes follow the room's noise level on a curve (2026.11.22)"
+    "Adaptive volume: assistant, media and intercom volumes follow the room's noise level on a curve (2026.11.22)",
+    "Voice Match through a separate Kiosk Satellite Ground Control service: shows who is talking, enrolls voices on the kiosk, can answer enrolled voices only (on main, not yet in a release)"
    ]
   },
   {
@@ -227,16 +229,19 @@
    "focus": "Replaces the software on the Echo 2nd gen and Echo Dot 2nd gen (MediaTek MT8163) with a Linux 6.1 image, a local voice assistant and a web control center on the user's network. Home Assistant connects through the ESPHome native API. Updates are signed whole-system generations with fallback.",
    "also": [
     "Nursery page: baby monitor stream and generated sleep sounds",
-    "Music-reactive light ring with beat and mood analysis",
+    "Music-reactive light ring that turns with the beat, with mood colors (0.14.6)",
     "Assistant on a ChatGPT subscription login or a local LLM endpoint",
     "Weather by Open-Meteo, Met Office models or MET Norway",
     "Local web accounts and optional SSH",
     "Per-model speaker tuning with 24-bit output",
     "USB storage playback including Ogg Opus",
-    "Spoken timers and stop handled before any model call",
+    "Spoken timers and alarms; stop handled before any model call",
     "Recovery access point with captive portal (in source, not in release notes)",
     "Multiroom audio with Music Assistant (Sendspin), new in 0.14.5",
-    "Local services that survive updates (0.14.5)"
+    "Local services that survive updates (0.14.5)",
+    "Action button: Start listening, Play / pause and its own long-press action (0.14.6)",
+    "Own NTP time servers and a time zone picker in setup (0.14.6)",
+    "Rootless Podman containers for the flashing tools (0.14.6)"
    ]
   },
   {
@@ -310,7 +315,9 @@
     "Audiobooks and podcasts in the Music Assistant library: Continue listening, the place kept by Music Assistant on every device, back and forward 30 seconds and a speed button while they play (v1.6.36)",
     "Scan a QR code with the Show's camera from an HA action (qr_scan), such as a Matter setup code (v1.6.36)",
     "Connect to Home Assistant by signing in with Home Assistant's own login, with no long-lived token to create or paste; the device's sign-in renews itself (v1.6.42)",
-    "Sendspin playback delay, 0 to 1000 ms, to keep a room in step with slower players in a Music Assistant group (v1.6.42)"
+    "Sendspin playback delay, 0 to 1000 ms, to keep a room in step with slower players in a Music Assistant group (v1.6.42)",
+    "Record wake word: 5 to 50 takes of the wake word, a beep before each, sent to wakesmith as training examples (v1.6.44)",
+    "The night clock on the Echo Show 5 and Show 8 shows the next alarm, dim and moving a little through the night (v1.6.44)"
    ]
   },
   {
@@ -1532,7 +1539,7 @@
     "https://github.com/Gamer92000/echo-dot-assist/commits/main"
    ],
    "releases": [
-    "v2026.10.17.151309, 2026-10-17; 109 GitHub releases: 4 stable, 105 pre-releases (\"beta\" from main, latest v2026.11.13.185908-beta, 2026-11-13)",
+    "v2026.10.17.151309, 2026-10-17; 115 GitHub releases: 4 stable, 111 pre-releases (\"beta\" from main, latest v2026.11.17.022701-beta, 2026-11-17)",
     "",
     "https://github.com/Gamer92000/echo-dot-assist/releases"
    ],
@@ -1542,9 +1549,9 @@
     "https://github.com/Gamer92000/echo-dot-assist/blob/v2026.10.17.151309/LICENSE"
    ],
    "devices": [
-    "Released: Echo Dot 3 (2018, donut), Echo Dot 2 (biscuit), Echo 2 (radar). In beta on main, not in a stable release: Echo Show 5 1st and 2nd gen, Show 8 1st and 2nd gen (PR #70 merged 2026-10-27), Echo Input (cupcake, PR #78 merged 2026-10-29)",
+    "Released: Echo Dot 3 (2018, donut), Echo Dot 2 (biscuit), Echo 2 (radar). In beta on main, not in a stable release: Echo Show 5 1st and 2nd gen, Show 8 1st and 2nd gen (PR #70 merged 2026-10-27), Echo Input (cupcake, PR #78 merged 2026-10-29). Listed as in progress: Echo Dot 5th gen (cannoli; solder USB to test pads, manual install only)",
     "",
-    "https://github.com/Gamer92000/echo-dot-assist/blob/v2026.11.03.224227-beta/README.md#supported-echos"
+    "https://github.com/Gamer92000/echo-dot-assist/blob/v2026.11.17.022701-beta/README.md#supported-echos"
    ],
    "on-device": [
     "Fire OS stays, with Amazon's audio front end and wake word engine; hassmic daemon replaces Alexa. Needs only Home Assistant",
@@ -2063,7 +2070,7 @@
    ],
    "led-ring": [
     "Yes",
-    "color, brightness, effects; fill and LED by LED colors on main and beta (issue #57)",
+    "color, brightness, effects; fill and LED by LED colors on main and beta (issue #57); exact colors, fades and 12 effects with the live light ring on the Echo Dot 3 (beta, PR #174)",
     "https://github.com/Gamer92000/echo-dot-assist/blob/3af8987e5e5ed07529a23c58566167bea829ab9d/docs/GUIDE.md#buttons-and-light-ring"
    ],
    "ring-styles": [
@@ -2117,9 +2124,9 @@
     "https://github.com/Gamer92000/echo-dot-assist/blob/v2026.10.17.151309/docs/GUIDE.md#wi-fi-motion"
    ],
    "ring-visualizer": [
-    "Not found",
-    "Ring shows status, timer and call animations and custom designs; no music-reactive mode found.",
-    "https://github.com/Gamer92000/echo-dot-assist/blob/v2026.10.17.151309/docs/GUIDE.md"
+    "In progress",
+    "six music effects (beat, spectrum, VU meter and others) with the live light ring on the Echo Dot 3, off by default; on main and beta (PR #174), not in a stable release",
+    "https://github.com/Gamer92000/echo-dot-assist/pull/174"
    ],
    "ha-link": [
     "Yes",
@@ -2369,7 +2376,7 @@
     "https://github.com/ygelfand/echolocal/commits/main"
    ],
    "releases": [
-    "echolocal 0.0.14, 2026-11-10: 14 releases plus 20 pre-releases (latest pre-release 0.0.15-dev.1794625294, 2026-11-14). echolocal-hacs v0.0.19, 2026-11-13: 19 releases. libcountertop: 2 pre-releases (kroko-en-1, 2026-10-29; engine-full-1, 2026-10-24; engine binaries)",
+    "echolocal 0.0.14, 2026-11-10: 14 releases plus 22 pre-releases (latest pre-release 0.0.15-dev.1794925357, 2026-11-17). echolocal-hacs v0.0.20, 2026-11-16: 20 releases. libcountertop: 2 pre-releases (kroko-en-1, 2026-10-29; engine-full-1, 2026-10-24; engine binaries)",
     "",
     "https://github.com/ygelfand/echolocal/releases"
    ],
@@ -2405,8 +2412,8 @@
    ],
    "ui-languages": [
     "Partly",
-    "language catalog: English and Italian (Italian added 2026-10-31, in release 0.0.13)",
-    "https://github.com/ygelfand/libcountertop/blob/1000d4167a6d8ce191dd37c6b6adcc0430b54b2e/pkg/say/messages/it.yaml"
+    "language catalog: English and Italian (Italian in release 0.0.13); Vietnamese added 2026-11-16, in pre-releases since 0.0.15-dev.1794875562",
+    "https://github.com/ygelfand/libcountertop/blob/38d829964ed2898c782366bd08da45c3716adcc4/pkg/say/messages/vi.yaml"
    ],
    "porting": [
     "Yes",
@@ -2485,7 +2492,7 @@
    ],
    "mic-array": [
     "Yes",
-    "center, delay-and-sum or vendor beamformer; Dot only",
+    "center, delay-and-sum or vendor beamformer; Dot only in the release; the vendor beamformer also on the Echo Show 8 1st and 2nd gen in pre-releases (0.0.15-dev.1794925357), and on the Show 5 1st gen on main (PR #177)",
     "https://github.com/ygelfand/echolocal/blob/0.0.12/internal/hardware/mic/mixer.go"
    ],
    "external-mic": [
@@ -3982,7 +3989,7 @@
    ],
    "admin-auth": [
     "Partly",
-    "login and button approval; no rate limit found",
+    "login and button approval; no rate limit found; sign-in through an OpenID Connect provider on main, not yet in a release (#868)",
     "https://github.com/wilbowes/EchoMuse/blob/v2.19.0/controller/em_auth.py"
    ],
    "sendspin-pairing": [
@@ -4872,7 +4879,7 @@
    "type": [
     "Replacement firmware: Alpine Linux image plus one Go daemon (echod) on Echo devices and the Skylight Calendar; the same daemon in an Android app (TECHO5 Panel) for tablets and the Portal; optional dashcast server and Deck PC agent",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md"
    ],
    "started": [
     "techo5 2026-09-14; techo5-dot 2026-09-16; techo5-spot 2026-09-16; techo5-athena 2026-10-15; techo5-panel 2026-10-18 (public 2026-10-19)",
@@ -4880,7 +4887,7 @@
     "https://github.com/HuskerMinion/techo5/commits/main"
    ],
    "releases": [
-    "v1.6.42 (2026-11-16), 165 releases incl. 3 pre-releases; Dot dot-v1.0.69 (130, 1 pre); Spot spot-v1.4.42 (139, 1 pre); Panel app v0.1.432660 (2026-10-28, 3)",
+    "v1.6.44 (2026-11-17), 167 releases incl. 3 pre-releases; Dot dot-v1.0.71 (132, 1 pre); Spot spot-v1.4.44 (141, 1 pre); Panel app v0.1.432660 (2026-10-28, 3)",
     "",
     "https://github.com/HuskerMinion/techo5/releases"
    ],
@@ -4892,112 +4899,112 @@
    "devices": [
     "Echo Show 5 gen 1/2, Show 8 gen 1/2, Spot gen 1, Dot gen 2, Dot gen 3 2018 (two units), Echo gen 2 (one unit), Skylight Calendar 15 (no microphone: screen and speaker only); with the TECHO5 Panel app: Fire HD 8 (10th gen), Galaxy Tab S6 Lite, Meta Portal (2nd gen); in progress: the Echo Input (cupcake, not yet tried on a unit), Fire HD 8 8th gen (Panel issue #1)",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md"
    ],
    "on-device": [
     "Echos and Skylight: no Android/Fire OS, Alpine Linux with the echod daemon; tablets and Portal: Android app with echod inside; no separate server needed (dashcast optional for streamed dashboards)",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "install": [
     "Unlock (amonet; saiyaku for Show 8 gen 2; kamakiri-donut kit for Dot gen 3); Show 5 and Show 8 gen 1 need LineageOS 18.1 drivers; USB; Python installer on Windows/Linux/macOS (--for-someone-else on every installer); Echo gen 2 and Dot gen 3 need soldering to pads; Skylight: no unlock, adb on stock firmware; tablets and Portal: no unlock, adb install of the Panel app",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md"
    ],
    "os-replaced": [
     "Partly",
     "Echos and Skylight: yes; the Panel app runs on Android",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md"
    ],
    "third-party-parts": [
     "Partly",
     "Show, Skylight and Panel app can be a screen for the Tessera HA add-on (preview)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/dashboards.md#tessera-screens-preview"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/dashboards.md#tessera-screens-preview"
    ],
    "ui-languages": [
     "Yes",
     "whole screen in German, French, Galician, Italian, Japanese and Turkish, nearly all of it in Dutch (v1.6.40), part of it in Spanish; the first-run walkthrough in all eight of them (v1.6.41); date and weather also in Portuguese and Russian",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/lib/locale/text_test.go#L183-L185"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/lib/locale/text_test.go#L183-L185"
    ],
    "porting": [
     "Partly",
     "porting plans and hardware notes per device, no porting guide",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/porting-plan.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/porting-plan.md"
    ],
    "assist-satellite": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "follow-up": [
     "Yes",
     "a closing phrase (\"thank you\", \"that's all\", \"never mind\") ends the conversation (v1.6.35)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#two-wake-words-two-assistants"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#two-wake-words-two-assistants"
    ],
    "ask-question": [
     "Yes",
     "start_conversation feature flag in code",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/voice/voice.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/voice/voice.go"
    ],
    "wake-word": [
     "Yes",
     "microWakeWord",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "custom-wake": [
     "Yes",
     "most microWakeWord models, incl. ADD and pooling layers; a model needing an unsupported operation is refused",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#a-wake-word-of-your-own"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#a-wake-word-of-your-own"
    ],
    "two-wake": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#two-wake-words-two-assistants"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#two-wake-words-two-assistants"
    ],
    "server-wake": [
     "Yes",
     "off by default; confirm-only mode also offered",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#wake-word-on-home-assistant"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#wake-word-on-home-assistant"
    ],
    "no-wake-start": [
     "Yes",
     "screen tap, action button, HA Wake button",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#7-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#7-voice"
    ],
    "cancel-turn": [
     "Yes",
     "action button or HA Cancel request button",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#7-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#7-voice"
    ],
    "stop-word": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#two-wake-words-two-assistants"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#two-wake-words-two-assistants"
    ],
    "arbitration": [
     "Yes",
     "on by default; needs same house word; a wake heard faintly next to the other devices can be checked with HA first, off by default (v1.6.35)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#the-nearest-device-answers"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#the-nearest-device-answers"
    ],
    "echo-cancel": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#how-well-does-it-hear"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#how-well-does-it-hear"
    ],
    "noise-suppression": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#how-well-does-it-hear"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#how-well-does-it-hear"
    ],
    "mic-gain": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#how-well-does-it-hear"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#how-well-does-it-hear"
    ],
    "mic-array": [
     "Yes",
     "beamformer off on Show 8 gen 2",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#how-well-does-it-hear"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#how-well-does-it-hear"
    ],
    "external-mic": [
     "Not found",
@@ -5007,37 +5014,37 @@
    "end-of-speech": [
     "Yes",
     "on-device VAD on/off switch; End of speech pause 0.6 to 2 seconds (v1.6.20)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#7-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#7-voice"
    ],
    "no-wake-gap": [
     "Yes",
     "mics stay open while the wake sound plays, echo cancellation keeps words said straight after it; with echo cancellation off it waits for the sound to fade",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#sounds-of-your-own"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#sounds-of-your-own"
    ],
    "streaming-replies": [
     "Yes",
     "Reply delivery setting: whole file, streamed, or early (speaks from the first sentence)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#two-wake-words-two-assistants"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#two-wake-words-two-assistants"
    ],
    "voice-recordings": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#list-saved-voice-recordings"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#list-saved-voice-recordings"
    ],
    "turn-history": [
     "Yes",
     "last 10 voice requests on the setup page (time, wake word score, heard, reply, how it ended); kept in memory only; last-turn sensors in HA too",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#recent-voice-requests"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#recent-voice-requests"
    ],
    "last-turn-sensors": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#two-wake-words-two-assistants"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#two-wake-words-two-assistants"
    ],
    "wake-clips": [
     "Yes",
-    "off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#wake-word-clips"
+    "off by default; each kept clip can be sent to a trainer (Tater Trainer, wakesmith or a receiver of your own) (v1.6.43)",
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#wake-word-clips"
    ],
    "vendor-frontend": [
     "Partly",
@@ -5052,52 +5059,52 @@
    "realtime-voice": [
     "Yes",
     "off by default; paid cloud; HA control via MCP token",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#realtime-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#realtime-voice"
    ],
    "voice-without-ha": [
     "Yes",
     "needs own Wyoming and chat-model servers; no house control",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#voice-without-home-assistant"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#voice-without-home-assistant"
    ],
    "voice-command-library": [
     "Yes",
     "10 voice blueprints (alarms, reminders, volume, calls, help) plus 11 event blueprints and 2 scripts, with import buttons; all now branded with steps and links",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/blueprints/README.md#voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/blueprints/README.md#voice"
    ],
    "music-by-voice": [
     "Yes",
     "through Music Assistant",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "chatgpt-assistant": [
     "Partly",
     "Direct mode uses any OpenAI-style local endpoint (llama.cpp, Ollama); no ChatGPT subscription sign-in found. Cloud realtime needs an API key",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#realtime-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#realtime-voice"
    ],
    "media-player": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#under-the-hood"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#under-the-hood"
    ],
    "ducking": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#whats-new"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#whats-new"
    ],
    "sendspin": [
     "Yes",
     "on by default; a playback delay of 0 to 1000 ms holds a device back to match slower players in a Music Assistant group (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "bluetooth-in": [
     "Partly",
     "Show, Spot, Dot and Echo gen 2; the Panel app has no Bluetooth",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/panel.md#L59-L61"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/panel.md#L59-L61"
    ],
    "bluetooth-out": [
     "Yes",
     "Echos; not the Panel app (no Bluetooth); the Echo's volume sets the speaker's own (AVRCP absolute volume) and the speaker's buttons set the Echo's (v1.6.40)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/panel.md#L59-L61"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/panel.md#L59-L61"
    ],
    "line-out": [
     "Partly",
@@ -5107,112 +5114,112 @@
    "airplay": [
     "Partly",
     "every device but the Panel app; off by default; AirPlay 2 grouping, kept in step with other AirPlay 2 speakers since v1.6.9; the AirPlay slider can set the device volume (v1.6.12); Music Assistant's buffered AirPlay stream plays since v1.6.36",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "dlna": [
     "Yes",
     "off by default; no seeking yet",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "cast-receiver": [
     "No",
     "video.md: not a Google Cast target",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/video.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/video.md"
    ],
    "volume-streams": [
     "Yes",
     "voice volume (replies, announcements) and call volume as steps from the main volume (music); alarm/timer ring volume separate",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#voice-volume-and-call-volume"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#voice-volume-and-call-volume"
    ],
    "equalizer": [
     "Yes",
     "bass and treble Â±6 dB",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "speaker-gain": [
     "Partly",
     "Show 5 gen 2, Show 8 gen 2, Dot and Echo 2nd gen; not the other Shows or the Spot; Louder top volume setting for the Dot 2nd gen (off by default, v1.6.30)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md"
    ],
    "custom-sounds": [
     "Yes",
     "timer, chime, alarm and other event sounds, incl. the announcement chime (v1.6.29); sound packs save and load them as one file; a call ring of your own for every incoming call (v1.6.37)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#sounds-of-your-own"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#sounds-of-your-own"
    ],
    "route-to-player": [
     "Yes",
     "\"Replies play on\" sends replies to a chosen HA media player as announcements; the device's own sounds stay on it",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#replies-on-another-speaker"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#replies-on-another-speaker"
    ],
    "radio": [
     "Yes",
     "a station of your own shows its song and cover from an HA sensor's attributes (v1.6.36)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/install.md#radio"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/install.md#radio"
    ],
    "sleep-sounds": [
     "Yes",
     "generated on the device",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "sleep-timer": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "now-playing": [
     "Yes",
     "Classic or Modern layout (square artwork beside details and controls on rectangular screens, v1.6.30); skip back 15 and forward 30 seconds for songs Music Assistant can skip within (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#L922-L925"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#L930-L933"
    ],
    "follow-player": [
     "Yes",
     "one or several players can be followed; the one that started last is shown",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "lyrics": [
     "Yes",
     "Shows only; off by default; LRCLIB",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "video": [
     "Yes",
     "Show, Spot and Skylight; off by default; H.264; H.265, VP8 and VP9 on Show 8 gen 2 and Skylight",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/video.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/video.md"
    ],
    "nursery-monitor": [
     "Yes",
     "Baby monitor switch (off by default): room sound live in a browser on the home network through a private link; Show, Spot and Dot; not the Skylight (no mic); listening light Normal, Dimmest or Off (v1.6.26)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#the-baby-monitor"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#the-baby-monitor"
    ],
    "speaker-tuning": [
     "Partly",
     "Per-model speaker setup with EQ tables and vendor limiter on Dot and Cronos devices, plus bass/treble; no shipped crossover or multiband profile found",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/hardware/speaker/paths_dot.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/hardware/speaker/paths_dot.go"
    ],
    "ha-dashboard": [
     "Yes",
     "drawn on device, or streamed via separate dashcast server; text fields on a streamed dashboard open the Show's own keyboard (v1.6.37); a drawn dashboard with no Home Assistant access shows a QR code that opens the page to connect it (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/dashboards.md#using-it"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/dashboards.md#using-it"
    ],
    "web-pages": [
     "Yes",
     "needs dashcast server",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/dashboards.md#web-pages"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/dashboards.md#web-pages"
    ],
    "on-screen-settings": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#screenshots"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#screenshots"
    ],
    "app-drawer": [
     "Partly",
     "fixed drawer tabs (Cameras, Radio, Call)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "return-home": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/dashboards.md#turning-it-on"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/dashboards.md#turning-it-on"
    ],
    "orientation": [
     "Not found",
@@ -5227,157 +5234,157 @@
    "ui-scale": [
     "Yes",
     "Text size setting, 70% to 125%, for every word on the screen; icons and layout keep their size; Show, Spot and Skylight (not yet the Panel app)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#L871-L875"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#L879-L883"
    ],
    "clock": [
     "Yes",
     "15 styles, incl. Nixie, Stack and Overlap; bottom left, center or right position; the screensaver's clock at the top, in the middle or at the bottom (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#clock-and-home-screen"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#clock-and-home-screen"
    ],
    "weather": [
     "Yes",
     "High, Low and Rain on the weather page follow the screen's language (v1.6.37)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#3-weather"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#3-weather"
    ],
    "screensaver": [
     "Yes",
     "photos, dashboard or web page; swipe between the last 20 photos, Medium clock and weather on it (v1.6.35); clock at the top, in the middle or at the bottom, the photo's date and place on the other side (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#2-photos"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#2-photos"
    ],
    "photos": [
     "Yes",
     "date and place for any source, from the EXIF date or the file name (v1.6.35)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#2-photos"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#2-photos"
    ],
    "immich": [
     "Yes",
     "also albums through Home Assistant's own Immich integration (v1.6.36), pictures of any type, RAW such as DNG included (v1.6.37)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#2-photos"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#2-photos"
    ],
    "glance-chips": [
     "Yes",
     "Shows only",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#show-chips-along-the-foot-of-the-clock"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#show-chips-along-the-foot-of-the-clock"
    ],
    "screen-messages": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#show-a-notification"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#show-a-notification"
    ],
    "timers-on-screen": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "calendar": [
     "Yes",
     "HA calendars or iCal links; Month, Week, Day or Coming up opens by setting; week can start Monday",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#calendar"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#calendar"
    ],
    "todo-lists": [
     "Yes",
     "HA to-do lists in the drawer To-do tab on Show, Skylight and Panel app; tap marks an item done; add by voice through Assist or the built-in assistant; off until lists are chosen",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#to-do-and-shopping-lists"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#to-do-and-shopping-lists"
    ],
    "answer-views": [
     "Yes",
     "forecast, radar, camera pages for voice requests",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "display-modes": [
     "Partly",
     "night mode switch and dashboard show/hide",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#night"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#night"
    ],
    "weather-radar": [
     "Yes",
     "alerts U.S. only",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "night-mode": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#night"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#night"
    ],
    "auto-brightness": [
     "Yes",
     "light sensor uncalibrated on Show 8 gen 2",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#clock-and-home-screen"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#clock-and-home-screen"
    ],
    "themes": [
     "Yes",
     "dark, light or auto by room light; custom colors; skins (LCARS, Commodore 64, Big and plain, Control room, Prairie, Earthrise and more)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#clock-and-home-screen"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#clock-and-home-screen"
    ],
    "fonts": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#clock-and-home-screen"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#clock-and-home-screen"
    ],
    "screen-control": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#the-screen-and-the-rooms-lights"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#the-screen-and-the-rooms-lights"
    ],
    "camera-view": [
     "Yes",
     "grid of up to six on the Show",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#show-several-cameras-at-once"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#show-several-cameras-at-once"
    ],
    "go2rtc": [
     "Yes",
     "go2rtc camera sound not played yet",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#cameras-from-go2rtc"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#cameras-from-go2rtc"
    ],
    "camera-sound": [
     "Partly",
     "HA stream or RTSP; not go2rtc or Reolink recorder",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#4-cameras"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#4-cameras"
    ],
    "device-camera-entity": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "device-camera-stream": [
     "Yes",
     "off by default; RTP/JPEG, not H.264; ONVIF discovery switch, off by default; login settable from HA (opt-in)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#recording-this-devices-camera"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#recording-this-devices-camera"
    ],
    "camera-preview": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "camera-vision": [
     "Partly",
     "motion, person with confidence sensor; palm-over-lens stop; no face/hand detection; off by default; the person model downloads the first time it is turned on (v1.6.41)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#presence-and-gestures"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#presence-and-gestures"
    ],
    "announcements": [
     "Yes",
     "play as the audio arrives, as streamed replies do (v1.6.41)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/voice/announce.go#L17-L20"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/voice/announce.go#L17-L20"
    ],
    "intercom": [
     "Yes",
     "needs same house word",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md#calling-another-device-in-the-house"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md#calling-another-device-in-the-house"
    ],
    "broadcast": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#announce-to-the-house"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#announce-to-the-house"
    ],
    "auto-answer": [
     "Yes",
     "Drop In off by default; an optional ring of 2 to 15 seconds before Drop In answers (v1.6.37)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md#ring-before-drop-in"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md#ring-before-drop-in"
    ],
    "call-by-voice": [
     "Yes",
     "built in: the device's phone book handles 'call Mom'; a wake word can call a phone book contact (v1.6.28); a blueprint covers 'call the kitchen' and HA contacts",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md#calling-a-contact-on-a-wake-word"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md#calling-a-contact-on-a-wake-word"
    ],
    "video-calls": [
     "Not found",
@@ -5387,77 +5394,77 @@
    "phone-calls": [
     "Yes",
     "needs own SIP provider; off until signed in",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md"
    ],
    "buttons": [
     "Yes",
     "press, hold, long hold events",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/buttons/buttons.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/buttons/buttons.go"
    ],
    "mic-mute": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/mute/mute.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/mute/mute.go"
    ],
    "light-sensor": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/diag/diag.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/diag/diag.go"
    ],
    "ble-proxy": [
     "Yes",
     "off by default; active connections on the Show, the Spot and the Panel app (own switch, off by default, needs an API encryption key), scanning only on the Dot; pairing a device from HA through the proxy on the Show and Spot (not the Dot)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md"
    ],
    "led-ring": [
     "Yes",
     "Dot, Echo gen 2 and Dot gen 3",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/light/light.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/light/light.go"
    ],
    "ring-styles": [
     "Yes",
     "Wake word, Thinking and Replying effects, per wake word",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#7-voice"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#7-voice"
    ],
    "touch-gestures": [
     "Yes",
     "hold-on-clock event off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#presence-and-gestures"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#presence-and-gestures"
    ],
    "clap": [
     "Yes",
     "off by default; Normal or Strict sensitivity (v1.6.19)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#presence-and-gestures"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#presence-and-gestures"
    ],
    "proximity": [
     "Not found",
     "Show 5 light chip has no proximity half; other models not documented",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/hardware.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/hardware.md"
    ],
    "room-loudness": [
     "Yes",
     "off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#how-loud-the-room-is"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#how-loud-the-room-is"
    ],
    "camera-shutter": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/diag/diag.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/diag/diag.go"
    ],
    "dnd": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md#calling-another-device-in-the-house"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md#calling-another-device-in-the-house"
    ],
    "health-sensors": [
     "Yes",
     "Wi-Fi signal, load, CPU, memory, free space, last boot reason",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/diag/diag.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/diag/diag.go"
    ],
    "sound-events": [
     "Not found",
     "smoke alarm listed only as future research",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/standalone-plan.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/standalone-plan.md"
    ],
    "wifi-motion": [
     "Not found",
@@ -5467,32 +5474,32 @@
    "ring-visualizer": [
     "Yes",
     "Dot 2nd/3rd gen and Echo 2nd gen: \"Follows the Music\" ring setting follows level, bass/middle/treble and beat of music, radio, AirPlay, Spotify or Sendspin; None turns it off",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#5-music"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#5-music"
    ],
    "ha-link": [
     "Yes",
     "Add it from the device: first run lets HA add it with nothing typed for 15 minutes (HA 2026.9 or later); key can still be typed or scanned",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#first-run"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#first-run"
    ],
    "settings-entities": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#under-the-hood"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#under-the-hood"
    ],
    "ha-actions": [
     "Yes",
     "Connect to Home Assistant on the setup page signs the device in with Home Assistant's own login, no long-lived token to paste; the sign-in renews itself and shows in the HA profile, where it can be taken back (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md"
    ],
    "ha-events": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#voice-request-events"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#voice-request-events"
    ],
    "navigate": [
     "Yes",
     "dashboard, forecast, radar, calendar, camera actions",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#show-or-hide-the-dashboard"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#show-or-hide-the-dashboard"
    ],
    "launch-apps": [
     "n/a",
@@ -5502,52 +5509,52 @@
    "time-from-ha": [
     "Yes",
     "time zone from HA; clock from NTP, or from HA when no time server answers",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md"
    ],
    "timers": [
     "Yes",
     "Home Assistant timers stay on screen through a brief API reconnect (v1.6.30); timer_start_silent action, timer_cancel by label (v1.6.35)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#start-a-timer"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#start-a-timer"
    ],
    "alarms": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#set-an-alarm"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#set-an-alarm"
    ],
    "reminders": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#set-a-reminder"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#set-a-reminder"
    ],
    "wake-light": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#sounds-of-your-own"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#sounds-of-your-own"
    ],
    "ha-down": [
     "Yes",
     "alarms, intercom, announcements, go2rtc, doorbell",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "device-groups": [
     "Partly",
     "stop-all or mute-all blueprint script and a dashboard script, for every TECHO5 device (not a chosen group)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/blueprints/script/techo5/stop_every_device.yaml"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/blueprints/script/techo5/stop_every_device.yaml"
    ],
    "ota": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md#after-installing-every-device"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md#after-installing-every-device"
    ],
    "update-channels": [
     "Yes",
     "Echos; the Panel app has no Stable or Dev channel",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md#after-installing-every-device"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md#after-installing-every-device"
    ],
    "update-rollback": [
     "Yes",
     "Echos (A/B slots); the Show 8 2nd gen's kernel too, with the opt-in boot layer; the Panel app has no A/B slots",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "signed-updates": [
     "Yes",
@@ -5557,77 +5564,77 @@
    "settings-page": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md"
    ],
    "logs": [
     "Yes",
     "setup page shows the device log live (pause, level filter, download); signed API log stream, SSH, diagnostics download",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#questions-and-problems"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#questions-and-problems"
    ],
    "screenshot": [
     "Yes",
     "off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md#working-on-it"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md#working-on-it"
    ],
    "diag-bundle": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#questions-and-problems"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#questions-and-problems"
    ],
    "remote-shell": [
     "Yes",
     "SSH keys only; off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/actions.md#set-the-ssh-authorized-keys"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/actions.md#set-the-ssh-authorized-keys"
    ],
    "remote-api": [
     "Yes",
     "off by default; everyday settings only",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#11-the-remote-api"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#11-the-remote-api"
    ],
    "copy-settings": [
     "Yes",
     "sharing off by default",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#sharing-settings-with-the-other-devices"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#sharing-settings-with-the-other-devices"
    ],
    "settings-backup": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#10-saving-the-settings"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#10-saving-the-settings"
    ],
    "wifi-change": [
     "Yes",
     "Dot: Wi-Fi over Bluetooth with Improv from HA or a phone (v1.6.31), or wifi-set over SSH or USB tool; hidden Wi-Fi networks join (v1.6.42)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#another-wi-fi-on-an-echo-dot"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#another-wi-fi-on-an-echo-dot"
    ],
    "restart": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#whats-new"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#whats-new"
    ],
    "auto-recover": [
     "Yes",
     "supervisor restarts daemon; slot fallback",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/overview.md#working-on-it"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/overview.md#working-on-it"
    ],
    "recovery": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md#going-back-to-twrp-or-fire-os"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md#going-back-to-twrp-or-fire-os"
    ],
    "peer-list": [
     "Partly",
     "other devices listed for settings sharing, no links",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#sharing-settings-with-the-other-devices"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#sharing-settings-with-the-other-devices"
    ],
    "rename": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/setup/rename.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/setup/rename.go"
    ],
    "reset-unpair": [
     "Yes",
     "Reset for someone else: setup page, screen Settings, or HA action reset_for_someone_else (confirm: reset); clears Wi-Fi, name, HA key and token, settings, logins; Dot, Echo gen 2 and Dot gen 3 too (button combo; new network over Bluetooth with Improv, v1.6.31; Dot gen 3 v1.6.32); deletes its own HA entry when given an admin token (v1.6.32)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#giving-a-device-to-someone-else"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#giving-a-device-to-someone-else"
    ],
    "controller": [
     "Not found",
@@ -5637,57 +5644,57 @@
    "browser-install": [
     "Partly",
     "one-command Python installer on a PC",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/tools/install-show.py"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/tools/install-show.py"
    ],
    "vendor-services-off": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "inbound-firewall": [
     "Yes",
     "",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md#after-installing-every-device"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md#after-installing-every-device"
    ],
    "encrypted-peers": [
     "Yes",
     "signed with house word; intercom encrypted",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/phone.md#calling-another-device-in-the-house"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/phone.md#calling-another-device-in-the-house"
    ],
    "admin-auth": [
     "Yes",
     "setup page needs on-device Allow; PIN and API lockouts",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#8-settings-lock"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#8-settings-lock"
    ],
    "sendspin-pairing": [
     "No",
     "docs: no key, no pairing, by design",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/getting-started.md#after-installing-every-device"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/getting-started.md#after-installing-every-device"
    ],
    "tls-options": [
     "Partly",
     "only a skip-certificate-checks switch",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/echod/internal/feature/diag/diag.go"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/echod/internal/feature/diag/diag.go"
    ],
    "privacy-indicators": [
     "Partly",
     "camera off with mute; Show's camera dot for RTSP and camera pages, not HA views; Spot's camera dot whenever the camera runs, or only when a picture leaves it",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#recording-this-devices-camera"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#recording-this-devices-camera"
    ],
    "no-telemetry": [
     "Yes",
     "none found; internet use listed in README",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/README.md#why-techo5"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/README.md#why-techo5"
    ],
    "kiosk-lock": [
     "Partly",
     "settings PIN only",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/setup.md#8-settings-lock"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/setup.md#8-settings-lock"
    ],
    "custom-pages": [
     "Yes",
     "web pages via dashcast server; Tessera pages (preview), grid of your choosing; HA card grid_options sets tile width and height on a Show (v1.6.30)",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/dashboards.md#web-pages"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/dashboards.md#web-pages"
    ],
    "plugins": [
     "Not found",
@@ -5696,13 +5703,13 @@
    ],
    "wake-training": [
     "Partly",
-    "trainer: wakesmith, a separate repo by the same author (linked from the README); manual guide in docs/training-wake-word.md",
+    "trainer: wakesmith, a separate repo by the same author (linked from the README); manual guide in docs/training-wake-word.md; Record wake word records 5 to 50 prompted takes and sends them to wakesmith (v1.6.44)",
     "https://github.com/HuskerMinion/wakesmith"
    ],
    "deck": [
     "Yes",
     "Shows only",
-    "https://github.com/HuskerMinion/techo5/blob/v1.6.42/docs/deck.md"
+    "https://github.com/HuskerMinion/techo5/blob/v1.6.44/docs/deck.md"
    ]
   },
   "view-assist": {
@@ -6554,8 +6561,8 @@
     "https://github.com/aslater3/LibreEcho/commits/main"
    ],
    "releases": [
-    "radar-puffin-v0.14.5, 2026-10-30: 19 releases plus 144 pre-releases (dev builds), all in the LibreEcho repo; the other four repos publish none",
-    "The oldest release is from 2026-08-21; latest dev build 2026-11-16",
+    "radar-puffin-v0.14.6, 2026-11-17: 20 releases plus 145 pre-releases (dev builds), all in the LibreEcho repo; the other four repos publish none",
+    "The oldest release is from 2026-08-21; latest dev build 2026-11-17",
     "https://github.com/aslater3/LibreEcho/releases"
    ],
    "license": [
@@ -6589,14 +6596,14 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/HOME_ASSISTANT_VOICE.md"
    ],
    "ui-languages": [
-    "No",
-    "Web control center is English only",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/web/js/app.js"
+    "Yes",
+    "control center in English or German, chosen under Appearance (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#other-settings"
    ],
    "porting": [
     "Yes",
-    "Per-model porting guide (kernel, Platform target, product files, acceptance checklist) with the Echo Dot 2nd gen as worked example; covers MT8163 models (on the 0.14.6 branch, not yet in a release)",
-    "https://github.com/aslater3/LibreEcho/blob/56e723ab6ff9e9115c26d1e8f6f7aa7c998ff424/docs/porting/README.md"
+    "Per-model porting guide (kernel, Platform target, product files, acceptance checklist) with the Echo Dot 2nd gen as worked example; covers MT8163 models (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/docs/porting/README.md"
    ],
    "assist-satellite": [
     "Yes",
@@ -6619,39 +6626,39 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/HOME_ASSISTANT_VOICE.md"
    ],
    "custom-wake": [
-    "No",
-    "Only the bundled Alexa model; no model upload",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "upload, select and remove wake word models in the control center; bad models refused (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "two-wake": [
-    "No",
-    "One installed wake word",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Partly",
+    "second wake word, both start the same assistant; experimental, off by default, no control-center setting",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "server-wake": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "HA detects the wake word on a continuous mic stream; experimental, off by default, set in the config file only",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "no-wake-start": [
-    "No",
-    "Action button 'Start listening' is a placeholder",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Partly",
+    "action button Start listening starts a request; no HA button for it",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "cancel-turn": [
-    "Partly",
-    "Mic mute cancels a listening turn; voice stop works during a reply",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/src/adapter/esphomed.c"
+    "Yes",
+    "action button, HA Cancel request button, or the wake word again while thinking (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "stop-word": [
-    "Partly",
-    "Spoken stop is handled before any model call but follows the wake word",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "just \"stop\" ends a ringing timer or alarm or a reply; off by default, on-device recognizer (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "arbitration": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "only the paired device that heard the wake word loudest answers; off by default (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "echo-cancel": [
     "Yes",
@@ -6659,9 +6666,9 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/HOME_ASSISTANT_VOICE.md"
    ],
    "noise-suppression": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "experimental switch on the Audio page, off by default",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "mic-gain": [
     "Yes",
@@ -6669,14 +6676,14 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
    ],
    "mic-array": [
-    "Partly",
-    "12 fixed beams over four mics; beam follows the strongest talker; no user mode choice",
-    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/release/radar-puffin-v0.14.4.md"
+    "Yes",
+    "Microphone mixing: beamformer (default), average or one chosen mic (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "external-mic": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "one microphone of the array can be picked under Microphone mixing (0.14.6); no USB or Bluetooth mic",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "end-of-speech": [
     "Yes",
@@ -6690,8 +6697,8 @@
    ],
    "streaming-replies": [
     "Yes",
-    "Local replies are spoken at the first natural break; HA TTS can start early",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/ARCHITECTURE.md"
+    "Local replies are spoken at the first natural break; HA voice replies play while still being generated (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "voice-recordings": [
     "Not found",
@@ -6704,14 +6711,14 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/voice-history-core.md"
    ],
    "last-turn-sensors": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "last wake word text sensor; last transcript and reply sensors opt-in, set in the config file only (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "wake-clips": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "opt-in near-miss clips to play, download or delete on the Privacy page; experimental, off by default",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "vendor-frontend": [
     "Not found",
@@ -6719,14 +6726,14 @@
     ""
    ],
    "whisper": [
-    "Not found",
-    "",
-    ""
+    "In progress",
+    "whisper detection in source, opt-in by environment variable only; tells the local assistant to answer briefly; not in the release notes",
+    "https://github.com/aslater3/LibreEcho-UI/blob/1f7e60cbc3b0d15d27688895aa400ab48b37549e/src/adapter/agentd.c"
    ],
    "realtime-voice": [
     "In progress",
-    "GPT-Live speech-to-speech over a ChatGPT login is in source, hidden and not in 0.14 releases; it delegates device actions, not HA",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/GPT_LIVE.md"
+    "GPT-Live speech-to-speech over a ChatGPT login is in source, not in releases; opt-in HA state and switch control added in source",
+    "https://github.com/aslater3/LibreEcho-UI/blob/1f7e60cbc3b0d15d27688895aa400ab48b37549e/docs/GPT_LIVE.md"
    ],
    "voice-without-ha": [
     "Yes",
@@ -6769,9 +6776,9 @@
     "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/release/radar-puffin-v0.14.3.md"
    ],
    "bluetooth-out": [
-    "Not found",
-    "",
-    ""
+    "In progress",
+    "A2DP source protocol core in source, not wired up or in the release notes",
+    "https://github.com/aslater3/LibreEcho-UI/blob/1f7e60cbc3b0d15d27688895aa400ab48b37549e/tests/test_avdtp_wire_format.c"
    ],
    "line-out": [
     "Not found",
@@ -6794,24 +6801,24 @@
     ""
    ],
    "volume-streams": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "separate volume for replies, announcements and chimes; follows the main volume until set (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "equalizer": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "four bands (120 Hz to 6 kHz, ±6 dB) with presets, applied live (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#equaliser"
    ],
    "speaker-gain": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "speaker boost off, +3 or +6 dB ahead of the speaker protection (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#equaliser"
    ],
    "custom-sounds": [
-    "Partly",
-    "Action-button sound chosen from three bundled ones",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "upload own listening and finished chimes and the timer and alarm ring (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#voice"
    ],
    "route-to-player": [
     "Not found",
@@ -7039,9 +7046,9 @@
     ""
    ],
    "broadcast": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "spoken announcement on every paired device or one; device API only (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#several-devices"
    ],
    "auto-answer": [
     "Not found",
@@ -7064,9 +7071,9 @@
     ""
    ],
    "buttons": [
-    "No",
-    "Buttons are handled on the device; volume and mute only, nothing sent to HA as events",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "press, long-press and double-press events for all four buttons (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "mic-mute": [
     "Yes",
@@ -7074,19 +7081,19 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/src/adapter/esphomed.c"
    ],
    "light-sensor": [
-    "Partly",
-    "TSL2540 lux shown in the web UI, not an HA entity",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "ambient light in lux as an HA sensor (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "ble-proxy": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "passive BLE advertisement forwarding only; experimental, off by default, set in the config file only",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "led-ring": [
-    "No",
-    "Ring is set from the web UI and API only; the ESPHome satellite exposes just a media player and a mic-mute switch",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "LED ring as an HA light with Solid, Pulse and Flash effects (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "ring-styles": [
     "Yes",
@@ -7099,9 +7106,9 @@
     "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/README.md"
    ],
    "clap": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "experimental clap detector in source, off by default; events stay on the device; named only in the release note's validation",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#validation"
    ],
    "proximity": [
     "n/a",
@@ -7109,9 +7116,9 @@
     "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/README.md"
    ],
    "room-loudness": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "room sound level in dBFS as an opt-in HA sensor, set in the config file only (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "camera-shutter": [
     "n/a",
@@ -7119,9 +7126,9 @@
     "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/README.md"
    ],
    "dnd": [
-    "Not found",
-    "A 'dnd' ring color profile exists but nothing in source sets it; no DND switch",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "switch on the LED page silences chimes, button tones and HA announcements; alarms still ring (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#alarms-reminders-and-time"
    ],
    "health-sensors": [
     "Yes",
@@ -7129,19 +7136,19 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
    ],
    "sound-events": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "room loudness sensor only; an experimental smoke-alarm detector in source does not report to HA",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "wifi-motion": [
-    "Not found",
-    "",
-    ""
+    "In progress",
+    "RSSI motion detector core with tests in source, not wired to a sensor",
+    "https://github.com/aslater3/LibreEcho-UI/blob/1f7e60cbc3b0d15d27688895aa400ab48b37549e/src/wifi_motion.c"
    ],
    "ring-visualizer": [
     "Yes",
-    "12-band levels, beat and mood analysis drive the ring; switchable",
-    "https://github.com/aslater3/LibreEcho-Platform/blob/bba9f106a4008ad9efb1c58271b5467a986fb3ba/tools/mt8163-arm32/airplay/music-features.md"
+    "Levels, beat and mood drive the ring; turns with the beat and mood colors since 0.14.6; switchable",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#light-ring"
    ],
    "ha-link": [
     "Yes",
@@ -7149,19 +7156,19 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/HOME_ASSISTANT_VOICE.md"
    ],
    "settings-entities": [
-    "No",
-    "Settings live in the web UI; HA sees a media player and a mute switch",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/src/adapter/esphomed.c"
+    "Partly",
+    "wake word, volume, reply volume, wake sensitivity and LED brightness, plus mute; most settings stay in the web UI",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "ha-actions": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "announce, play_sound and set_ring device actions (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "ha-events": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "events for buttons, voice steps, playback and timers (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#home-assistant-esphome"
    ],
    "navigate": [
     "n/a",
@@ -7174,9 +7181,9 @@
     "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.4/README.md"
    ],
    "time-from-ha": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "time zone from HA, optional and off by default; clock from NTP, own servers settable",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#alarms-reminders-and-time"
    ],
    "timers": [
     "Yes",
@@ -7184,29 +7191,29 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/src/adapter/esphomed.c"
    ],
    "alarms": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "alarms by voice, Timers page or API, with repeat days and snooze; survive restarts (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#alarms-reminders-and-time"
    ],
    "reminders": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "spoken reminders by voice or the Timers page, can repeat (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#alarms-reminders-and-time"
    ],
    "wake-light": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "ring fades up 5 to 30 minutes before an alarm; off by default, API only, no control-center switch yet",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#alarms-reminders-and-time"
    ],
    "ha-down": [
     "Yes",
-    "A doc lists what keeps working with HA offline: device timers and alarms, local voice, radio, AirPlay, Bluetooth; HA-mode voice and HA-owned timers stop. Checked on two units per the doc (on the 0.14.6 branch, not yet in a release)",
-    "https://github.com/aslater3/LibreEcho/blob/56e723ab6ff9e9115c26d1e8f6f7aa7c998ff424/docs/without-home-assistant.md"
+    "A doc lists what keeps working with HA offline: device timers and alarms, local voice, radio, AirPlay, Bluetooth; HA-mode voice and HA-owned timers stop. Checked on two units per the doc (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/docs/without-home-assistant.md"
    ],
    "device-groups": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "mute, unmute or stop a group of paired devices through the device API only; no HA control",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#several-devices"
    ],
    "ota": [
     "Yes",
@@ -7259,9 +7266,9 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
    ],
    "copy-settings": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "copy voice, audio, HA or LED settings to another paired device; device API only (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#several-devices"
    ],
    "settings-backup": [
     "Yes",
@@ -7270,8 +7277,8 @@
    ],
    "wifi-change": [
     "Yes",
-    "Network page scans and connects",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Network page scans and connects; hidden networks joined by name (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#fixes"
    ],
    "restart": [
     "Yes",
@@ -7285,13 +7292,13 @@
    ],
    "recovery": [
     "Yes",
-    "Fastboot and recovery button modes are documented; a guide for going back to stock Fire OS via TWRP is on the 0.14.6 branch, not yet run end to end by the maintainers per the guide",
-    "https://github.com/aslater3/LibreEcho/blob/56e723ab6ff9e9115c26d1e8f6f7aa7c998ff424/docs/install/restore-stock.md"
+    "Fastboot and recovery button modes are documented; a guide for going back to stock Fire OS via TWRP ships with 0.14.6, not yet run end to end by the maintainers per the guide",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/docs/install/restore-stock.md"
    ],
    "peer-list": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "Network page lists other LibreEcho devices with room, version and a link (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#several-devices"
    ],
    "rename": [
     "Yes",
@@ -7324,9 +7331,9 @@
     ""
    ],
    "encrypted-peers": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "paired devices sign what they send each other, set up with a shared code (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#several-devices"
    ],
    "admin-auth": [
     "Yes",
@@ -7334,14 +7341,14 @@
     "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
    ],
    "sendspin-pairing": [
-    "Not found",
-    "",
-    ""
+    "Yes",
+    "only paired Music Assistant servers play; Play without pairing switch, off by default (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#other-settings"
    ],
    "tls-options": [
-    "Partly",
-    "Optional HTTPS with a generated self-signed certificate; no private CA or own certificate found",
-    "https://github.com/aslater3/LibreEcho-UI/blob/f50547a22cc749ce0ad2d4c1ac3d60a64986171d/docs/API.md"
+    "Yes",
+    "own HTTPS certificate for the control center and a trusted private CA for outgoing HTTPS (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/release/radar-puffin-v0.14.6.md#other-settings"
    ],
    "privacy-indicators": [
     "Yes",
@@ -7350,8 +7357,8 @@
    ],
    "no-telemetry": [
     "No",
-    "Weekly anonymous ping is on by default; 0.14.5 adds an off switch on the Privacy page (not yet tested on a device, per the release note)",
-    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.5/docs/privacy.md"
+    "weekly anonymous count ping on by default, can be switched off; health and crash reporting are not built yet and send nothing",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/docs/privacy.md"
    ],
    "kiosk-lock": [
     "n/a",
@@ -7369,9 +7376,9 @@
     ""
    ],
    "wake-training": [
-    "Not found",
-    "",
-    ""
+    "Partly",
+    "guide to training with outside tools plus a host tool that checks, packages and scores a model (0.14.6)",
+    "https://github.com/aslater3/LibreEcho/blob/radar-puffin-v0.14.6/docs/wake-word-training.md"
    ],
    "deck": [
     "n/a",
