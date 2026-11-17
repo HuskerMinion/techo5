@@ -564,7 +564,7 @@ LET_ADD_MINUTES = 30
 # The first release whose daemon turns that marker into a window. An older daemon ignores the marker,
 # so a device installed from it with --let-home-assistant-add would have no key and no window, and
 # serve the zero key until somebody opened a window by hand.
-LET_ADD_MIN_RELEASE = (1, 6, 43)
+LET_ADD_MIN_RELEASE = (1, 6, 44)
 LET_ADD_HELP = ('write no Home Assistant key: Home Assistant adds the device with nothing typed, within %d minutes '
                 'of its first start on the network; name, Wi-Fi and SSH key are kept' % LET_ADD_MINUTES)
 
