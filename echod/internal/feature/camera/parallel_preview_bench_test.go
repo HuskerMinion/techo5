@@ -17,7 +17,7 @@ func BenchmarkCheckersMJPEGPreview(b *testing.B) {
 	b.Run("parallel-stripes", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			if _, err := encodeHalf(frame); err != nil {
+			if _, err := encodeStripes(frame.Image(), quality); err != nil {
 				b.Fatal(err)
 			}
 		}

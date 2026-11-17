@@ -131,11 +131,14 @@ func encode(f *camera.Frame) ([]byte, error) {
 	return b, nil
 }
 
-// encodeHalf is a streamed frame's half-size picture at quality. Reuse the
-// tested restart-marker stripe encoder on available cores to keep live previews
-// fresh without changing resolution, JPEG quality, or the still-photo path.
+// encodeHalf is a streamed frame's half-size picture at quality. The Show 5 1st gen encodes it in
+// strips across its cores (encodeStripes) to keep the live picture fresh; every other board but the
+// 2nd gen Show 5 sends it as one encode, as before.
 func encodeHalf(f interface{ Image() *image.RGBA }) ([]byte, error) {
-	return encodeStripes(f.Image(), quality)
+	if layout.Checkers() {
+		return encodeStripes(f.Image(), quality)
+	}
+	return encodeWhole(f.Image(), quality)
 }
 
 // Native Checkers mode is opt-in. The ordinary MJPEG URL remains the established
@@ -170,13 +173,7 @@ func encodeNative(f *camera.Frame) ([]byte, error) {
 	if nativeEncoded.frame == f {
 		return nativeEncoded.jpg, nil
 	}
-	img := f.Full()
-	jpg, err := encodeNativeTurbo(img, quality)
-	if err != nil {
-		// A codec failure must never disable camera access. Fall back to
-		// the previously verified pure-Go stripe encoder.
-		jpg, err = encodeStripes(img, quality)
-	}
+	jpg, err := encodeStripes(f.Full(), quality)
 	if err != nil {
 		return nil, err
 	}
