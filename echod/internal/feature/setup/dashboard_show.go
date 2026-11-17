@@ -21,7 +21,7 @@ import (
 // an action by hand. The key once saved is never shown again, only whether there is one.
 func dashboardSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	sectionOpen(w, "dashboard", "Dashboard server")
+	sectionOpen(w, "dashboard", "Dashboard server", dashboardServerSummary(d, lastCheck.Load())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashboard")
 	fmt.Fprintf(w, `<label for="dashaddr">Address</label>
@@ -33,6 +33,26 @@ func dashboardSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
 	sectionClose(w)
+}
+
+// dashboardServerSummary is the line on the shut card: whether a server is set, whether it has a key,
+// and what the last save's check found of it. The key is never said.
+func dashboardServerSummary(d config.Dashboard, c *serverCheck) []string {
+	if d.Server == "" {
+		return []string{"Not set up"}
+	}
+	out := []string{"Set up"}
+	if d.Key == "" {
+		out = append(out, "no key")
+	}
+	if c != nil && strings.Contains(c.said, d.Server) {
+		if c.ok {
+			out = append(out, "working")
+		} else {
+			out = append(out, "not working")
+		}
+	}
+	return out
 }
 
 // serverCheck is the dashboard server as the last save found it (dashboard.Check).
@@ -66,7 +86,7 @@ func checkNote(server string) string {
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	sectionOpen(w, "dashpanel", "Dashboard")
+	sectionOpen(w, "dashpanel", "Dashboard", dashboardPanelSummary(dashboard.Get().Mode(), d.Idle)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashpanel")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
@@ -212,4 +232,17 @@ func saveDashboard(r *http.Request) string {
 		return "Saved, but " + strings.ToLower(said[:1]) + said[1:]
 	}
 	return ""
+}
+
+// dashboardPanelSummary is the line on the shut card: how the dashboard is shown, or Off, and whether
+// it stands in for the clock.
+func dashboardPanelSummary(mode config.DashboardMode, idle bool) []string {
+	if mode == config.DashboardOff {
+		return []string{"Off"}
+	}
+	out := []string{mode.Label()}
+	if idle {
+		out = append(out, "in place of the clock")
+	}
+	return out
 }

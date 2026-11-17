@@ -28,7 +28,7 @@ func camStreamSection(w http.ResponseWriter, token string) {
 	case c.On:
 		state = "on, but waiting for a password"
 	}
-	sectionOpen(w, "camstream", "Camera streaming")
+	sectionOpen(w, "camstream", "Camera streaming", camStreamSummary(c)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "camstream")
 	fmt.Fprintf(w, `<p style="margin:0">Camera streaming is %s. Turn it on or off with the Camera streaming
@@ -46,6 +46,18 @@ func camStreamSection(w http.ResponseWriter, token string) {
 		secretField("cspass", fmt.Sprintf("Password (at least %d characters)", camstream.MinPass), "pass", c.Pass != "", ""),
 		camstream.Port, camstream.Path)
 	sectionClose(w)
+}
+
+// camStreamSummary is the line on the shut card: on, off, or on and waiting for a password. The
+// password is never said.
+func camStreamSummary(c config.CamStream) []string {
+	switch {
+	case c.On && c.Pass != "":
+		return []string{"On"}
+	case c.On:
+		return []string{"On", "waiting for a password"}
+	}
+	return []string{"Off"}
 }
 
 func saveCamStream(r *http.Request) string {

@@ -21,7 +21,7 @@ import (
 func deckSection(w http.ResponseWriter, token string) {
 	d := config.Get().Deck
 	st := deck.Get().OBS()
-	sectionOpen(w, "deck", "Deck")
+	sectionOpen(w, "deck", "Deck", deckSummary(d, st.Connected, st.Problem != "")...)
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Buttons for OBS Studio on this screen. Swipe up from the bottom
 	  edge of the clock to open it, swipe down to put it away; swipe left and right for the pages.</p>`)
 
@@ -357,4 +357,21 @@ func saveDeckPC(r *http.Request) string {
 		return "that is not something this page does"
 	}
 	return ""
+}
+
+// deckSummary is the line on the shut card: where OBS stands, and the grid. The password is never said.
+func deckSummary(d config.Deck, connected, problem bool) []string {
+	var out []string
+	switch {
+	case d.OBS.Addr == "":
+		out = append(out, "OBS not set up")
+	case connected:
+		out = append(out, "OBS connected")
+	case problem:
+		out = append(out, "OBS not connected")
+	default:
+		out = append(out, "OBS connecting")
+	}
+	cols, rows := d.Grid()
+	return append(out, fmt.Sprintf("%d × %d buttons", cols, rows))
 }

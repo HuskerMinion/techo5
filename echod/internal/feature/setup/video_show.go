@@ -23,7 +23,7 @@ func videoSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	sectionOpen(w, "video", "Video")
+	sectionOpen(w, "video", "Video", videoSummary(c, video.Installed())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "video")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play a video full screen, with its sound, from an
@@ -59,11 +59,18 @@ func videoSection(w http.ResponseWriter, token string) {
 	sectionClose(w)
 }
 
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
+// videoSummary is the line on the shut card: whether videos play, and from DLNA too; or that this
+// device's software has no player yet.
+func videoSummary(c config.Video, installed bool) []string {
+	switch {
+	case !installed:
+		return []string{"No video player yet"}
+	case !c.On:
+		return []string{"Off"}
+	case c.DLNA:
+		return []string{"On", "DLNA video on"}
 	}
-	return many
+	return []string{"On"}
 }
 
 func saveVideo(r *http.Request) string {

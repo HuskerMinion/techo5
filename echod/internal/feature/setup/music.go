@@ -28,7 +28,7 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	for _, ip := range metrics.Addresses() {
 		addrs = append(addrs, ip.String())
 	}
-	sectionOpen(w, "music", "Music Assistant")
+	sectionOpen(w, "music", "Music Assistant", musicSummary(m, sendspin.Get().Delay())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "music")
 	var a musicAnswer
@@ -61,6 +61,25 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 		config.MaxSendspinDelayMs, config.MaxSendspinDelayMs, sendspin.Get().Delay())
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
+}
+
+// musicSummary is the line on the shut card: whether a Music Assistant is set, and the playback delay
+// when there is one. What Music Assistant says of itself is asked later, and not waited for here; the
+// token is never said.
+func musicSummary(m config.MusicAssistant, delayMs int) []string {
+	var out []string
+	switch {
+	case m.URL == "":
+		return []string{"Not set up"}
+	case m.Token == "":
+		out = append(out, "No token yet")
+	default:
+		out = append(out, "Set up")
+	}
+	if delayMs > 0 {
+		out = append(out, fmt.Sprintf("delay %d ms", delayMs))
+	}
+	return out
 }
 
 // musicAnswer is what Music Assistant said: how it sees this device (musicStatus), and the services it

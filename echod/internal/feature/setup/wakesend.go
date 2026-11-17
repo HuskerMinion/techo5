@@ -43,13 +43,31 @@ func init() {
 	saves["wakeclips-keep"] = saveKeepWake
 }
 
+// wakeClipsSummary is the line on the shut card: whether clips are kept, and where they go; Off when
+// neither. The token is never said.
+func wakeClipsSummary(keeping bool, cur config.WakeSend) []string {
+	if !keeping && !cur.On() {
+		return []string{"Off"}
+	}
+	out := []string{"Keeping clips"}
+	if !keeping {
+		out = []string{"Not keeping clips"}
+	}
+	if cur.On() {
+		out = append(out, "sent to "+config.SendLabel(cur.Target))
+	} else {
+		out = append(out, "not sent")
+	}
+	return out
+}
+
 // wakeSendPlaceholder is what the address field shows before one is typed.
 const wakeSendPlaceholder = "http://192.168.1.20:8765"
 
 func wakeClipsSendSection(w http.ResponseWriter, token string) {
 	cur := config.Get().Wake.Send
-	sectionOpen(w, "wakeclips", "Send wake clips to")
 	keeping := wakeClipsKept()
+	sectionOpen(w, "wakeclips", "Send wake clips to", wakeClipsSummary(keeping, cur)...)
 	on, off := "", ` selected`
 	if keeping {
 		on, off = ` selected`, ""

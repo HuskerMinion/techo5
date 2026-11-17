@@ -166,6 +166,27 @@ func sectionOpen(w io.Writer, section, title string, summary ...string) {
 	sayHere(w, section)
 }
 
+// plural is one or many, for n.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// count is n and its noun, for a summary: "1 camera", "3 cameras".
+func count(n int, one, many string) string {
+	return fmt.Sprintf("%d %s", n, plural(n, one, many))
+}
+
+// onOff is a switch as a summary says it.
+func onOff(on bool) string {
+	if on {
+		return "On"
+	}
+	return "Off"
+}
+
 // sectionClose ends what sectionOpen started.
 func sectionClose(w io.Writer) {
 	fmt.Fprint(w, `</div></details>`)

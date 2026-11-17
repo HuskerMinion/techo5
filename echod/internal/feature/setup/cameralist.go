@@ -22,7 +22,7 @@ func cameraListSection(w http.ResponseWriter, token string) {
 	if len(cams) == 0 && !camera.Available() {
 		return
 	}
-	sectionOpen(w, "cameralist", "Camera list")
+	sectionOpen(w, "cameralist", "Camera list", cameraListSummary(len(cams), camera.Available() && h.OwnCameraLeftOut)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "cameralist")
 	if camera.Available() {
@@ -44,6 +44,16 @@ func cameraListSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`,
 		max(3, min(len(lines), 10)), html.EscapeString(text), html.EscapeString(text))
 	sectionClose(w)
+}
+
+// cameraListSummary is the line on the shut card: how many cameras are listed, and whether the device's
+// own is left off.
+func cameraListSummary(n int, ownLeftOut bool) []string {
+	out := []string{count(n, "camera", "cameras")}
+	if ownLeftOut {
+		out = append(out, "this device's own left out")
+	}
+	return out
 }
 
 func saveCameraList(r *http.Request) string {

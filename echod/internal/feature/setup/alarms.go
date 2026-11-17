@@ -185,7 +185,7 @@ func addDrawer(w http.ResponseWriter, token string) {
 
 func prefsSection(w http.ResponseWriter, token string) {
 	c := config.Get()
-	sectionOpen(w, "alarm_prefs", "For every alarm on this device")
+	sectionOpen(w, "alarm_prefs", "For every alarm on this device", alarmPrefsSummary(c.Alarms.Snooze(), ring.Level(), alarm.Get().Sound())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "alarm_prefs")
 	fmt.Fprintf(w, `<div class="row">
@@ -216,6 +216,15 @@ func prefsSection(w http.ResponseWriter, token string) {
 	  Assistant, after the first chime.</p>
 	 <div class="btns"><button type="submit">Save</button></div></form>`)
 	sectionClose(w)
+}
+
+// alarmPrefsSummary is the line on the shut card: the snooze, the ring volume and the sound.
+func alarmPrefsSummary(snooze, ringVolume int, sound string) []string {
+	out := []string{fmt.Sprintf("Snooze %d min", snooze), fmt.Sprintf("ring volume %d", ringVolume)}
+	if sound != "" {
+		out = append(out, sound)
+	}
+	return out
 }
 
 // whenFields are an alarm's time and words.

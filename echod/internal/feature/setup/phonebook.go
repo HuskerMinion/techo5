@@ -22,9 +22,10 @@ func init() { saves["phonebook"] = savePhoneBook }
 // page only, which is the device's own and open only to somebody who pressed its button: never in the
 // log, and never in Home Assistant.
 func phoneBookSection(w http.ResponseWriter, token string) {
-	book := phone.FormatContacts(phone.Get().Contacts())
+	contacts := phone.Get().Contacts()
+	book := phone.FormatContacts(contacts)
 	byVoice := phone.CallByVoice()
-	sectionOpen(w, "phonebook", "Phone book")
+	sectionOpen(w, "phonebook", "Phone book", phoneBookSummary(len(contacts), byVoice)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "phonebook")
 	fmt.Fprintf(w, `<label for="contacts">Contacts, one to a line</label>
@@ -40,6 +41,24 @@ func phoneBookSection(w http.ResponseWriter, token string) {
 	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(book), html.EscapeString(book), phone.MaxContacts, checkedIf(byVoice), byVoice)
 	sectionClose(w)
+}
+
+// phoneBookSummary is the line on the shut card: how many contacts, and whether they are called by
+// voice. Never a name or a number.
+func phoneBookSummary(n int, byVoice bool) []string {
+	var out []string
+	switch n {
+	case 0:
+		out = append(out, "None added")
+	case 1:
+		out = append(out, "1 contact")
+	default:
+		out = append(out, fmt.Sprintf("%d contacts", n))
+	}
+	if byVoice {
+		out = append(out, "call by voice on")
+	}
+	return out
 }
 
 // savePhoneBook keeps the book when it was changed on the page, and the switch when it was.

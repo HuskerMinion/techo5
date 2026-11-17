@@ -12,7 +12,7 @@ import (
 // replyPlayerSection is where the assistant's spoken replies play: this device, or another Home
 // Assistant media player.
 func replyPlayerSection(w http.ResponseWriter, token string) {
-	sectionOpen(w, "replyplayer", "Replies play on")
+	sectionOpen(w, "replyplayer", "Replies play on", replyPlayerSummary(config.Get().Brain.ReplyPlayer)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "replyplayer")
 	fmt.Fprintf(w, `<label for="player">Media player</label>
@@ -28,6 +28,14 @@ func replyPlayerSection(w http.ResponseWriter, token string) {
 	  here.</p>
 	 <p><button type="submit">Save</button></p></form>`, html.EscapeString(config.Get().Brain.ReplyPlayer))
 	sectionClose(w)
+}
+
+// replyPlayerSummary is the line on the shut card: this device, or the player the replies go to.
+func replyPlayerSummary(player string) []string {
+	if player == "" {
+		return []string{"This device"}
+	}
+	return []string{player}
 }
 
 // saveReplyPlayer keeps the player, or says why it is not one.

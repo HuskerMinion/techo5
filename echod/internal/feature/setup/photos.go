@@ -19,7 +19,7 @@ const maxPhoto = 8 << 20
 
 func photosSection(w http.ResponseWriter, token string) {
 	n := home.LocalPhotoCount()
-	sectionOpen(w, "photos", "Photos on this device")
+	sectionOpen(w, "photos", "Photos on this device", photosSummary(n)...)
 	fmt.Fprintf(w, `<p style="margin:0"><strong>%d</strong> kept, of at most %d. The slideshow shows them when it has no Home
 	  Assistant photos to show; turn it on above, or on the device under Settings, Display, Slideshow.</p>
 	 <label for="pics">Add photos</label>
@@ -55,6 +55,14 @@ func photosSection(w http.ResponseWriter, token string) {
 		 <p><button type="submit" class="danger">Remove all photos</button></p></form>`)
 	}
 	sectionClose(w)
+}
+
+// photosSummary is the line on the shut card: how many photos are kept.
+func photosSummary(n int) []string {
+	if n == 0 {
+		return []string{"None kept"}
+	}
+	return []string{count(n, "photo", "photos")}
 }
 
 // photo takes one picture from the page's script.

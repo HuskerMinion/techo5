@@ -22,7 +22,7 @@ func talkBackSection(w http.ResponseWriter, token string) {
 		return
 	}
 	c := config.Get()
-	sectionOpen(w, "talkback", "Talk through cameras")
+	sectionOpen(w, "talkback", "Talk through cameras", talkBackSummary(c)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "talkback")
 	state := "off: turn on Talk through cameras under Privacy &amp; Security, on the device or in Home Assistant"
@@ -192,4 +192,16 @@ func rtspAddress(a string) string {
 		return "put the login in User and Password, not in the address"
 	}
 	return ""
+}
+
+// talkBackSummary is the line on the shut card: the switch, and whether a login is kept for the cameras
+// that need one. The password is never said.
+func talkBackSummary(c config.Config) []string {
+	if !c.Security.TalkBack {
+		return []string{"Off"}
+	}
+	if c.TalkBack.Pass == "" {
+		return []string{"On"}
+	}
+	return []string{"On", "login set"}
 }

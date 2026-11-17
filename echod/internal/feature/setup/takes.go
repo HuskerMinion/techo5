@@ -216,7 +216,7 @@ func takesSection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	sectionOpen(w, "takes", "Record takes of a word")
+	sectionOpen(w, "takes", "Record takes of a word", onOff(config.Get().Security.Takes))
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">For training a wake word, or a command word, on what this
 	  device really hears: it records up to two minutes from its own microphones, exactly as the wake word
 	  hears them, and cuts it into one take each time the word is said. Each recording starts %s.</p>`,

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -30,7 +31,7 @@ func todoSection(w http.ResponseWriter, token string) {
 			offered = append(offered, hass.Entity{ID: id})
 		}
 	}
-	sectionOpen(w, "todo", "To-do lists")
+	sectionOpen(w, "todo", "To-do lists", todoSummary(offered, chosen)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "todo")
 	if len(offered) == 0 {
@@ -49,6 +50,25 @@ func todoSection(w http.ResponseWriter, token string) {
 	 <code>todo_lists</code> action in Home Assistant.</p>
 	 <p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
+}
+
+// todoSummary is the line on the shut card: the lists chosen, by their names where Home Assistant gave
+// them, or Off for none. It reads only what the section has already been given.
+func todoSummary(offered []hass.Entity, chosen []string) []string {
+	if len(chosen) == 0 {
+		return []string{"Off"}
+	}
+	var names []string
+	for _, id := range chosen {
+		name := id
+		for _, e := range offered {
+			if e.ID == id && e.Name != "" {
+				name = e.Name
+			}
+		}
+		names = append(names, name)
+	}
+	return []string{strings.Join(names, ", ")}
 }
 
 func saveTodo(r *http.Request) string {

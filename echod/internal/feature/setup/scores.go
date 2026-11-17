@@ -51,12 +51,24 @@ func (f *Feature) scores(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(sc)
 }
 
+// scoresSummary is the line on the shut card: whether the microphones are cut, and how many words are
+// listened for now.
+func scoresSummary(sc wakeword.Scores) []string {
+	if sc.Muted {
+		return []string{"Microphones cut"}
+	}
+	if len(sc.Rows) == 0 {
+		return []string{"Nothing listened for now"}
+	}
+	return []string{count(len(sc.Rows), "word", "words") + " listened for"}
+}
+
 // scoresSection is the words being listened for, their thresholds and what was last heard, drawn as a
 // plain table that Refresh brings up to date. With script, Watch polls and draws each word's scores as
 // they come. Reading it for the table does not start the engine keeping the peaks: only watching does.
 func scoresSection(w http.ResponseWriter) {
 	sc := readScores(0, 0, false)
-	sectionOpen(w, "scores", "Wake word scores")
+	sectionOpen(w, "scores", "Wake word scores", scoresSummary(sc)...)
 	fmt.Fprint(w, `<div id="scores">
 	 <style>
 	  table.scores{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
