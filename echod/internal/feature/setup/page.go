@@ -871,7 +871,10 @@ func (f *Feature) wifiSection(w http.ResponseWriter, token string, scan bool) {
 func wifiSummary(connected bool, ssid string, remembered int) []string {
 	out := []string{"Not connected"}
 	if connected {
-		out = []string{"Connected to " + ssid}
+		out = []string{"Connected"}
+		if ssid != "" {
+			out = []string{"Connected to " + ssid}
+		}
 	}
 	if remembered > 0 {
 		out = append(out, fmt.Sprintf("%d remembered", remembered))
@@ -903,7 +906,7 @@ func wifiJoinForm(ctx context.Context, w http.ResponseWriter, token string, scan
 	}
 	fmt.Fprint(w, `</select>`)
 	if !scan {
-		fmt.Fprint(w, `<p><a href="/setup?tab=network&amp;scan=1">Scan for networks</a> — it takes a few seconds.</p>`)
+		fmt.Fprint(w, `<p><a href="/setup?tab=network&amp;scan=1&amp;open=wifi#sec-wifi">Scan for networks</a> — it takes a few seconds.</p>`)
 	}
 	// A passphrase typed wrong is only found out after the join has been waited for, so it can be
 	// looked at before it is sent (secret.go).

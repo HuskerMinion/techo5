@@ -91,6 +91,9 @@ func haCamerasSummary(mode string, list []config.Camera) []string {
 		}
 		names = append(names, name)
 	}
+	if len(names) == 0 {
+		return []string{"None picked"}
+	}
 	return []string{strings.Join(names, ", ")}
 }
 

@@ -42,7 +42,7 @@ func statusSection(w http.ResponseWriter) {
 	} else {
 		statusLine(w, "bad", "Home Assistant", `is not connected. Alarms, timers and what is set here keep
 		 working without it; voice, the dashboard and its controls wait for it.
-		 <a href="/setup?tab=network">Network</a> has how it is added.`)
+		 <a href="/setup?tab=network&amp;open=adopt#sec-adopt">Network</a> has how it is added.`)
 	}
 
 	if wifi.Available() {
@@ -54,7 +54,7 @@ func statusSection(w http.ResponseWriter) {
 				html.EscapeString(st.SSID), html.EscapeString(st.Address)))
 		} else {
 			statusLine(w, "bad", "Wi-Fi", fmt.Sprintf(`is not on a network (%s).
-			 <a href="/setup?tab=network">Network</a> has the networks.`, html.EscapeString(st.State)))
+			 <a href="/setup?tab=network&amp;open=wifi#sec-wifi">Network</a> has the networks.`, html.EscapeString(st.State)))
 		}
 	}
 
@@ -68,10 +68,10 @@ func statusSection(w http.ResponseWriter) {
 		statusLine(w, "", "Software", running+` An update is installing; the device restarts when it is done.`)
 	case fw.Failed() != "":
 		statusLine(w, "bad", "Software", running+` The last update did not install.
-		 <a href="/setup?tab=system">System</a> says why.`)
+		 <a href="/setup?tab=system&amp;open=updates#sec-updates">System</a> says why.`)
 	case fw.Offered() != "":
 		statusLine(w, "", "Software", running+fmt.Sprintf(` <strong>%s</strong> is ready to install, on
-		 <a href="/setup?tab=system">System</a>.`, html.EscapeString(fw.Offered())))
+		 <a href="/setup?tab=system&amp;open=updates#sec-updates">System</a>.`, html.EscapeString(fw.Offered())))
 	default:
 		statusLine(w, "ok", "Software", running+` Nothing newer is waiting.`)
 	}

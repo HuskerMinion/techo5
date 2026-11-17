@@ -95,7 +95,7 @@ func historySummary(turns []activity.Past) []string {
 			newest = t.At
 		}
 	}
-	return []string{count(len(turns), "request", "requests"), "last " + newest.Format("Jan 2, 3:04 PM")}
+	return []string{count(len(turns), "request", "requests"), "last " + newest.Local().Format("Jan 2, 3:04 PM")}
 }
 
 // took is the parts of a turn that have a time, in seconds.

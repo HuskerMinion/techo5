@@ -159,7 +159,7 @@ func sectionOpen(w io.Writer, section, title string, summary ...string) {
 		keep = " data-keep"
 	}
 	fmt.Fprintf(w, `<details class="card" id="sec-%s"%s%s><summary><span class="ttl">%s</span><span class="sum">%s</span></summary><div class="in">`,
-		section, open, keep, title, html.EscapeString(strings.Join(summary, " · ")))
+		section, open, keep, html.EscapeString(title), html.EscapeString(strings.Join(summary, " · ")))
 	if s, ok := w.(*sectionWriter); ok {
 		s.cards = append(s.cards, card{section, title})
 	}
