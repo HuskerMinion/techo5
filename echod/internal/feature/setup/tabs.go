@@ -127,7 +127,13 @@ func head(w http.ResponseWriter) {
  nav.rail .toc{list-style:none;margin:.1rem 0 .4rem;padding:0 0 0 .8rem;border-left:1px solid var(--line);margin-left:.8rem}
  nav.rail .toc a{padding:.3rem .6rem;font-size:.88rem;color:var(--dimtext);line-height:1.3}
  nav.rail .toc a:hover{color:var(--text)}
- .wrap:has(.cards){max-width:96rem} .cards .note{max-width:none}
+ .wrap:has(.cards),.wrap:has(.found){max-width:96rem} .cards .note,.found .note{max-width:none}
+ .tabhead{display:flex;flex-direction:row-reverse;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.6rem 1.5rem;margin:0 0 .8rem}
+ .tabhead h2{margin:0}
+ form.find{display:flex;gap:.5rem;flex:0 1 24rem;min-width:0}
+ form.find input{flex:1;min-width:0;-webkit-appearance:none;appearance:none} form.find button{flex:none}
+ .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .found .where{margin:0 0 .3rem}
  .cardbar{display:flex;gap:1.2rem;flex-wrap:wrap;margin:-.4rem 0 .8rem;font-size:.9rem}
  .cardbar a{display:inline-flex;align-items:center;min-height:var(--tap)}
  .cards{display:grid;grid-template-columns:minmax(0,1fr);column-gap:1rem;align-items:start}
@@ -141,6 +147,7 @@ func head(w http.ResponseWriter) {
   nav.rail{flex-direction:row;overflow-x:auto;position:sticky;top:0;z-index:1;background:var(--bg);padding:.3rem 0;border-bottom:1px solid var(--line);max-height:none}
   nav.rail a{white-space:nowrap;padding:.65rem .9rem}
   nav.rail a small,nav.rail .toc{display:none}
+  .tabhead{flex-direction:column;align-items:stretch} form.find{flex:none;width:100%%}
  }
  details{border:1px solid var(--line);border-radius:10px;margin:0 0 .6rem;background:var(--drawer)}
  details>summary{list-style:none;cursor:pointer;padding:.7rem .9rem;display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}

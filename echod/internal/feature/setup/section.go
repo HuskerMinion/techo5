@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"io"
@@ -75,10 +76,17 @@ type sectionWriter struct {
 	open               string
 	said               bool
 	cards              []card
+	// finding is a tab drawn to be searched (find.go), not sent: it never waits on a server and never
+	// scans for networks.
+	finding bool
 }
 
-// card is a section as the rail lists it: its name and its title.
-type card struct{ name, title string }
+// card is a section as the rail lists it: its name and its title. A find also reads its line and
+// where in the body it was drawn, from its start to its end.
+type card struct {
+	name, title, summary string
+	start, end           int
+}
 
 // alwaysOpen are the sections that are drawn open whatever the address says: lists that are what their
 // tab is for, not settings. Alarms & Timers is opened to see what goes off next, and a shut card there
@@ -158,10 +166,16 @@ func sectionOpen(w io.Writer, section, title string, summary ...string) {
 	if alwaysOpen[section] {
 		keep = " data-keep"
 	}
+	s, ok := w.(*sectionWriter)
+	start := 0
+	if ok {
+		start = s.body.Len()
+	}
+	line := strings.Join(summary, " · ")
 	fmt.Fprintf(w, `<details class="card" id="sec-%s"%s%s><summary><span class="ttl">%s</span><span class="sum">%s</span></summary><div class="in">`,
-		section, open, keep, html.EscapeString(title), html.EscapeString(strings.Join(summary, " · ")))
-	if s, ok := w.(*sectionWriter); ok {
-		s.cards = append(s.cards, card{section, title})
+		section, open, keep, html.EscapeString(title), html.EscapeString(line))
+	if ok {
+		s.cards = append(s.cards, card{name: section, title: title, summary: line, start: start})
 	}
 	sayHere(w, section)
 }
@@ -190,4 +204,18 @@ func onOff(on bool) string {
 // sectionClose ends what sectionOpen started.
 func sectionClose(w io.Writer) {
 	fmt.Fprint(w, `</div></details>`)
+	if s, ok := w.(*sectionWriter); ok && len(s.cards) > 0 && s.cards[len(s.cards)-1].end == 0 {
+		s.cards[len(s.cards)-1].end = s.body.Len()
+	}
+}
+
+// waitFor is the context a draw waits on a server's answer with (lookup.go): none at all for a tab
+// drawn to be searched, which says the answer is on its way rather than hold the find up.
+func waitFor(ctx context.Context, w io.Writer) context.Context {
+	if s, ok := w.(*sectionWriter); ok && s.finding {
+		dead, cancel := context.WithCancel(ctx)
+		cancel()
+		return dead
+	}
+	return ctx
 }
