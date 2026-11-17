@@ -18,11 +18,11 @@ The same as Tailscale, by the same rules (see [what Tailscale does](tailscale.md
 - **The setup page, only with Remote setup.** Over NetBird the web port answers nothing else.
 - **SSH, if you turned it on.**
 - **Nothing else gets in.** The device's own firewall lets NetBird's interface reach only ports 6053,
-  8181 and 22, and ping. NetBird's access policies decide which peers can see the device, not which
-  ports they reach: see [Access policies](#access-policies).
-- **The device takes nothing from the network.** No DNS, no routes, no IPv6, no NetBird SSH server. NetBird's
-  own firewall on the device is off: the device's firewall does that job. The client sends NetBird no
-  metrics. It does talk to your management server, and to NetBird's signal and relay servers, which is
+  8181 and 22, and ping. NetBird's access policies narrow that further, per peer: which peers see the
+  device, and which of those ports and protocols each of them reaches. A policy can never open more:
+  see [Access policies](#access-policies).
+- **The device takes nothing from the network.** No DNS, no routes, no IPv6, no NetBird SSH server. The
+  client sends NetBird no metrics. It does talk to your management server, and to NetBird's signal and relay servers, which is
   how peers find each other.
 - **Announcements, Drop In and shared settings stay in each house.**
 
@@ -58,12 +58,15 @@ NetBird the same way as over Tailscale: see [Remote setup](tailscale.md#remote-s
 
 ## Access policies
 
-The device's own firewall decides which ports can be reached over NetBird: only 6053, 8181 and 22, and
-ping, on the NetBird interface. The NetBird client on the device runs with its own firewall off, so the
-policies in **Access Control → Policies** decide which peers can see the device, not which ports they
-reach, and they can't narrow the ports per peer. A new NetBird network lets every peer reach every
-other, so give the `techo5` group a policy for only the peers that should see it (your Home Assistant
-host's group, say), and keep the setup page and SSH off unless you need them.
+The device's own firewall decides which ports can be reached over NetBird at all: only 6053, 8181 and
+22, and ping, on the NetBird interface. The policies in **Access Control → Policies** narrow that per
+peer: which peers can see the device, and which of those ports and protocols each of them reaches. The
+NetBird client on the device enforces them with its own firewall, under the device's, so a policy can
+never open more. A device joined before the client did this turns it on when it next starts.
+
+A new NetBird network lets every peer reach every other. Let only your Home Assistant host's group
+reach the `techo5` group on TCP 6053, and only your own devices reach TCP 8181 and 22, and keep the
+setup page and SSH off unless you need them.
 
 ## Leaving the mesh
 
@@ -75,8 +78,9 @@ the device under **Peers** in your NetBird dashboard.
 
 - **Tailscale or NetBird, not both on the same device.** Both number their devices in 100.64.0.0/10, and
   two at once can claim the same addresses.
-- **Cost on the device:** nothing until you join, then about 40 MB of storage, and some memory while
-  it runs.
+- **Cost on the device:** nothing until you join, then about 40 MB of storage, some memory while it
+  runs, and a little CPU: on an Echo Show 8 (2nd gen), about 1.5% of one core when idle, and about 4.5%
+  with some 50 packets a second going through, of which NetBird's own firewall takes 0.3 to 0.5 points.
 - **Turning NetBird off** from far away cuts your way to it. Turning it back on then needs somebody
   there: the switch on the screen.
 - **A device that goes missing** stays on your network until you remove it under **Peers** in the

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,5 +171,72 @@ func TestPinned(t *testing.T) {
 	if !strings.HasPrefix(client.URL, "https://github.com/HuskerMinion/techo5/releases/download/") ||
 		len(client.SHA256) != 64 || client.Size < 1<<20 {
 		t.Errorf("%+v", client)
+	}
+}
+
+func TestFirewallOn(t *testing.T) {
+	dir := t.TempDir()
+	profile := filepath.Join(dir, "default.json")
+
+	// No profile yet: nothing to do.
+	if err := firewallOn(profile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(profile); !os.IsNotExist(err) {
+		t.Fatalf("a profile was made: %v", err)
+	}
+
+	// Joined with --disable-firewall: turned on, the rest kept.
+	os.WriteFile(profile, []byte(`{"ManagementURL":{"Host":"mesh.example"},"DisableFirewall": true,"DisableDNS":true}`), 0o600)
+	if err := firewallOn(profile); err != nil {
+		t.Fatal(err)
+	}
+	var c map[string]any
+	b, _ := os.ReadFile(profile)
+	if err := json.Unmarshal(b, &c); err != nil {
+		t.Fatal(err)
+	}
+	if c["DisableFirewall"] != false || c["DisableDNS"] != true || c["ManagementURL"].(map[string]any)["Host"] != "mesh.example" {
+		t.Errorf("profile = %s", b)
+	}
+	if fi, _ := os.Stat(profile); fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode = %v", fi.Mode().Perm())
+	}
+
+	// On already: left as it is, byte for byte.
+	on := []byte(`{"DisableFirewall":false}`)
+	os.WriteFile(profile, on, 0o600)
+	if err := firewallOn(profile); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(profile); !bytes.Equal(b, on) {
+		t.Errorf("profile rewritten: %s", b)
+	}
+
+	// Not a profile it can read: said, and left alone.
+	os.WriteFile(profile, []byte("{"), 0o600)
+	if err := firewallOn(profile); err == nil {
+		t.Error("no error for a broken profile")
+	}
+}
+
+// The client's own firewall must stay on: without it, a policy decides which peers see the device but
+// not which ports they reach (#579).
+func TestUpKeepsTheFirewallOn(t *testing.T) {
+	args := upArgs("https://mesh.example:443", "kitchen")
+	if args[0] != "up" {
+		t.Fatalf("args = %q", args)
+	}
+	on := 0
+	for _, a := range args {
+		switch {
+		case a == "--disable-firewall=false":
+			on++
+		case strings.HasPrefix(a, "--disable-firewall"):
+			t.Errorf("%q in the up arguments", a)
+		}
+	}
+	if on != 1 {
+		t.Errorf("--disable-firewall=false %d times in %q", on, args)
 	}
 }
