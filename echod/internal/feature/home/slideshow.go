@@ -1346,12 +1346,15 @@ func SlideshowPhoto(m hass.Media) bool {
 }
 
 // isPhoto is whether an entry is a picture the device can show, going by the type Home
-// Assistant gives it, or failing that its name. Only JPEG and PNG: those are the decoders built in,
-// and a GIF or a WebP would only be fetched to be skipped.
+// Assistant gives it, or failing that its name. JPEG and PNG are the decoders built in, and a GIF or a
+// WebP would only be fetched to be skipped. HEIC and HEIF are let through as well: Home Assistant names
+// an entry's type from its file name, and a source such as Synology Photos' shared albums serves an
+// iPhone's HEIC picture as a JPEG of it (#623). The picture is decoded by what it is, not by that name,
+// so one that really is HEIC fails to decode and the slideshow goes on to the next.
 func isPhoto(m hass.Media) bool {
 	k := strings.ToLower(m.Kind)
 	switch k {
-	case "image/jpeg", "image/jpg", "image/png":
+	case "image/jpeg", "image/jpg", "image/png", "image/heic", "image/heif":
 		return true
 	}
 	if strings.HasPrefix(k, "image") {
@@ -1361,7 +1364,7 @@ func isPhoto(m hass.Media) bool {
 		return false
 	}
 	switch strings.ToLower(path.Ext(m.ID)) {
-	case ".jpg", ".jpeg", ".png":
+	case ".jpg", ".jpeg", ".png", ".heic", ".heif":
 		return true
 	}
 	return false
