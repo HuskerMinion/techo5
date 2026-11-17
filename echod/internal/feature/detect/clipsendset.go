@@ -133,8 +133,9 @@ func (d *Detect) Trust(ctx context.Context, fingerprint string) error {
 	return nil
 }
 
-// KeepOn is whether Keep wake clips is on: nothing is sent while it is off.
-func (d *Detect) KeepOn() bool { return d.clips.on.Load() }
+// KeepOn is whether clips are being kept (Keep wake clips): nothing is sent while they are not. The
+// same question the sender asks (clips.kept).
+func (d *Detect) KeepOn() bool { return d.clips.kept() }
 
 // SetSend saves where clips go, from the setup page: the address is checked as an address and as a home
 // one, and Since, the moment from which clips are sent, is set when the target changes.
