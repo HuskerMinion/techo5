@@ -211,29 +211,37 @@ func startClips(e *Engine, publish func(total int, kinds string)) *clips {
 	// A run's takes are of the device's wake word, the model id its wake clips are filed under: the first
 	// wake word slot with a word in it. The first slot can be empty while the second has one (a Show set up
 	// with only its second wake word), so the slots are looked through in order.
-	takes.Get().SetWakeWord(func() (string, string) {
-		for slot := 0; slot < wakeword.Slots; slot++ {
-			if m, ok := e.Loaded(slot); ok {
-				return m.ID, e.FrontOf(slot)
-			}
-		}
-		return "", ""
-	}, c.keepTake)
-	// The recorder keeps a copy of that word for the settings screen, taken again whenever a word is
-	// loaded, cleared or dropped. Without this the copy was the one taken here, at start, before any
-	// word had loaded, and a run was refused for want of a wake word.
-	prevSlots := e.OnSlots
-	e.OnSlots = func() {
-		if prevSlots != nil {
-			prevSlots()
-		}
-		takes.Get().WakeWordChanged()
-	}
+	wireTakeWord(e, c.keepTake, takes.Get())
 	// Record takes of a word going from on to off is the owner taking the permission back: every take
 	// still waiting goes, whichever way its run was started.
 	c.takesOn.Store(config.Get().Security.Takes)
 	security.Get().Changed.Listen(func(struct{}) { c.takesSwitched(config.Get().Security.Takes) })
 	return c
+}
+
+// firstWakeWord is the wake word a run's takes are of, and its front end: the first slot with a word.
+func firstWakeWord(e *Engine) (string, string) {
+	for slot := 0; slot < wakeword.Slots; slot++ {
+		if m, ok := e.Loaded(slot); ok {
+			return m.ID, e.FrontOf(slot)
+		}
+	}
+	return "", ""
+}
+
+// wireTakeWord gives the recorder the wake word and where its takes go. The recorder keeps a copy of
+// that word for the settings screen, taken again whenever a word is loaded, cleared or dropped. Without
+// this the copy was the one taken here, at start, before any word had loaded, and a run was refused for
+// want of a wake word.
+func wireTakeWord(e *Engine, keep func(takes.Capture), rec *takes.Feature) {
+	rec.SetWakeWord(func() (string, string) { return firstWakeWord(e) }, keep)
+	prevSlots := e.OnSlots
+	e.OnSlots = func() {
+		if prevSlots != nil {
+			prevSlots()
+		}
+		rec.WakeWordChanged()
+	}
 }
 
 // takesSwitched is Record takes of a word as it is now: going from on to off drops the takes waiting.

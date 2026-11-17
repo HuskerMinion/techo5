@@ -295,6 +295,35 @@ func TestARunKeepsOneTakeAfterEachBeepAndAsksAgainForAMiss(t *testing.T) {
 	}
 }
 
+// A word said promptly after the beep is kept, though the speaker goes on saying it is playing for a
+// second after the note (the fake's chime is heard for a second): from the beep on, only the beep and
+// its echo (runEcho) count as the device's own sound.
+func TestAWordSaidPromptlyAfterTheBeepIsKept(t *testing.T) {
+	d, f, kept := runDevice(t)
+	if err := f.StartRun(5, 2); err != nil {
+		t.Fatal(err)
+	}
+	m := d.listening(t)
+	if !d.say(m, room, framesIn(2*time.Second)) {
+		t.Fatal("the run stopped in the gap")
+	}
+	// The beep has sounded; the speaker says it is playing for the next second.
+	chimed(t, d, 2) // the start note and the beep
+	if !d.audibleNow() {
+		t.Fatal("the fake does not hear the beep: this test would prove nothing")
+	}
+	after := framesIn(300 * time.Millisecond)
+	if !d.say(m, room, after) || !d.say(m, word, 25) || !d.say(m, room, framesIn(runListen)-after-25) {
+		t.Fatal("the run stopped in the capture")
+	}
+	c := took(t, kept)
+	if n := len(c.PCM) / mic.FrameSamples; c.Index != 1 || n < 25 {
+		t.Errorf("took take %d of %d frames, want the word said 0.3 s after the beep", c.Index, n)
+	}
+	f.Stop()
+	settled(t, f, Idle)
+}
+
 // A capture with nothing said in it is never handed on, and three in a row end the run.
 func TestARunThatHearsNothingThreeTimesEnds(t *testing.T) {
 	d, f, kept := runDevice(t)

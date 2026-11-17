@@ -76,6 +76,9 @@ func newDevice(t *testing.T) (*fake, *Feature) {
 	return d, f
 }
 
+// audibleNow is whether the fake says the device is making a sound now.
+func (d *fake) audibleNow() bool { return d.audible.Load() || d.now().UnixNano() < d.heardUntil.Load() }
+
 func (d *fake) now() time.Time {
 	d.mu.Lock()
 	defer d.mu.Unlock()
