@@ -208,14 +208,27 @@ func startClips(e *Engine, publish func(total int, kinds string)) *clips {
 	talkback.Get().Changed.Listen(func(struct{}) { c.roomChanged() })
 	takes.Get().Changed.Listen(func(struct{}) { c.roomChanged() })
 	c.roomChanged()
-	// A run's takes are of the first assistant's wake word, the model id its wake clips are filed under.
+	// A run's takes are of the device's wake word, the model id its wake clips are filed under: the first
+	// wake word slot with a word in it. The first slot can be empty while the second has one (a Show set up
+	// with only its second wake word), so the slots are looked through in order.
 	takes.Get().SetWakeWord(func() (string, string) {
-		m, ok := e.Loaded(0)
-		if !ok {
-			return "", ""
+		for slot := 0; slot < wakeword.Slots; slot++ {
+			if m, ok := e.Loaded(slot); ok {
+				return m.ID, e.FrontOf(slot)
+			}
 		}
-		return m.ID, e.FrontOf(0)
+		return "", ""
 	}, c.keepTake)
+	// The recorder keeps a copy of that word for the settings screen, taken again whenever a word is
+	// loaded, cleared or dropped. Without this the copy was the one taken here, at start, before any
+	// word had loaded, and a run was refused for want of a wake word.
+	prevSlots := e.OnSlots
+	e.OnSlots = func() {
+		if prevSlots != nil {
+			prevSlots()
+		}
+		takes.Get().WakeWordChanged()
+	}
 	// Record takes of a word going from on to off is the owner taking the permission back: every take
 	// still waiting goes, whichever way its run was started.
 	c.takesOn.Store(config.Get().Security.Takes)
