@@ -133,8 +133,10 @@ func (p *paint) headerH() int     { return p.grownForText(p.s(headerHBase)) }
 func (p *paint) rowH() int        { return p.grownForText(p.s(rowHBase)) }
 func (p *paint) rowIn() int       { return p.s(rowInBase) }
 
-// rowHeight is how tall row is drawn: a heading is shorter than a row with something on it.
-func (p *paint) rowHeight(row settingRow) int {
+// rowHeight is how tall row is drawn on card: a heading is shorter than a row with something on it,
+// and a Show row whose words take more lines, or whose button stands over its chip, is taller. It is
+// measured on the card the row is drawn on, the settings card's or the drawer's narrower panel.
+func (p *paint) rowHeight(card image.Rectangle, row settingRow) int {
 	if row.kind == ctlHeading {
 		return p.s(headHBase)
 	}
@@ -142,10 +144,10 @@ func (p *paint) rowHeight(row settingRow) int {
 		return p.planRow(p.rowCard, row).h
 	}
 	h := p.rowH()
-	if p.stacked(row) {
+	if p.stacked(card, row) {
 		h += p.s(stackStep)
 	}
-	labels, subs := p.wordLines(p.rowsCard(), row)
+	labels, subs := p.wordLines(card, row)
 	return h + p.extraLines(row, labels, subs)
 }
 
@@ -178,7 +180,7 @@ func (p *paint) wordLines(card image.Rectangle, row settingRow) (labels, subs []
 		return nil, nil
 	}
 	fc := p.faces()
-	room := card.Max.X - p.s(26) - p.controlWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	room := card.Max.X - p.s(26) - p.controlWidth(card, row) - p.s(rowGap) - (card.Min.X + p.rowIn())
 	if row.locked {
 		room -= p.s(lockGap + lockW)
 	}
@@ -196,12 +198,11 @@ const stackStep = 48
 
 // stacked says whether a Show row's button stands over its value's chip instead of beside it: only a
 // choice with a button, and only when its words would not fit beside the two.
-func (p *paint) stacked(row settingRow) bool {
+func (p *paint) stacked(card image.Rectangle, row settingRow) bool {
 	if p.planned() || row.kind != ctlChoice || row.button == "" {
 		return false
 	}
 	fc := p.faces()
-	card := p.rowsCard()
 	room := card.Max.X - p.s(26) - p.sideBySideWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
 	return max(p.width(fc.label, row.label), p.width(fc.sub, row.sub)) > room
 }
@@ -212,11 +213,11 @@ func (p *paint) sideBySideWidth(row settingRow) int {
 	return p.width(fc.value, row.value) + p.s(58) + p.width(fc.button, row.button) + p.s(44+12)
 }
 
-// rowsHeight is how tall rows are, one under another.
-func (p *paint) rowsHeight(rows []settingRow) int {
+// rowsHeight is how tall rows are on card, one under another.
+func (p *paint) rowsHeight(card image.Rectangle, rows []settingRow) int {
 	h := 0
 	for _, row := range rows {
-		h += p.rowHeight(row)
+		h += p.rowHeight(card, row)
 	}
 	return h
 }
@@ -513,12 +514,12 @@ func (r *paint) scrollLimits() (card, pick int) {
 // is put back from under (the frame as it was before the rows), which clips them without clipping
 // every primitive; bg is the card's color at the list's edges, for the fades.
 func (r *paint) rowList(card, list image.Rectangle, rows []settingRow, scroll int, bg color.RGBA, under []uint8) int {
-	maxScroll := max(r.rowsHeight(rows)-list.Dy(), 0)
+	maxScroll := max(r.rowsHeight(card, rows)-list.Dy(), 0)
 	scroll = min(max(scroll, 0), maxScroll)
 	mark := len(r.pending)
 	top := list.Min.Y - scroll
 	for i, row := range rows {
-		h := r.rowHeight(row)
+		h := r.rowHeight(card, row)
 		if top+h > list.Min.Y && top < list.Max.Y {
 			r.settingRow(card, top, row)
 			// A rule between rows, but none to set a heading off from the rows it names.
@@ -734,7 +735,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	if row.bold {
 		face = fc.labelBold
 	}
-	rh := r.rowHeight(row)
+	rh := r.rowHeight(card, row)
 	right, cy := card.Max.X-r.s(26), top+rh/2
 	var labelEnd int
 	var plan rowPlan
@@ -858,7 +859,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		add(minus.Inset(-r.s(6)), partMinus)
 		add(plus.Inset(-r.s(6)), partPlus)
 	case ctlChoice:
-		if r.stacked(row) {
+		if r.stacked(card, row) {
 			half := r.s(stackStep) / 2
 			bx := r.pillButton(right, cy-half, row.button, btnSecondary)
 			r.choice(right, cy+half, fit(row.value, right-r.s(58)))
@@ -920,7 +921,7 @@ func (r *paint) padlock(cx, cy int, col color.RGBA) {
 func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (label, sub string, end int) {
 	fc := r.faces()
 	right := card.Max.X - r.s(26)
-	room := right - r.controlWidth(row) - r.s(rowGap) - (card.Min.X + r.rowIn())
+	room := right - r.controlWidth(card, row) - r.s(rowGap) - (card.Min.X + r.rowIn())
 	if row.locked {
 		room -= r.s(lockGap + lockW) // the label gives way to its padlock, which follows it
 	}
@@ -947,7 +948,7 @@ func (r *paint) dayChip() (w, gap int) {
 }
 
 // controlWidth is how much of a row its control takes, from the right, before any value beside it.
-func (r *paint) controlWidth(row settingRow) int {
+func (r *paint) controlWidth(card image.Rectangle, row settingRow) int {
 	fc := r.faces()
 	switch row.kind {
 	case ctlToggle:
@@ -956,7 +957,7 @@ func (r *paint) controlWidth(row settingRow) int {
 		return r.s(44) + max(r.width(fc.value, row.value), r.s(80)) + r.s(24+44)
 	case ctlChoice:
 		w := r.width(fc.value, row.value) + r.s(58)
-		if r.stacked(row) {
+		if r.stacked(card, row) {
 			return max(w, r.width(fc.button, row.button)+r.s(44))
 		}
 		if row.button != "" {

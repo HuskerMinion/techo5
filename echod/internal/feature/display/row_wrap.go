@@ -49,7 +49,7 @@ func (r *paint) controlBase(row settingRow) int {
 	case ctlButton, ctlDanger:
 		return r.width(fc.button, row.button) + r.s(44)
 	case ctlStepper, ctlDays:
-		return r.controlWidth(row)
+		return r.controlWidth(r.rowCard, row)
 	}
 	return 0
 }

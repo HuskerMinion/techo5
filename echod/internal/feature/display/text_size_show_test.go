@@ -66,7 +66,7 @@ func TestTheLargestTextSizeStillFits(t *testing.T) {
 					continue
 				}
 				label, sub, end := r.rowWords(card, row, fc.label)
-				if end+r.s(rowGap)+r.controlWidth(row) > card.Max.X-r.s(26) && row.kind != ctlSwatches && row.kind != ctlDays {
+				if end+r.s(rowGap)+r.controlWidth(card, row) > card.Max.X-r.s(26) && row.kind != ctlSwatches && row.kind != ctlDays {
 					t.Errorf("%d%% on the %s: %s runs under its control", size, panel.name, row.id)
 				}
 				// Its name whole, so it can be found to make the words smaller again; past 125% the line
