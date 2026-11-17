@@ -431,6 +431,9 @@ loop:
 				continue
 			}
 			pcm, found := pickTake(capture, beepAt)
+			if !found {
+				missLog(capture, beepAt)
+			}
 			capture, back, wait = nil, back[:0], gapN
 			if found {
 				f.store(Capture{Run: r.id, Index: take, Word: r.word, Front: r.front, Frame: r.frame,
@@ -441,7 +444,6 @@ loop:
 			} else {
 				misses++
 				slog.Info("takes: no take heard; asking for it again", "take", take)
-				missLog(capture, beepAt)
 			}
 			done := kept >= r.count
 			set(func(r *run) {
