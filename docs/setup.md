@@ -226,6 +226,12 @@ While the photos are up, a swipe left goes to the next photo and a swipe right t
 back through the last 20; the photo swiped to stays up for five minutes before the slideshow carries
 on. Swipes there never change the clock style.
 
+**Show screensaver** (a button in Home Assistant, on the Show, the Spot and the Panel) puts the
+screensaver up now, as if the screen had been idle for the whole wait, for an automation such as
+"everybody left" or "movie time". A tap takes it down as usual. A press does nothing when there is
+no screensaver to show (Slideshow is not on Screensaver, or no photo has arrived yet), when the
+screen is out, or while something else has the screen (a request, a call, a ring, the settings).
+
 The same settings are entities in Home Assistant, and the folder can be set with the
 [`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is
 already showing, the action reads it again, for photos added since; the photo up stays until the
