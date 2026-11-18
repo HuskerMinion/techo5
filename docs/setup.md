@@ -1804,6 +1804,11 @@ any recording a browser asks for does. While takes of a word recorded on the set
 downloaded, a run waits until they are downloaded or thrown away. The count and the gap are remembered
 until the device restarts.
 
+The takes are of the wake word in the first slot that has one. With two wake words loaded, a **Wake
+word** row under **Start** on the screen, and a **Wake word** choice on the setup page, say which word
+the run is of; − and + switch between them. Like the count and the gap, the choice is remembered only
+until the device restarts, and a chosen word that is no longer loaded goes back to the first one.
+
 Before each take the device beeps; say the wake word after the beep. The screen says which take it is
 ("Take 7 of 20") and when to say it, and has **Stop**; a Dot's ring pulses amber for the whole run.
 Between takes, move around the room or turn on a fan or the TV, so the takes are not all alike. A take

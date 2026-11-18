@@ -16,8 +16,13 @@ func runDevice(t *testing.T) (*fake, *Feature, chan Capture) {
 	d, f := newDevice(t)
 	d.wakesmith.Store(true)
 	kept := make(chan Capture, 100)
-	f.SetWakeWord(func() (string, string) { return "hey_jarvis_v2", "zserge" }, func(c Capture) { kept <- c })
+	f.SetWakeWords(oneWord("hey_jarvis_v2", "zserge"), func(c Capture) { kept <- c })
 	return d, f, kept
+}
+
+// oneWord is a device with word alone loaded, in its first slot ("" for none).
+func oneWord(word, front string) func() []SlotWord {
+	return func() []SlotWord { return []SlotWord{{ID: word, Front: front}} }
 }
 
 // listening waits for the run to have taken the microphone, and hands it back.
@@ -81,16 +86,16 @@ func TestARunNeedsTheSwitchWakesmithAndAWakeWord(t *testing.T) {
 	if b := f.RunBlocked(); b != RunNoWakeWord {
 		t.Errorf("blocked %v with no wake word, want none loaded", b)
 	}
-	f.SetWakeWord(func() (string, string) { return "", "" }, func(Capture) {})
+	f.SetWakeWords(oneWord("", ""), func(Capture) {})
 	if b := f.RunBlocked(); b != RunNoWakeWord {
 		t.Errorf("blocked %v with an empty wake word", b)
 	}
-	f.SetWakeWord(func() (string, string) { return "okay_nabu", "tflm" }, func(Capture) {})
+	f.SetWakeWords(oneWord("okay_nabu", "tflm"), func(Capture) {})
 	if b := f.RunBlocked(); b != RunReady {
 		t.Errorf("blocked %v with everything set", b)
 	}
 	d.on.Store(false)
-	if err := f.ArmRun(20, 3, "browser"); !errors.Is(err, errOff) && (err == nil || err.Error() != errOff.Error()) {
+	if err := f.ArmRun(20, 3, -1, "browser"); !errors.Is(err, errOff) && (err == nil || err.Error() != errOff.Error()) {
 		t.Errorf("asked with the switch off: %v", err)
 	}
 	if f.Card().Up() || f.Holding() {
@@ -110,7 +115,7 @@ func TestTheScreensStartNeedsNoSwitchAndThePagesDoes(t *testing.T) {
 	if b := f.PageRunBlocked(); b != RunSwitchOff {
 		t.Errorf("the page is blocked %v with the switch off", b)
 	}
-	if err := f.ArmRun(5, 2, "browser"); err == nil || err.Error() != errOff.Error() {
+	if err := f.ArmRun(5, 2, -1, "browser"); err == nil || err.Error() != errOff.Error() {
 		t.Errorf("the page asked with the switch off: %v", err)
 	}
 	if err := f.StartRun(5, 2); err != nil {
@@ -156,7 +161,7 @@ func TestARunLeavesKeptTakesAlone(t *testing.T) {
 	if b := f.RunBlocked(); b != RunTakesKept {
 		t.Errorf("blocked %v with takes kept", b)
 	}
-	if err := f.ArmRun(5, 2, "browser"); err == nil {
+	if err := f.ArmRun(5, 2, -1, "browser"); err == nil {
 		t.Error("a run was asked for over the kept takes")
 	}
 	if err := f.StartRun(5, 2); err == nil {
@@ -197,7 +202,7 @@ func TestRunBlockedReadsTheCopyOfTheWord(t *testing.T) {
 	_, f, _ := runDevice(t)
 	calls := 0
 	word := "hey_jarvis_v2"
-	f.SetWakeWord(func() (string, string) { calls++; return word, "tflm" }, func(Capture) {})
+	f.SetWakeWords(func() []SlotWord { calls++; return []SlotWord{{ID: word, Front: "tflm"}} }, func(Capture) {})
 	calls = 0
 	for range 10 {
 		f.RunBlocked()
@@ -366,7 +371,7 @@ func TestOtherPlaybackDuringACaptureIsNotATake(t *testing.T) {
 // started at the device and its takes go to wakesmith. One still waiting for the press goes.
 func TestASetupPageRunOutlivesThePage(t *testing.T) {
 	d, f, _ := runDevice(t)
-	if err := f.ArmRun(5, 2, "browser"); err != nil {
+	if err := f.ArmRun(5, 2, -1, "browser"); err != nil {
 		t.Fatal(err)
 	}
 	if !f.Begin(0) {
@@ -381,7 +386,7 @@ func TestASetupPageRunOutlivesThePage(t *testing.T) {
 	settled(t, f, Idle)
 	stopped(t, m)
 
-	if err := f.ArmRun(5, 2, "browser"); err != nil {
+	if err := f.ArmRun(5, 2, -1, "browser"); err != nil {
 		t.Fatal(err)
 	}
 	f.DiscardPage("the setup page closed")
@@ -504,7 +509,7 @@ func TestStopEndsARun(t *testing.T) {
 // says it is a run; the press starts it.
 func TestASetupPageRunWaitsForThePress(t *testing.T) {
 	d, f, _ := runDevice(t)
-	if err := f.ArmRun(20, 3, "browser"); err != nil {
+	if err := f.ArmRun(20, 3, -1, "browser"); err != nil {
 		t.Fatal(err)
 	}
 	if c := f.Card(); c.Phase != Armed || !c.Run || c.Of != 20 || c.Gap != 3*time.Second {
@@ -545,7 +550,7 @@ func TestTheSetupPageClosingLeavesAScreenRun(t *testing.T) {
 	settled(t, f, Idle)
 	stopped(t, m)
 
-	if err := f.ArmRun(5, 2, "browser"); err != nil {
+	if err := f.ArmRun(5, 2, -1, "browser"); err != nil {
 		t.Fatal(err)
 	}
 	f.DiscardPage("the setup page closed")

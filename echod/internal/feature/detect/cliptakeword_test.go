@@ -11,26 +11,27 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
 
-// A run's takes are of the first slot with a word in it: a Show set up with only its second wake word
-// (the first slot empty) records that one, with its own front end.
-func TestARunsWordIsTheFirstLoadedSlots(t *testing.T) {
+// A run's takes can be of any slot with a word in it, each with its own front end, in slot order: a Show
+// set up with only its second wake word (the first slot empty) offers that one alone.
+func TestARunsWordsAreTheLoadedSlots(t *testing.T) {
 	e := New(2, nil)
-	if w, f := firstWakeWord(e); w != "" || f != "" {
-		t.Errorf("no word loaded gives %q on %q", w, f)
+	if w := slotWords(e); len(w) != 0 {
+		t.Errorf("no word loaded gives %+v", w)
 	}
 	e.mu.Lock()
 	e.slots[1] = slot{model: model("alexa", wake.KindMicroWakeWord), loaded: true}
 	e.backends[wake.KindMicroWakeWord] = &microBackend{step: map[string]frontKey{"alexa": {exact: false}}}
 	e.mu.Unlock()
-	if w, f := firstWakeWord(e); w != "alexa" || f != "zserge" {
-		t.Errorf("slot 0 empty and alexa in slot 1 gives %q on %q", w, f)
+	if w := slotWords(e); len(w) != 1 || w[0].Slot != 1 || w[0].ID != "alexa" || w[0].Front != "zserge" {
+		t.Errorf("slot 0 empty and alexa in slot 1 gives %+v", w)
 	}
 	e.mu.Lock()
 	e.slots[0] = slot{model: model("okay_nabu", wake.KindMicroWakeWord), loaded: true}
 	e.backends[wake.KindMicroWakeWord].(*microBackend).step["okay_nabu"] = frontKey{exact: true}
 	e.mu.Unlock()
-	if w, f := firstWakeWord(e); w != "okay_nabu" || f != "tflm" {
-		t.Errorf("with both slots loaded it gives %q on %q, want the first", w, f)
+	w := slotWords(e)
+	if len(w) != 2 || w[0].ID != "okay_nabu" || w[0].Front != "tflm" || w[0].Slot != 0 || w[1].ID != "alexa" || w[1].Slot != 1 {
+		t.Errorf("with both slots loaded it gives %+v, want both in slot order", w)
 	}
 }
 
@@ -40,7 +41,7 @@ func TestWiringTheWordWhileAWordLoadsIsNotARace(t *testing.T) {
 	fakes(t)
 	e := New(2, nil)
 	rec := takes.Get()
-	t.Cleanup(func() { rec.SetWakeWord(func() (string, string) { return "", "" }, func(takes.Capture) {}) })
+	t.Cleanup(func() { rec.SetWakeWords(func() []takes.SlotWord { return nil }, func(takes.Capture) {}) })
 	done := make(chan struct{})
 	go func() { e.Use(0, model("alexa", wake.KindMicroWakeWord)); close(done) }()
 	wireTakeWord(e, func(takes.Capture) {}, rec)
@@ -58,7 +59,7 @@ func TestAWordLoadedLaterLetsARunStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := takes.Get()
-	t.Cleanup(func() { rec.SetWakeWord(func() (string, string) { return "", "" }, func(takes.Capture) {}) })
+	t.Cleanup(func() { rec.SetWakeWords(func() []takes.SlotWord { return nil }, func(takes.Capture) {}) })
 	e := New(2, nil)
 	wireTakeWord(e, func(takes.Capture) {}, rec)
 	if !layout.HasMicrophone() {

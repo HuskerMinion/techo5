@@ -37,8 +37,10 @@ var (
 	takesPressed   = func() bool { return takes.Get().Pressed() }
 	takesTookPress = func() bool { return takes.Get().TookPress() }
 	discardTakes   = func(why string) { takes.Get().DiscardPage(why) }
-	armRun         = func(count, gap int, session string) error { return takes.Get().ArmRun(count, gap, session) }
+	armRun         = func(count, gap, slot int, session string) error { return takes.Get().ArmRun(count, gap, slot, session) }
 	runBlocked     = func() takes.RunBlock { return takes.Get().PageRunBlocked() }
+	runWords       = func() []takes.SlotWord { return takes.Get().RunWords() }
+	runWord        = func() (takes.SlotWord, bool) { return takes.Get().RunWord() }
 )
 
 // takesWait is how long a download may take to write: three and a half megabytes over the slowest Wi-Fi
@@ -86,10 +88,17 @@ func (f *Feature) takes(w http.ResponseWriter, r *http.Request) {
 		// Record wake word: a counted run of takes of the device's own wake word, for wakesmith.
 		count, _ := strconv.Atoi(r.PostFormValue("count"))
 		gap, _ := strconv.Atoi(r.PostFormValue("gap"))
+		// The wake word chosen, when the page offered a choice: a slot, from 0. None is the one chosen already.
+		slot := -1
+		if v := r.PostFormValue("slot"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				slot = n
+			}
+		}
 		if owner := takesOwner(); owner != "" && owner != token && !f.stillHere(owner) {
 			discardTakes("the browser that recorded them has gone")
 		}
-		if err := armRun(count, gap, token); err != nil {
+		if err := armRun(count, gap, slot, token); err != nil {
 			problem = err.Error()
 		} else if _, in := f.session(r); !in {
 			discardTakes("the setup page closed")
@@ -288,7 +297,9 @@ func runForm(w http.ResponseWriter, token string) {
 	}
 	count, gap := recorder().RunPlan()
 	fmt.Fprintf(w, `<form method="post" action="/setup/takes"><input type="hidden" name="token" value="%s">
-	 <input type="hidden" name="do" value="run">
+	 <input type="hidden" name="do" value="run">`, html.EscapeString(token))
+	runWordChoice(w)
+	fmt.Fprintf(w, `
 	 <label for="runcount">Takes</label>
 	 <input id="runcount" name="count" type="number" min="%d" max="%d" value="%d" required>
 	 <label for="rungap">Seconds between takes</label>
@@ -297,8 +308,29 @@ func runForm(w http.ResponseWriter, token string) {
 	 <p class="note">It starts %s. They are kept on the device until they reach wakesmith, whether or not
 	  Keep wake clips is on, and deleted if wakesmith refuses one, if Send wake clips to moves off wakesmith
 	  or to another address, or if Record takes of a word is turned off.</p>`,
-		html.EscapeString(token), takes.RunCountMin, takes.RunCountMax, count, takes.RunGapMin, takes.RunGapMax, gap,
+		takes.RunCountMin, takes.RunCountMax, count, takes.RunGapMin, takes.RunGapMax, gap,
 		onThisDevice("with a tap on Start on the device's screen", "with a press of the action button on the device"))
+}
+
+// runWordChoice is which of the loaded wake words the run is of, with two or more loaded: one alone
+// is the run's word with nothing to choose, as before there was a choice.
+func runWordChoice(w http.ResponseWriter) {
+	words := runWords()
+	if len(words) < 2 {
+		return
+	}
+	now, _ := runWord()
+	fmt.Fprint(w, `
+	 <label for="runslot">Wake word</label>
+	 <select id="runslot" name="slot">`)
+	for _, sw := range words {
+		sel := ""
+		if sw.Slot == now.Slot {
+			sel = " selected"
+		}
+		fmt.Fprintf(w, `<option value="%d"%s>%s</option>`, sw.Slot, sel, html.EscapeString(sw.Name()))
+	}
+	fmt.Fprint(w, `</select>`)
 }
 
 // sentence is s with a capital letter first.

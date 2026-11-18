@@ -223,22 +223,24 @@ func startClips(e *Engine, publish func(total int, kinds string)) *clips {
 	return c
 }
 
-// firstWakeWord is the wake word a run's takes are of, and its front end: the first slot with a word.
-func firstWakeWord(e *Engine) (string, string) {
+// slotWords are the wake words a run's takes can be of, each with its front end: every slot with a
+// word, in slot order. The recorder starts from the first unless another is chosen.
+func slotWords(e *Engine) []takes.SlotWord {
+	var out []takes.SlotWord
 	for slot := 0; slot < wakeword.Slots; slot++ {
 		if m, ok := e.Loaded(slot); ok {
-			return m.ID, e.FrontOf(slot)
+			out = append(out, takes.SlotWord{Slot: slot, ID: m.ID, Front: e.FrontOf(slot), Phrase: m.Phrase})
 		}
 	}
-	return "", ""
+	return out
 }
 
-// wireTakeWord gives the recorder the wake word and where its takes go. The recorder keeps a copy of
-// that word for the settings screen, taken again whenever a word is loaded, cleared or dropped. Without
+// wireTakeWord gives the recorder the wake words and where its takes go. The recorder keeps a copy of
+// the words for the settings screen, taken again whenever a word is loaded, cleared or dropped. Without
 // this the copy was the one taken here, at start, before any word had loaded, and a run was refused for
 // want of a wake word.
 func wireTakeWord(e *Engine, keep func(takes.Capture), rec *takes.Feature) {
-	rec.SetWakeWord(func() (string, string) { return firstWakeWord(e) }, keep)
+	rec.SetWakeWords(func() []takes.SlotWord { return slotWords(e) }, keep)
 	// Under the engine's lock, which slotsChanged reads it under.
 	e.mu.Lock()
 	defer e.mu.Unlock()
