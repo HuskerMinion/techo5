@@ -874,13 +874,19 @@ func TestAGetIsAnswered(t *testing.T) {
 func TestValues(t *testing.T) {
 	r := newRig(t)
 	r.f.send = func(_ context.Context, to string, body []byte) ([]byte, error) {
-		if to == "Garage" {
+		switch to {
+		case "Garage":
 			return nil, errors.New("not on the network now")
+		case "Den":
+			return json.Marshal(reply{Results: map[string]string{"bass": NotTaking}})
 		}
 		return json.Marshal(reply{Values: map[string]string{"bass": "1", "treble": "4", "sendspin": "on"}})
 	}
-	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen"})
-	if len(got) != 1 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
+	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen", "Den"})
+	if len(got) != 2 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
 		t.Errorf("%v", got)
+	}
+	if v, ok := got["Den"]; !ok || v != nil {
+		t.Errorf("a device with sharing off is not said to be: %v", got)
 	}
 }
