@@ -2512,9 +2512,9 @@ run: see [NetBird: reaching a device from away](netbird.md).
 
 The original Echo Wall Clock — the round one with the LED ring and a sixty-minute dial — can show
 this device's timers. It is off until turned on. Turn on **Wall clock** (the setup page's
-Network tab, or Home Assistant), put the clock in pairing mode (hold its center button until
-the middle LED pulses amber), and choose **Pair the clock** on the setup page, or press the **Pair
-wall clock** button in Home Assistant. The device
+Network tab, or Home Assistant), choose **Pair the clock** on the setup page, or press the **Pair
+wall clock** button in Home Assistant, and then put the clock in pairing mode (hold its center
+button until the middle LED pulses amber). Start the search first and the clock second: the device
 looks for a clock for two minutes, pairs with it, trusts it and remembers its address; the **Wall
 clock status** sensor says what it is doing, from Connecting to Connected or Waiting for the clock.
 A clock that cannot be reached is retried less and less often — ten seconds, then twenty, doubling

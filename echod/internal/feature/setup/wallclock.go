@@ -42,8 +42,8 @@ func wallClockSection(w http.ResponseWriter, token string) {
 	 <label for="wcaddr">Clock address</label>
 	 <input id="wcaddr" name="address" value="%s" placeholder="found by name when empty" autocomplete="off">
 	 <p class="note">The original wall clock, the round one with the LED ring. It must be unpaired from
-	  Alexa first: hold its center button until the middle LED pulses amber, then choose <strong>Pair the
-	  clock</strong>. It stays paired to one controller, and while it is paired here its ring shows this
+	  Alexa first. Choose <strong>Pair the clock</strong> first, then hold the clock's center button until the
+	  middle LED pulses amber: the device looks for it for two minutes. It stays paired to one controller, and while it is paired here its ring shows this
 	  device's timers. A timer that ends pulses the ring, and one that is canceled or paused puts its
 	  marker out. Leave the address empty to find the clock by the name it advertises.</p>`, checkedIf(wc.Enabled()),
 		html.EscapeString(wc.Address()))
