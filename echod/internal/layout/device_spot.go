@@ -38,3 +38,6 @@ const (
 )
 
 var AnimationScripts = []string{}
+
+// Checkers is not a Spot board; its native-resolution camera path is unavailable.
+func Checkers() bool { return false }

@@ -131,10 +131,54 @@ func encode(f *camera.Frame) ([]byte, error) {
 	return b, nil
 }
 
-// encodeHalf is a streamed frame's half-size picture at quality, as every board but the 2nd gen Show 5
-// sends it.
+// encodeHalf is a streamed frame's half-size picture at quality. The Show 5 1st gen encodes it in
+// strips across its cores (encodeStripes) to keep the live picture fresh; every other board but the
+// 2nd gen Show 5 sends it as one encode, as before.
 func encodeHalf(f interface{ Image() *image.RGBA }) ([]byte, error) {
+	if layout.Checkers() {
+		return encodeStripes(f.Image(), quality)
+	}
 	return encodeWhole(f.Image(), quality)
+}
+
+// Native Checkers mode is opt-in. The ordinary MJPEG URL remains the established
+// fast half-size stream, including for Home Assistant and other existing clients.
+// Only the first-generation Echo Show 5's /camera.mjpeg?size=full uses 1280x720.
+const nativeFPS = 14
+
+func wantsNativeFrames(r *http.Request) bool {
+	return layout.Checkers() && r.URL.Query().Get("size") == "full"
+}
+
+func nativeInterval(enabled bool, fallback time.Duration) time.Duration {
+	if enabled {
+		return time.Second / nativeFPS
+	}
+	return fallback
+}
+
+// Cache each full-size JPEG by its source frame. Multiple viewers must not
+// independently demosaic and compress the same Bayer frame.
+var nativeEncoded struct {
+	mu    sync.Mutex
+	frame *camera.Frame
+	jpg   []byte
+}
+
+func encodeNative(f *camera.Frame) ([]byte, error) {
+	// Keep lookup and encode under one lock: different viewers asking for the
+	// same frame share the cached JPEG, while concurrent new frames serialize.
+	nativeEncoded.mu.Lock()
+	defer nativeEncoded.mu.Unlock()
+	if nativeEncoded.frame == f {
+		return nativeEncoded.jpg, nil
+	}
+	jpg, err := encodeStripes(f.Full(), quality)
+	if err != nil {
+		return nil, err
+	}
+	nativeEncoded.frame, nativeEncoded.jpg = f, jpg
+	return jpg, nil
 }
 
 // stillFrame is a frame for a still: the next frame.
@@ -354,7 +398,8 @@ func (f *Feature) stream(w http.ResponseWriter, r *http.Request) {
 	flusher, _ := w.(http.Flusher)
 	check := time.NewTicker(time.Second)
 	defer check.Stop()
-	interval := pageInterval(hwEncode)
+	native := wantsNativeFrames(r)
+	interval := nativeInterval(native, pageInterval(hwEncode))
 	var last time.Time
 	for {
 		select {
@@ -373,7 +418,13 @@ func (f *Feature) stream(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			last = time.Now()
-			b, err := encode(fr)
+			var b []byte
+			var err error
+			if native && !fr.Blank() {
+				b, err = encodeNative(fr)
+			} else {
+				b, err = encode(fr)
+			}
 			if err != nil {
 				return
 			}
