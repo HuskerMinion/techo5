@@ -127,6 +127,8 @@ func head(w http.ResponseWriter) {
  nav.rail .toc{list-style:none;margin:.1rem 0 .4rem;padding:0 0 0 .8rem;border-left:1px solid var(--line);margin-left:.8rem}
  nav.rail .toc a{padding:.3rem .6rem;font-size:.88rem;color:var(--dimtext);line-height:1.3}
  nav.rail .toc a:hover{color:var(--text)}
+ .also{margin:1rem 0} .also-devs{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem} .also-devs label{display:flex;align-items:center;gap:.4rem;min-height:var(--tap)}
+ .also-said ul{margin:.4rem 0 0;padding-left:1.2rem}
  .wrap:has(.cards),.wrap:has(.found){max-width:96rem} .cards .note,.found .note{max-width:none}
  .tabhead{display:flex;flex-direction:row-reverse;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.6rem 1.5rem;margin:0 0 .8rem}
  .tabhead h2{margin:0}

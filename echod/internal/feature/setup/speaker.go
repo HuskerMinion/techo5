@@ -102,6 +102,7 @@ func speakerSection(w http.ResponseWriter, token string) {
 	dnd := c.Home.DoNotDisturb
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="dnd" value="yes" style="width:auto"%s> Do not disturb: intercom
 	  calls from other rooms are turned away</label><input type="hidden" name="was_dnd" value="%t"></p>`, checkedIf(dnd), dnd)
+	alsoOnRow(w, token, "speaker")
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
 }

@@ -213,8 +213,9 @@ func prefsSection(w http.ResponseWriter, token string) {
 	 <p class="note">Ring volume is only for alarms and timers, not the music. At 0 they make no sound. The
 	  default wake light is for alarms that don't choose their own. Gets louder starts an alarm 30 dB under its
 	  ring volume and brings it up to it. What an alarm says is spoken by Home
-	  Assistant, after the first chime.</p>
-	 <div class="btns"><button type="submit">Save</button></div></form>`)
+	  Assistant, after the first chime.</p>`)
+	alsoOnRow(w, token, "alarm_prefs")
+	fmt.Fprint(w, `<div class="btns"><button type="submit">Save</button></div></form>`)
 	sectionClose(w)
 }
 

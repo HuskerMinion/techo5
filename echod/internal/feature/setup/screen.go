@@ -231,8 +231,9 @@ func screenSection(w http.ResponseWriter, token string) {
 	 <p><label><input type="checkbox" name="saverweather" value="yes" style="width:auto"%s> Weather with the
 	  screensaver clock</label></p>
 	 <p class="note">On the screensaver, a swipe left or right goes to the next photo or the one before, and that
-	  photo stays up for five minutes.</p></div>
-	 <p><button type="submit">Save</button></p></form>`, checked(home.Get().SlideshowWeather()))
+	  photo stays up for five minutes.</p></div>`, checked(home.Get().SlideshowWeather()))
+	alsoOnRow(w, token, "screen")
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
 }
 
