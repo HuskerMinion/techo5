@@ -420,9 +420,10 @@ func previewShutterLimit(maxShut, frameLines int, checkers, live bool) int {
 	return maxShut
 }
 
-// gainForShorterShutter trades exposure duration for gain where possible.
-// On Checkers the usual long exposure (4000 lines, 6x) fits in two periods
-// (1596 lines) at 15x, within the sensor's 15.5x gain ceiling.
+// gainForShorterShutter trades exposure duration for gain where possible, up to the sensor's 15.5x
+// ceiling. On Checkers a live preview's shutter is one frame period (798 lines): a dark room's usual
+// long exposure (4000 lines at 6x) would want about 30x, so it is held at 15.5x and the live picture is
+// about half as bright as the still, the price of a picture that keeps up with movement.
 func gainForShorterShutter(shutter, gain, limit int) int {
 	return min(aeMaxGain, max(aeMinGain, (shutter*gain+limit/2)/limit))
 }

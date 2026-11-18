@@ -160,9 +160,25 @@ func nativeInterval(enabled bool, fallback time.Duration) time.Duration {
 // Cache each full-size JPEG by its source frame. Multiple viewers must not
 // independently demosaic and compress the same Bayer frame.
 var nativeEncoded struct {
-	mu    sync.Mutex
-	frame *camera.Frame
-	jpg   []byte
+	mu      sync.Mutex
+	frame   *camera.Frame
+	jpg     []byte
+	viewers int // full-size streams open: the last to close lets go of the frame and its JPEG
+}
+
+// nativeViewer counts a full-size stream for as long as it is open, and returns its close. The last to
+// close drops the cached frame and JPEG, a few megabytes on a board with little memory.
+func nativeViewer() func() {
+	nativeEncoded.mu.Lock()
+	nativeEncoded.viewers++
+	nativeEncoded.mu.Unlock()
+	return func() {
+		nativeEncoded.mu.Lock()
+		defer nativeEncoded.mu.Unlock()
+		if nativeEncoded.viewers--; nativeEncoded.viewers == 0 {
+			nativeEncoded.frame, nativeEncoded.jpg = nil, nil
+		}
+	}
 }
 
 func encodeNative(f *camera.Frame) ([]byte, error) {
@@ -399,6 +415,9 @@ func (f *Feature) stream(w http.ResponseWriter, r *http.Request) {
 	check := time.NewTicker(time.Second)
 	defer check.Stop()
 	native := wantsNativeFrames(r)
+	if native {
+		defer nativeViewer()()
+	}
 	interval := nativeInterval(native, pageInterval(hwEncode))
 	var last time.Time
 	for {
