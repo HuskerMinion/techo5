@@ -224,7 +224,7 @@ func (d *Display) mediaTap(x, y int) bool {
 		d.openLibrary(m.lists.Target, m.entity, false)
 	case z.kind == mediaPartFavorite && z.index < len(m.lists.Favorites):
 		f := m.lists.Favorites[z.index]
-		tap(m.lists.Target, "music_assistant.play_media", map[string]any{"media_id": f.URI, "media_type": f.Kind, "enqueue": "replace"})
+		tap(m.lists.Target, "music_assistant.play_media", playMediaData(f.URI, f.Kind, "replace"))
 		putOn.Store(m.lists.Target, f.URI)
 		d.editMedia(func(n *mediaSheet) { n.lists.Queued, n.lists.Elsewhere = true, false })
 		i := z.index

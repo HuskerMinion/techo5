@@ -1217,3 +1217,34 @@ func TestLibDuration(t *testing.T) {
 		}
 	}
 }
+
+// Home Assistant's music_assistant.play_media takes only some media types, and fails the whole action on
+// any other: a podcast episode (Music Assistant's podcast_episode) is played by its URI alone, and every
+// kind Home Assistant accepts is still named.
+func TestPlayMediaDataNamesOnlyTypesHomeAssistantTakes(t *testing.T) {
+	for _, kind := range []string{"artist", "album", "audiobook", "folder", "playlist", "podcast", "track", "radio"} {
+		if got := playMediaData("library://"+kind+"/1", kind, "replace"); got["media_type"] != kind {
+			t.Errorf("%s: media_type %v, want %s", kind, got["media_type"], kind)
+		}
+	}
+	got := playMediaData("rss://podcast_episode/e1", "podcast_episode", "replace")
+	if _, has := got["media_type"]; has {
+		t.Errorf("a podcast episode was sent media_type %v", got["media_type"])
+	}
+	if got["media_id"] != "rss://podcast_episode/e1" || got["enqueue"] != "replace" {
+		t.Errorf("a podcast episode was sent %v", got)
+	}
+}
+
+// A podcast episode from the library plays through Home Assistant without a media_type.
+func TestTheLibraryPlaysAPodcastEpisode(t *testing.T) {
+	noLibrary(t)
+	asked := recordTaps(t)
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.libPlay("media_player.ma_test", musicassistant.Entry{URI: "rss://podcast_episode/e1", Name: "Ep"}, "podcast_episode", false, libEnqueueReplace)
+	waitUntil(t, "the episode's call", func() bool { return len(asked()) == 1 })
+	want := dashboard.Action{Entity: "media_player.ma_test", Service: "music_assistant.play_media", Data: map[string]any{"media_id": "rss://podcast_episode/e1", "enqueue": "replace"}}
+	if got := asked()[0]; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("asked %v, want %v", got, want)
+	}
+}

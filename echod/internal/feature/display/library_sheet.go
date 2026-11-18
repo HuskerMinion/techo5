@@ -1451,7 +1451,7 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 	}
 	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle, "enqueue", enqueue)
 	play := func() {
-		data := map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": enqueue}
+		data := playMediaData(e.URI, kind, enqueue)
 		if enqueue == libEnqueueRadio {
 			data["enqueue"], data["radio_mode"] = libEnqueueReplace, true
 		}
@@ -1598,4 +1598,21 @@ var libOpenings atomic.Uint64
 // libPlayChapter plays the book from where chapter starts (see libPlayAt).
 func (d *Display) libPlayChapter(l *librarySheet, book, chapter musicassistant.Entry, lit int) {
 	d.libPlayAt(l, book, "audiobook", chapter.TrackNumber-1, chapter.Start, lit)
+}
+
+// haMediaTypes are the media types Home Assistant's music_assistant.play_media accepts. A kind outside
+// them (Music Assistant's own podcast_episode) fails the action's schema in Home Assistant, so the play
+// never reaches Music Assistant and nothing happens; without a media_type Music Assistant takes the
+// kind from the URI, which names it already.
+var haMediaTypes = map[string]bool{"artist": true, "album": true, "audiobook": true, "folder": true,
+	"playlist": true, "podcast": true, "track": true, "radio": true}
+
+// playMediaData is music_assistant.play_media's data for uri: its media_type only when Home Assistant
+// accepts it.
+func playMediaData(uri, kind, enqueue string) map[string]any {
+	data := map[string]any{"media_id": uri, "enqueue": enqueue}
+	if haMediaTypes[kind] {
+		data["media_type"] = kind
+	}
+	return data
 }
