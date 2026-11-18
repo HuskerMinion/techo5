@@ -83,7 +83,11 @@ const (
 const (
 	slideshowUnreadable = "photos: folder unreadable"
 	slideshowEmpty      = "photos: folder is empty"
+	slideshowNoneShown  = "photos: none this screen can show"
 )
+
+// slideshowUndecodableMost is the most photos kept as not decodable here.
+const slideshowUndecodableMost = 4096
 
 // slideshowIdleDefault is how long Screensaver mode waits for when IdleMinutes is unset.
 const slideshowIdleDefault = 5 * time.Minute
@@ -113,8 +117,11 @@ const (
 
 type slideshowState struct {
 	children []hass.Media // the source's playable children, last browsed
-	browsed  time.Time
-	idx      int
+	// undecodable is the photos fetched that are no picture this screen decodes (an iPhone's HEIC
+	// itself, where the source does not serve it as a JPEG): skipped from then on, not fetched again.
+	undecodable map[string]bool
+	browsed     time.Time
+	idx         int
 
 	image *image.RGBA
 	prev  *image.RGBA // what was showing before image, faded out while at is within slideshowFade
@@ -952,6 +959,17 @@ func (f *Feature) advance(force bool) {
 		if err != nil {
 			slog.Warn("home: slideshow photo", "id", id, "err", err)
 			last = err
+			if errors.Is(err, image.ErrFormat) {
+				f.mu.Lock()
+				if len(f.slideshow.undecodable) >= slideshowUndecodableMost {
+					f.slideshow.undecodable = nil // a huge folder of them: forget, rather than grow
+				}
+				if f.slideshow.undecodable == nil {
+					f.slideshow.undecodable = map[string]bool{}
+				}
+				f.slideshow.undecodable[id] = true
+				f.mu.Unlock()
+			}
 			continue
 		}
 		ids, srcs := []string{id}, []image.Image{src}
@@ -1185,7 +1203,10 @@ func (f *Feature) SlideshowCaptions() []PhotoCaption {
 // fetchCounts is whether a look whose photos all failed, the last with err, says the source is in
 // trouble: not when Immich has merely no preview of them yet, which a library just added is short of
 // for hours while it makes them.
-func fetchCounts(err error) bool { return err != nil && !errors.Is(err, errImmichGone) }
+func fetchCounts(err error) bool {
+	// A picture this screen does not decode came from a source that answered: not the source's trouble.
+	return err != nil && !errors.Is(err, errImmichGone) && !errors.Is(err, image.ErrFormat)
+}
 
 // nextSlideshowChild is the next photo's id to try, gathering the source again when the list is
 // stale or empty. A shuffled list is shuffled afresh each time round.
@@ -1231,16 +1252,26 @@ func (f *Feature) nextSlideshowChild(h config.Slideshow) (string, bool) {
 	if n == 0 {
 		return "", false
 	}
-	if f.slideshow.idx >= n {
-		f.slideshow.idx = 0
-		if !h.InOrder {
-			c := f.slideshow.children
-			rand.Shuffle(n, func(i, j int) { c[i], c[j] = c[j], c[i] })
+	// Each child once at most, past any this screen could not decode before.
+	for range n {
+		if f.slideshow.idx >= n {
+			f.slideshow.idx = 0
+			if !h.InOrder {
+				c := f.slideshow.children
+				rand.Shuffle(n, func(i, j int) { c[i], c[j] = c[j], c[i] })
+			}
+		}
+		id := f.slideshow.children[f.slideshow.idx].ID
+		f.slideshow.idx++
+		if !f.slideshow.undecodable[id] {
+			return id, true
 		}
 	}
-	id := f.slideshow.children[f.slideshow.idx].ID
-	f.slideshow.idx++
-	return id, true
+	// Every one is a picture this screen does not decode: as good as an empty folder, and said so.
+	f.mu.Unlock()
+	f.slideshowNothing(slideshowNoneShown)
+	f.mu.Lock()
+	return "", false
 }
 
 // slideshowNothing records a look that came back with nothing. After slideshowGiveUp of them in a
