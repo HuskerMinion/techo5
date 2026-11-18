@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -99,7 +100,7 @@ func alsoOnRow(w http.ResponseWriter, token, what string) {
 	}
 	fmt.Fprint(w, `<fieldset class="also"><legend>Also on</legend>`)
 	if len(devices) > 0 {
-		here, now := alsoOnHere(ids), alsoOnNow.get(devices)
+		here, now := alsoOnHere(ids), alsoOnNow.drawn(w, devices)
 		fmt.Fprint(w, `<div class="also-devs">`)
 		for _, d := range devices {
 			fmt.Fprintf(w, `<label><input type="checkbox" name="also_on" value="%s" style="width:auto"> %s%s%s</label>`,
@@ -182,6 +183,17 @@ type alsoOnAsked struct {
 	by    map[string]map[string]string
 }
 
+// drawn is what the devices have, for a card being drawn: as get, except for a tab drawn to be searched
+// (find.go), which never waits on the network and takes what was kept, nil when nothing was.
+func (a *alsoOnAsked) drawn(w io.Writer, devices []string) map[string]map[string]string {
+	if s, ok := w.(*sectionWriter); ok && s.finding {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return a.by
+	}
+	return a.get(devices)
+}
+
 // get is what the devices have, asked again when what was kept is old or was not asked of all of them.
 // It holds the lock while it asks, so cards drawn at once ask once.
 func (a *alsoOnAsked) get(devices []string) map[string]map[string]string {
@@ -255,6 +267,7 @@ func alsoOnSave(r *http.Request, token, what string) {
 	defer cancel()
 	copied := alsoOnCopy(ctx, ids, devices)
 	var linked map[string]map[string]string
+	var notLinked []string // a link refused here, before any device was asked: said under the devices
 	if r.PostFormValue("also_link") == "yes" {
 		linked = map[string]map[string]string{}
 		for _, id := range ids {
@@ -267,6 +280,7 @@ func alsoOnSave(r *http.Request, token, what string) {
 			got, err := alsoOnLink(ctx, id, want)
 			if err != nil {
 				slog.Warn("setup page: also on: a link was not made", "setting", id, "err", err)
+				notLinked = append(notLinked, fmt.Sprintf("%s not kept in step: %v", shareName(id), err))
 				continue
 			}
 			for d, outcome := range got {
@@ -282,6 +296,7 @@ func alsoOnSave(r *http.Request, token, what string) {
 	for _, d := range devices {
 		lines = append(lines, alsoOnLine(d, copied[d], linked[d]))
 	}
+	lines = append(lines, notLinked...)
 	slog.Info("setup page: also on", "card", what, "settings", len(ids), "devices", len(devices), "linked", linked != nil)
 	alsoOnSaid.keep(token, what, lines)
 }

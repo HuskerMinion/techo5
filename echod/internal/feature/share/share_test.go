@@ -16,6 +16,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 )
 
 // rig is this device as "Kitchen", three settings of its own, and what it sends, kept.
@@ -879,14 +880,24 @@ func TestValues(t *testing.T) {
 			return nil, errors.New("not on the network now")
 		case "Den":
 			return json.Marshal(reply{Results: map[string]string{"bass": NotTaking}})
+		case "Attic":
+			return nil, announce.ErrShareNotTaking
+		case "Hall":
+			return json.Marshal(reply{Results: map[string]string{}})
 		}
 		return json.Marshal(reply{Values: map[string]string{"bass": "1", "treble": "4", "sendspin": "on"}})
 	}
-	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen", "Den"})
-	if len(got) != 2 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
+	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen", "Den", "Attic", "Hall"})
+	if len(got) != 4 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
 		t.Errorf("%v", got)
 	}
 	if v, ok := got["Den"]; !ok || v != nil {
 		t.Errorf("a device with sharing off is not said to be: %v", got)
+	}
+	if v, ok := got["Attic"]; !ok || v != nil {
+		t.Errorf("a device whose share route is shut (sharing off) is not said to be: %v", got)
+	}
+	if v, ok := got["Hall"]; !ok || v == nil || len(v) != 0 {
+		t.Errorf("a device that keeps every setting its own is not said to have answered: %v", got)
 	}
 }

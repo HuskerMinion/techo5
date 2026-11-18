@@ -74,7 +74,14 @@ func devicesSection(w http.ResponseWriter, token string) {
 	if len(devices) == 0 {
 		return
 	}
-	by := alsoOnNow.get(devices)
+	by := alsoOnNow.drawn(w, devices)
+	if by == nil {
+		// Only for a find: nothing kept to show, and a find does not ask.
+		sectionOpen(w, "devices", "Your devices")
+		fmt.Fprint(w, `<p class="note">Your devices side by side: open the System tab to see them.</p>`)
+		sectionClose(w)
+		return
+	}
 	var answered, off, silent []string
 	for _, d := range devices {
 		v, ok := by[d]

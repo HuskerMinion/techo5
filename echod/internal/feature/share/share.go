@@ -1062,6 +1062,12 @@ func (f *Feature) Values(ctx context.Context, ids, devices []string) map[string]
 		go func(d string) {
 			defer wg.Done()
 			raw, err := f.send(ctx, d, body)
+			if errors.Is(err, announce.ErrShareNotTaking) {
+				mu.Lock()
+				out[d] = nil
+				mu.Unlock()
+				return
+			}
 			if err != nil {
 				return
 			}
@@ -1069,17 +1075,17 @@ func (f *Feature) Values(ctx context.Context, ids, devices []string) map[string]
 			if json.Unmarshal(raw, &r) != nil {
 				return
 			}
-			if r.Values == nil {
-				for _, outcome := range r.Results {
-					if outcome == NotTaking {
-						mu.Lock()
-						out[d] = nil
-						mu.Unlock()
-						break
-					}
+			for _, outcome := range r.Results {
+				if outcome == NotTaking {
+					mu.Lock()
+					out[d] = nil
+					mu.Unlock()
+					return
 				}
-				return
 			}
+			// An answer with no values (left out when empty) is a device that keeps every one asked about
+			// its own, or has none of them: it answered. One on a release that cannot be asked answers
+			// with an error instead, and was left out above.
 			got := map[string]string{}
 			for _, it := range items {
 				if v, ok := r.Values[it.ID]; ok && utf8.ValidString(v) && len(v) <= 256 {

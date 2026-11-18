@@ -214,7 +214,7 @@ const findMaxOptions = 24
 
 var (
 	findOwn    = regexp.MustCompile(`(?is)<summary>.*?</summary>`)
-	findSkip   = regexp.MustCompile(`(?is)<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>`)
+	findSkip   = regexp.MustCompile(`(?is)<script\b.*?</script>|<style\b.*?</style>|<textarea\b.*?</textarea>|<fieldset class="also">.*?</fieldset>`)
 	findSelect = regexp.MustCompile(`(?is)<select\b.*?</select>`)
 	findTag    = regexp.MustCompile(`<[^>]*>`)
 )

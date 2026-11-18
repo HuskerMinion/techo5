@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"net/url"
 	"slices"
@@ -251,5 +252,23 @@ func TestAlsoOnLine(t *testing.T) {
 		if got := alsoOnLine("Den", tc.copied, nil); got != tc.want {
 			t.Errorf("%v: %q, want %q", tc.copied, got, tc.want)
 		}
+	}
+}
+
+// A link refused here (too many devices already) is said on the card, not only in the log.
+func TestAlsoOnSaysALinkRefused(t *testing.T) {
+	_, c := in(t)
+	_ = config.Set().Share().On(true)
+	fakeAlsoOn(t, []string{"Kitchen"}, func(string, string) string { return share.Applied })
+	alsoOnLink = func(context.Context, string, []string) (map[string]string, error) {
+		return nil, errors.New("linked with 8 devices at most")
+	}
+	r := httptest.NewRequest("POST", "/setup/save", strings.NewReader("what=alarm_prefs&also_on=Kitchen&also_link=yes"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	_ = r.ParseForm()
+	alsoOnSave(r, c.Value, "alarm_prefs")
+	said := alsoOnSaid.get(c.Value, "alarm_prefs")
+	if said == nil || !strings.Contains(strings.Join(said.lines, "\n"), "Alarm sound not kept in step: linked with 8 devices at most") {
+		t.Errorf("said %v", said)
 	}
 }

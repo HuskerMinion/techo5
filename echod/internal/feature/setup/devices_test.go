@@ -134,3 +134,37 @@ func TestDevicesMakeAllLikeThis(t *testing.T) {
 		t.Errorf("a post with no token: %d, copied %d times", w.Code, len(*copied))
 	}
 }
+
+// A find draws every tab, the System tab's Your devices and the Also on rows too, without asking the
+// devices: it shows what was kept, or says to open the tab.
+func TestAFindDoesNotAskTheDevices(t *testing.T) {
+	f, c := in(t)
+	_ = config.Set().Share().On(true)
+	fakeDevices(t, map[string]string{"alarm_snooze_length": "9"}, map[string]map[string]string{"Kitchen": {"alarm_snooze_length": "12"}})
+	asked := 0
+	alsoOnValues = func(context.Context, []string, []string) map[string]map[string]string {
+		asked++
+		return map[string]map[string]string{"Kitchen": {"alarm_snooze_length": "12"}}
+	}
+	page := get(f, "/setup?find="+url.QueryEscape("your devices"), c).Body.String()
+	if asked != 0 {
+		t.Errorf("a find asked the devices %d times", asked)
+	}
+	if !strings.Contains(page, "open the System tab to see them") {
+		t.Error("a find with nothing kept does not say where to look")
+	}
+	get(f, "/setup?tab=system", c)
+	if asked != 1 {
+		t.Fatalf("the System tab asked %d times", asked)
+	}
+	if page := get(f, "/setup?find="+url.QueryEscape("your devices"), c).Body.String(); !strings.Contains(page, `<td class="diff">12</td>`) || asked != 1 {
+		t.Errorf("a find after the tab: asked %d times, kept values shown: %v", asked, strings.Contains(page, `class="diff"`))
+	}
+}
+
+// Find does not find a card by its Also on row: a device's name is no setting of the card.
+func TestAFindSkipsTheAlsoOnRow(t *testing.T) {
+	if got := cardText([]byte(`<details class="card"><summary>x</summary><label>Alarm sound</label><fieldset class="also"><legend>Also on</legend>Kitchen same as here</fieldset></details>`)); strings.Contains(got, "kitchen") || !strings.Contains(got, "alarm sound") {
+		t.Errorf("card text %q", got)
+	}
+}
