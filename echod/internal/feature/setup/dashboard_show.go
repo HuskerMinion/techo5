@@ -135,8 +135,9 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	  device's Home Assistant token. <strong>Streamed</strong> needs a
 	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
-	 %s
-	 <p><button type="submit">Save</button></p></form>`, idle, handle, tesseraNote, tokenNote())
+	 %s`, idle, handle, tesseraNote, tokenNote())
+	alsoOnRow(w, token, "dashpanel")
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
 }
 

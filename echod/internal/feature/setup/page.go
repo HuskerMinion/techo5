@@ -449,6 +449,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("setup page: a change was refused", "problem", problem)
 		to = back(what, "problem", problem)
 		f.rejected.keep(token, what, r.PostForm) // so it is not all typed again (stash.go)
+	} else {
+		alsoOnSave(r, token, what) // and on the devices ticked on the card (alsoon.go)
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }

@@ -213,6 +213,7 @@ func (f *Feature) Close() {
 	clear(f.live)
 	f.mu.Unlock()
 	f.rejected.drop("") // what was typed belongs to the sessions, and goes with them
+	alsoOnSaid.drop("")
 
 	if was {
 		slog.Info("setup page closed")
@@ -234,6 +235,7 @@ func (f *Feature) leave(token string) {
 	delete(f.remote.sessions, token)
 	f.mu.Unlock()
 	f.rejected.drop(token)
+	alsoOnSaid.drop(token)
 }
 
 // used puts the idle time back to the start: typing on the page keeps it open.
@@ -359,6 +361,7 @@ func (f *Feature) admit(asking, by string) bool {
 		}
 		delete(f.live, oldest)
 		f.rejected.drop(oldest) // and what it typed
+		alsoOnSaid.drop(oldest)
 	}
 	f.live[f.waiting] = now
 	f.keepRemote(f.waiting)

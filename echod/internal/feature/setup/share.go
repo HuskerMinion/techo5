@@ -141,7 +141,11 @@ func shareSection(w http.ResponseWriter, token string) {
 				}
 				from := ""
 				if f, ok := s.From[st.ID]; ok {
-					from = f.Device + ", " + f.At.Local().Format("Jan 2 15:04")
+					by := f.Device
+					if f.Via != "" {
+						by = f.Via + " (a copy)"
+					}
+					from = by + ", " + f.At.Local().Format("Jan 2 15:04")
 				}
 				fmt.Fprintf(w, `<td>%s</td></tr>`, html.EscapeString(from))
 			}

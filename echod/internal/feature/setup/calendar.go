@@ -106,8 +106,9 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `</select><p class="note">%s</p>`, html.EscapeString(c.Note))
 	}
 	fmt.Fprint(w, `<p class="note">Also on the screen, under Settings, Display, Calendar, and in Home Assistant.
-	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>
-	 <p><button type="submit">Save</button></p></form>`)
+	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>`)
+	alsoOnRow(w, token, "calendar-look")
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
 }
 
