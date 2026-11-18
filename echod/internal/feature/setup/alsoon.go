@@ -101,8 +101,8 @@ func alsoOnRow(w http.ResponseWriter, token, what string) {
 	if len(devices) > 0 {
 		fmt.Fprint(w, `<div class="also-devs">`)
 		for _, d := range devices {
-			fmt.Fprintf(w, `<label><input type="checkbox" name="also_on" value="%s" style="width:auto"> %s</label>`,
-				html.EscapeString(d), html.EscapeString(d))
+			fmt.Fprintf(w, `<label><input type="checkbox" name="also_on" value="%s" style="width:auto"> %s%s</label>`,
+				html.EscapeString(d), html.EscapeString(d), alsoOnLinkNote(config.Get().Share, ids, d))
 		}
 		fmt.Fprintf(w, `</div>
 	 <p><label><input type="checkbox" name="also_link" value="yes" style="width:auto"> Keep these in step from now on:
@@ -119,6 +119,29 @@ func alsoOnRow(w http.ResponseWriter, token, what string) {
 		fmt.Fprint(w, `</ul></div>`)
 	}
 	fmt.Fprint(w, `</fieldset>`)
+}
+
+// alsoOnLinkNote is how the card's settings stand with a device, beside its name: kept in step when every
+// one is linked both ways, asked while a link waits to be accepted there, nothing when none is linked.
+func alsoOnLinkNote(s config.Share, ids []string, d string) string {
+	linked, waiting := 0, 0
+	for _, id := range ids {
+		switch {
+		case s.WaitingFor(id, d):
+			waiting++
+		case s.LinkedWith(id, d):
+			linked++
+		}
+	}
+	switch {
+	case waiting > 0:
+		return ` <small>asked to keep in step, waiting for it to accept</small>`
+	case linked == len(ids):
+		return ` <small>kept in step</small>`
+	case linked > 0:
+		return fmt.Sprintf(` <small>%d of %d kept in step</small>`, linked, len(ids))
+	}
+	return ""
 }
 
 // alsoOnSave sends a card's shared settings to the devices ticked on it, after the card was saved here,
@@ -188,13 +211,15 @@ var (
 
 // alsoOnLine is one device's line after a save: what it made of the settings, by setting, in a few words.
 func alsoOnLine(d string, copied, linked map[string]string) string {
-	var took, kept, missing int
+	var took, same, kept, missing int
 	var keptNames []string
 	reach, off := false, false
 	for id, outcome := range copied {
 		switch outcome {
-		case share.Applied, share.Same:
+		case share.Applied:
 			took++
+		case share.Same:
+			same++
 		case share.Kept:
 			kept++
 			keptNames = append(keptNames, shareName(id))
@@ -207,17 +232,21 @@ func alsoOnLine(d string, copied, linked map[string]string) string {
 		}
 	}
 	switch {
-	case len(copied) == 0 || reach && took == 0 && kept == 0:
+	case len(copied) == 0 || reach && took+same+kept == 0:
 		return d + ": could not be reached"
-	case off && took == 0 && kept == 0:
+	case off && took+same+kept == 0:
 		return d + ": sharing is off there (System, Shared settings, on its own page)"
 	}
 	var parts []string
+	// Taken is said apart from already so: a device that had them already changed nothing, and "took it"
+	// would hide a save that sent what it had.
 	switch {
 	case took > 0 && kept == 0:
 		parts = append(parts, "took it")
 	case took > 0:
 		parts = append(parts, "took the rest")
+	case same > 0:
+		parts = append(parts, "already had these")
 	}
 	if kept > 0 {
 		sort.Strings(keptNames)

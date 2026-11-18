@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/share"
@@ -153,6 +154,26 @@ func TestAlsoOnSendsNothingWithSharingOff(t *testing.T) {
 	}
 }
 
+func TestAlsoOnLinkNote(t *testing.T) {
+	ids := []string{"alarm_sound", "alarm_snooze_length"}
+	var s config.Share
+	if got := alsoOnLinkNote(s, ids, "Den"); got != "" {
+		t.Errorf("nothing linked: %q", got)
+	}
+	config.AddLink(&s, "alarm_sound", "Den")
+	if got := alsoOnLinkNote(s, ids, "Den"); !strings.Contains(got, "1 of 2 kept in step") {
+		t.Errorf("one linked: %q", got)
+	}
+	config.AddLink(&s, "alarm_snooze_length", "Den")
+	if got := alsoOnLinkNote(s, ids, "Den"); !strings.Contains(got, ">kept in step<") {
+		t.Errorf("both linked: %q", got)
+	}
+	config.SetWaiting(&s, "alarm_snooze_length", "Den", true, time.Now())
+	if got := alsoOnLinkNote(s, ids, "Den"); !strings.Contains(got, "waiting for it to accept") {
+		t.Errorf("one waiting: %q", got)
+	}
+}
+
 func TestAlsoOnLine(t *testing.T) {
 	for _, tc := range []struct {
 		copied map[string]string
@@ -161,6 +182,8 @@ func TestAlsoOnLine(t *testing.T) {
 		{nil, "Den: could not be reached"},
 		{map[string]string{"bass": share.Unreachable}, "Den: could not be reached"},
 		{map[string]string{"bass": share.Same, "treble": share.Applied}, "Den: took it"},
+		{map[string]string{"bass": share.Same, "treble": share.Same}, "Den: already had these"},
+		{map[string]string{"bass": share.Same, "treble": share.Kept}, "Den: kept its own treble (Keep mine is on there); already had these"},
 		{map[string]string{"bass": share.Applied, "treble": share.NotHere}, "Den: took it; 1 setting it does not have"},
 		{map[string]string{"bass": share.Kept, "treble": share.Applied}, "Den: kept its own bass (Keep mine is on there); took the rest"},
 	} {
