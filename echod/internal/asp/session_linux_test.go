@@ -164,7 +164,11 @@ func TestOneOutstandingExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	const concurrent = 12
+	// Enough callers to queue at the gate, few enough that the queue fits the session's budget: time
+	// waiting at the gate counts toward the 80ms deadline and the processing debt, and a failed exchange
+	// ends the session. Twelve went over on a loaded machine (the debt check, by design), which says
+	// nothing about whether the exchanges were one at a time.
+	const concurrent = 3
 	errs := make(chan error, concurrent)
 	var wg sync.WaitGroup
 	for i := 0; i < concurrent; i++ {
