@@ -2560,6 +2560,21 @@ offered there. The Skylight has not been tried.
 - [Phone calls](phone.md) through your own SIP provider.
 - [Actions](actions.md): everything Home Assistant can ask the device to do, with examples.
 
+### The buttons in Home Assistant
+
+Each of the device's buttons is an event entity in Home Assistant (**Action button**, **Mute
+button**, **Volume down button**, **Volume up button**, and **Power button** where there is one).
+The device acts on a press itself as well; the events are there so an automation can act on one too.
+
+- `press`: a short press, as it is let go. A volume key reports it as it goes down.
+- `hold`: held for 0.7 seconds, as it happens.
+- `long_hold`: held on for longer, on the devices that tell a long hold apart.
+- `double_press` and `triple_press` (action button only): a second or third press within 0.4
+  seconds of the one before. Each press still reports `press` first, so nothing waits to see whether
+  another is coming: a double press is `press`, `press`, `double_press`, and a triple goes on with
+  `press`, `triple_press`. An automation for a single press that should stay quiet on a double can
+  wait half a second for a `double_press` before it acts.
+
 ### Running something of your own at boot
 
 An update replaces the root filesystem, so anything added to it is gone afterwards; userdata is what

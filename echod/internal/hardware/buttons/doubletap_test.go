@@ -27,23 +27,70 @@ func TestDoubleTapFollowsThePair(t *testing.T) {
 	}
 }
 
-// Three taps are a double and then a single. Without spending the pair, the third tap would pair
-// with the second and every tap after the first would be a double.
-func TestThreeTapsAreNotTwoDoubles(t *testing.T) {
+// Three taps are a double and then a triple, each after the tap that completed it. Without spending
+// the pair at the double's count, the third tap would pair with the second and every tap after the
+// first would be a double.
+func TestThreeTapsAreADoubleThenATriple(t *testing.T) {
 	c := &Controller{}
-	doubles := 0
+	var got []Event
+	defer c.Events.Listen(func(e Event) { got = append(got, e) })()
+
+	c.emit(Action, Tap)
+	c.emit(Action, Tap)
+	c.emit(Action, Tap)
+
+	want := []Event{{Action, Tap}, {Action, Tap}, {Action, DoubleTap}, {Action, Tap}, {Action, TripleTap}}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}
+
+// Three taps spend the run: a fourth is a single again, and a fifth makes a new double.
+func TestTheRunIsSpentAtThree(t *testing.T) {
+	c := &Controller{}
+	var multi []Kind
 	defer c.Events.Listen(func(e Event) {
-		if e.Kind == DoubleTap {
-			doubles++
+		if e.Kind == DoubleTap || e.Kind == TripleTap {
+			multi = append(multi, e.Kind)
+		}
+	})()
+
+	for range 4 {
+		c.emit(Action, Tap)
+	}
+	if len(multi) != 2 || multi[0] != DoubleTap || multi[1] != TripleTap {
+		t.Fatalf("four taps gave %v, want [double_tap triple_tap]", multi)
+	}
+	c.emit(Action, Tap)
+	if len(multi) != 3 || multi[2] != DoubleTap {
+		t.Errorf("five taps gave %v, want a new double_tap last", multi)
+	}
+}
+
+// A third tap that comes too late after the second is not a triple: it starts a new run.
+func TestALateThirdTapIsNotATriple(t *testing.T) {
+	c := &Controller{}
+	triples := 0
+	defer c.Events.Listen(func(e Event) {
+		if e.Kind == TripleTap {
+			triples++
 		}
 	})()
 
 	c.emit(Action, Tap)
 	c.emit(Action, Tap)
+	c.mu.Lock()
+	c.tapped[Action] = time.Now().Add(-doubleTap - time.Millisecond)
+	c.mu.Unlock()
 	c.emit(Action, Tap)
 
-	if doubles != 1 {
-		t.Errorf("three taps gave %d doubles, want 1", doubles)
+	if triples != 0 {
+		t.Errorf("a third tap %v after the second gave a triple", doubleTap)
 	}
 }
 
