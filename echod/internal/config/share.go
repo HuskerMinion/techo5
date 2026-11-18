@@ -59,6 +59,9 @@ type ShareFrom struct {
 	Device string    `json:"device"`
 	At     time.Time `json:"at"`
 	N      uint64    `json:"n"`
+	// Via is, for a copy, the device it was copied from: the change is this device's own in the order
+	// (Device), since it is this device that numbered it.
+	Via string `json:"via,omitempty"`
 }
 
 // ShareRequest is a link another device asked for.

@@ -576,9 +576,17 @@ func (f *Feature) takeOne(from string, it item, copied bool, c config.Share, now
 		return BadValue, none, false, nil // a number from nowhere, which would end every change after it
 	}
 	was, _ := valueOf(e)
+	// A copy is numbered here, so it is this device's change in the order, not the sender's: put down
+	// as the sender's, it held a number the sender never had, and the sender's next change, numbered
+	// the same, was a second value under one number and one name, which neither device would give way
+	// to once the two were linked.
 	origin := it.Origin
-	if origin == "" || copied {
+	if origin == "" {
 		origin = from
+	}
+	via := ""
+	if copied {
+		origin, via = f.me(), from
 	}
 	var n uint64
 	if copied {
@@ -604,7 +612,7 @@ func (f *Feature) takeOne(from string, it item, copied bool, c config.Share, now
 			return Older, none, false, &item{ID: it.ID, Value: was, N: have.N, Origin: holder}
 		}
 	}
-	fr := config.ShareFrom{Device: origin, At: now, N: n}
+	fr := config.ShareFrom{Device: origin, At: now, N: n, Via: via}
 	if was == it.Value {
 		f.last[it.ID] = was
 		return Same, fr, true, nil // the same value, later in the order: only where it came from is new

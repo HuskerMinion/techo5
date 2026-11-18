@@ -198,12 +198,31 @@ func TestACopy(t *testing.T) {
 	if got["screen_theme"] != Applied || r.theme.Get() != "Light" || got["slideshow_shuffle"] != Applied || !r.shuffle.Get() {
 		t.Fatalf("%v theme %q shuffle %v", got, r.theme.Get(), r.shuffle.Get())
 	}
-	if from := config.Get().Share.From["screen_theme"]; from.N != 41 || from.Device != "Office" {
-		t.Errorf("a copy is not the latest change: %+v", from)
+	if from := config.Get().Share.From["screen_theme"]; from.N != 41 || from.Device != "Kitchen" || from.Via != "Office" {
+		t.Errorf("a copy is not the latest change, numbered here: %+v", from)
 	}
 	waitFor(t, func() bool { return len(r.sentTo("Bedroom")) == 1 })
 	if m := r.sentTo("Bedroom")[0]; m.Kind != "set" || m.Items[0].Value != "Light" || m.Items[0].N != 41 {
 		t.Errorf("passed on as %+v", m)
+	}
+}
+
+// A copy, then a link and a change on the device that copied: the two settle on one value. The copy was
+// put down as the sender's, under a number the sender never had; its next change took the same number,
+// and each device refused the other's as older, linked and apart for good.
+func TestACopyThenALinkSettles(t *testing.T) {
+	r := newRig(t)
+	r.receive(t, "Office", message{Kind: "copy", Items: []item{{ID: "bass", Value: "3", N: 0, Origin: "Office"}}})
+	link(t, "bass", "Office")
+	// Office changes bass by itself, numbered from what it has: nothing, so 1.
+	// Before, the copy was put down here as Office's number 1, and this was refused as older with
+	// Office's own answer refused the same way. Now the two number 1s are by different devices, and the
+	// names settle it the same way on both.
+	if got := r.receive(t, "Office", set("bass", "-2", 1, "Office")); got["bass"] != Applied || r.bass.Get() != -2 {
+		t.Fatalf("%v, bass %v", got, r.bass.Get())
+	}
+	if here := config.Get().Share.From["bass"]; here.N != 1 || here.Device != "Office" {
+		t.Errorf("%+v", here)
 	}
 }
 
