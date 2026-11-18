@@ -1562,8 +1562,8 @@ In YAML, refer to this action as `esphome.<node>_notify`.
 
 Puts a notification up on this device's screen: a card in the middle of the screen with a heading (an
 icon and a title, either optional) and a message of up to three lines. It can chime as it comes up and
-can be said aloud. It stays until somebody taps it or its time runs out (12 hours at most when no time
-is given).
+can be said aloud. It stays until somebody taps it, its time runs out (12 hours at most when no time
+is given) or an automation takes it down ([Take a notification down](#take-a-notification-down)).
 
 Every TECHO5 has its own `notify`, and a call shows on that device alone. To reach several devices,
 call each one's action; see [Notifying every device](#notifying-every-device).
@@ -1665,7 +1665,7 @@ comes up, and once more as it goes.
 
 | Field | |
 |---|---|
-| `event` | `shown` as it comes up; then `dismissed` (somebody tapped it, or its picture's camera page was closed), `expired` (its time ran out) or `replaced` (a newer notification, or a camera put up over its picture, took its place) |
+| `event` | `shown` as it comes up; then `dismissed` (somebody tapped it, or its picture's camera page was closed), `expired` (its time ran out), `replaced` (a newer notification, or a camera put up over its picture, took its place) or `cleared` (an automation took it down with `notify_clear`) |
 | `id` | The notification's own, unique on its device: the numbers count up from a random start each time the device starts, so one from before a restart is very unlikely to come again. Pair it with `device` |
 | `tag` | The `tag` the call passed, `""` for none |
 | `kind` | `text` for `notify`, `picture` for `notify_picture` |
@@ -1971,6 +1971,30 @@ actions:
       - action: notify.mobile_app_phone
         data:
           message: "Nobody answered the door"
+```
+
+## Take a notification down
+
+In YAML, refer to this action as `esphome.<node>_notify_clear`.
+
+Takes a notification down before its time, when the news is over: the messages have been heard, the
+washer has been emptied, somebody opened the door on another device. It works for both kinds, a card
+and a picture, and takes a picture's camera view down with it. The notification reports `cleared`.
+
+| Argument | Type | Accepted values | Empty means |
+|---|---|---|---|
+| `tag` | string | The `tag` the notification was sent with. Only a notification with this tag is taken down, so clearing the messages never takes down the doorbell. | Whichever notification is up. |
+
+Nothing up, or one with another tag, is not an error: the call does nothing, since the notification
+may have been tapped away or run out already. A note or an alert of the device's own (a calendar's
+meeting, for one) is not taken down; a tap or its time ends it. A Dot takes the call too, so a script
+that clears every device does not fail on one.
+
+```yaml
+# The new messages have been heard: take their card down on the kitchen Show.
+action: esphome.kitchen_notify_clear
+data:
+  tag: "messages"
 ```
 
 ## Choose the calendars shown

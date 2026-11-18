@@ -514,6 +514,7 @@ func TestTheActionsAreTheOnesHomeAssistantKnows(t *testing.T) {
 		"notify_picture":       "message,title,picture,chime,speak,sound,tag,seconds",
 		"notify_sized":         "message,title,icon,chime,speak,tag,seconds,size",
 		"notify_picture_sized": "message,title,picture,chime,speak,sound,tag,seconds,size",
+		"notify_clear":         "tag",
 	}
 	for _, a := range r.f.Actions() {
 		var args []string
@@ -842,6 +843,88 @@ func TestDismissIDOnlyDismissesThatOne(t *testing.T) {
 		t.Errorf("hides=%d, or it dismissed twice", r.pics.hides)
 	}
 	if got := r.fired(); !same(got, []string{"shown", "dismissed"}) {
+		t.Errorf("events %v", got)
+	}
+}
+
+func TestClearTakesDownTheOneWithItsTag(t *testing.T) {
+	r := newRig(t, true)
+	_ = r.f.Notify("New messages", "", "", "", "", "messages", 0)
+	if r.f.Clear("doorbell") {
+		t.Fatal("Clear took down a notification with another tag")
+	}
+	if _, up := r.f.Card(); !up {
+		t.Fatal("the wrong tag changed something")
+	}
+	if !r.f.Clear(" messages ") {
+		t.Fatal("Clear with its tag said no")
+	}
+	if _, up := r.f.Card(); up {
+		t.Error("still up after Clear")
+	}
+	if r.f.Clear("messages") || r.f.Clear("") {
+		t.Error("cleared one already gone")
+	}
+	r.f.tick(r.now.Add(13 * time.Hour))
+	if got := r.fired(); !same(got, []string{"shown", "cleared"}) {
+		t.Errorf("events %v", got)
+	}
+	if e := r.last(); e.Data["tag"] != "messages" {
+		t.Errorf("event %+v", e)
+	}
+}
+
+func TestClearWithNoTagTakesDownAnyFromHomeAssistant(t *testing.T) {
+	r := newRig(t, true)
+	_ = r.f.Notify("m", "", "", "", "", "washer", 0)
+	if !r.f.Clear("") {
+		t.Error("Clear with no tag left the notification up")
+	}
+	_ = r.f.Notify("m", "", "", "", "", "", 0)
+	if r.f.Clear("washer") {
+		t.Error("a tag cleared a notification that has none")
+	}
+	if !r.f.Clear("") {
+		t.Error("Clear with no tag left an untagged notification up")
+	}
+}
+
+// A note or an alert is the device's own, and the tap or its time ends it, not Home Assistant.
+func TestClearLeavesTheDevicesOwn(t *testing.T) {
+	r := newRig(t, true)
+	r.f.Note("Not found", "No such light")
+	r.f.Alert("Meeting", "Standup in 5 minutes", time.Minute, true)
+	if r.f.Clear("") {
+		t.Error("Clear took down the device's own alert")
+	}
+	if n, up := r.f.Card(); !up || !n.Own {
+		t.Errorf("card %+v up=%v", n, up)
+	}
+}
+
+func TestClearingAPictureTakesItsViewDown(t *testing.T) {
+	r := newRig(t, true)
+	_ = r.f.NotifyPicture("m", "", "camera.front_door", "", "", "", "doorbell", 0)
+	if !r.f.Clear("doorbell") {
+		t.Fatal("Clear left the picture up")
+	}
+	if r.pics.hides != 1 || r.pics.up != "" {
+		t.Errorf("hides=%d up=%q, want the view down once", r.pics.hides, r.pics.up)
+	}
+	if got := r.fired(); !same(got, []string{"shown", "cleared"}) {
+		t.Errorf("events %v", got)
+	}
+}
+
+// A Dot shows nothing, but an automation clearing every device must not fail on one, and a notification
+// waiting out its seconds there ends as on a Show.
+func TestClearOnADeviceWithNoScreen(t *testing.T) {
+	r := newRig(t, false)
+	_ = r.f.Notify("m", "", "", "off", "", "messages", 600)
+	if !r.f.Clear("messages") {
+		t.Error("Clear on a Dot said no")
+	}
+	if got := r.fired(); !same(got, []string{"shown", "cleared"}) {
 		t.Errorf("events %v", got)
 	}
 }
