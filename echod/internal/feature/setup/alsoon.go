@@ -99,10 +99,11 @@ func alsoOnRow(w http.ResponseWriter, token, what string) {
 	}
 	fmt.Fprint(w, `<fieldset class="also"><legend>Also on</legend>`)
 	if len(devices) > 0 {
+		here, now := alsoOnHere(ids), alsoOnNow.get(devices)
 		fmt.Fprint(w, `<div class="also-devs">`)
 		for _, d := range devices {
-			fmt.Fprintf(w, `<label><input type="checkbox" name="also_on" value="%s" style="width:auto"> %s%s</label>`,
-				html.EscapeString(d), html.EscapeString(d), alsoOnLinkNote(config.Get().Share, ids, d))
+			fmt.Fprintf(w, `<label><input type="checkbox" name="also_on" value="%s" style="width:auto"> %s%s%s</label>`,
+				html.EscapeString(d), html.EscapeString(d), alsoOnNowNote(ids, here, now[d]), alsoOnLinkNote(config.Get().Share, ids, d))
 		}
 		fmt.Fprintf(w, `</div>
 	 <p><label><input type="checkbox" name="also_link" value="yes" style="width:auto"> Keep these in step from now on:
@@ -119,6 +120,91 @@ func alsoOnRow(w http.ResponseWriter, token, what string) {
 		fmt.Fprint(w, `</ul></div>`)
 	}
 	fmt.Fprint(w, `</fieldset>`)
+}
+
+// alsoOnNowNote is what a device has of the card's settings, beside its name: same as here, or the
+// settings it has otherwise, and what it has. Nothing for a device that did not say (sharing off there,
+// a release from before it could be asked, or no answer in time).
+func alsoOnNowNote(ids []string, here, there map[string]string) string {
+	if there == nil {
+		return ""
+	}
+	var differ []string
+	asked := 0
+	for _, id := range ids {
+		v, ok := there[id]
+		if !ok {
+			continue
+		}
+		asked++
+		if v != here[id] {
+			differ = append(differ, strings.ToLower(shareName(id))+" "+v)
+		}
+	}
+	switch {
+	case asked == 0:
+		return ""
+	case len(differ) == 0:
+		return ` <small>same as here</small>`
+	case len(differ) > alsoOnShown:
+		more := len(differ) - alsoOnShown
+		differ = append(differ[:alsoOnShown], fmt.Sprintf("%d more", more))
+	}
+	return ` <small>now: ` + html.EscapeString(strings.Join(differ, ", ")) + `</small>`
+}
+
+// alsoOnShown is the most settings said beside a device that differ from here.
+const alsoOnShown = 3
+
+// alsoOnAskFor is how long what the devices have is kept: a tab drawing several cards asks them once, and
+// a page opened again a minute later asks again.
+const alsoOnAskFor = 20 * time.Second
+
+// alsoOnAskWithin is the most the page waits for the devices to say: a device switched off or slow does
+// not hold the page up, it only goes without its note.
+const alsoOnAskWithin = 1500 * time.Millisecond
+
+// alsoOnHere and alsoOnValues are feature/share's, replaced in tests.
+var (
+	alsoOnHere   = share.Here
+	alsoOnValues = func(ctx context.Context, ids, devices []string) map[string]map[string]string {
+		return share.Get().Values(ctx, ids, devices)
+	}
+)
+
+// alsoOnNow is what the other devices have of every setting on the list, as they last said.
+var alsoOnNow = alsoOnAsked{}
+
+type alsoOnAsked struct {
+	mu    sync.Mutex
+	at    time.Time
+	asked []string
+	by    map[string]map[string]string
+}
+
+// get is what the devices have, asked again when what was kept is old or was not asked of all of them.
+// It holds the lock while it asks, so cards drawn at once ask once.
+func (a *alsoOnAsked) get(devices []string) map[string]map[string]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	fresh := a.by != nil && time.Since(a.at) < alsoOnAskFor
+	for _, d := range devices {
+		fresh = fresh && slices.Contains(a.asked, d)
+	}
+	if !fresh {
+		ctx, cancel := context.WithTimeout(context.Background(), alsoOnAskWithin)
+		a.by = alsoOnValues(ctx, share.IDs(), devices)
+		cancel()
+		a.at, a.asked = time.Now(), slices.Clone(devices)
+	}
+	return a.by
+}
+
+// forget drops what was kept: a save has just changed what the devices have.
+func (a *alsoOnAsked) forget() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.by = nil
 }
 
 // alsoOnLinkNote is how the card's settings stand with a device, beside its name: kept in step when every
@@ -191,6 +277,7 @@ func alsoOnSave(r *http.Request, token, what string) {
 			}
 		}
 	}
+	alsoOnNow.forget()
 	var lines []string
 	for _, d := range devices {
 		lines = append(lines, alsoOnLine(d, copied[d], linked[d]))

@@ -32,8 +32,13 @@ func TestAlsoOnCardsAreSharedSettings(t *testing.T) {
 // answer, keeping what was asked.
 func fakeAlsoOn(t *testing.T, peers []string, answer func(d, id string) string) (copied *[][2][]string, linked *map[string][]string) {
 	t.Helper()
-	oldDevices, oldCopy, oldLink := alsoOnDevices, alsoOnCopy, alsoOnLink
-	t.Cleanup(func() { alsoOnDevices, alsoOnCopy, alsoOnLink = oldDevices, oldCopy, oldLink })
+	oldDevices, oldCopy, oldLink, oldValues := alsoOnDevices, alsoOnCopy, alsoOnLink, alsoOnValues
+	t.Cleanup(func() {
+		alsoOnDevices, alsoOnCopy, alsoOnLink, alsoOnValues = oldDevices, oldCopy, oldLink, oldValues
+		alsoOnNow.forget()
+	})
+	alsoOnNow.forget()
+	alsoOnValues = func(context.Context, []string, []string) map[string]map[string]string { return nil }
 	var calls [][2][]string
 	links := map[string][]string{}
 	alsoOnDevices = func() []string { return peers }
@@ -171,6 +176,62 @@ func TestAlsoOnLinkNote(t *testing.T) {
 	config.SetWaiting(&s, "alarm_snooze_length", "Den", true, time.Now())
 	if got := alsoOnLinkNote(s, ids, "Den"); !strings.Contains(got, "waiting for it to accept") {
 		t.Errorf("one waiting: %q", got)
+	}
+}
+
+func TestAlsoOnNowNote(t *testing.T) {
+	ids := []string{"alarm_sound", "alarm_snooze_length"}
+	here := map[string]string{"alarm_sound": "Chimes", "alarm_snooze_length": "9"}
+	for _, tc := range []struct {
+		there map[string]string
+		want  string
+	}{
+		{nil, ""},
+		{map[string]string{}, ""},
+		{map[string]string{"alarm_sound": "Chimes", "alarm_snooze_length": "9"}, "same as here"},
+		{map[string]string{"alarm_sound": "Chimes", "alarm_snooze_length": "10"}, "now: snooze length 10"},
+		{map[string]string{"alarm_snooze_length": "9"}, "same as here"},
+	} {
+		got := alsoOnNowNote(ids, here, tc.there)
+		if tc.want == "" && got != "" || tc.want != "" && !strings.Contains(got, tc.want) {
+			t.Errorf("%v: %q, want %q", tc.there, got, tc.want)
+		}
+	}
+	many := []string{"screen_clock_style", "screen_font", "screen_clock_tap", "screen_volume_swipe", "screen_clock_style_swipe"}
+	there := map[string]string{}
+	for _, id := range many {
+		there[id] = "x"
+	}
+	if got := alsoOnNowNote(many, map[string]string{}, there); !strings.Contains(got, ", 2 more<") {
+		t.Errorf("five that differ: %q", got)
+	}
+}
+
+// The devices are asked once for a tab's cards, and again after a save.
+func TestAlsoOnAsksOnce(t *testing.T) {
+	f, c := in(t)
+	_ = config.Set().Share().On(true)
+	fakeAlsoOn(t, []string{"Kitchen"}, func(string, string) string { return share.Applied })
+	asked := 0
+	alsoOnValues = func(_ context.Context, ids, devices []string) map[string]map[string]string {
+		asked++
+		return map[string]map[string]string{"Kitchen": {"alarm_snooze_length": "12"}}
+	}
+	body := get(f, "/setup?tab=alarms", c).Body.String()
+	if !strings.Contains(body, "now: snooze length 12") {
+		t.Error("the device's snooze length is not said")
+	}
+	get(f, "/setup?tab=alarms", c)
+	if asked != 1 {
+		t.Errorf("asked %d times for two pages a moment apart", asked)
+	}
+	r := httptest.NewRequest("POST", "/setup/save", strings.NewReader("what=alarm_prefs&also_on=Kitchen"))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	_ = r.ParseForm()
+	alsoOnSave(r, c.Value, "alarm_prefs")
+	get(f, "/setup?tab=alarms", c)
+	if asked != 2 {
+		t.Errorf("not asked again after a save: %d", asked)
 	}
 }
 

@@ -3,6 +3,7 @@ package share
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -848,5 +849,38 @@ func TestCatchingUpIsOneAtATime(t *testing.T) {
 	close(hold)
 	if n != 1 {
 		t.Fatalf("sent %d times at once", n)
+	}
+}
+
+// A get is answered with what this device has for the settings on the list, never one kept its own nor
+// one off the list, and nothing at all with sharing off.
+func TestAGetIsAnswered(t *testing.T) {
+	r := newRig(t)
+	r.bass.Set(2)
+	_ = config.Set().Share().Update(func(s *config.Share) { s.Keep = append(s.Keep, "slideshow_shuffle") })
+	rep := r.receiveReply(t, "Office", message{Kind: "get", Items: []item{{ID: "bass"}, {ID: "screen_theme"},
+		{ID: "slideshow_shuffle"}, {ID: "sendspin"}, {ID: "screen_clock_style"}}})
+	want := map[string]string{"bass": "2", "screen_theme": "Dark"}
+	if len(rep.Values) != len(want) || rep.Values["bass"] != "2" || rep.Values["screen_theme"] != "Dark" {
+		t.Errorf("answered %v, want %v", rep.Values, want)
+	}
+	_ = config.Set().Share().On(false)
+	if rep := r.receiveReply(t, "Office", message{Kind: "get", Items: []item{{ID: "bass"}}}); len(rep.Values) != 0 {
+		t.Errorf("answered %v with sharing off", rep.Values)
+	}
+}
+
+// Values asks each device and keeps only what was asked; one that fails is left out.
+func TestValues(t *testing.T) {
+	r := newRig(t)
+	r.f.send = func(_ context.Context, to string, body []byte) ([]byte, error) {
+		if to == "Garage" {
+			return nil, errors.New("not on the network now")
+		}
+		return json.Marshal(reply{Values: map[string]string{"bass": "1", "treble": "4", "sendspin": "on"}})
+	}
+	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen"})
+	if len(got) != 1 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
+		t.Errorf("%v", got)
 	}
 }
