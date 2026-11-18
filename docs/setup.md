@@ -1427,6 +1427,9 @@ To keep the words on the device, turn off **Send voice text** on it in Home Assi
 and **Last reply** stay empty, and the events leave out what was heard and the reply, keeping the rest
 (how it ended, the timings).
 
+A reply's audio tags, words in square brackets such as `[whispers]` or `[calm]` that tell a voice how
+to speak, are left out of the reply on the screen, **Last reply** and the events.
+
 ### Realtime voice
 
 A wake word can be answered by a speech-to-speech model at OpenAI, xAI (Grok) or Google (Gemini) in
