@@ -712,6 +712,7 @@ func (f *Feature) drawTab(ctx context.Context, w http.ResponseWriter, token, tab
 		}
 		settingsFileSection(w, token)
 		shareSection(w, token)
+		devicesSection(w, token)
 		if firstrun.CanReset() {
 			resetSection(w, token)
 		}

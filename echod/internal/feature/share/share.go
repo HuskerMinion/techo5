@@ -1034,8 +1034,8 @@ func Here(ids []string) map[string]string {
 }
 
 // Values asks devices what they have for settings, for the setup page to show beside each one: answers,
-// by device, each setting's value there. A device that does not answer in time, has sharing off, or is
-// on a release from before it could be asked, is left out.
+// by device, each setting's value there. A device with sharing off is there with nil, for the page to say
+// so; one that does not answer in time, or is on a release from before it could be asked, is left out.
 func (f *Feature) Values(ctx context.Context, ids, devices []string) map[string]map[string]string {
 	var items []item
 	for _, id := range ids {
@@ -1066,7 +1066,18 @@ func (f *Feature) Values(ctx context.Context, ids, devices []string) map[string]
 				return
 			}
 			var r reply
-			if json.Unmarshal(raw, &r) != nil || r.Values == nil {
+			if json.Unmarshal(raw, &r) != nil {
+				return
+			}
+			if r.Values == nil {
+				for _, outcome := range r.Results {
+					if outcome == NotTaking {
+						mu.Lock()
+						out[d] = nil
+						mu.Unlock()
+						break
+					}
+				}
 				return
 			}
 			got := map[string]string{}

@@ -129,6 +129,8 @@ func head(w http.ResponseWriter) {
  nav.rail .toc a:hover{color:var(--text)}
  .also{margin:1rem 0} .also-devs{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem} .also-devs label{display:flex;align-items:center;gap:.4rem;min-height:var(--tap)}
  .also-said ul{margin:.4rem 0 0;padding-left:1.2rem}
+ table.devices{border-collapse:collapse;width:100%%} table.devices th,table.devices td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:middle}
+ table.devices th small{display:block;font-weight:400;color:var(--dim)} table.devices td.diff{background:color-mix(in srgb,var(--accent) 18%%,var(--bg))} table.devices td.na{color:var(--dim)}
  .wrap:has(.cards),.wrap:has(.found){max-width:96rem} .cards .note,.found .note{max-width:none}
  .tabhead{display:flex;flex-direction:row-reverse;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.6rem 1.5rem;margin:0 0 .8rem}
  .tabhead h2{margin:0}
@@ -249,7 +251,7 @@ var tabFor = map[string]string{
 
 	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",
-	"ringwait": "system", "settingsfile": "system", "share": "system", "giftreset": "system",
+	"ringwait": "system", "settingsfile": "system", "share": "system", "devices": "system", "giftreset": "system",
 }
 
 // formTab is the tab a form is on here: its tabFor, except on a device with no microphones, which has no
