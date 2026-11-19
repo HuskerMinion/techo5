@@ -34,7 +34,7 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	for _, c := range list {
 		names = append(names, html.EscapeString(c.Name))
 	}
-	fieldsetOpen(w, "hacameras", "Home Assistant cameras")
+	sectionOpen(w, "hacameras", "Home Assistant cameras", haCamerasSummary(mode, list)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "hacameras")
 	var now string
@@ -65,9 +65,36 @@ func haCamerasSection(w http.ResponseWriter, token string) {
 	  or a list, so it does not show the other homes' cameras. Cameras set up below (Reolink, go2rtc) and
 	  the device's own camera are listed either way. An automation can still put any camera up with
 	  home_show_camera.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		checkedIf(mode == "none"), checkedIf(mode == "all"), checkedIf(mode == "these"), mode,
 		html.EscapeString(text), html.EscapeString(text))
+	sectionClose(w)
+}
+
+// haCamerasSummary is the line on the shut card: None, All and how many that is now, or the cameras
+// listed by name.
+func haCamerasSummary(mode string, list []config.Camera) []string {
+	switch mode {
+	case "none":
+		return []string{"None"}
+	case "all":
+		if len(list) == 0 {
+			return []string{"All"}
+		}
+		return []string{"All", count(len(list), "camera", "cameras") + " now"}
+	}
+	var names []string
+	for _, c := range list {
+		name := c.Name
+		if name == "" {
+			name = c.Entity
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return []string{"None picked"}
+	}
+	return []string{strings.Join(names, ", ")}
 }
 
 // isHACamera is whether a camera on the list is one of Home Assistant's: not the device's own, a
@@ -115,7 +142,7 @@ func saveHACameras(r *http.Request) string {
 // password is never shown: it is written, or left alone.
 func reolinkSection(w http.ResponseWriter, token string) {
 	r := config.Get().Home.Reolink
-	fieldsetOpen(w, "reolink", "Reolink cameras")
+	sectionOpen(w, "reolink", "Reolink cameras", reolinkSummary(r)...)
 	// Saving logs in to the recorder and lists its cameras before it answers (home.SetReolink).
 	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyReolink))
 	hidden(w, token, "reolink")
@@ -137,9 +164,23 @@ func reolinkSection(w http.ResponseWriter, token string) {
 	  Reolink app. A user of its own with only "view" rights is the tidy way. Clear the address and save
 	  to take the cameras away. Removing the saved password leaves the cameras on the list, but they
 	  cannot be read until one is typed again.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(host), html.EscapeString(r.User),
 		secretField("rlpass", "Password", "pass", r.Pass != "", "nopass"))
+	sectionClose(w)
+}
+
+// reolinkSummary is the line on the shut card: how many cameras the recorder has, and whether the
+// password is missing. The password is never said.
+func reolinkSummary(r config.Reolink) []string {
+	if r.Base == "" {
+		return []string{"Not set up"}
+	}
+	out := []string{count(len(r.Cameras), "camera", "cameras")}
+	if r.Pass == "" {
+		out = append(out, "no password")
+	}
+	return out
 }
 
 func saveReolink(r *http.Request) string {

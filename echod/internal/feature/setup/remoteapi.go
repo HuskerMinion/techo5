@@ -28,14 +28,27 @@ func remoteSection(w http.ResponseWriter, token string) {
 		key = "A key has been made. Making another stops the old one working."
 		button, class = "Make a new key", ` class="danger"` // it ends the key every script here holds
 	}
-	fieldsetOpen(w, "remote", "Remote API")
+	sectionOpen(w, "remote", "Remote API", remoteSummary(config.Get().Remote.On, remote.HasKey())...)
 	fmt.Fprintf(w, `<p style="margin:0">Remote API: %s. %s</p>
 	 <p class="note">For scripts and tools that are not Home Assistant: they read the device and change its
 	  everyday settings, never its privacy switches, updates or restarts. Every request is signed with the
 	  key, which is shown once. Turn it on in Home Assistant, or on the screen (Show and Spot, Privacy & Security).</p>
 	 <form method="post" action="/setup/remote-key"><input type="hidden" name="token" value="%s">
-	  <div class="btns"><button type="submit"%s>%s</button></div></form></fieldset>`,
+	  <div class="btns"><button type="submit"%s>%s</button></div></form>`,
 		state, key, html.EscapeString(token), class, button)
+	sectionClose(w)
+}
+
+// remoteSummary is the line on the shut card: on or off, and whether a key has been made. The key is
+// never kept to say.
+func remoteSummary(on, hasKey bool) []string {
+	if !on {
+		return []string{"Off"}
+	}
+	if hasKey {
+		return []string{"On", "key made"}
+	}
+	return []string{"On", "no key yet"}
 }
 
 // remoteKey makes a key and shows it, once.

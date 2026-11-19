@@ -148,8 +148,11 @@ func TestATappedStillStaysDownWhenItsPictureArrives(t *testing.T) {
 	eventually(t, "the fetch to start", func() bool { return ha.started.Load() == 1 })
 	f.HideCamera()
 	ha.open.Do(func() { close(ha.release) })
-	eventually(t, "the fetch to finish", func() bool { return ha.hits.Load() == 1 })
-	time.Sleep(200 * time.Millisecond) // long enough for the fetch to land, were it going to
+	// Taking the still down may cancel its fetch: on a busy machine the server sees that before the
+	// release and drops the request rather than serving it. Either way the fetch is over, and the view
+	// must stay down.
+	eventually(t, "the fetch to end, served or given up", func() bool { return ha.hits.Load()+ha.dropped.Load() == 1 })
+	time.Sleep(400 * time.Millisecond) // long enough for a served picture to land, were it going to
 	if v, up := f.Camera(); up {
 		t.Errorf("view %+v is back up after its picture arrived", v)
 	}

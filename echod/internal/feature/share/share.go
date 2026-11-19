@@ -91,7 +91,7 @@ const (
 
 // message is what travels between two devices.
 type message struct {
-	Kind  string `json:"kind"` // set, copy, link
+	Kind  string `json:"kind"` // set, copy, link, get
 	Items []item `json:"items,omitempty"`
 	// Link, for a link message: request, accept or remove, for the setting ID.
 	Link string `json:"link,omitempty"`
@@ -110,6 +110,9 @@ type reply struct {
 	// Current is, for each change refused as older, what this device has instead, for the sender to
 	// catch up with.
 	Current map[string]item `json:"current,omitempty"`
+	// Values is, for a get, what this device has for each setting asked about that it has and shares:
+	// none it keeps its own is left out, nor anything not on the list.
+	Values map[string]string `json:"values,omitempty"`
 }
 
 type Feature struct {
@@ -484,6 +487,8 @@ func (f *Feature) receive(from string, body []byte) ([]byte, error) {
 		rep = f.takeReply(from, m.Items, m.Kind == "copy")
 	case "link":
 		rep.Results[m.ID] = f.linkFrom(from, m.Link, m.ID)
+	case "get":
+		rep.Values = valuesOf(m.Items)
 	default:
 		return nil, fmt.Errorf("not a kind of message this device reads: %q", m.Kind)
 	}
@@ -576,9 +581,17 @@ func (f *Feature) takeOne(from string, it item, copied bool, c config.Share, now
 		return BadValue, none, false, nil // a number from nowhere, which would end every change after it
 	}
 	was, _ := valueOf(e)
+	// A copy is numbered here, so it is this device's change in the order, not the sender's: put down
+	// as the sender's, it held a number the sender never had, and the sender's next change, numbered
+	// the same, was a second value under one number and one name, which neither device would give way
+	// to once the two were linked.
 	origin := it.Origin
-	if origin == "" || copied {
+	if origin == "" {
 		origin = from
+	}
+	via := ""
+	if copied {
+		origin, via = f.me(), from
 	}
 	var n uint64
 	if copied {
@@ -604,7 +617,7 @@ func (f *Feature) takeOne(from string, it item, copied bool, c config.Share, now
 			return Older, none, false, &item{ID: it.ID, Value: was, N: have.N, Origin: holder}
 		}
 	}
-	fr := config.ShareFrom{Device: origin, At: now, N: n}
+	fr := config.ShareFrom{Device: origin, At: now, N: n, Via: via}
 	if was == it.Value {
 		f.last[it.ID] = was
 		return Same, fr, true, nil // the same value, later in the order: only where it came from is new
@@ -980,6 +993,111 @@ func (f *Feature) Copy(ctx context.Context, ids, devices []string) map[string]ma
 	}
 	wg.Wait()
 	slog.Info("share: settings copied", "settings", len(items), "to", len(out))
+	return out
+}
+
+// valuesOf is what this device has for the settings a get asks about: only those on the list, and none it
+// keeps its own, which another device has no say over and so no need to see.
+func valuesOf(items []item) map[string]string {
+	c := config.Get().Share
+	out := map[string]string{}
+	for i, it := range items {
+		if i >= len(shareable) {
+			break // each setting once at most: more is not a get the page sends
+		}
+		if !Shareable(it.ID) || c.Kept(it.ID) {
+			continue
+		}
+		if e, ok := entities(it.ID); ok {
+			if v, ok := valueOf(e); ok {
+				out[it.ID] = v
+			}
+		}
+	}
+	return out
+}
+
+// Here is what this device has for settings on the list, by setting.
+func Here(ids []string) map[string]string {
+	out := map[string]string{}
+	for _, id := range ids {
+		if !Shareable(id) {
+			continue
+		}
+		if e, ok := entities(id); ok {
+			if v, ok := valueOf(e); ok {
+				out[id] = v
+			}
+		}
+	}
+	return out
+}
+
+// Values asks devices what they have for settings, for the setup page to show beside each one: answers,
+// by device, each setting's value there. A device with sharing off is there with nil, for the page to say
+// so; one that does not answer in time, or is on a release from before it could be asked, is left out.
+func (f *Feature) Values(ctx context.Context, ids, devices []string) map[string]map[string]string {
+	var items []item
+	for _, id := range ids {
+		if Shareable(id) {
+			items = append(items, item{ID: id})
+		}
+	}
+	out := map[string]map[string]string{}
+	if len(items) == 0 {
+		return out
+	}
+	body, err := json.Marshal(message{Kind: "get", Items: items})
+	if err != nil {
+		return out
+	}
+	me := f.me()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, d := range devices {
+		if strings.EqualFold(d, me) || !ValidName(d) {
+			continue
+		}
+		wg.Add(1)
+		go func(d string) {
+			defer wg.Done()
+			raw, err := f.send(ctx, d, body)
+			if errors.Is(err, announce.ErrShareNotTaking) {
+				mu.Lock()
+				out[d] = nil
+				mu.Unlock()
+				return
+			}
+			if err != nil {
+				return
+			}
+			var r reply
+			if json.Unmarshal(raw, &r) != nil {
+				return
+			}
+			for _, outcome := range r.Results {
+				if outcome == NotTaking {
+					mu.Lock()
+					out[d] = nil
+					mu.Unlock()
+					return
+				}
+			}
+			// An answer with no values (left out when empty) is a device that keeps every one asked about
+			// its own, or has none of them: it answered. One on a release that cannot be asked answers
+			// with an error instead, and was left out above.
+			got := map[string]string{}
+			for _, it := range items {
+				if v, ok := r.Values[it.ID]; ok && utf8.ValidString(v) && len(v) <= 256 {
+					got[it.ID] = v
+				}
+			}
+			mu.Lock()
+			out[d] = got
+			mu.Unlock()
+		}(d)
+	}
+	wg.Wait()
 	return out
 }
 

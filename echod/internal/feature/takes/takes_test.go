@@ -269,11 +269,6 @@ func TestThePressIsTheRecordersEvenAfterItStarted(t *testing.T) {
 	if !f.TookPress() {
 		t.Error("the press a recording waits for was not taken")
 	}
-	d.ringing.Store(true)
-	if f.TookPress() || f.Pressed() {
-		t.Error("the press meant for a ring was taken")
-	}
-	d.ringing.Store(false)
 	d.press()
 	if !f.Pressed() {
 		t.Fatal("the press did not start it")
@@ -292,6 +287,21 @@ func TestThePressIsTheRecordersEvenAfterItStarted(t *testing.T) {
 	d.press()
 	if f.TookPress() {
 		t.Error("the next press, to stop it, was taken as the recorder's")
+	}
+	f.Discard("done")
+}
+
+// A press while an alarm or timer rings is the ring's, not the recording's. On its own device: the
+// waiting recording may well be given up over the ring (waitPress), which is right, and a test that
+// went on to start it after the ring would only pass when the check happened not to run meanwhile.
+func TestAPressDuringARingIsTheRings(t *testing.T) {
+	d, f := newDevice(t)
+	if err := f.Arm("Hey Jarvis", Word, "browser"); err != nil {
+		t.Fatal(err)
+	}
+	d.ringing.Store(true)
+	if f.TookPress() || f.Pressed() {
+		t.Error("the press meant for a ring was taken")
 	}
 	f.Discard("done")
 }

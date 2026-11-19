@@ -7,8 +7,12 @@ package metrics
 
 import (
 	"cmp"
+	"context"
+	"errors"
+	"io/fs"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -223,8 +227,18 @@ func (r Reader) Memory() (available, total Reading) {
 // Wifi is what the radio reports: the signal in dBm, and the bytes carried since boot.
 //
 // The kernel keeps the signal as an unsigned byte, so anything above 127 is a negative dBm.
+//
+// A kernel built without the wireless extensions' proc file, as the Show 8 2nd gen's is (#642), has
+// no /proc/net/wireless at all. There the signal is what iw reports for the link instead, and every
+// other board keeps reading the proc file as before.
 func (r Reader) Wifi() (signal, rx, tx Reading) {
-	if body, err := os.ReadFile(r.path("proc/net/wireless")); err == nil {
+	body, err := os.ReadFile(r.path("proc/net/wireless"))
+	if errors.Is(err, fs.ErrNotExist) {
+		if out, err := iwLink(r.wifiInterface()); err == nil {
+			signal = linkSignal(out)
+		}
+	}
+	if err == nil {
 		for line := range strings.SplitSeq(string(body), "\n") {
 			name, rest, ok := strings.Cut(line, ":")
 			if !ok || strings.TrimSpace(name) != r.wifiInterface() {
@@ -241,7 +255,7 @@ func (r Reader) Wifi() (signal, rx, tx Reading) {
 		}
 	}
 
-	body, err := os.ReadFile(r.path("proc/net/dev"))
+	body, err = os.ReadFile(r.path("proc/net/dev"))
 	if err != nil {
 		return signal, Reading{}, Reading{}
 	}
@@ -256,6 +270,45 @@ func (r Reader) Wifi() (signal, rx, tx Reading) {
 		}
 	}
 	return signal, rx, tx
+}
+
+// iwLink runs "iw dev <interface> link", which asks nl80211 about the station the radio is joined to.
+// It is a variable so a test can say what iw would have printed. It gives up after a few seconds, so a
+// stuck iw never holds up the readings.
+var iwLink = func(iface string) ([]byte, error) {
+	path, err := iwPath()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, path, "dev", iface, "link").Output()
+}
+
+// iwPath finds iw where the images keep it, /usr/sbin on the Show 8 2nd gen, and otherwise on the
+// PATH.
+func iwPath() (string, error) {
+	for _, path := range []string{"/usr/sbin/iw", "/sbin/iw", "/usr/bin/iw"} {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return exec.LookPath("iw")
+}
+
+// linkSignal is the "signal: -43 dBm" line of iw's link report, in dBm. A radio that is not joined
+// prints "Not connected." and no signal line, so the signal is unknown.
+func linkSignal(out []byte) Reading {
+	for line := range strings.SplitSeq(string(out), "\n") {
+		_, rest, ok := strings.Cut(strings.TrimSpace(line), "signal:")
+		if !ok {
+			continue
+		}
+		if fields := strings.Fields(rest); len(fields) > 0 {
+			return parse(fields[0])
+		}
+	}
+	return Reading{}
 }
 
 // wifiInterface is the only one on this board: wlan0 on every Echo, mlan0 on the Surface RT

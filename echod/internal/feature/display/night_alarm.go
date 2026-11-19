@@ -17,12 +17,13 @@ import (
 )
 
 // Night clock shows the next alarm (#619): an Echo Show 5 or Show 8 is the one on a bedside table, so its
-// night clock says, small and under the time, when the next alarm will ring - "Alarm 7:30 AM", with the day
+// night clock says, under the time, when the next alarm will ring - "Alarm 7:30 AM", with the day
 // as well when it is not today or tomorrow - without anybody leaving the night light to look. It is the
 // clock's next alarm that rings (alarm.View's NextAlarm, the day clock's Next without the reminders):
 // the device's alarms and the Home Assistant ones it follows, whichever comes first, over their weekdays
 // and around an occurrence left out. It is drawn in a dimmer shade of the night red, and with no alarm on
-// it is not there at all. On unless turned off. The Skylight hangs on a wall, a Panel is a tablet and
+// it is not there at all. It is bold and half as large again as the date's words, so it reads from
+// the pillow (#646). On unless turned off. The Skylight hangs on a wall, a Panel is a tablet and
 // the Spot's round face has no room under its time, so they do not offer it.
 
 // nightAlarmHere is whether this device offers the next alarm on its night clock: every Echo Show 5 and
@@ -117,7 +118,7 @@ func (r *renderer) nightAlarmDrift(now time.Time) image.Point {
 // room they drift down into and the space under them. The clock keeps clear of it as it does of the
 // Next up foot (nightInfoReserve), and the band sits above that foot.
 func (r *renderer) nightAlarmBand() int {
-	return r.small.Metrics().Height.Ceil() + r.s(nightAlarmDown) + r.s(nightAlarmFoot)
+	return r.nightAlarmFace.Metrics().Height.Ceil() + r.s(nightAlarmDown) + r.s(nightAlarmFoot)
 }
 
 // nightAlarmOver draws the line in band, centered across the screen and moved by its drift.
@@ -125,9 +126,9 @@ func (r *renderer) nightAlarmOver(s scene, line string, band image.Rectangle) {
 	if line == "" || band.Empty() {
 		return
 	}
-	line = r.clipTo(r.small, line, r.w-2*r.margin-2*r.s(nightAlarmAcross))
+	line = r.clipTo(r.nightAlarmFace, line, r.w-2*r.margin-2*r.s(nightAlarmAcross))
 	d := r.nightAlarmDrift(s.now)
-	x := (r.w-r.width(r.small, line))/2 + d.X
-	base := band.Min.Y + r.small.Metrics().Ascent.Ceil() + d.Y
-	r.text(r.small, line, x, base, nightAlarmInk)
+	x := (r.w-r.width(r.nightAlarmFace, line))/2 + d.X
+	base := band.Min.Y + r.nightAlarmFace.Metrics().Ascent.Ceil() + d.Y
+	r.text(r.nightAlarmFace, line, x, base, nightAlarmInk)
 }

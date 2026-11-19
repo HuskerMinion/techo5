@@ -1,6 +1,7 @@
 package hass
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -49,6 +50,43 @@ func (c *Client) Calendars() ([]Calendar, error) {
 		cals = append(cals, Calendar{ID: l.EntityID, Name: l.Name})
 	}
 	return cals, nil
+}
+
+// CalendarColors is the color picked in Home Assistant for each of the calendars ids that has one, as
+// "#rrggbb". Home Assistant keeps it in the entity registry, among the entity's options (2026.2 and
+// later): Google Calendar sets one when a calendar is added, and any other calendar has one only when
+// someone picks it in the entity's settings. config/entity_registry/get_entries reads them all at once
+// and needs no administrator; an entity not in the registry comes back as null and has none.
+func (c *Client) CalendarColors(ctx context.Context, ids []string) (map[string]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	s, err := c.wsOpen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer s.conn.Close()
+	raw, err := s.call(map[string]any{"type": "config/entity_registry/get_entries", "entity_ids": ids})
+	if err != nil {
+		return nil, err
+	}
+	var entries map[string]*struct {
+		Options struct {
+			Calendar struct {
+				Color string `json:"color"`
+			} `json:"calendar"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for id, e := range entries {
+		if e != nil && e.Options.Calendar.Color != "" {
+			out[id] = e.Options.Calendar.Color
+		}
+	}
+	return out, nil
 }
 
 // calendarTime is an event's start or end as Home Assistant gives it: a dateTime for a timed event, a

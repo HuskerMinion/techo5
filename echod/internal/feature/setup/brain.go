@@ -17,7 +17,8 @@ import (
 // listeningSection is how long the device listens again after an answer, and how many times in a row:
 // Home Assistant's two settings for the first wake word, here for a device that has none.
 func listeningSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "listening", "Listening after an answer")
+	sectionOpen(w, "listening", "Listening after an answer",
+		listeningSummary(int(wakeword.FollowUp(0).Seconds()), wakeword.FollowUps(0))...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "listening")
 	fmt.Fprintf(w, `<label for="fu">Keep listening for (seconds, 0 for only when asked a question)</label>
@@ -26,8 +27,22 @@ func listeningSection(w http.ResponseWriter, token string) {
 	 <input id="fus" name="followups" type="number" min="0" max="10" value="%d">
 	 <p class="note">After an answer the device listens again without the wake word, for this long and this
 	  many times. A question the assistant asks is always listened for.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		int(wakeword.FollowUp(0).Seconds()), wakeword.FollowUps(0))
+	sectionClose(w)
+}
+
+// listeningSummary is the line on the shut card: how long it listens again and how many times, or that
+// it listens again only after a question.
+func listeningSummary(seconds, times int) []string {
+	if seconds <= 0 {
+		return []string{"Only after a question"}
+	}
+	out := []string{"On", fmt.Sprintf("%d s", seconds)}
+	if times > 0 {
+		out = append(out, fmt.Sprintf("%d %s in a row", times, plural(times, "time", "times")))
+	}
+	return out
 }
 
 func saveListening(r *http.Request) string {
@@ -49,7 +64,7 @@ func saveListening(r *http.Request) string {
 // and what the assistant should know stay: realtime voice uses them whichever is chosen here.
 func brainSection(w http.ResponseWriter, token string) {
 	b := config.Get().Brain
-	fieldsetOpen(w, "brain", "Voice assistant")
+	sectionOpen(w, "brain", "Voice assistant", brainSummary(b)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "brain")
 	fmt.Fprintf(w, `<label for="mode">Answered by</label>
@@ -93,11 +108,30 @@ func brainSection(w http.ResponseWriter, token string) {
 	  the assistant asks which.</p>
 	 <label for="prompt">Anything the assistant should know</label>
 	 <textarea id="prompt" name="prompt" rows="3" maxlength="2000">%s</textarea>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		selected(b.Mode == config.BrainHomeAssistant), selected(b.Mode == config.BrainDirect),
 		html.EscapeString(b.STT), html.EscapeString(b.TTS), html.EscapeString(b.Voice), html.EscapeString(b.Language),
 		html.EscapeString(b.LLM), html.EscapeString(b.Model), secretField("key", "Key", "key", b.Key != "", "nokey"), html.EscapeString(b.Search),
 		html.EscapeString(b.Reader), html.EscapeString(b.News), html.EscapeString(b.Prompt))
+	sectionClose(w)
+}
+
+// brainSummary is the line on the shut card: what answers, the model when it is answered directly and
+// one is named, and whether it can search the web. The key is never said.
+func brainSummary(b config.Brain) []string {
+	var out []string
+	if b.Mode == config.BrainDirect {
+		out = append(out, "Directly")
+		if b.Model != "" {
+			out = append(out, b.Model)
+		}
+	} else {
+		out = append(out, "Home Assistant")
+	}
+	if b.Search != "" {
+		out = append(out, "web search on")
+	}
+	return out
 }
 
 // saveBrain keeps the form, refusing what could not work rather than keeping it to fail at the next

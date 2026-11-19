@@ -38,7 +38,8 @@ var immichLookup = &lookup[immichAnswer]{ask: immichListAsk}
 
 func immichSection(w http.ResponseWriter, token string) {
 	srv := config.Get().Home.Immich
-	fieldsetOpen(w, "immich", "Photos from Immich")
+	source, _, _ := home.Get().SlideshowSettings()
+	sectionOpen(w, "immich", "Photos from Immich", immichSummary(srv, source)...)
 	// Saving waits for Immich to list the albums (immichAsk).
 	fmt.Fprintf(w, `<p style="margin:0">Show photos from your own Immich server, with no Home Assistant needed.</p>
 	 <form method="post" action="/setup/save"%s>`, busy(busyImmich))
@@ -60,14 +61,30 @@ func immichSection(w http.ResponseWriter, token string) {
 		hidden(w, token, "immich-forget")
 		fmt.Fprint(w, `<p><button type="submit" class="danger">Forget this server</button></p></form>`)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
+}
+
+// immichSummary is the line on the shut card: whether a server is set, and what of it the slideshow
+// shows. The key is never said.
+func immichSummary(srv config.Immich, source string) []string {
+	switch {
+	case srv.Server == "":
+		return []string{"Not set up"}
+	case !srv.Set():
+		return []string{"No API key yet"}
+	case source == home.ImmichAll:
+		return []string{"Set up", "the whole library"}
+	case strings.HasPrefix(source, home.ImmichAlbumPrefix):
+		return []string{"Set up", "an album"}
+	}
+	return []string{"Set up", "not in the slideshow"}
 }
 
 // immichAlbumForm offers the whole library and each album as the slideshow's photos, with the one
 // showing now chosen.
 func immichAlbumForm(w http.ResponseWriter, token string, srv config.Immich) {
 	// Asked through a lookup (lookup.go): an Immich that is down does not hold the page up.
-	a, ok := immichLookup.get(context.Background(), lookupKey(srv.Server, srv.Key), func(ctx context.Context) immichAnswer {
+	a, ok := immichLookup.get(waitFor(context.Background(), w), lookupKey(srv.Server, srv.Key), func(ctx context.Context) immichAnswer {
 		albums, err := home.ImmichAlbums(ctx, srv)
 		return immichAnswer{albums, err}
 	})

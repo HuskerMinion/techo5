@@ -52,6 +52,24 @@ func timeInk(c color.RGBA) color.RGBA {
 	return lerp(c, color.RGBA{0, 0, 0, 255}, 0.5)
 }
 
+// calendarReads is how well a calendar's color c reads where the calendar draws it, as the contrasts
+// readableCalendarColor holds a color picked in Home Assistant to: its mark on the ground and on a box,
+// the words on its event's box and on its chip, and the start time in the month on a day's box and on
+// today's.
+func calendarReads(c color.RGBA) []float64 {
+	box, today := calWash(10), lerp(walnut, amber, 0.12)
+	return []float64{colorContrast(c, walnut), colorContrast(c, box), colorContrast(cream, evFill(c)),
+		colorContrast(cream, chipFill(c)), colorContrast(timeInk(c), box), colorContrast(timeInk(c), today)}
+}
+
+// chipFill is a shown calendar's chip in its color c: the ground with a little of the color in it.
+func chipFill(c color.RGBA) color.RGBA {
+	if dark() {
+		return lerp(walnut, c, 0.28)
+	}
+	return lerp(walnut, c, 0.35)
+}
+
 // mdiAt draws an icon with its middle at cx, cy, size tall in the Show 5's pixels as mdiIcon takes it.
 func (r *renderer) mdiAt(name string, cx, cy, size int, c color.RGBA) {
 	px := r.s(size)
@@ -278,11 +296,7 @@ func (r *renderer) calChips(v calendarView, cals []string, x, cy int, inLine boo
 			r.text(f, name, b.Min.X+gap, base, calFade(dim, 0.15))
 		} else {
 			c := v.color(cal)
-			t := 0.28
-			if !dark() {
-				t = 0.35
-			}
-			r.roundRect(b, h/2, lerp(walnut, c, t))
+			r.roundRect(b, h/2, chipFill(c))
 			r.aaDisc(float64(b.Min.X+r.s(16)), float64(cy), float64(dot), c)
 			r.text(f, name, b.Min.X+gap, base, cream)
 		}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
@@ -23,7 +24,7 @@ func streamingSection(w http.ResponseWriter, token string) {
 		}
 		return ""
 	}
-	fieldsetOpen(w, "streaming", "Play to this device")
+	sectionOpen(w, "streaming", "Play to this device", streamingSummary(c, streaming.Here)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "streaming")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">Play to this device from other apps. It shows up under its
@@ -71,7 +72,27 @@ func streamingSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprint(w, `</p>
 	 <p class="note">New, and not yet tried with every app: if something does not work, say so on GitHub.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 <p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// streamingSummary is the line on the shut card: what other apps can play to this device with, or Off.
+// AirPlay and Spotify Connect only where the device has them (here).
+func streamingSummary(c config.Streaming, here bool) []string {
+	var on []string
+	if here && c.AirPlay {
+		on = append(on, "AirPlay")
+	}
+	if here && c.Spotify {
+		on = append(on, "Spotify Connect")
+	}
+	if c.DLNA {
+		on = append(on, "DLNA")
+	}
+	if len(on) == 0 {
+		return []string{"Off"}
+	}
+	return []string{strings.Join(on, ", ")}
 }
 
 // spotifyQuality names a Spotify Connect quality as the Spotify app does.

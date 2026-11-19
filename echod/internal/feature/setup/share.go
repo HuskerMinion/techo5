@@ -53,10 +53,35 @@ func shareDevices() []string {
 	return out
 }
 
+// shareSummary is the line on the shut card: Off, or On with how many settings are linked, how many
+// links are asked for, and when sharing cannot work for want of a house word.
+func shareSummary(s config.Share, houseWord bool) []string {
+	if !s.On {
+		return []string{"Off"}
+	}
+	out := []string{"On"}
+	linked := 0
+	for _, devices := range s.Links {
+		if len(devices) > 0 {
+			linked++
+		}
+	}
+	if linked > 0 {
+		out = append(out, count(linked, "setting", "settings")+" linked")
+	}
+	if n := len(s.Requests); n > 0 {
+		out = append(out, count(n, "request", "requests"))
+	}
+	if !houseWord {
+		out = append(out, "no house word")
+	}
+	return out
+}
+
 func shareSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	s := c.Share
-	fieldsetOpen(w, "share", "Shared settings")
+	sectionOpen(w, "share", "Shared settings", shareSummary(s, c.Home.HouseWord != "")...)
 	devices := shareDevices()
 	// Requests first, each a form of its own, ahead of the settings' form.
 	if s.On && len(s.Requests) > 0 {
@@ -116,7 +141,11 @@ func shareSection(w http.ResponseWriter, token string) {
 				}
 				from := ""
 				if f, ok := s.From[st.ID]; ok {
-					from = f.Device + ", " + f.At.Local().Format("Jan 2 15:04")
+					by := f.Device
+					if f.Via != "" {
+						by = f.Via + " (a copy)"
+					}
+					from = by + ", " + f.At.Local().Format("Jan 2 15:04")
 				}
 				fmt.Fprintf(w, `<td>%s</td></tr>`, html.EscapeString(from))
 			}
@@ -145,7 +174,7 @@ func shareSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `<p><button type="submit">Copy</button></p></form>`)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 }
 
 func checked(b bool) string {

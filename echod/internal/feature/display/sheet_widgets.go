@@ -107,6 +107,10 @@ type paint struct {
 
 	// press is the finger the frame in hand shows a press under (press_draw.go). Only the Show sets it.
 	press pressView
+
+	// oneTint is drawing the night clock, whose text is all in the one color it is drawn in: an emoji
+	// too, in shades of it rather than its own colors (lib/fonts, DrawStringTinted).
+	oneTint bool
 }
 
 // s scales a fixed size to this screen. Every size written as a literal in this package is in the
@@ -184,6 +188,10 @@ func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 		if _, chosen := c.(chosenColor); !chosen && face.Metrics().Height.Ceil() <= r.atTextSize(r.s(scrimTallest)) {
 			c = overPhotoColor(c)
 		}
+	}
+	if r.oneTint {
+		fonts.DrawStringTinted(r.dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
+		return
 	}
 	fonts.DrawString(r.dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
 }

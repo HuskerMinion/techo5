@@ -151,6 +151,7 @@ func (f *Feature) remoteOff() {
 	for token := range f.remote.sessions {
 		delete(f.live, token)
 		f.rejected.drop(token)
+		alsoOnSaid.drop(token)
 	}
 	gone := len(f.remote.sessions)
 	f.remote.sessions = nil

@@ -70,3 +70,35 @@ func TestRecordWakeWordRows(t *testing.T) {
 		t.Error("Start began a run with nowhere to send the takes")
 	}
 }
+
+// With two wake words loaded a row under Start says which the run is of, and its stepper goes round
+// them; with one, there is no such row.
+func TestRecordWakeWordChoosesBetweenTwoWords(t *testing.T) {
+	rec := takes.Get()
+	words := []takes.SlotWord{{Slot: 0, ID: "hey_alfred", Front: "tflm", Phrase: "Hey Alfred"}}
+	rec.SetWakeWords(func() []takes.SlotWord { return words }, func(takes.Capture) {})
+	t.Cleanup(func() { rec.SetWakeWords(func() []takes.SlotWord { return nil }, func(takes.Capture) {}) })
+	for _, r := range recordWordRows() {
+		if r.id == "recordslot" {
+			t.Fatal("a choice of one word")
+		}
+	}
+	words = append(words, takes.SlotWord{Slot: 1, ID: "alexa", Front: "zserge", Phrase: "Alexa"})
+	rec.WakeWordChanged()
+	rec.SetRunWord(0)
+	rows := recordWordRows()
+	if len(rows) != 4 || rows[1].id != "recordslot" || rows[1].kind != ctlStepper || rows[1].value != "Hey Alfred" {
+		t.Fatalf("rows %+v", rows)
+	}
+	recordWordTap("recordslot", partPlus)
+	if w, _ := rec.RunWord(); w.ID != "alexa" {
+		t.Errorf("a step on chose %q", w.ID)
+	}
+	if v := recordWordRows()[1].value; v != "Alexa" {
+		t.Errorf("the row says %q", v)
+	}
+	recordWordTap("recordslot", partMinus)
+	if w, _ := rec.RunWord(); w.ID != "hey_alfred" {
+		t.Errorf("a step back chose %q", w.ID)
+	}
+}

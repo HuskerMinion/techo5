@@ -1249,7 +1249,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		}
 	case "mic":
 		mute.Get().Flip()
-	case "recordword", "recordcount", "recordgap":
+	case "recordword", "recordslot", "recordcount", "recordgap":
 		recordWordTap(id, p)
 	case "speakergain":
 		v := media.Get().SpeakerGain()

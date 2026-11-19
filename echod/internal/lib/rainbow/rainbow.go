@@ -22,11 +22,14 @@ import (
 )
 
 // Turn is what the screen is doing: the turn's phase (listening, thinking, replying, lingering with
-// the answer after it, or "" between turns), how loud the voice is, 0 to 1, and the words.
+// the answer after it, or "" between turns), how loud the voice is, 0 to 1, the words, and how much of
+// the answer has been said, 0 to 1 (voice.Spoken, as the Classic pages have it): an answer longer than
+// the card scrolls with it.
 type Turn struct {
 	Phase        string
 	Level        float64
 	Heard, Reply string
+	Said         float64
 }
 
 // Faces are the card's: what was heard, and the answer.

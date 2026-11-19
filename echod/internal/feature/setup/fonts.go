@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 // Fonts of the owner's own (lib/fonts/own.go): font files the screen draws the characters from that
@@ -27,11 +28,11 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 	if s == nil || s.OwnFonts == nil {
 		return
 	}
-	fieldsetOpen(w, "fonts", "Fonts of your own")
+	own := s.OwnFonts()
+	sectionOpen(w, "fonts", "Fonts of your own", fontsSummary(own)...)
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">For characters the screen's fonts do not have, such as Korean, Chinese
 	  and Japanese: the screen draws any character its font and Go lack from these, in the order of their
 	  file names. They are never the font for everything; that is Font, above.</p>`)
-	own := s.OwnFonts()
 	if len(own) == 0 {
 		fmt.Fprint(w, `<p>None yet.</p>`)
 	}
@@ -64,7 +65,28 @@ func ownFontsSection(w http.ResponseWriter, token string) {
 	     if (r.ok) setTimeout(() => location.reload(), 1200);
 	   } catch (e) { say.textContent = 'It could not be sent.'; }
 	 });
-	 </script></fieldset>`, s.MaxFont>>20, token)
+	 </script>`, s.MaxFont>>20, token)
+	sectionClose(w)
+}
+
+// fontsSummary is the line on the shut card: the fonts sent here, by file, and how many are not used.
+func fontsSummary(own []OwnFont) []string {
+	if len(own) == 0 {
+		return []string{"None added"}
+	}
+	var files []string
+	unused := 0
+	for _, o := range own {
+		files = append(files, o.File)
+		if o.Problem != "" {
+			unused++
+		}
+	}
+	out := []string{strings.Join(files, ", ")}
+	if unused > 0 {
+		out = append(out, fmt.Sprintf("%d not used", unused))
+	}
+	return out
 }
 
 // font takes one font file from the page's script. The form's token comes first and is checked

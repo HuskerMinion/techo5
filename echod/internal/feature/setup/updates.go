@@ -17,14 +17,16 @@ import (
 // installing by itself overnight - for a device with no Home Assistant to offer updates on.
 func updatesSection(w http.ResponseWriter, token string) {
 	fw := firmware.Get()
-	fieldsetOpen(w, "updates", "Updates")
+	installing, _ := fw.Installing()
+	sectionOpen(w, "updates", "Updates", updatesSummary(layout.Version, fw.Offered(), installing, fw.AutoInstall())...)
 	fmt.Fprintf(w, `<p style="margin:0">Running <strong>%s</strong>.`,
 		html.EscapeString(layout.Version))
 	if on, at := fw.Installing(); on {
 		fmt.Fprintf(w, ` Installing <strong>%s</strong>: <span id="upat">%d%%</span> downloaded.</p>
 		 <p class="note">The device restarts into it when the download is done, and is back in about a
 		  minute. This page checks by itself; after the restart, ask to be let in again.</p>
-		 <script>setTimeout(()=>location.reload(),3000)</script></fieldset>`, html.EscapeString(fw.Offered()), int(at*100))
+		 <script>setTimeout(()=>location.reload(),3000)</script>`, html.EscapeString(fw.Offered()), int(at*100))
+		sectionClose(w)
 		return
 	}
 	if why := fw.Failed(); why != "" {
@@ -51,7 +53,26 @@ func updatesSection(w http.ResponseWriter, token string) {
 	}
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="auto" value="yes"%s style="width:auto"> Install updates
 	 automatically, overnight between 2 and 5 in the morning while nothing is playing</label></p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`, checked)
+	 <p><button type="submit">Save</button></p></form>`, checked)
+	sectionClose(w)
+}
+
+// updatesSummary is the line on the shut card: the version running, what is offered or installing, and
+// whether updates install by themselves at night.
+func updatesSummary(version, offered string, installing, auto bool) []string {
+	out := []string{version}
+	switch {
+	case installing && offered != "":
+		out = append(out, "installing "+offered)
+	case installing:
+		out = append(out, "installing")
+	case offered != "":
+		out = append(out, offered+" ready")
+	}
+	if auto {
+		out = append(out, "automatic at night")
+	}
+	return out
 }
 
 func saveUpdates(what string, auto bool) string {

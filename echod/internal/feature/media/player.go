@@ -1299,7 +1299,7 @@ func (p *Player) External() uint64 {
 	p.remoteLast.Store(true)
 	p.nextTitle.Store(nil)
 	n := p.remote.take()
-	p.stream.Stop()
+	p.stream.stopLoaded()
 	p.refresh()
 	return n
 }

@@ -133,27 +133,98 @@ type RunResult struct {
 	At       time.Time
 }
 
-// SetWakeWord is feature/detect giving the recorder the wake word a run's takes are of, with its front
-// end, and where the takes go: its clip store, which sends them on.
-func (f *Feature) SetWakeWord(word func() (word, front string), keep func(Capture)) {
-	f.wakeWord.Store(&word)
+// SlotWord is a wake word loaded in one of the device's slots, which a run's takes can be of.
+type SlotWord struct {
+	Slot   int    // from 0
+	ID     string // the model's id, as the wake clips name it
+	Front  string // the front end it is scored on: "tflm", "zserge" or "oww"
+	Phrase string // what is said, for the screen and the setup page; the id when the model has none
+}
+
+// Name is the word as the screen and the setup page show it.
+func (w SlotWord) Name() string { return cmp.Or(w.Phrase, w.ID) }
+
+// SetWakeWords is feature/detect giving the recorder the wake words loaded, slot by slot, which a run's
+// takes can be of, and where the takes go: its clip store, which sends them on.
+func (f *Feature) SetWakeWords(words func() []SlotWord, keep func(Capture)) {
+	f.wakeWords.Store(&words)
 	f.keepTake.Store(&keep)
 	f.WakeWordChanged()
 }
 
-// wakeWordNow is the wake word and its front end as feature/detect last said them.
-type wakeWordNow struct{ word, front string }
-
-// WakeWordChanged is feature/detect saying the wake word was loaded, cleared or dropped: the copy
+// WakeWordChanged is feature/detect saying a wake word was loaded, cleared or dropped: the copy
 // RunBlocked and a run's start read is taken again. Asked here, off the screen's tap: the engine holds
 // its lock across a model load.
 func (f *Feature) WakeWordChanged() {
-	var w wakeWordNow
-	if p := f.wakeWord.Load(); p != nil {
-		w.word, w.front = (*p)()
+	var w []SlotWord
+	if p := f.wakeWords.Load(); p != nil {
+		for _, s := range (*p)() {
+			if s.ID != "" {
+				w = append(w, s)
+			}
+		}
 	}
-	f.wordNow.Store(&w)
+	f.wordsNow.Store(&w)
 	f.Changed.Emit(struct{}{})
+}
+
+// RunWords are the wake words a run can be of now, in slot order: a copy, which nothing waits on.
+func (f *Feature) RunWords() []SlotWord {
+	if p := f.wordsNow.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
+// RunWord is the word the next run is of: the one chosen (SetRunWord) while it is still loaded, else
+// the first loaded, as before there was a choice. False with none loaded.
+func (f *Feature) RunWord() (SlotWord, bool) {
+	words := f.RunWords()
+	if len(words) == 0 {
+		return SlotWord{}, false
+	}
+	f.mu.Lock()
+	pick := f.pickSlot
+	f.mu.Unlock()
+	for _, w := range words {
+		if pick != 0 && w.Slot == pick-1 {
+			return w, true
+		}
+	}
+	return words[0], true
+}
+
+// SetRunWord chooses the word in slot for the next run. Like the count and the gap it is memory only:
+// not a setting, and a restart is the first loaded word again. A slot with no word is left alone, and
+// false.
+func (f *Feature) SetRunWord(slot int) bool {
+	for _, w := range f.RunWords() {
+		if w.Slot == slot {
+			f.mu.Lock()
+			f.pickSlot = slot + 1
+			f.mu.Unlock()
+			f.Changed.Emit(struct{}{})
+			return true
+		}
+	}
+	return false
+}
+
+// StepRunWord is the screen's stepper: the next loaded word (step 1) or the one before (-1), round.
+func (f *Feature) StepRunWord(step int) {
+	words := f.RunWords()
+	if len(words) < 2 || step == 0 {
+		return
+	}
+	now, _ := f.RunWord()
+	i := 0
+	for j, w := range words {
+		if w.Slot == now.Slot {
+			i = j
+		}
+	}
+	n := len(words)
+	f.SetRunWord(words[((i+step)%n+n)%n].Slot)
 }
 
 // The clock is set once it reads this year or later; before, a take would be stamped 1970 (the same
@@ -173,7 +244,7 @@ func (f *Feature) RunBlocked() RunBlock {
 	case f.dev.now().Year() < clockSetYear:
 		return RunClockNotSet
 	}
-	if w := f.wordNow.Load(); w == nil || w.word == "" || f.keepTake.Load() == nil {
+	if len(f.RunWords()) == 0 || f.keepTake.Load() == nil {
 		return RunNoWakeWord
 	}
 	f.mu.Lock()
@@ -248,11 +319,11 @@ func (f *Feature) plan(count, gap int, page bool) (*run, error) {
 		return nil, errors.New(b.Text())
 	}
 	// The copy, not the engine: a tap on Start must not wait on a model loading.
-	w := f.wordNow.Load()
-	if w == nil || w.word == "" {
+	w, ok := f.RunWord()
+	if !ok {
 		return nil, errors.New(RunNoWakeWord.Text())
 	}
-	word, front := w.word, w.front
+	word, front := w.ID, w.Front
 	count, gap = ClampRun(count, gap)
 	f.mu.Lock()
 	f.lastCount, f.lastGap = count, gap
@@ -280,13 +351,21 @@ func frameOf(m config.Microphone) string {
 	return "plain"
 }
 
+// errWordGone is a word chosen on the setup page that is no longer loaded when the run is asked for.
+const errWordGone = "that wake word is not loaded any more; reload the page and choose again"
+
 // ArmRun asks for a run from the setup page: it waits a minute for the press on the device, as Arm does.
-func (f *Feature) ArmRun(count, gap int, session string) error {
+// slot is the word chosen on the page (SetRunWord), or below 0 for the one chosen already.
+func (f *Feature) ArmRun(count, gap, slot int, session string) error {
 	if session == "" {
 		return errors.New("no browser asked for it")
 	}
 	f.op.Lock()
 	defer f.op.Unlock()
+	// The word the page showed may have gone since: a run of another word is not what was asked for.
+	if slot >= 0 && !f.SetRunWord(slot) {
+		return errors.New(errWordGone)
+	}
 	r, err := f.plan(count, gap, true)
 	if err != nil {
 		return err

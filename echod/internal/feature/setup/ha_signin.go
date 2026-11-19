@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -55,9 +56,9 @@ const signInsMost = 4
 // haAccessSection is the device's own access to Home Assistant: whether it has one and which kind, and
 // the Connect button.
 func haAccessSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "haaccess", "Home Assistant access")
 	c := hass.Get()
 	base := c.Address()
+	sectionOpen(w, "haaccess", "Home Assistant access", haAccessSummary(c.SignedIn(), c.SignedOut(), c.Ready(), base)...)
 	switch {
 	case c.SignedIn():
 		fmt.Fprintf(w, `<p style="margin:0"><strong>Connected to Home Assistant at %s</strong> by signing in.
@@ -90,8 +91,29 @@ func haAccessSection(w http.ResponseWriter, token string) {
 	 <input id="ha-url" name="url" value="%s" autocomplete="off" spellcheck="false">
 	 <p class="note">Home Assistant's sign-in page opens. Sign in as the user this device should act as:
 	  a user made for the devices, without administrator rights, is best. Then you come back here.</p>
-	 <p><button type="submit">%s</button></p></form></fieldset>`,
+	 <p><button type="submit">%s</button></p></form>`,
 		html.EscapeString(token), html.EscapeString(base), label)
+	sectionClose(w)
+}
+
+// haAccessSummary is the line on the shut card: how the device reaches Home Assistant, and where. The
+// token is never said.
+func haAccessSummary(signedIn, signedOut, ready bool, base string) []string {
+	var out []string
+	switch {
+	case signedIn:
+		out = append(out, "Signed in")
+	case signedOut:
+		return []string{"Sign-in taken back"}
+	case ready:
+		out = append(out, "Long-lived token")
+	default:
+		return []string{"No access yet"}
+	}
+	if u, err := url.Parse(base); err == nil && u.Host != "" {
+		out = append(out, u.Host)
+	}
+	return out
 }
 
 // haConnect starts a sign-in: a state for it, and the browser sent to Home Assistant's login.
@@ -200,7 +222,7 @@ func haBackPage(w http.ResponseWriter, code int, title, said string) {
 	w.WriteHeader(code)
 	head(w)
 	fmt.Fprintf(w, `<div class="wrap"><h1>%s</h1><p class="sub">Setup</p><p>%s</p>
-	 <p><a href="/setup?tab=network#sec-haaccess">Back to the setup page</a></p></div>`,
+	 <p><a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Back to the setup page</a></p></div>`,
 		html.EscapeString(title), html.EscapeString(said))
 }
 

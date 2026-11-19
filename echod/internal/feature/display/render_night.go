@@ -44,7 +44,13 @@ func (s scene) redClockFace() bool {
 
 // redClockPage is the night as a clock alone.
 func (r *renderer) redClockPage(s scene) {
+	r.oneTint = true
+	defer func() { r.oneTint = false }()
 	fillCanvas(r.dst, color.Black)
+	if s.ring.any() {
+		r.nightRingingPage(s)
+		return
+	}
 	r.ink = nightInk
 	// With Night clock shows Next up and notifications, the clock keeps clear of the foot when there is
 	// something along it (render_night_info.go); with nothing, or the setting off, it is as it was.
@@ -79,6 +85,15 @@ func (r *renderer) redClockPage(s scene) {
 	}
 	r.nightAlarmOver(s, alarmLine, alarmBand)
 	r.nightInfoOver(s)
+}
+
+// nightRingingPage is an alarm or a timer ringing over the night clock (#646): the ringing page, with
+// its Stop and Snooze buttons where the day's are, so a tap does there what it does by day. It is
+// drawn on black and then taken to the night red's tone, so nothing on it is brighter than the night
+// clock was and the room stays dark.
+func (r *renderer) nightRingingPage(s scene) {
+	r.ringingPage(s)
+	nightToneOnto(r.dst, r.dst, r.dst.Rect)
 }
 
 // plainRedClock is the time in dim red, centered top to bottom on cy.

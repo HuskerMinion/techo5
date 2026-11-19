@@ -29,6 +29,8 @@ func (s roundScene) nightClockFace() bool {
 
 // nightFace draws the night clock in its style.
 func (r *roundRenderer) nightFace(s roundScene) {
+	r.oneTint = true
+	defer func() { r.oneTint = false }()
 	fillCanvas(r.dst, color.Black)
 	if s.nightInfo && s.showNotification {
 		// Night clock shows Next up and notifications: the card takes the face, as by day, in the
