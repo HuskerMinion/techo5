@@ -126,10 +126,50 @@ func TestTheEmojiFontIsFetchedOnceAnEmojiWasMissed(t *testing.T) {
 	}
 }
 
-// Both fonts are looked at, the Japanese one first.
-func TestBothFontsAreLookedAt(t *testing.T) {
+// The color emoji font is fetched once an emoji was missed, or on a screen that has the black-and-white
+// one already: into the fonts folder under a name that comes before that one's, with its license
+// beside the others'.
+func TestTheColorEmojiFontIsFetchedWithTheOther(t *testing.T) {
+	dir := t.TempDir()
+	wasFonts, wasDownload, wasLicense, wasWork := fontsDir, download, licenseDir, workDir
+	t.Cleanup(func() { fontsDir, download, licenseDir, workDir = wasFonts, wasDownload, wasLicense, wasWork })
+	fontsDir = func() string { return filepath.Join(dir, "fonts") }
+	licenseDir, workDir = filepath.Join(dir, "licenses"), filepath.Join(dir, "work")
+	download = func(_ context.Context, b update.Binary, to string, _ func(float32)) error {
+		if b != colorEmojiArchive {
+			t.Errorf("fetched %+v", b)
+		}
+		return os.WriteFile(to, tgz(t, map[string]string{"FluentEmojiFlat.ttf": "color", "LICENSE": "MIT"}), 0o644)
+	}
+	if colorEmojiFont.wanted() {
+		t.Fatal("wanted with no emoji missed and no emoji font here")
+	}
+	os.MkdirAll(fontsDir(), 0o755)
+	os.WriteFile(filepath.Join(fontsDir(), emojiFont.file), []byte("emoji"), 0o644)
+	if !colorEmojiFont.wanted() {
+		t.Fatal("not wanted beside the black-and-white emoji font")
+	}
+	if err := colorEmojiFont.fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "fonts", "zz-fluent-emoji.ttf")); string(b) != "color" {
+		t.Errorf("font %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "licenses", "fluent-emoji-LICENSE.txt")); string(b) != "MIT" {
+		t.Errorf("license %q", b)
+	}
+	if colorEmojiFont.wanted() {
+		t.Error("wanted again once here")
+	}
+	if colorEmojiFont.file >= emojiFont.file {
+		t.Errorf("%s is not tried before %s", colorEmojiFont.file, emojiFont.file)
+	}
+}
+
+// The three fonts are looked at, the Japanese one first.
+func TestTheFontsAreLookedAt(t *testing.T) {
 	got := all()
-	if len(got) != 2 || got[0].file != fontName || got[1].file != "zz-noto-emoji.ttf" {
+	if len(got) != 3 || got[0].file != fontName || got[1].file != "zz-noto-emoji.ttf" || got[2].file != "zz-fluent-emoji.ttf" {
 		t.Errorf("the fonts are %+v", got)
 	}
 }

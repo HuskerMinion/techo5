@@ -11,7 +11,8 @@ import (
 
 // No font the screen offers has emoji (#639). The first time the screen is asked to draw one that no
 // font in use has, emojiMissed is set, and feature/cjkfont fetches an emoji font into the fonts folder
-// (own.go); from then on the stack draws emoji from it, a character at a time, in black and white.
+// (own.go); from then on the stack draws emoji from it, a character at a time: in color from the color
+// emoji font that comes with it (color.go), and in black and white from Noto Emoji where that has none.
 
 // emojiMissed is whether an emoji was drawn that no font had.
 var emojiMissed atomic.Bool

@@ -276,6 +276,14 @@ to draw, pinned in `echod/internal/feature/cjkfont/emoji.go`.
 Noto Emoji (the black-and-white one, SIL Open Font License) at one weight with its license, from
 google/fonts at a pinned commit, with the same pinned fontTools.
 
+The color emoji come with it, pinned in `echod/internal/feature/cjkfont/coloremoji.go`.
+[tools/fonts/make_color_emoji_font.py](../tools/fonts/make_color_emoji_font.py) builds
+`bin/techo5-fluent-emoji.tar.gz`, Microsoft's Fluent Emoji Flat art (MIT License) as a COLR version 0
+font, with its license, from microsoft/fluentui-emoji at a pinned commit, checked by one SHA-256 over
+the files it uses (`pip install fonttools==4.65.0 picosvg==0.23.0 skia-pathops==0.9.2 lxml==6.1.3`;
+`--cache DIR` keeps the 3,200 small files it fetches). It takes about a minute. Noto Emoji still draws
+what Fluent has no emoji for.
+
 ## The person detection model
 
 The daemon doesn't carry the person detection model either: a Show or a Spot downloads it (about 300 KB)

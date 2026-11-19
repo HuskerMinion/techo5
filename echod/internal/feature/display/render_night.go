@@ -44,6 +44,8 @@ func (s scene) redClockFace() bool {
 
 // redClockPage is the night as a clock alone.
 func (r *renderer) redClockPage(s scene) {
+	r.oneTint = true
+	defer func() { r.oneTint = false }()
 	fillCanvas(r.dst, color.Black)
 	r.ink = nightInk
 	// With Night clock shows Next up and notifications, the clock keeps clear of the foot when there is

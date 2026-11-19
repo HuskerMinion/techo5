@@ -20,4 +20,4 @@ var emojiArchive = update.Binary{
 // draw that no font has (lib/fonts, emoji.go): a calendar event, a notification, a song title. A
 // screen with no emoji to draw never fetches it.
 var emojiFont = fetched{what: "the emoji font", archive: emojiArchive, ttf: "NotoEmoji-Regular.ttf",
-	file: "zz-noto-emoji.ttf", license: "noto-emoji-OFL.txt", probe: '😀', want: fonts.EmojiMissed}
+	file: "zz-noto-emoji.ttf", notice: "OFL.txt", license: "noto-emoji-OFL.txt", probe: '😀', want: fonts.EmojiMissed}

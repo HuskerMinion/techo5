@@ -446,6 +446,13 @@ Noto Emoji, https://github.com/google/fonts (SIL Open Font License 1.1)
   down to one weight and the characters it maps by tools/fonts/make_emoji_font.py. Its OFL.txt travels
   with it and is kept on the device with the other licenses.
 
+Fluent Emoji, https://github.com/microsoft/fluentui-emoji (MIT License)
+  Not in any image or daemon: a device with a screen downloads it from TECHO5's release
+  (techo5-fluent-emoji.tar.gz) with Noto Emoji, and draws emoji from it in color. Copyright (c)
+  Microsoft Corporation. The Flat artwork, made into a color font by tools/fonts/make_color_emoji_font.py:
+  gradients filled with their middle color, and a thin light edge added under the mostly dark emoji.
+  Its LICENSE travels with it and is kept on the device with the other licenses.
+
 echod: Tessera's World clock and Custom card plugins (echod/internal/feature/display/tessera_plugins.go,
 tessera_card.go)
   Ported to Go from world_clock.cpp in tessera-plugin-world-clock 0.4.0,

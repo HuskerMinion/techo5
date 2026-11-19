@@ -1,7 +1,7 @@
 //go:build !dot
 
 // Package cjkfont fetches a font the screen needs when none of the screen's fonts draw it: Japanese
-// (#270) and emoji (#639, emoji.go). The fonts on offer draw Latin only, and a character none of them
+// (#270) and emoji (#639, emoji.go and coloremoji.go). The fonts on offer draw Latin only, and a character none of them
 // has is drawn from the device's own fonts folder (lib/fonts, own.go). So when the screen is set to
 // Japanese, and no font somebody put in that folder draws Japanese already, the daemon downloads a
 // Noto Sans JP cut down to everyday Japanese (tools/fonts/make_cjk_font.py, about 0.6 MB) into the
@@ -59,6 +59,7 @@ type fetched struct {
 	archive update.Binary
 	ttf     string // the font in the archive
 	file    string // its name in the fonts folder
+	notice  string // its license in the archive
 	license string // its license's name beside the others'
 	probe   rune   // a character it draws, which the screen's own fonts do not
 	want    func() bool
@@ -66,10 +67,10 @@ type fetched struct {
 
 // japanese is the font for a Japanese screen.
 var japanese = fetched{what: "the Japanese font", archive: archive, ttf: "NotoSansJP-Regular.ttf", file: fontName,
-	license: "noto-sans-jp-OFL.txt", probe: probe, want: func() bool { return languages[config.Get().Screen.Language] }}
+	notice: "OFL.txt", license: "noto-sans-jp-OFL.txt", probe: probe, want: func() bool { return languages[config.Get().Screen.Language] }}
 
 // all are the fonts fetched, in the order they are looked at.
-func all() []fetched { return []fetched{japanese, emojiFont} }
+func all() []fetched { return []fetched{japanese, emojiFont, colorEmojiFont} }
 
 // checkEvery is how often the screen language is looked at.
 const checkEvery = time.Minute
@@ -109,7 +110,8 @@ func (f *Feature) Run(ctx context.Context) error {
 }
 
 // wanted is whether the font is to be fetched: the screen wants it, it is not here yet, and no font of
-// the owner's own draws what it is for already.
+// the owner's own draws what it is for already (the ones fetched here are not the owner's: the color
+// emoji font and the black-and-white one are each fetched whichever of the two is here).
 func (ft fetched) wanted() bool {
 	if !ft.want() {
 		return false
@@ -118,7 +120,11 @@ func (ft fetched) wanted() bool {
 		return false
 	}
 	fonts.Refresh()
-	return !fonts.OwnDraws(ft.probe, ft.file)
+	var ours []string
+	for _, o := range all() {
+		ours = append(ours, o.file)
+	}
+	return !fonts.OwnDraws(ft.probe, ours...)
 }
 
 // fetch downloads the archive, puts its font in the fonts folder and its license beside the others',
@@ -166,7 +172,7 @@ func (ft fetched) unpack(tgz string) error {
 		switch h.Name {
 		case ft.ttf:
 			to = filepath.Join(fontsDir(), ft.file)
-		case "OFL.txt":
+		case ft.notice:
 			to = filepath.Join(licenseDir, ft.license)
 		default:
 			continue

@@ -223,7 +223,7 @@ func Face(value string, bold bool, size float64) (font.Face, error) {
 		}
 		f := e.font
 		layers = append(layers, Layer{Face: face, Font: f, Broke: func(why string) { markBad(f, why) },
-			shaper: shaperFor(e)})
+			shaper: shaperFor(e), color: e.color})
 	}
 	if len(layers) == 1 {
 		return watched{goFace, goFonts[w]}, nil // emoji.go

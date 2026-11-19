@@ -1113,9 +1113,9 @@ screen draws any character its font and Go don't have from it. It's never the fo
 that's **Font**, above.
 
 Emoji need nothing of your own. The first time the screen has an emoji to draw (in a calendar event,
-a notification or a song title, say), the Show or Spot downloads Google's Noto Emoji, about 0.5 MB,
-into the fonts folder, and draws emoji from it from then on, in black and white like the text around
-them. They're drawn a character at a time: a family shows as its people side by side, a flag as its
+a notification or a song title, say), the Show or Spot downloads Microsoft's Fluent Emoji and Google's
+Noto Emoji, about 1 MB together, into the fonts folder, and draws emoji in color from then on (Noto
+draws the few Fluent lacks, in black and white; the night clock draws them in its red). They're drawn a character at a time: a family shows as its people side by side, a flag as its
 two letters, and a skin tone is left out. A font of your own that has emoji is used instead.
 
 On the setup page's Screen tab, under **Fonts of your own**, choose a `.ttf`, `.otf` or

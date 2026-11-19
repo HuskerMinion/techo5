@@ -24,6 +24,8 @@ type Layer struct {
 	// shaper, when set, shapes runs of a complex script (Khmer, Thai, the Indic scripts...) in this
 	// layer's font: a font of one's own (shape.go).
 	shaper *shapeSource
+	// color, when set, is the layer's font's color glyphs (color.go).
+	color *colorFont
 }
 
 // Stack is a face drawn from several: each character from the first layer that has a glyph for it.
@@ -47,14 +49,20 @@ type Stack struct {
 	layers  []Layer
 	metrics font.Face
 	// size is the pixel size the layers were made at, 0 when not known: what complex-script runs
-	// are shaped at (shape.go).
+	// are shaped at (shape.go), and color glyphs drawn at (color.go).
 	size float64
+	// colored is whether a layer has color glyphs.
+	colored bool
 }
 
 // NewStack makes a Stack of layers, in the order they are tried, with metrics' line metrics (nil for
 // the first layer's).
 func NewStack(metrics font.Face, layers ...Layer) *Stack {
-	return &Stack{layers: layers, metrics: metrics}
+	s := &Stack{layers: layers, metrics: metrics}
+	for _, l := range layers {
+		s.colored = s.colored || l.color != nil
+	}
+	return s
 }
 
 // guard runs fn, a call into layer i. Should it panic, the layer is dropped, its Broke told, and
@@ -142,6 +150,11 @@ func (s *Stack) Glyph(dot fixed.Point26_6, r rune) (dr image.Rectangle, mask ima
 	if skinTone(r) { // emoji.go
 		return image.Rectangle{}, nothing, image.Point{}, 0, true
 	}
+	if cg, ok := s.colorOf(r); ok { // color.go: drawn here as one tint
+		m, at := cg.tone()
+		dr = m.Rect.Add(at).Add(image.Pt(dot.X.Round(), dot.Y.Round()))
+		return dr, m, image.Point{}, cg.advance, true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.with(r, func(f font.Face) { dr, mask, maskp, advance, ok = f.Glyph(dot, r) })
@@ -151,6 +164,10 @@ func (s *Stack) Glyph(dot fixed.Point26_6, r rune) (dr image.Rectangle, mask ima
 func (s *Stack) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance fixed.Int26_6, ok bool) {
 	if skinTone(r) {
 		return fixed.Rectangle26_6{}, 0, true
+	}
+	if cg, ok := s.colorOf(r); ok {
+		b := cg.bounds()
+		return fixed.R(b.Min.X, b.Min.Y, b.Max.X, b.Max.Y), cg.advance, true
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
