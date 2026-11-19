@@ -241,7 +241,18 @@ type colorGlyph struct {
 	ppem    fixed.Int26_6
 }
 
-// colorOf is r as a color glyph, if the layer that draws it draws it as one.
+// maxColorEms is the most a color glyph's layers may cover together, in squares of the font's size:
+// an emoji covers about one. A broken font whose layers lie far apart would otherwise have tone ask for
+// a buffer of their whole span, which can be more memory than the board has.
+const maxColorEms = 16
+
+// maxColorPixels is the most a color glyph's layers may cover together at any size, in pixels.
+const maxColorPixels = 1 << 22
+
+// colorOf is r as a color glyph, if the layer that draws it draws it as one. A glyph whose layers
+// together cover more than maxColorEms or maxColorPixels is not drawn as one but as its plain glyph:
+// the check is made here, inside the layer's guard, so drawing in color and drawing as one tint are
+// both kept within it.
 func (s *Stack) colorOf(r rune) (cg colorGlyph, ok bool) {
 	if !s.colored || s.size <= 0 {
 		return cg, false
@@ -262,7 +273,7 @@ func (s *Stack) colorOf(r rune) (cg colorGlyph, ok bool) {
 			if layers := l.color.glyph(g); layers != nil {
 				adv, aok := l.Face.GlyphAdvance(r)
 				cg = colorGlyph{l.Font, l.color, g, layers, adv, fixed.Int26_6(s.size * 64)}
-				ok = aok
+				ok = aok && cg.fits()
 			}
 		}) {
 			return cg, ok
@@ -278,6 +289,15 @@ func (cg colorGlyph) each(fn func(l colorLayer, mask *image.Alpha, at image.Rect
 			fn(l, m, m.Rect.Add(at))
 		}
 	}
+}
+
+// fits is whether the glyph's layers together cover no more than maxColorEms squares of its size and
+// no more than maxColorPixels, so that drawing it as one tint asks for a buffer of a sane size.
+func (cg colorGlyph) fits() bool {
+	b := cg.bounds()
+	area := int64(b.Dx()) * int64(b.Dy())
+	em := int64(cg.ppem.Ceil())
+	return area <= maxColorEms*em*em && area <= maxColorPixels
 }
 
 // bounds is where the glyph's layers have ink, from its origin.
