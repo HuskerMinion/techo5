@@ -1244,8 +1244,9 @@ as a countdown in two sensors:
 A running timer always comes before a paused one. Silent timers (`timer_start_silent`) are left out.
 Several timers at once are in the **Timers** sensor and `alarms_list`.
 
-A tile or entity card shows the countdown with `format: relative`. A time trigger with an offset runs
-an automation before the timer ends:
+A tile card shows the end as a countdown, and so does a row in an entities card with
+`format: relative`. A time trigger with an offset runs an automation before the timer ends; it does not
+run for a timer shorter than the offset, whose moment has already passed:
 
 ```yaml
 alias: Kitchen light on before the timer ends

@@ -12,7 +12,7 @@ import (
 // per timer, since one at a time is the usual case; Timers and alarms_list cover several at once.
 //
 // A stopgap: Home Assistant's timer_list domain (home-assistant/architecture#1407) is one entity
-// holding any number of timers, and once ESPHome can carry it, it replaces these.
+// holding any number of timers, and once ESPHome can carry it, it may replace these.
 type next struct {
 	ends  *esphome.TextSensor
 	label *esphome.TextSensor
