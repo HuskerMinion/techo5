@@ -174,6 +174,8 @@ func optionLabel(english string) string {
 		return tr("option_12_hour")
 	case "24-hour":
 		return tr("option_24_hour")
+	case "12-hour, no AM/PM":
+		return tr("option_12_hour_no_ampm")
 	case "Strip after 10 s":
 		return tr("option_strip_after_10_s")
 	case "Strip after 30 s":

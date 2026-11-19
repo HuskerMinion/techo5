@@ -355,6 +355,7 @@ var uiEnglish = map[string]string{
 	"option_10_minutes":                       "10 minutes",
 	"option_10_seconds":                       "10 seconds",
 	"option_12_hour":                          "12-hour",
+	"option_12_hour_no_ampm":                  "12-hour, no AM/PM",
 	"option_15_seconds":                       "15 seconds",
 	"option_1_hour":                           "1 hour",
 	"option_1_hour_before":                    "1 hour before",
@@ -2142,6 +2143,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_10_minutes":                         "10 minutes",
 		"option_10_seconds":                         "10 secondes",
 		"option_12_hour":                            "12 heures",
+		"option_12_hour_no_ampm":                    "12 heures, sans AM/PM",
 		"option_15_seconds":                         "15 secondes",
 		"option_1_hour":                             "1 heure",
 		"option_1_hour_before":                      "1 heure avant",
@@ -3143,6 +3145,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_10_minutes":                       "10 minutos",
 		"option_10_seconds":                       "10 segundos",
 		"option_12_hour":                          "12 horas",
+		"option_12_hour_no_ampm":                  "12 horas, sen AM/PM",
 		"option_15_seconds":                       "15 segundos",
 		"option_1_hour":                           "1 hora",
 		"option_1_hour_before":                    "1 hora antes",
@@ -4193,6 +4196,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_10_minutes":                       "10 minuti",
 		"option_10_seconds":                       "10 secondi",
 		"option_12_hour":                          "Formato a 12 ore",
+		"option_12_hour_no_ampm":                  "Formato a 12 ore, senza AM/PM",
 		"option_15_seconds":                       "15 secondi",
 		"option_1_hour":                           "1 ora",
 		"option_1_hour_before":                    "1 ora prima",
@@ -5545,7 +5549,8 @@ var uiTranslations = map[string]map[string]string{
 		// 10 seconds
 		"option_10_seconds": "10 seconden",
 		// 12-hour
-		"option_12_hour": "12-uurs",
+		"option_12_hour":         "12-uurs",
+		"option_12_hour_no_ampm": "12-uurs, zonder AM/PM",
 		// 12 hours
 		"option_12_hours": "12 uur",
 		// 15 seconds
@@ -7056,6 +7061,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_10_minutes":                       "10分",
 		"option_10_seconds":                       "10秒",
 		"option_12_hour":                          "12時間表示",
+		"option_12_hour_no_ampm":                  "12時間表示（午前/午後なし）",
 		"option_15_seconds":                       "15秒",
 		"option_1_hour":                           "1時間",
 		"option_1_hour_before":                    "1時間前",
@@ -8313,7 +8319,8 @@ var uiTranslations = map[string]map[string]string{
 		// 10 seconds
 		"option_10_seconds": "10 Sekunden",
 		// 12-hour
-		"option_12_hour": "12-Stunden-Format",
+		"option_12_hour":         "12-Stunden-Format",
+		"option_12_hour_no_ampm": "12-Stunden-Format, ohne AM/PM",
 		// 15 seconds
 		"option_15_seconds": "15 Sekunden",
 		// 1 hour
@@ -9796,6 +9803,7 @@ var uiTranslations = map[string]map[string]string{
 		"option_10_minutes":                       "10 dakika",
 		"option_10_seconds":                       "10 saniye",
 		"option_12_hour":                          "12 saat",
+		"option_12_hour_no_ampm":                  "12 saat, ÖÖ/ÖS olmadan",
 		"option_15_seconds":                       "15 saniye",
 		"option_1_hour":                           "1 saat",
 		"option_1_hour_before":                    "1 saat önce",

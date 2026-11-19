@@ -849,6 +849,8 @@ other Shows don't have the switches.
 ### Clock and home screen
 
 - **Clock format**, **Clock position** and **Date color** (Date color on the Show only). Clock
+  format is *12-hour*, *12-hour, no AM/PM* or *24-hour*; *no AM/PM* leaves it off the clock face
+  only, so an alarm's or an event's time in a line of text still says which. Clock
   position puts a smaller clock at the foot of the screen, in a bottom corner or between them
   (*Bottom left*, *Bottom center*, *Bottom right*), so a photo stays in view. Every style goes there
   except *Dashboard*, *Agenda* and *World*, which keep the whole screen. On the Spot, Clock position is

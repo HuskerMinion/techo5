@@ -712,7 +712,7 @@ func (d *Display) Entities() []esphome.Entity {
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
-	setClock24(d.clock, c.Screen.Clock24)
+	setClockFormat(d.clock, c.Screen.Clock24, c.Screen.NoAMPM)
 	d.roomSw.Set(c.Screen.IgnoreRoomLights)
 	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)
