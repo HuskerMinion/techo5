@@ -19,4 +19,6 @@ import "github.com/HuskerMinion/techo5/echod/internal/layout"
 // false on that unit, so nothing was blocked, but reading the capability bitmap alone would publish
 // a cover sensor for hardware that has none, and a unit whose pin read the other way would refuse
 // the camera with nothing in the log but "the lens cover is closed".
-func hasShutter() bool { return layout.Crown() || layout.AthenaMainline() || layout.CronosMainline() }
+func hasShutter() bool {
+	return layout.Crown() || layout.AthenaMainline() || layout.CronosMainline() || layout.ThinkSmart()
+}
