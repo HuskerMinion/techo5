@@ -493,18 +493,18 @@ type renderer struct {
 	weatherKept []byte
 	weatherKey  string
 
-	clock  font.Face // the big time
-	big    font.Face // a large reading, like today's temperature
-	ampm   font.Face
-	title  font.Face // "Listening…"
-	body   font.Face // transcript and reply
-	small  font.Face // date, corner clock, footer
-	tiny   font.Face
-	micro  font.Face // an event's words on a day of the month
+	clock font.Face // the big time
+	big   font.Face // a large reading, like today's temperature
+	ampm  font.Face
+	title font.Face // "Listening…"
+	body  font.Face // transcript and reply
+	small font.Face // date, corner clock, footer
+	tiny  font.Face
+	micro font.Face // an event's words on a day of the month
 	// nightAlarmFace is the next alarm under the night clock (night_alarm.go): half as large again as
 	// small, and bold, so it reads from the pillow.
 	nightAlarmFace font.Face
-	margin int
+	margin         int
 
 	// ringClock and ringAmpm are the ringing page's time at 100% whatever the text size: it already
 	// fills the band between the title and the buttons.
