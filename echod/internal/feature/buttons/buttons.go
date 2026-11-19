@@ -33,19 +33,16 @@ const (
 	TriplePress = "triple_press"
 )
 
-// order is the buttons as Home Assistant lists them, since a map has none. The power key is listed
-// only where there is one: every Echo has the other four's entities, but a power key on a device
-// without one would sit at unknown for good. The same goes for a key a board is known to lack
-// (buttons.Missing: the Echo Input's volume keys).
+// order is the buttons as Home Assistant lists them, since a map has none. A button is listed only
+// where the board has it, as an entity for one it lacks would sit at unknown for good: the Shows and
+// the Spot have no action button, no Echo has a power key of its own, and the Dots' codes list volume
+// keys the Echo Input is known to lack (buttons.Missing).
 var order = func() []buttons.Name {
 	var o []buttons.Name
-	for _, n := range []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp} {
-		if !buttons.Missing(n) {
+	for _, n := range []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp, buttons.Power} {
+		if buttons.Has(n) && !buttons.Missing(n) {
 			o = append(o, n)
 		}
-	}
-	if buttons.Has(buttons.Power) {
-		o = append(o, buttons.Power)
 	}
 	return o
 }()
