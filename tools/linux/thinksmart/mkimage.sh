@@ -2,12 +2,15 @@
 # mkimage.sh — the image written to a Lenovo ThinkSmart View's "system" partition: an MBR with lk2nd's
 # boot partition and TECHO5's store.
 #
-#   mkimage.sh -b <boot.tar> -s <store.img> -u <store uuid> -o <system.img> [-a <extra kernel arguments>]
-#              [-w <workdir>]
+#   mkimage.sh -b <boot.tar> -s <store.img> -u <store uuid> -o <system.img> [-d <camera.dtb>]
+#              [-a <extra kernel arguments>] [-w <workdir>]
 #
 #   <boot.tar>    the kernel's own files, from a unit running that kernel (/boot): vmlinuz, initramfs
 #                 (postmarketOS's, which finds and mounts the store) and apq8053-lenovo-cd-18781y.dtb
 #   <store.img>   tools/linux/thinksmart/mkstore.sh's, made with -U <store uuid> and -S 2048
+#   <camera.dtb>  the device tree with the camera in it (the kernel package's has none): lk2nd is
+#                 then told to load that one, and the kernel to keep 128 MiB of contiguous memory.
+#                 Without it the unit has no camera.
 #
 # The unit's system partition is the size of this image exactly, 4694016 sectors, with TECHO5's data
 # in a GPT partition of its own after it (tools/linux/thinksmart/repartition.sh). Inside the image:
@@ -23,20 +26,21 @@
 set -euo pipefail
 umask 022
 
-BOOT=; STORE=; UUID=; OUT=; EXTRA=; WORK=$HOME/techo5-thinksmart-image
+BOOT=; STORE=; UUID=; OUT=; EXTRA=; DTB=; WORK=$HOME/techo5-thinksmart-image
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-b) BOOT=$2; shift 2;;
 	-s) STORE=$2; shift 2;;
 	-u) UUID=$2; shift 2;;
 	-o) OUT=$2; shift 2;;
+	-d) DTB=$2; shift 2;;
 	-a) EXTRA=$2; shift 2;;
 	-w) WORK=$2; shift 2;;
 	*) echo "mkimage: unknown argument $1" >&2; exit 1;;
 	esac
 done
 [ -n "$BOOT" ] && [ -n "$STORE" ] && [ -n "$UUID" ] && [ -n "$OUT" ] || {
-	echo "usage: mkimage.sh -b boot.tar -s store.img -u store-uuid -o system.img [-a 'kernel arguments'] [-w workdir]" >&2; exit 1; }
+	echo "usage: mkimage.sh -b boot.tar -s store.img -u store-uuid -o system.img [-d camera.dtb] [-a 'kernel arguments'] [-w workdir]" >&2; exit 1; }
 say() { echo "mkimage: $*"; }
 
 P1_START=2048; P1_SECTORS=497664
@@ -53,6 +57,15 @@ tar -xf "$BOOT" -C "$WORK/boot" vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb
 for f in vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb; do
 	[ -s "$WORK/boot/$f" ] || { echo "mkimage: $BOOT has no $f" >&2; exit 1; }
 done
+# With fdtdir lk2nd picks the kernel package's tree by the board's name; fdt names one, and fdtdir
+# wins where both are there, so it is one or the other.
+FDT="fdtdir /"
+if [ -n "$DTB" ]; then
+	[ -s "$DTB" ] || { echo "mkimage: no $DTB" >&2; exit 1; }
+	install -m 644 "$DTB" "$WORK/boot/apq8053-lenovo-cd-18781y-camera.dtb"
+	FDT="fdt /apq8053-lenovo-cd-18781y-camera.dtb"
+	EXTRA="cma=128M${EXTRA:+ $EXTRA}"
+fi
 BOOT_UUID=$(cat /proc/sys/kernel/random/uuid)
 # lk2nd reads one entry and no more. The initramfs finds both file systems by these UUIDs, and waits
 # ten seconds for a framebuffer it has no driver for unless it is told there is none. The device
@@ -65,7 +78,7 @@ menu title ThinkSmart View (TECHO5)
 
 label techo5
 	kernel /vmlinuz
-	fdtdir /
+	$FDT
 	initrd /initramfs
 	append consoleblank=0 vt.global_cursor_default=0 pmos_boot_uuid=$BOOT_UUID pmos_root_uuid=$UUID pmos_rootfsopts=defaults deviceinfo_no_framebuffer=true video=DSI-1:800x1280,rotate=180${EXTRA:+ $EXTRA}
 EOF
