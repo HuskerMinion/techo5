@@ -140,6 +140,23 @@ func TestBrokenColorTablesAreRefused(t *testing.T) {
 	if _, err := parseColor(good, cpalTable(red)[:10]); err == nil {
 		t.Error("a short palette was read")
 	}
+	// An offset past 2 GB is refused by the check itself, also where an int is 32 bits and the offset
+	// would be negative as one (GOARCH=arm).
+	far := slices.Clone(good)
+	binary.BigEndian.PutUint32(far[4:], 0xFFFFFFF0)
+	if _, err := parseColor(far, nil); err == nil {
+		t.Error("a base offset past 2 GB was read")
+	}
+	far = slices.Clone(good)
+	binary.BigEndian.PutUint32(far[8:], 0x80000000)
+	if _, err := parseColor(far, nil); err == nil {
+		t.Error("a layer offset past 2 GB was read")
+	}
+	pal := cpalTable(red)
+	binary.BigEndian.PutUint32(pal[8:], 0xFFFFFFFC)
+	if _, err := parsePalette(pal); err == nil {
+		t.Error("a palette offset past 2 GB was read")
+	}
 	if c, err := readColor(bytes.NewReader(bundled(t, "opensans"))); c != nil || err != nil {
 		t.Errorf("a font with no color tables: %v, %v", c, err)
 	}

@@ -166,11 +166,14 @@ func parseColor(colr, cpal []byte) (*colorFont, error) {
 	}
 	be := binary.BigEndian
 	nBase := int(be.Uint16(colr[2:]))
-	baseAt, layerAt := int(be.Uint32(colr[4:])), int(be.Uint32(colr[8:]))
 	nLayer := int(be.Uint16(colr[12:]))
-	if baseAt+6*nBase > len(colr) || layerAt+4*nLayer > len(colr) {
+	// The offsets are checked as 64-bit numbers: on a 32-bit board an offset past 2 GB would be negative
+	// as an int, and pass a check made with ints.
+	baseAt64, layerAt64 := int64(be.Uint32(colr[4:])), int64(be.Uint32(colr[8:]))
+	if baseAt64+6*int64(nBase) > int64(len(colr)) || layerAt64+4*int64(nLayer) > int64(len(colr)) {
 		return nil, errColor
 	}
+	baseAt, layerAt := int(baseAt64), int(layerAt64) // within the table, so they fit
 	c := &colorFont{}
 	if cpal != nil {
 		pal, err := parsePalette(cpal)
@@ -209,14 +212,16 @@ func parsePalette(cpal []byte) ([]color.NRGBA, error) {
 	}
 	be := binary.BigEndian
 	entries, palettes := int(be.Uint16(cpal[2:])), int(be.Uint16(cpal[4:]))
-	records, recordsAt := int(be.Uint16(cpal[6:])), int(be.Uint32(cpal[8:]))
+	records, recordsAt64 := int(be.Uint16(cpal[6:])), int64(be.Uint32(cpal[8:]))
 	if palettes == 0 {
 		return nil, nil
 	}
 	first := int(be.Uint16(cpal[12:]))
-	if first+entries > records || recordsAt+4*records > len(cpal) {
+	// The offset is checked as a 64-bit number, as parseColor's are.
+	if first+entries > records || recordsAt64+4*int64(records) > int64(len(cpal)) {
 		return nil, errColor
 	}
+	recordsAt := int(recordsAt64)
 	out := make([]color.NRGBA, entries)
 	for i := range out {
 		rec := cpal[recordsAt+4*(first+i):]
