@@ -2622,7 +2622,9 @@ Every build that boots TECHO5's Linux runs it: the Echo Show builds (Show 8 2nd 
 Skylight and the Echo Spot, and the TECHO5 Dot builds for the Echo Dot 2nd gen, the Echo 2nd gen, the
 Echo Dot 3rd gen and the Echo Input. On the Dot builds it is started last, after the daemon has been
 let start and the check that commits an update is under way. Their logs are also kept to about 1 MB
-each while the device is up, so a long boot's earlier output moves to `rc.local.log.1`. TECHO5 Panel
+each while the device is up, so a long boot's earlier output moves to `rc.local.log.1`. A Dot has no
+clock that keeps time while it is off, so the time may not be set yet when the script starts: wait for
+it before anything that needs it, such as a certificate check. TECHO5 Panel
 is an Android app, not a Linux image, so it has no `rc.local`.
 
 The Dot builds are small. The Echo Dot 2nd gen has about 445 MB of its 481 MB free with everything
