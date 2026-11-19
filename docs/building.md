@@ -270,6 +270,12 @@ everyday kanji, with its license, from google/fonts at a pinned commit, with a p
 (`pip install fonttools==4.65.0`). The same script gives the same bytes; release.ps1 checks them against
 the pin.
 
+The emoji font comes the same way: a Show or a Spot downloads it the first time its screen has an emoji
+to draw, pinned in `echod/internal/feature/cjkfont/emoji.go`.
+[tools/fonts/make_emoji_font.py](../tools/fonts/make_emoji_font.py) builds `bin/techo5-noto-emoji.tar.gz`,
+Noto Emoji (the black-and-white one, SIL Open Font License) at one weight with its license, from
+google/fonts at a pinned commit, with the same pinned fontTools.
+
 ## The person detection model
 
 The daemon doesn't carry the person detection model either: a Show or a Spot downloads it (about 300 KB)

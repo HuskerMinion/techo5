@@ -1112,6 +1112,12 @@ a Korean song title or a Japanese calendar event, show as boxes. A font of your 
 screen draws any character its font and Go don't have from it. It's never the font for everything;
 that's **Font**, above.
 
+Emoji need nothing of your own. The first time the screen has an emoji to draw (in a calendar event,
+a notification or a song title, say), the Show or Spot downloads Google's Noto Emoji, about 0.5 MB,
+into the fonts folder, and draws emoji from it from then on, in black and white like the text around
+them. They're drawn a character at a time: a family shows as its people side by side, a flag as its
+two letters, and a skin tone is left out. A font of your own that has emoji is used instead.
+
 On the setup page's Screen tab, under **Fonts of your own**, choose a `.ttf`, `.otf` or
 `.ttc` file to send it to the device, and use **Remove** to delete one. Or put the file in the
 device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the-ssh-authorized-keys)):

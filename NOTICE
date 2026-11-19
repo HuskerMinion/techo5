@@ -440,6 +440,12 @@ Noto Sans JP, https://github.com/google/fonts (SIL Open Font License 1.1)
   Font Name 'Source'. Cut down to the characters the screen draws by tools/fonts/make_cjk_font.py. Its
   OFL.txt travels with it and is kept on the device with the other licenses.
 
+Noto Emoji, https://github.com/google/fonts (SIL Open Font License 1.1)
+  Not in any image or daemon: a device with a screen downloads it from TECHO5's release
+  (techo5-noto-emoji.tar.gz) the first time it has an emoji to draw. Copyright 2013 Google LLC. Cut
+  down to one weight and the characters it maps by tools/fonts/make_emoji_font.py. Its OFL.txt travels
+  with it and is kept on the device with the other licenses.
+
 echod: Tessera's World clock and Custom card plugins (echod/internal/feature/display/tessera_plugins.go,
 tessera_card.go)
   Ported to Go from world_clock.cpp in tessera-plugin-world-clock 0.4.0,

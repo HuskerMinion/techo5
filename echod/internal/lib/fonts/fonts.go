@@ -182,7 +182,7 @@ func Font(value string, bold bool) (*sfnt.Font, error) {
 // the screen's text always has been.
 //
 // Go, with no fonts of the owner's own, is Go's face alone, exactly as the screen drew before there
-// was a choice. Anything else is a Stack: the family at its own scale of size first, then Go at size
+// was a choice, but for noticing an emoji it has no glyph for (emoji.go). Anything else is a Stack: the family at its own scale of size first, then Go at size
 // for the characters it has no glyph for, then the owner's own fonts (own.go) at size for those Go has
 // none for either, with Go's line metrics at size, so lines are spaced as every layout expects.
 func Face(value string, bold bool, size float64) (font.Face, error) {
@@ -226,7 +226,7 @@ func Face(value string, bold bool, size float64) (font.Face, error) {
 			shaper: shaperFor(e)})
 	}
 	if len(layers) == 1 {
-		return goFace, nil
+		return watched{goFace, goFonts[w]}, nil // emoji.go
 	}
 	s := NewStack(goFace, layers...)
 	s.size = size

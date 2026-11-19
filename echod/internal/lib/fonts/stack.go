@@ -78,29 +78,39 @@ func (s *Stack) guard(i int, fn func()) (ok bool) {
 
 // pick is the place of the layer that draws r, -1 with none left. Called under s.mu.
 func (s *Stack) pick(r rune) int {
+	i, _ := s.find(r)
+	return i
+}
+
+// find is pick, and whether that layer has a glyph for r: a character no layer has is the first
+// layer's to draw, without one. Called under s.mu.
+func (s *Stack) find(r rune) (int, bool) {
 	for i := 0; i < len(s.layers); {
 		var has bool
 		if !s.guard(i, func() { has = s.has(s.layers[i], r) }) {
 			continue // dropped: the next layer is at i now
 		}
 		if has {
-			return i
+			return i, true
 		}
 		i++
 	}
 	if len(s.layers) == 0 {
-		return -1
+		return -1, false
 	}
-	return 0
+	return 0, false
 }
 
 // with runs fn on the face of the layer that draws r, trying the next should that layer panic, and
 // is false when no layer is left. Called under s.mu.
 func (s *Stack) with(r rune, fn func(font.Face)) bool {
 	for {
-		i := s.pick(r)
+		i, has := s.find(r)
 		if i < 0 {
 			return false
+		}
+		if !has && emoji(r) {
+			emojiMissed.Store(true) // emoji.go
 		}
 		if s.guard(i, func() { fn(s.layers[i].Face) }) {
 			return true
@@ -129,6 +139,9 @@ func (s *Stack) Has(r rune) bool {
 }
 
 func (s *Stack) Glyph(dot fixed.Point26_6, r rune) (dr image.Rectangle, mask image.Image, maskp image.Point, advance fixed.Int26_6, ok bool) {
+	if skinTone(r) { // emoji.go
+		return image.Rectangle{}, nothing, image.Point{}, 0, true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.with(r, func(f font.Face) { dr, mask, maskp, advance, ok = f.Glyph(dot, r) })
@@ -136,6 +149,9 @@ func (s *Stack) Glyph(dot fixed.Point26_6, r rune) (dr image.Rectangle, mask ima
 }
 
 func (s *Stack) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance fixed.Int26_6, ok bool) {
+	if skinTone(r) {
+		return fixed.Rectangle26_6{}, 0, true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.with(r, func(f font.Face) { bounds, advance, ok = f.GlyphBounds(r) })
@@ -143,6 +159,9 @@ func (s *Stack) GlyphBounds(r rune) (bounds fixed.Rectangle26_6, advance fixed.I
 }
 
 func (s *Stack) GlyphAdvance(r rune) (advance fixed.Int26_6, ok bool) {
+	if skinTone(r) {
+		return 0, true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.with(r, func(f font.Face) { advance, ok = f.GlyphAdvance(r) })
