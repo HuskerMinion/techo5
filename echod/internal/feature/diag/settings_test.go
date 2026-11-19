@@ -31,9 +31,10 @@ func TestTheSecretsAreTakenOut(t *testing.T) {
 	var c config.Config
 	c.CamStream.Pass, c.Remote.Secret, c.Home.HouseWord = "camera-password-value", "remote-secret-value", "our long house word"
 	c.Home.Immich.Key = "immich-key-value"
+	c.Security.ScreenKey, c.Security.BabyKey = "screen-key-value", "baby-key-value"
 	c.Home.Go2RTC.Base = "http://admin:go2rtc-password@go2rtc.example:1984"
 	got := secrets(c)
-	for _, want := range []string{"camera-password-value", "remote-secret-value", "our long house word", "immich-key-value", "go2rtc-password"} {
+	for _, want := range []string{"camera-password-value", "remote-secret-value", "our long house word", "immich-key-value", "screen-key-value", "baby-key-value", "go2rtc-password"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("%q is not among the secrets", want)
 		}
