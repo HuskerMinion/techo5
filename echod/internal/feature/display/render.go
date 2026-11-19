@@ -501,6 +501,9 @@ type renderer struct {
 	small  font.Face // date, corner clock, footer
 	tiny   font.Face
 	micro  font.Face // an event's words on a day of the month
+	// nightAlarmFace is the next alarm under the night clock (night_alarm.go): half as large again as
+	// small, and bold, so it reads from the pillow.
+	nightAlarmFace font.Face
 	margin int
 
 	// ringClock and ringAmpm are the ringing page's time at 100% whatever the text size: it already
@@ -588,6 +591,7 @@ func (r *renderer) makeFaces(k fontKey) {
 	r.small = face(false, 34)
 	r.tiny = face(false, 26)
 	r.micro = face(false, 18)
+	r.nightAlarmFace = face(true, 51)
 	if r.scaled() {
 		fc := sheetFacesAt(k, r.s)
 		r.fc = &fc
@@ -667,8 +671,9 @@ func (r *renderer) draw(s scene) {
 	defer r.publishCameraTaps()
 	r.setPopupAt(image.Rectangle{})
 	r.clearAlertTaps()
-	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it,
-	// and it stays up while an alarm or a timer rings (a tap on it stops the ring). A call has lifted
+	// The red night clock is the whole screen: nothing else, not even the header, is drawn over it.
+	// An alarm or a timer ringing puts the ringing page in its place, in the night's red, with its
+	// Stop and Snooze buttons (nightRingingPage). A call has lifted
 	// the night light and takes the screen; a turn, a camera, an announcement or a reminder is shown in
 	// its place at the night light's level.
 	if s.redClockFace() && s.camtest == nil && s.qrscan == nil {

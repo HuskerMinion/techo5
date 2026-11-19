@@ -1183,12 +1183,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	askedAtNight := glowing && d.askedUp(time.Now()) && (g.Kind == touch.Tap || calUp)
 	d.mu.Unlock()
 	if glowing && !dashAtNight && !askedAtNight {
-		if g.Kind == touch.Tap && d.ringing(time.Now()).any() {
-			// An alarm or a timer rings over the night clock; a tap anywhere stops it, as the ringing
-			// page's own button would.
-			d.stopRing()
-			d.wake()
-			return
+		if g.Kind == touch.Tap {
+			if st := d.ringing(time.Now()); st.any() {
+				// An alarm or a timer rings over the night light, and the ringing page is drawn there with
+				// its buttons (nightRingingPage): a tap is what it is by day, Snooze on the Snooze button
+				// and Stop anywhere else (#646).
+				d.ringTap(g.X, g.Y, st)
+				d.wake()
+				return
+			}
 		}
 		if held {
 			// Only released, by a tap or a long press alike: the night light stays, with the notification

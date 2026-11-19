@@ -100,20 +100,6 @@ func TestNightClockGivesWayToAReminder(t *testing.T) {
 	}
 }
 
-// A timer ringing at night rings over the night clock: the screen stays the clock, not the ringing page.
-func TestNightClockStaysWhileSomethingRings(t *testing.T) {
-	now := time.Date(2026, 9, 28, 2, 10, 0, 0, time.Local)
-	draw := func(ring ringState) *image.RGBA {
-		img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
-		newRenderer(img).draw(scene{now: now, phase: "idle", redClock: true, redStyle: nightStylePlain, ring: ring})
-		return img
-	}
-	quiet, ringing := draw(ringState{}), draw(ringState{timer: "Tea"})
-	if !bytes.Equal(quiet.Pix, ringing.Pix) {
-		t.Error("a ringing timer replaced the night clock")
-	}
-}
-
 // The Wi-Fi page is never under the night clock: a device with no network has no time either, and
 // can think it is the middle of the night while somebody stands at it choosing a network.
 func TestNightClockGivesWayToTheWifiPage(t *testing.T) {
