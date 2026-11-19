@@ -206,8 +206,8 @@ usual one, and the steps below start with it.
    - **Show whole photo** shows each photo in full, with a blurred copy of it filling the sides.
      Off, a photo shaped like the screen (a landscape one on a wide screen) fills it, cropped; a photo
      of the other shape, such as a portrait one on a wide screen, is still shown whole on its blurred
-     copy, so nobody loses their head. On the round Spot, photos close to square (4:3 and 3:4) fill the
-     face and wider or taller ones are shown whole inside the circle.
+     copy, so nobody loses their head. On the round Spot every photo fills the face, cropped, whatever its
+     shape; turn Show whole photo on to see them whole there.
    - **Photo pairs** (the Show) puts two tall photos side by side, each filling half the screen,
      in place of one with blurred sides. A tall photo with no other near it in the list shows alone.
    - **Screensaver clock position** puts the screensaver's clock at the top, in the middle or at the
