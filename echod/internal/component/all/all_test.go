@@ -144,6 +144,8 @@ var registered = []string{
 	"nearest_device_window",
 	"next_alarm",
 	"next_scheduled_alarm",
+	"next_timer",
+	"next_timer_ends",
 	"alarms_on",
 	"next_song_word",
 	"next_song_word_threshold",
