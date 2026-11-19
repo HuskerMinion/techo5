@@ -2582,9 +2582,10 @@ offered there. The Skylight has not been tried.
 
 ### The buttons in Home Assistant
 
-Each of the device's buttons is an event entity in Home Assistant (**Action button**, **Mute
-button**, **Volume down button**, **Volume up button**, and **Power button** where there is one).
-The device acts on a press itself as well; the events are there so an automation can act on one too.
+Each of the device's buttons is an event entity in Home Assistant: **Mute button**, **Volume down
+button** and **Volume up button**, and on the Dots, the Echo 2nd gen and the Echo Input an **Action
+button** too. Only the buttons the device has are listed: the Shows and the Spot have no action
+button, and the Echo Input has only its action and mute buttons. The device acts on a press itself as well; the events are there so an automation can act on one too.
 
 - `press`: a short press, as it is let go. A volume key reports it as it goes down.
 - `hold`: held for 0.7 seconds, as it happens.
