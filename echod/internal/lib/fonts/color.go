@@ -254,7 +254,10 @@ const maxColorPixels = 1 << 22
 // the check is made here, inside the layer's guard, so drawing in color and drawing as one tint are
 // both kept within it.
 func (s *Stack) colorOf(r rune) (cg colorGlyph, ok bool) {
-	if !s.colored || s.size <= 0 {
+	// ASCII is not looked up, which saves a search of the layers for every letter of a line: the Go
+	// layer, ahead of every font of one's own, has a glyph for each printable ASCII character, and the
+	// emoji font leaves ASCII out (tools/fonts/make_color_emoji_font.py), so none is a color glyph.
+	if !s.colored || s.size <= 0 || r < 0x80 {
 		return cg, false
 	}
 	s.mu.Lock()
