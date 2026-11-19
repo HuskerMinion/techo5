@@ -111,7 +111,7 @@ func (r *roundRenderer) agendaFace(s roundScene) {
 	x := center - (r.width(h, hm)+aw)/2
 	r.text(h, hm, x, 134, colText)
 	if ampm != "" {
-		r.text(r.label, ampm, x+r.width(h, hm)+6, 134, colAccent)
+		r.text(r.label, ampm, x+r.width(h, hm)+6, 134, colText)
 	}
 	r.centered(r.styleFace(false, 20), locale.LongDate(s.now, screenLang()), 166, colDim)
 	r.line(90, 188, 390, 188, 2, colTrack)

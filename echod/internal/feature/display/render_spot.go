@@ -56,8 +56,8 @@ var (
 // ampmGap is the space between the time and its AM/PM.
 const ampmGap = 10
 
-// timeLine draws the time centered on the face at baseline, with its AM/PM beside it in the accent
-// the way the Show sets it; on a 24-hour clock the time stands alone. At a large text size the two
+// timeLine draws the time centered on the face at baseline, with its AM/PM beside it in the time's
+// own color (the Spot's colors cannot be chosen, and a red AM/PM by a white time read as a mistake); on a 24-hour clock the time stands alone. At a large text size the two
 // move left together as far as it takes to keep the AM/PM on the face.
 func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 	hm, s := clockHM(now), clockSuffix(now)
@@ -65,7 +65,7 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 	x := center - hw/2
 	if s != "" {
 		x -= max(0, x+hw+ampmGap+r.width(r.title, s)-(2*center-ampmEdge))
-		r.text(r.title, s, x+hw+ampmGap, baseline, colAccent)
+		r.text(r.title, s, x+hw+ampmGap, baseline, colText)
 	}
 	r.text(r.clock, hm, x, baseline, colText)
 }
