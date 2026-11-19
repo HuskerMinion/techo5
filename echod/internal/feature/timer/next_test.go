@@ -77,6 +77,19 @@ func TestASilentTimerIsNeverTheNextTimer(t *testing.T) {
 	wantNext(t, ts, nextText{ends: "2026-10-17T18:42:00Z", label: "Eggs"})
 }
 
+// A timer of Home Assistant's at zero, its finishing event late, has an end that has gone by: the next
+// timer is the one still counting, or none.
+func TestATimerAtZeroIsNotTheNextTimer(t *testing.T) {
+	ts := build()
+	done := running("Eggs", time.Minute)
+	done.at = nextNow.Add(-2 * time.Minute)
+	hold(ts, "eggs", done)
+	wantNext(t, ts, nextText{})
+
+	hold(ts, "pasta", running("Pasta", 10*time.Minute))
+	wantNext(t, ts, nextText{ends: "2026-10-17T18:48:00Z", label: "Pasta"})
+}
+
 func TestAnUnnamedNextTimerIsCalledTimer(t *testing.T) {
 	ts := build()
 	hold(ts, "tea", running("", 3*time.Minute))
