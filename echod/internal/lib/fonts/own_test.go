@@ -56,7 +56,7 @@ func TestNoFolderNoFonts(t *testing.T) {
 	}
 	if f, _ := Face(Go, false, 30); f == nil {
 		t.Fatal("no face")
-	} else if _, ok := f.(*opentype.Face); !ok {
+	} else if !goAlone(f) {
 		t.Errorf("Go with no fonts of one's own is a %T", f)
 	}
 }

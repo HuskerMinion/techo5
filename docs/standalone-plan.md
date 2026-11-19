@@ -90,8 +90,10 @@ start one.
 - "Set a timer for ten minutes" by voice still goes to Home Assistant, because the sentence does.
   Nothing about voice changes.
 
-Open: whether a device timer should appear in Home Assistant as a countdown entity (nice, more
-surface) or stay invisible to it (simpler, and honest — it is the device's).
+Decided (#647): the timer that ends soonest, the device's own or Assist's, appears in Home Assistant
+as one countdown pair (`next_timer_ends`, `next_timer`); several at once stay in Timers and
+`alarms_list`. A stopgap until ESPHome carries Home Assistant's `timer_list` domain
+(home-assistant/architecture#1407), which holds any number of timers in one entity.
 
 ## M2 — Radio without Home Assistant
 

@@ -4,6 +4,7 @@ package display
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"slices"
 	"time"
@@ -36,6 +37,10 @@ func chordAt(y int) int {
 	d := float64(y - center)
 	return int(2*math.Sqrt(math.Max(float64(center*center)-d*d, 0))) - 80
 }
+
+// calendarReads is how well a calendar's color c reads on the Spot, as readableCalendarColor holds a
+// color picked in Home Assistant to: the dot beside an event, on the ground.
+func calendarReads(c color.RGBA) []float64 { return []float64{colorContrast(c, colIconGround)} }
 
 // calendarFace is Today, or Next: each event's title with its calendar's color beside it, and when.
 func (r *roundRenderer) calendarFace(s roundScene) {

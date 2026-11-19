@@ -6,6 +6,7 @@ package buttons
 
 import (
 	"log/slog"
+	"slices"
 	"sync"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -20,25 +21,28 @@ func init() {
 
 // Event types, as Home Assistant sees them. Repeats are not reported: a volume ramp would fill the
 // logbook with dozens of entries for one press.
+//
+// DoublePress and TriplePress are the action button's only (#627). Press still fires for every tap the
+// moment it is let go, so nothing that acts on Press gets slower: a double press reaches Home Assistant
+// as press, press, double_press, and a triple as those and then press, triple_press.
 const (
-	Press    = "press"
-	Hold     = "hold"
-	LongHold = "long_hold"
+	Press       = "press"
+	Hold        = "hold"
+	LongHold    = "long_hold"
+	DoublePress = "double_press"
+	TriplePress = "triple_press"
 )
 
-// order is the buttons as Home Assistant lists them, since a map has none. The power key is listed
-// only where there is one: every Echo has the other four's entities, but a power key on a device
-// without one would sit at unknown for good. The same goes for a key a board is known to lack
-// (buttons.Missing: the Echo Input's volume keys).
+// order is the buttons as Home Assistant lists them, since a map has none. A button is listed only
+// where the board has it, as an entity for one it lacks would sit at unknown for good: the Shows and
+// the Spot have no action button, no Echo has a power key of its own, and the Dots' codes list volume
+// keys the Echo Input is known to lack (buttons.Missing).
 var order = func() []buttons.Name {
 	var o []buttons.Name
-	for _, n := range []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp} {
-		if !buttons.Missing(n) {
+	for _, n := range []buttons.Name{buttons.Action, buttons.Mute, buttons.VolumeDown, buttons.VolumeUp, buttons.Power} {
+		if buttons.Has(n) && !buttons.Missing(n) {
 			o = append(o, n)
 		}
-	}
-	if buttons.Has(buttons.Power) {
-		o = append(o, buttons.Power)
 	}
 	return o
 }()
@@ -61,12 +65,16 @@ func Get() *Events {
 			types = append(types, LongHold)
 		}
 		for _, name := range order {
+			t := types
+			if name == buttons.Action {
+				t = append(slices.Clone(types), DoublePress, TriplePress)
+			}
 			shared.events[name] = &esphome.Event{
 				Base: esphome.Base{
 					ObjectID: "button_" + string(name),
 					Name:     label(string(name)) + " button",
 				},
-				Types: types,
+				Types: t,
 			}
 		}
 		buttons.Get().Events.Listen(shared.report)
@@ -101,15 +109,28 @@ func (e *Events) report(ev buttons.Event) {
 	if !ok {
 		return
 	}
-	switch ev.Kind {
-	case buttons.Hold:
-		entity.Trigger(Hold)
-		return
-	case buttons.LongHold:
-		entity.Trigger(LongHold)
-		return
+	if t, ok := eventType(ev); ok {
+		entity.Trigger(t)
 	}
-	entity.Trigger(Press)
+}
+
+// eventType is what Home Assistant is told for a button's event, and false for one it is not told.
+// A double or triple tap is told for the action button only, the one that lists them: before, a double
+// tap of any button reached Home Assistant as a third press, which no automation could tell from one.
+func eventType(ev buttons.Event) (string, bool) {
+	switch ev.Kind {
+	case buttons.Tap:
+		return Press, true
+	case buttons.Hold:
+		return Hold, true
+	case buttons.LongHold:
+		return LongHold, true
+	case buttons.DoubleTap:
+		return DoublePress, ev.Name == buttons.Action
+	case buttons.TripleTap:
+		return TriplePress, ev.Name == buttons.Action
+	}
+	return "", false
 }
 
 func label(name string) string {

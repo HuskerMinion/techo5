@@ -50,12 +50,12 @@ func historySection(w http.ResponseWriter, token string) {
 	if !layout.HasMicrophone() {
 		return
 	}
-	fieldsetOpen(w, "history", "Recent voice requests")
+	turns := pastTurns()
+	sectionOpen(w, "history", "Recent voice requests", historySummary(turns)...)
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">The last 10 voice requests this device took, newest first: when, which
 	  assistant, the wake word's score, what was heard, the reply, how it ended and how long each part took. Kept
 	  in memory only: never saved, never in the diagnostics download, and gone when the device restarts. Like
 	  Send voice text, the words are left out while that is off.</p>`)
-	turns := pastTurns()
 	if len(turns) == 0 {
 		fmt.Fprint(w, `<p class="note">Nothing yet.</p>`)
 	} else {
@@ -78,8 +78,24 @@ func historySection(w http.ResponseWriter, token string) {
 	}
 	// Refresh differs from the page's own address in more than its fragment, so following it reloads.
 	fmt.Fprintf(w, `<form method="post" action="/setup/history/clear" class="btns"><input type="hidden" name="token" value="%s">
-	 <a href="/setup?tab=voice&amp;history=1#sec-history">Refresh</a>
-	 <button type="submit">Clear</button></form></fieldset>`, html.EscapeString(token))
+	 <a href="/setup?tab=voice&amp;history=1&amp;open=history#sec-history">Refresh</a>
+	 <button type="submit">Clear</button></form>`, html.EscapeString(token))
+	sectionClose(w)
+}
+
+// historySummary is the line on the shut card: how many requests are kept, and when the newest was.
+// Never what was said.
+func historySummary(turns []activity.Past) []string {
+	if len(turns) == 0 {
+		return []string{"Nothing yet"}
+	}
+	newest := turns[0].At
+	for _, t := range turns {
+		if t.At.After(newest) {
+			newest = t.At
+		}
+	}
+	return []string{count(len(turns), "request", "requests"), "last " + newest.Local().Format("Jan 2, 3:04 PM")}
 }
 
 // took is the parts of a turn that have a time, in seconds.

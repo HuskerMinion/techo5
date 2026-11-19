@@ -88,17 +88,25 @@ func takesWhat(c takes.Card, most int) string {
 }
 
 // Record wake word (feature/takes run.go), in the Voice group of the Sound card: Start, with how many
-// takes and how far apart above it. The tap on Start is the press at the device, so the run starts at
+// takes and how far apart above it, and with two wake words loaded which of them. The tap on Start is the press at the device, so the run starts at
 // once; behind the settings lock, as starting the setup page's recording is.
 
-// recordWordRows are the rows: Start, the count and the gap.
+// recordWordRows are the rows: Start, the wake word when there are two to choose from, the count and
+// the gap. The word's row is not there with one word loaded: nothing to choose, as before there was a
+// choice.
 func recordWordRows() []settingRow {
-	count, gap := takes.Get().RunPlan()
-	return []settingRow{
+	rec := takes.Get()
+	count, gap := rec.RunPlan()
+	rows := []settingRow{
 		{id: "recordword", label: tr("record_wake_word"), sub: recordWordSub(), kind: ctlButton, button: tr("ui_start")},
-		{id: "recordcount", label: tr("ui_record_takes"), kind: ctlStepper, value: fmt.Sprint(count)},
-		{id: "recordgap", label: tr("ui_record_seconds_between"), kind: ctlStepper, value: fmt.Sprintf("%d s", gap)},
 	}
+	if w, ok := rec.RunWord(); ok && len(rec.RunWords()) > 1 {
+		rows = append(rows, settingRow{id: "recordslot", label: tr("wake_word"), kind: ctlStepper, value: w.Name()})
+	}
+	return append(rows,
+		settingRow{id: "recordcount", label: tr("ui_record_takes"), kind: ctlStepper, value: fmt.Sprint(count)},
+		settingRow{id: "recordgap", label: tr("ui_record_seconds_between"), kind: ctlStepper, value: fmt.Sprintf("%d s", gap)},
+	)
 }
 
 // recordWordRefusedFor is how long a start that could not be made is said under Record wake word.
@@ -128,7 +136,8 @@ func recordWordSub() string {
 	return tr("ui_record_sends_to_wakesmith")
 }
 
-// recordWordTap is a tap on one of the rows: Start, or a step of the count (by five) or the gap.
+// recordWordTap is a tap on one of the rows: Start, or a step of the wake word, the count (by five) or
+// the gap.
 func recordWordTap(id string, p part) {
 	rec := takes.Get()
 	count, gap := rec.RunPlan()
@@ -140,6 +149,8 @@ func recordWordTap(id string, p part) {
 		step = 1
 	}
 	switch id {
+	case "recordslot":
+		rec.StepRunWord(step)
 	case "recordcount":
 		if step != 0 {
 			rec.SetRunPlan(count+5*step, gap)

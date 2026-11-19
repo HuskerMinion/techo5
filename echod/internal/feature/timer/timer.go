@@ -71,6 +71,9 @@ type Timers struct {
 	// the one place a timer of its own can still be watched.
 	names *esphome.TextSensor
 
+	// next is the timer that ends soonest, as a countdown for a dashboard and for automations (next.go).
+	next next
+
 	// woke is how a new timer restarts the redraw, which stops while there is nothing counting down.
 	woke chan struct{}
 
@@ -186,6 +189,7 @@ func build() *Timers {
 				Category: esphome.CategoryDiagnostic,
 			},
 		},
+		next: newNext(),
 		woke: make(chan struct{}, 1),
 		held: map[string]*timer{},
 	}
@@ -197,7 +201,9 @@ func build() *Timers {
 
 func (t *Timers) Name() string { return "timers" }
 
-func (t *Timers) Entities() []esphome.Entity { return []esphome.Entity{t.names} }
+func (t *Timers) Entities() []esphome.Entity {
+	return []esphome.Entity{t.names, t.next.ends, t.next.label}
+}
 
 // Actions let Home Assistant set and cancel the device's own timers, which run and ring here with Home
 // Assistant away. Its own timers, set by voice through Assist, are canceled the same way they were set.
@@ -600,9 +606,13 @@ func (t *Timers) Event(e esphome.TimerEvent) {
 	t.Changed.Emit(struct{}{})
 }
 
-// publish names what is counting down, soonest first. It follows the table rather than the clock, so
-// it does not send Home Assistant anything four times a second.
-func (t *Timers) publish() { t.names.Set(t.describe(time.Now())) }
+// publish names what is counting down, soonest first, and which timer is next. It follows the table
+// rather than the clock, so it does not send Home Assistant anything four times a second.
+func (t *Timers) publish() {
+	now := time.Now()
+	t.names.Set(t.describe(now))
+	t.publishNext(now)
+}
 
 // describe is what Home Assistant is told is counting down: each timer by name and what is left of it,
 // soonest first. A name on its own does not say whether it is the timer somebody is waiting on, and a

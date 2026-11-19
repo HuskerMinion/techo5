@@ -15,7 +15,8 @@ import (
 // answer on a card of frosted glass a little above the middle. A turn opens with a gold globe at the
 // right edge and a wave of pink crossing the screen, frosting the page as it goes. Under the same
 // conditions as the cue light, and the words under the same as the captions (cueOver); a tap on the
-// card puts it away, as a tap on the captions does.
+// card puts it away, as a tap on the captions does. An answer longer than the card scrolls on it with
+// the voice, by the same reckoning of how much has been said (voice.Spoken) as the Classic pages.
 
 // rainbowFrame is how often Rainbow is drawn again while it moves, from the start of one frame to the
 // next: the other turn screens' pace (eqFrame). A frame that takes longer is followed after
@@ -37,7 +38,7 @@ func (r *renderer) rainbowBegin(s scene) {
 	light, words := cueOver(s)
 	var t rainbow.Turn
 	if light {
-		t = rainbow.Turn{Phase: s.cue, Heard: s.heard, Reply: s.reply}
+		t = rainbow.Turn{Phase: s.cue, Heard: s.heard, Reply: s.reply, Said: s.said}
 		if !words || s.failed != "" {
 			// A failed request's line is the plain captions' (turnCue): the card has no words then.
 			t.Heard, t.Reply = "", ""

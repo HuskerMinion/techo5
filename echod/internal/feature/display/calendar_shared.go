@@ -5,9 +5,11 @@ package display
 import (
 	"image/color"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -23,14 +25,77 @@ var calendarColors = []color.RGBA{
 	{92, 190, 178, 255},  // teal
 }
 
-// calendarColor is a calendar's color, by its place among the calendars shown.
+// calendarColor is a calendar's color: the one picked for it in Home Assistant, kept readable, or else
+// ours, by its place among the calendars shown.
 func calendarColor(order []string, cal string) color.RGBA {
+	if c, ok := home.Get().CalendarColor(cal); ok {
+		if c, ok := readableCalendarColor(c); ok {
+			return c
+		}
+	}
 	for i, c := range order {
 		if c == cal {
 			return calendarColors[i%len(calendarColors)]
 		}
 	}
 	return calendarColors[len(calendarColors)-1]
+}
+
+// readable keeps the colors readableCalendarColor has worked out, by the color and the theme it was
+// worked out for, so a frame that draws the calendar does not work them out again.
+var readable struct {
+	sync.Mutex
+	kept map[readableKey]readableColor
+}
+
+type readableKey struct{ c, ground, accent, text color.RGBA }
+
+type readableColor struct {
+	c  color.RGBA
+	ok bool
+}
+
+// readableCalendarColor is c, a color picked in Home Assistant, as near to it as reads as well as our
+// own calendars' colors do on the theme in force: each of calendarReads' contrasts at least the least
+// any of ours has. A pale yellow on a light theme is deepened and a navy on a dark one lightened, a step
+// at a time toward black or white, which keeps its hue, until it does. A color that never does is not
+// used, and the calendar keeps ours.
+func readableCalendarColor(c color.RGBA) (color.RGBA, bool) {
+	key := readableKey{c, walnut, amber, cream}
+	readable.Lock()
+	defer readable.Unlock()
+	if got, ok := readable.kept[key]; ok {
+		return got.c, got.ok
+	}
+	if readable.kept == nil || len(readable.kept) > 64 {
+		readable.kept = map[readableKey]readableColor{}
+	}
+	least := calendarReads(calendarColors[0])
+	for _, own := range calendarColors[1:] {
+		for i, v := range calendarReads(own) {
+			least[i] = min(least[i], v)
+		}
+	}
+	meets := func(c color.RGBA) bool {
+		for i, v := range calendarReads(c) {
+			if v < least[i] {
+				return false
+			}
+		}
+		return true
+	}
+	got := readableColor{}
+	const steps = 40
+	for step := 0; step <= steps && !got.ok; step++ {
+		for _, toward := range []color.RGBA{{255, 255, 255, 255}, {0, 0, 0, 255}} {
+			if try := lerp(c, toward, float64(step)/steps); meets(try) {
+				got = readableColor{try, true}
+				break
+			}
+		}
+	}
+	readable.kept[key] = got
+	return got.c, got.ok
 }
 
 // eventsOn is the events of a list that touch day.

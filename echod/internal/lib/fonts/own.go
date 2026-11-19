@@ -57,6 +57,8 @@ type ownEntry struct {
 	mod  time.Time
 	fh   *os.File
 	font *sfnt.Font
+	// color is its color glyphs, nil for a font with none (color.go).
+	color *colorFont
 }
 
 func (e ownEntry) sig() fileSig { return fileSig{e.file, e.size, e.mod} }
@@ -158,12 +160,12 @@ func ownFonts() []ownEntry {
 	return slices.Clone(own.inUse)
 }
 
-// OwnDraws is whether a font in the folder other than the file named skip has a glyph for r: one
+// OwnDraws is whether a font in the folder other than the files named in skip has a glyph for r: one
 // somebody put there for a script that ships with no font (feature/cjkfont).
-func OwnDraws(r rune, skip string) bool {
+func OwnDraws(r rune, skip ...string) bool {
 	var buf sfnt.Buffer
 	for _, e := range ownFonts() {
-		if e.file == skip {
+		if slices.Contains(skip, e.file) {
 			continue
 		}
 		if i, err := glyphIndex(e.font, &buf, r); err == nil && i != 0 {
@@ -255,7 +257,12 @@ func load(files []fileSig) {
 			}
 			o.Name = name
 			total += o.Size
-			inUse = append(inUse, ownEntry{file: sig.name, size: sig.size, mod: sig.mod, fh: fh, font: f})
+			c, err := readColor(fh)
+			if err != nil {
+				// Its glyphs are still drawn, each as its own outline, in the text's color.
+				slog.Warn("fonts: a font of your own's colors cannot be read", "file", o.File, "err", err)
+			}
+			inUse = append(inUse, ownEntry{file: sig.name, size: sig.size, mod: sig.mod, fh: fh, font: f, color: c})
 		}
 		if o.Problem != "" {
 			slog.Warn("fonts: a font of your own is not used", "file", o.File, "why", o.Problem)

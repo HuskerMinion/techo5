@@ -123,11 +123,35 @@ func head(w http.ResponseWriter) {
  nav.rail a small{display:block;color:var(--dimtext);font-size:.8rem;line-height:1.3}
  nav.rail a:hover{background:var(--field)}
  nav.rail a.on{background:var(--field);border-color:var(--line);color:var(--accent)}
+ nav.rail{max-height:calc(100vh - 2rem);overflow-y:auto}
+ nav.rail .toc{list-style:none;margin:.1rem 0 .4rem;padding:0 0 0 .8rem;border-left:1px solid var(--line);margin-left:.8rem}
+ nav.rail .toc a{padding:.3rem .6rem;font-size:.88rem;color:var(--dimtext);line-height:1.3}
+ nav.rail .toc a:hover{color:var(--text)}
+ .also{margin:1rem 0} .also-devs{display:flex;flex-wrap:wrap;gap:.5rem 1.25rem} .also-devs label{display:flex;align-items:center;gap:.4rem;min-height:var(--tap)}
+ .also-said ul{margin:.4rem 0 0;padding-left:1.2rem}
+ table.devices{border-collapse:collapse;width:100%%} table.devices th,table.devices td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:middle}
+ table.devices th small{display:block;font-weight:400;color:var(--dim)} table.devices td.diff{background:color-mix(in srgb,var(--accent) 18%%,var(--bg))} table.devices td.na{color:var(--dim)}
+ .wrap:has(.cards),.wrap:has(.found){max-width:96rem} .cards .note,.found .note{max-width:none}
+ .tabhead{display:flex;flex-direction:row-reverse;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.6rem 1.5rem;margin:0 0 .8rem}
+ .tabhead h2{margin:0}
+ form.find{display:flex;gap:.5rem;flex:0 1 24rem;min-width:0}
+ form.find input{flex:1;min-width:0;-webkit-appearance:none;appearance:none} form.find button{flex:none}
+ .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ .found .where{margin:0 0 .3rem}
+ .cardbar{display:flex;gap:1.2rem;flex-wrap:wrap;margin:-.4rem 0 .8rem;font-size:.9rem}
+ .cardbar a{display:inline-flex;align-items:center;min-height:var(--tap)}
+ .cards{display:grid;grid-template-columns:minmax(0,1fr);column-gap:1rem;align-items:start}
+ .cards>*{grid-column:1/-1;min-width:0}
+ @media (min-width:72rem){
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cards>details.card:not([open]){grid-column:auto}
+ }
  @media (max-width:44rem){
   .layout{grid-template-columns:minmax(0,1fr);gap:1rem}
-  nav.rail{flex-direction:row;overflow-x:auto;position:sticky;top:0;z-index:1;background:var(--bg);padding:.3rem 0;border-bottom:1px solid var(--line)}
+  nav.rail{flex-direction:row;overflow-x:auto;position:sticky;top:0;z-index:1;background:var(--bg);padding:.3rem 0;border-bottom:1px solid var(--line);max-height:none}
   nav.rail a{white-space:nowrap;padding:.65rem .9rem}
-  nav.rail a small{display:none}
+  nav.rail a small,nav.rail .toc{display:none}
+  .tabhead{flex-direction:column;align-items:stretch} form.find{flex:none;width:100%%}
  }
  details{border:1px solid var(--line);border-radius:10px;margin:0 0 .6rem;background:var(--drawer)}
  details>summary{list-style:none;cursor:pointer;padding:.7rem .9rem;display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
@@ -136,6 +160,14 @@ func head(w http.ResponseWriter) {
  details[open]>summary::after{transform:rotate(90deg)}
  details .body{padding:0 .9rem .9rem;border-top:1px solid var(--line)}
  details>:not(summary):not(.body){margin:0 .9rem .9rem}
+ details.card{border-radius:12px;margin:0 0 1rem}
+ details.card>summary{padding:.75rem 1rem;min-height:var(--tap);flex-wrap:nowrap;gap:.8rem;border-radius:12px}
+ details.card>summary .ttl{font-weight:600;min-width:0;flex:0 1 auto}
+ details.card>summary .sum{flex:1 1 0;min-width:0;color:var(--dimtext);font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ details.card>summary::after{flex:none;font-size:1.2rem;line-height:1}
+ details.card[open]>summary{border-bottom:1px solid var(--line);border-radius:12px 12px 0 0}
+ details.card>.in{margin:0;padding:.9rem 1rem 1rem}
+ details.card>.in>:first-child{margin-top:0} details.card>.in>:last-child{margin-bottom:0}
  .when{font-weight:600;font-variant-numeric:tabular-nums;min-width:4.6rem}
  .what{flex:1;min-width:8rem}
  .where{color:var(--dimtext);font-size:.85rem}
@@ -166,8 +198,8 @@ func head(w http.ResponseWriter) {
 </style>`, c[0], c[1], c[2], c[3], c[4], ok, bad, scheme)
 }
 
-// nav is the tabs, the one being shown marked.
-func nav(w http.ResponseWriter, on string) {
+// nav is the tabs, the one being shown marked, with its sections listed under it (toc).
+func nav(w http.ResponseWriter, on string, cards []card) {
 	fmt.Fprint(w, `<nav class="rail">`)
 	for _, t := range shownTabs() {
 		cls := ""
@@ -176,6 +208,9 @@ func nav(w http.ResponseWriter, on string) {
 		}
 		fmt.Fprintf(w, `<a href="/setup?tab=%s"%s>%s<small>%s</small></a>`,
 			t.id, cls, html.EscapeString(t.title), html.EscapeString(t.blurb))
+		if t.id == on {
+			toc(w, t.id, cards)
+		}
 	}
 	fmt.Fprint(w, `</nav>`)
 }
@@ -192,10 +227,10 @@ var tabFor = map[string]string{
 
 	"brain": "voice", "replyplayer": "voice", "realtime": "voice", "listening": "voice",
 	"house": "voice", "phonebook": "voice", "wakecall": "voice", "wakeword-remove": "voice",
-	"wakewords": "voice", "takes": "voice", "history": "voice", "wakeclips": "voice", "wakeclips-test": "voice", "wakeclips-trust": "voice", "wakeclips-keep": "voice",
+	"wakewords": "voice", "takes": "voice", "history": "voice", "wakeclips": "voice", "wakeclips-test": "voice", "wakeclips-trust": "voice", "wakeclips-keep": "voice", "scores": "voice",
 
 	"alarm_add": "alarms", "alarm_edit": "alarms", "alarm_prefs": "alarms",
-	"timer_cancel": "alarms", "snoozes_cancel": "alarms",
+	"timer_cancel": "alarms", "snoozes_cancel": "alarms", "haalarms": "alarms",
 
 	"screen": "screen", "themes": "screen", "theme-colors": "screen", "font-remove": "screen", "fonts": "screen",
 	"dashpanel": "screen", "dashboard": "screen", "calendar-look": "screen", "todo": "screen",
@@ -210,11 +245,13 @@ var tabFor = map[string]string{
 	"wifi": "network", "forget": "network", "address": "network", "adopt": "network", "haaccess": "network", "timeserver": "network",
 	"tailscale": "network", "netbird": "network", "wallclock": "network",
 
-	"lock": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy",
+	"now": "status", "switchedon": "status", "diagnostics": "status",
+
+	"lock": "privacy", "screenpage": "privacy", "screenkey": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy", "thispage": "privacy",
 
 	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",
-	"ringwait": "system", "settingsfile": "system", "share": "system", "giftreset": "system",
+	"ringwait": "system", "settingsfile": "system", "share": "system", "devices": "system", "giftreset": "system",
 }
 
 // formTab is the tab a form is on here: its tabFor, except on a device with no microphones, which has no
@@ -249,6 +286,8 @@ func back(what, key, value string) string {
 	}
 	if key != "" {
 		q.Set("at", section)
+	} else {
+		q.Set("open", section) // nothing to say, but the card it came from is opened all the same
 	}
 	return "/setup?" + q.Encode() + "#sec-" + section
 }

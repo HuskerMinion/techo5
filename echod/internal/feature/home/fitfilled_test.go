@@ -24,8 +24,9 @@ func TestOnlyPhotosOfTheScreensShapeFill(t *testing.T) {
 		{"4:3 on the round screen", 4000, 3000, 480, 480, true},
 		{"3:4 on the round screen", 3000, 4000, 480, 480, true},
 		{"square on the round screen", 3000, 3000, 480, 480, true},
-		{"16:9 on the round screen", 1920, 1080, 480, 480, false},
-		{"9:16 on the round screen", 1080, 1920, 480, 480, false},
+		{"16:9 on the round screen", 1920, 1080, 480, 480, true},
+		{"9:16 on the round screen", 1080, 1920, 480, 480, true},
+		{"a panorama on the round screen", 6000, 1500, 480, 480, true},
 		{"nothing known", 0, 0, 1280, 800, true},
 	} {
 		if got := shapeFills(tc.sw, tc.sh, tc.w, tc.h); got != tc.fills {
