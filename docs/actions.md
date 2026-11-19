@@ -1230,6 +1230,36 @@ data:
   duration: 5 minutes
 ```
 
+## Next timer
+
+The timer that ends soonest, whether it was set by voice through Assist or with `timer_start`, shows
+as a countdown in two sensors:
+
+- **Next timer ends** (`sensor.<node>_next_timer_ends`) is when it ends, as a timestamp. It's empty
+  (`unknown` in Home Assistant) when no timer is running.
+- **Next timer** (`sensor.<node>_next_timer`) is its label, `Pasta`. With no timer running but one
+  paused, it's the paused one with what it has left, `Pasta (paused, 4:05 left)`, and **Next timer
+  ends** stays empty. It's empty when there's no timer at all.
+
+A running timer always comes before a paused one. Silent timers (`timer_start_silent`) are left out.
+Several timers at once are in the **Timers** sensor and `alarms_list`.
+
+A tile or entity card shows the countdown with `format: relative`. A time trigger with an offset runs
+an automation before the timer ends:
+
+```yaml
+alias: Kitchen light on before the timer ends
+triggers:
+  - trigger: time
+    at:
+      entity_id: sensor.kitchen_echo_next_timer_ends
+      offset: "-00:01:00"
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: light.kitchen
+```
+
 ## Follow Home Assistant helpers as alarms
 
 In YAML, refer to this action as `esphome.<node>_alarms_follow`.
