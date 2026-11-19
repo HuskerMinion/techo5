@@ -334,7 +334,9 @@ func (m *Stream) play(url string, handOff bool, title *Title) *track {
 				safe.Go("media hand-off", func() { m.handOff(url, wanted) })
 			}
 		}
-		itself = ctx.Err() == nil
+		// A stream the device cannot decode did not drop: played again, it fails the same way, and the
+		// radio putting it back on would start a second hand-off over the first (#649).
+		itself = ctx.Err() == nil && !IsUnplayable(err)
 	})
 	return t
 }
@@ -499,6 +501,14 @@ func (m *Stream) unpauseIf(ok func(t *track, bySender bool) bool) bool {
 
 // Stop ends the track. There is nothing to come back to afterwards.
 func (m *Stream) Stop() { m.stopIf(nil) }
+
+// stopLoaded is Stop for something else taking the speaker: it ends a track that is loaded and does
+// nothing with none. Unlike Stop it is not an ask of its own, so a hand-off on its way is still wanted
+// when the music library's stream for it is what arrives (#649); a track loaded since has overtaken it
+// already.
+func (m *Stream) stopLoaded() {
+	m.stopIf(func(t *track, _ bool) bool { return t != nil })
+}
 
 // stopPaused ends the received track named name if it is the one loaded and the listener has it
 // paused, and says whether it did. It is looked at and ended in one hold of mu, so a play or another
