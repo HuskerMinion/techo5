@@ -2618,9 +2618,20 @@ stops it at shutdown: write it to run for as long as the device is up, or to han
 supervision. A script that does not exit is not waited for, and one that fails cannot hold up the
 daemon.
 
-This is on the Echo Show builds (Show 8 2nd gen included) and the Skylight; the Dot, Echo and Spot
-builds do not run it yet. Anyone with SSH or a root shell can leave a script here that runs at every
-boot, so only put something here you trust.
+Every build that boots TECHO5's Linux runs it: the Echo Show builds (Show 8 2nd gen included), the
+Skylight and the Echo Spot, and the TECHO5 Dot builds for the Echo Dot 2nd gen, the Echo 2nd gen, the
+Echo Dot 3rd gen and the Echo Input. On the Dot builds it is started last, after the daemon has been
+let start and the check that commits an update is under way. Their logs are also kept to about 1 MB
+each while the device is up, so a long boot's earlier output moves to `rc.local.log.1`. TECHO5 Panel
+is an Android app, not a Linux image, so it has no `rc.local`.
+
+The Dot builds are small. The Echo Dot 2nd gen has about 445 MB of its 481 MB free with everything
+running, and the Echo Dot 3rd gen about 420 MB of its 470 MB when idle, with about 1 GB free on
+userdata. A helper that uses up the memory can get the daemon stopped, and an update that cannot keep
+the daemon up is rolled back, so keep what runs there light. The Echo Spot has 2 GB of memory.
+
+Anyone with SSH or a root shell can leave a script here that runs at every boot, so only put
+something here you trust.
 
 ## Questions and problems
 
