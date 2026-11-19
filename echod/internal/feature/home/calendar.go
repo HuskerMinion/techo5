@@ -1,8 +1,11 @@
 package home
 
 import (
+	"context"
 	"errors"
+	"image/color"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -80,6 +83,8 @@ var calendar struct {
 	listAt   time.Time
 	listBusy bool
 	months   map[string]*calendarMonth
+	// colors is the color picked in Home Assistant for each calendar that has one, read with the list.
+	colors map[string]color.RGBA
 }
 
 // calendarMonth is one month's events, from the sources chosen when it was read.
@@ -95,6 +100,14 @@ type calendarMonth struct {
 func (f *Feature) Calendars() []hass.Calendar {
 	calendar.Lock()
 	defer calendar.Unlock()
+	f.freshCalendars()
+	// The calendars read from their iCal address come after Home Assistant's.
+	return append(slices.Clone(calendar.list), linkCalendars()...)
+}
+
+// freshCalendars starts a read of Home Assistant's calendars, and then of their colors, when the list
+// is stale and none is under way. The caller holds calendar's lock.
+func (f *Feature) freshCalendars() {
 	if time.Since(calendar.listAt) > calendarsEvery && !calendar.listBusy && hass.Get().Ready() {
 		calendar.listBusy = true
 		go func() {
@@ -110,11 +123,63 @@ func (f *Feature) Calendars() []hass.Calendar {
 			calendar.Unlock()
 			if err == nil {
 				f.Changed.Emit(struct{}{})
+				f.readCalendarColors(list)
 			}
 		}()
 	}
-	// The calendars read from their iCal address come after Home Assistant's.
-	return append(slices.Clone(calendar.list), linkCalendars()...)
+}
+
+// readCalendarColors reads the colors picked in Home Assistant for its calendars, all of them in one
+// command, after the list they are on. One that cannot be read leaves the colors as they were: an older
+// Home Assistant without the command, or a moment the websocket is down, keeps the device's own.
+func (f *Feature) readCalendarColors(list []hass.Calendar) {
+	ids := make([]string, 0, len(list))
+	for _, c := range list {
+		ids = append(ids, c.ID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	hexes, err := hass.Get().CalendarColors(ctx, ids)
+	if err != nil {
+		slog.Debug("calendar: reading the calendars' colors failed", "err", err)
+		return
+	}
+	colors := map[string]color.RGBA{}
+	for id, hex := range hexes {
+		if c, ok := hexColor(hex); ok {
+			colors[id] = c
+		}
+	}
+	calendar.Lock()
+	same := maps.Equal(colors, calendar.colors)
+	calendar.colors = colors
+	calendar.Unlock()
+	if !same {
+		calendarVersion.Add(1)
+		f.Changed.Emit(struct{}{})
+	}
+}
+
+// hexColor is a color written "#rrggbb", as Home Assistant keeps a calendar's.
+func hexColor(hex string) (color.RGBA, bool) {
+	if len(hex) != 7 || hex[0] != '#' {
+		return color.RGBA{}, false
+	}
+	v, err := strconv.ParseUint(hex[1:], 16, 32)
+	if err != nil {
+		return color.RGBA{}, false
+	}
+	return color.RGBA{uint8(v >> 16), uint8(v >> 8), uint8(v), 255}, true
+}
+
+// CalendarColor is the color picked in Home Assistant for a calendar, if it has one. Asking starts a
+// read of the calendars, and their colors, when those are stale, as Calendars does; it never waits.
+func (f *Feature) CalendarColor(id string) (color.RGBA, bool) {
+	calendar.Lock()
+	defer calendar.Unlock()
+	f.freshCalendars()
+	c, ok := calendar.colors[id]
+	return c, ok
 }
 
 // CalendarSources is the calendars this device shows, in the order chosen; none is no calendar.
