@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -260,14 +261,24 @@ func (r *Ring) hasCurrent() bool {
 	return err == nil
 }
 
-// SetBootAnimation toggles the driver's built-in boot animation.
+// SetBootAnimation toggles the driver's built-in boot animation. On the Echo Input it is the LP5562's
+// bootanimation, on the chip beside its LED class devices: the kernel's own thread, which repaints the
+// LED blue every 88 ms until it is told to stop, so left on it pulses over everything drawn (#641). A
+// kernel without it has nothing to stop.
 func (r *Ring) SetBootAnimation(on bool) error {
-	if r.absent || r.single {
+	if r.absent {
 		return nil
 	}
 	v := "0"
 	if on {
 		v = "1"
+	}
+	if r.single {
+		attr := filepath.Join(filepath.Dir(r.path()), "bootanimation")
+		if _, err := os.Stat(attr); err != nil {
+			return nil
+		}
+		return os.WriteFile(attr, []byte(v), 0o644)
 	}
 	return os.WriteFile(r.attr("boot_animation"), []byte(v), 0o644)
 }
