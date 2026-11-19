@@ -32,8 +32,9 @@ import (
 // its settings would be the wrong one.
 //
 // The other ways a station comes to nothing are said the same way, each in its own words: Home
-// Assistant refusing to play one from a list (PlayFailedHint), and a stream left off after it kept
-// ending (DroppingHint). They were lines in the log, and the screen went back to the clock, or stayed
+// Assistant refusing to play one from a list (PlayFailedHint), a stream left off after it kept
+// ending (DroppingHint), and a stream in a format the device cannot decode, with no music library to
+// hand it to (UnplayableHint). They were lines in the log, and the screen went back to the clock, or stayed
 // on the song before, with nothing to say a station had been asked for at all.
 
 // Hint is a short note for the screen about something this device asked for that went nowhere. The
@@ -59,6 +60,9 @@ const (
 	PlayFailedHint = "hint_play_failed"
 	// DroppingHint is a station left off after its stream ended by itself too many times.
 	DroppingHint = "hint_dropping"
+	// UnplayableHint is a station whose stream is in a format this device cannot decode, with no music
+	// library set up to play it instead.
+	UnplayableHint = "hint_unplayable"
 )
 
 // HintText is a note's words, or its heading's, in the screen's language.
@@ -153,6 +157,28 @@ func (f *Feature) startFailed(key string) {
 	f.hinted = true
 	f.mu.Unlock()
 	f.Hint.Emit(radioHint(key))
+}
+
+// unplayable is a stream the device cannot decode, with no music library set up to play it instead
+// (media's OnUnplayable). When it is the stream of the station asked for, the note says so: the radio
+// does not put such a stream back on, since it would fail the same way, so without the note it would
+// just go quiet. Not under f.mu.
+func (f *Feature) unplayable(url string) {
+	f.mu.Lock()
+	station := f.asked
+	if station != "" && time.Since(f.askedAt) > askedFor {
+		station = ""
+	}
+	if url != f.stationURL {
+		station = "" // a song or a sound played after the station is not the station
+	}
+	f.mu.Unlock()
+	if station == "" {
+		return
+	}
+	slog.Warn("radio: this device cannot decode the station's stream, and no music library is set up to play it",
+		"station", station)
+	f.startFailed(UnplayableHint)
 }
 
 // favoriteFailed is the star's script call refused: the note names the script it needs, since a 400 is
