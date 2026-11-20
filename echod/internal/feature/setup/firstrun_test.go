@@ -257,3 +257,28 @@ func TestTheSetupPagesLanguageStep(t *testing.T) {
 		t.Fatalf("an unknown language went to %q, step %q", to, firstrun.Step())
 	}
 }
+
+// Back is on every counted step but the first, walks the steps the other way, and does nothing where
+// it is not offered.
+func TestTheSetupPageGoesBack(t *testing.T) {
+	f, c, _ := firstRunIn(t)
+	steps := firstrun.Steps()
+	backForm := `name="what" value="back"`
+	for i, s := range steps {
+		if err := config.Set().FirstRun().Step(s); err != nil {
+			t.Fatal(err)
+		}
+		body := get(f, firstRunPath, c).Body.String()
+		if want := firstrun.HasBack(s); strings.Contains(body, backForm) != want {
+			t.Errorf("step %q: Back on the page %v, want %v", s, !want, want)
+		}
+		firstRunPost(t, f, c, url.Values{"what": {"back"}})
+		want := s
+		if firstrun.HasBack(s) {
+			want = steps[i-1]
+		}
+		if got := firstrun.Step(); got != want {
+			t.Errorf("Back on %q went to %q, want %q", s, got, want)
+		}
+	}
+}

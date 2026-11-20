@@ -89,6 +89,10 @@ func (d *Display) firstRunTapSpot(x, y int) {
 		d.firstRunFinish()
 		return
 	}
+	if spotShowsBack(v) && image.Pt(x, y).In(spotBackRect) {
+		d.firstRunBack(v.step)
+		return
+	}
 	if v.step == frHome && v.showKey && v.key != "" {
 		d.mu.Lock()
 		d.firstRun.showKey = false
@@ -203,8 +207,21 @@ func frLangName(lang string) string {
 	return lang
 }
 
+// spotBackRect is where Back is tapped: over the step's count, at the top of the circle, apart from
+// the buttons stacked at its foot, which have no room for a fourth.
+var spotBackRect = image.Rect(center-100, 14, center+100, 58)
+
+// spotShowsBack is whether the step shows Back: on the steps that have one (firstrun.HasBack), and
+// not while a rename restarts the daemon or the key is up (a tap anywhere puts it away).
+func spotShowsBack(v firstRunView) bool {
+	return firstrun.HasBack(v.step) && !v.renaming && !(v.step == frHome && v.showKey && v.key != "")
+}
+
 // firstRunFaceSpot draws the step.
 func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
+	if spotShowsBack(v) {
+		r.centered(r.tiny, "‹ "+tr("back"), 44, colDim)
+	}
 	if n, of := v.number, v.of; n > 0 {
 		r.centered(r.tiny, fmt.Sprintf(tr("firstrun_step_d_of_d"), n, of), 74, colDim)
 	}

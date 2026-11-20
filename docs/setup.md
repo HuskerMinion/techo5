@@ -22,11 +22,14 @@ and clock**, **Wi-Fi**, **Time zone**, **Name and room**, **Home Assistant**, **
 check** (a device with no screen has no **Language and clock**). A step that is
 already done, such as Wi-Fi set by the installer, just shows what is set, with Next. Each step is kept
 as it is finished, so a restart picks up where it stopped, and finishing it on any face (the screen or
-the setup page) finishes it everywhere.
+the setup page) finishes it everywhere. Every step after the first has **Back**, to the step before:
+going back undoes nothing (the network stays joined, Home Assistant keeps the device), the step just
+shows what is set, with Next.
 
 - **On a Show** (and the Skylight Calendar), the screen shows a card a step, starting and ending with
-  the welcome card.
-- **On a Spot**, the round screen shows the same steps, with the buttons stacked. What needs typing
+  the welcome card. Back is the **‹** key beside a step's title.
+- **On a Spot**, the round screen shows the same steps, with the buttons stacked and **Back** at the
+  top. What needs typing
   (another network, a name, a zone not in the clock's list) is done on a phone: **On a phone** opens
   the setup page, and the Spot asks for the tap that lets the phone in.
 - **On a TECHO5 Panel**, the screen shows the same cards without **Wi-Fi** and **Updates**: the

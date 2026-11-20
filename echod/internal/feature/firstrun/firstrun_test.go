@@ -119,6 +119,26 @@ func TestStepsInOrder(t *testing.T) {
 	}
 }
 
+// Back walks the same steps the other way, and is offered on every counted step but the first.
+func TestStepsBackInOrder(t *testing.T) {
+	fresh(t)
+	steps := Steps()
+	for i := len(steps) - 1; i > 0; i-- {
+		if got := Before(steps[i]); got != steps[i-1] {
+			t.Errorf("before %q: %q, want %q", steps[i], got, steps[i-1])
+		}
+	}
+	if got := Before(Hello); got != Hello {
+		t.Errorf("before hello: %q", got)
+	}
+	for i, s := range steps {
+		want := i > 1 && i < len(steps)-1
+		if HasBack(s) != want {
+			t.Errorf("step %q offers Back %v, want %v", s, HasBack(s), want)
+		}
+	}
+}
+
 // Reset clears the old home's things, keeps the device's own, and leaves first run to do.
 func TestResetClearsForSomeoneElse(t *testing.T) {
 	dir := fresh(t)

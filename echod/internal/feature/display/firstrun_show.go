@@ -111,6 +111,10 @@ func (d *Display) firstRunTap(x, y int) {
 			}
 		}
 	}
+	if frShowsBack(v) && image.Pt(x, y).In(d.r.frBackRect().Inset(-d.r.s(12))) {
+		d.firstRunBack(v.step)
+		return
+	}
 	buttons := firstRunButtons(v)
 	for i, b := range d.r.frButtonRects(buttons) {
 		if image.Pt(x, y).In(b) {

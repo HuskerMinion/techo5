@@ -158,6 +158,11 @@ func (d *Display) firstRunView(now time.Time) firstRunView {
 	if v.step != frSound {
 		fr.chimedOn = ""
 	}
+	if v.step != frHome {
+		// Away from the step, what it saw is forgotten: coming back to it (Back, from the screen or the
+		// setup page) shows Home Assistant as it is, and does not go on again by itself at once.
+		fr.waited, fr.homeAt = false, time.Time{}
+	}
 	d.mu.Unlock()
 	if v.step == frHome && !v.home {
 		v.key, v.adopt = firstrun.Key(), firstrun.AdoptUntil()
@@ -198,6 +203,18 @@ func (d *Display) firstRunReadWifi() {
 func (d *Display) firstRunGo(step string) {
 	firstrun.Go(step)
 	d.wake()
+}
+
+// firstRunBack goes back to the step before this one, shown afresh: the Home Assistant step's key put
+// away.
+func (d *Display) firstRunBack(step string) {
+	if !firstrun.HasBack(step) {
+		return
+	}
+	d.mu.Lock()
+	d.firstRun.showKey = false
+	d.mu.Unlock()
+	d.firstRunGo(firstrun.Before(step))
 }
 
 // firstRunLanguage makes lang the screen's language, and its usual clock; the rest of first run is in
