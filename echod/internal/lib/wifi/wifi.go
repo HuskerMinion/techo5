@@ -146,17 +146,27 @@ func Scan(ctx context.Context) ([]Network, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseScan(out), nil
+}
+
+// parseScan parses wpa_cli scan_results output, unescaping SSIDs back to plain UTF-8, skipping empty
+// or zeroed hidden entries, keeping the strongest signal per network name.
+func parseScan(out string) []Network {
 	best := map[string]Network{}
 	for i, line := range strings.Split(out, "\n") {
 		if i == 0 {
 			continue // the header
 		}
-		f := strings.Split(line, "\t")
-		if len(f) < 5 || strings.TrimSpace(f[4]) == "" {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(f) < 5 {
+			continue
+		}
+		ssid := decodeName(f[4])
+		if strings.TrimSpace(strings.Trim(ssid, "\x00")) == "" {
 			continue
 		}
 		sig, _ := strconv.Atoi(f[2])
-		n := Network{SSID: f[4], Signal: sig, Secured: strings.Contains(f[3], "WPA") || strings.Contains(f[3], "WEP"),
+		n := Network{SSID: ssid, Signal: sig, Secured: strings.Contains(f[3], "WPA") || strings.Contains(f[3], "WEP"),
 			Enterprise: strings.Contains(f[3], "-EAP")}
 		if cur, ok := best[n.SSID]; !ok || n.Signal > cur.Signal {
 			best[n.SSID] = n
@@ -167,7 +177,7 @@ func Scan(ctx context.Context) ([]Network, error) {
 		nets = append(nets, n)
 	}
 	sort.Slice(nets, func(i, j int) bool { return nets[i].Signal > nets[j].Signal })
-	return nets, nil
+	return nets
 }
 
 // Join writes the configuration for one network, makes the supplicant reread it, and waits for
@@ -363,7 +373,11 @@ func decodeName(s string) string {
 		case 'e':
 			b.WriteByte(0x1b)
 		case 'x':
-			v, err := strconv.ParseUint(s[min(i+1, len(s)):min(i+3, len(s))], 16, 8)
+			if i+2 >= len(s) {
+				b.WriteByte('x')
+				continue
+			}
+			v, err := strconv.ParseUint(s[i+1:i+3], 16, 8)
 			if err != nil {
 				b.WriteByte('x')
 				continue
