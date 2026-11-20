@@ -323,6 +323,8 @@ func newDetect() *Detect {
 	phone.Get().Changed.Listen(func(phone.State) {
 		go calls.follow(phone.Get().State(), time.Now())
 	})
+	// And what the stop word scored over each reply, said as the turn ends (replyscores.go).
+	followReplies(e, slog.Info)
 	for _, k := range commandKinds {
 		c := newCommand(d, k)
 		c.watch()

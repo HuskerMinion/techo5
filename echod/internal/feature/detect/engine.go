@@ -65,8 +65,9 @@ type Engine struct {
 	// board is what the words have scored lately, for the setup page (board.go).
 	board board
 
-	// peaks is each slot's highest score since MarkPeaks, nil when nothing asked (callscores.go).
-	peaks []Peak
+	// keepers keep the slots' highest scores, each for whoever asked for it (NewPeaks): a call's, a
+	// reply's.
+	keepers []*PeakKeeper
 
 	// Threshold is asked for every score, so a change in Home Assistant takes effect at once. It is
 	// per slot because the models disagree on scale.
@@ -531,16 +532,6 @@ func (e *Engine) score(frame []int16, source *mic.Source) {
 		if !ok {
 			continue
 		}
-		if e.peaks != nil {
-			p := &e.peaks[i]
-			if p.ID != s.model.ID {
-				// A word swapped in since the mark starts its own peak.
-				*p = Peak{Slot: i, ID: s.model.ID}
-			}
-			if score > p.Peak || p.At.IsZero() {
-				p.Peak, p.At = score, now
-			}
-		}
 		if !s.scored {
 			s.scored = true
 			slog.Info("wake word ready", "slot", i+1, "id", s.model.ID)
@@ -583,10 +574,16 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 	if e.Threshold != nil {
 		cutoff = e.Threshold(n)
 	}
-	// Every score, the held back ones too, for somebody watching on the setup page.
-	e.board.heard(n, score, now, now.Before(s.quiet))
+	// Every score, the held back ones too, for somebody watching on the setup page, and for whoever is
+	// keeping the peaks. To them a score in the hold after a detection is held back as well: it could
+	// not have fired either.
+	settling := now.Before(s.quiet)
+	e.board.heard(n, score, now, settling)
+	for _, k := range e.keepers {
+		k.note(n, s.model.ID, score, cutoff, settling || s.holding, now)
+	}
 
-	if now.Before(s.quiet) {
+	if settling {
 		s.suppressed++
 		return
 	}
@@ -642,6 +639,9 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 	// Feedback fires now; the peak is only for the log, and the slot settles when the hold ends.
 	s.holding, s.holdEnds = true, now.Add(Hold)
 	s.crossing, s.peak, s.crossCutoff = score, score, cutoff
+	for _, k := range e.keepers {
+		k.fired(n)
+	}
 
 	if e.OnDetect != nil {
 		safe.Go("wake detected", func() { e.OnDetect(n) })
@@ -705,36 +705,6 @@ func (e *Engine) Settle(d time.Duration, spared ...int) {
 			e.slots[i].quiet = until
 		}
 	}
-}
-
-// MarkPeaks starts each slot's highest score over again, the held back ones included, for Peaks.
-func (e *Engine) MarkPeaks() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.peaks = make([]Peak, len(e.slots))
-}
-
-// Peak is a slot's highest score since MarkPeaks, with the word that scored it.
-type Peak struct {
-	Slot int
-	ID   string
-	Peak float64
-	At   time.Time // when it scored that
-}
-
-// Peaks is the highest score of each slot that scored anything since MarkPeaks, a word taken out
-// since included, and stops keeping them. Nothing when MarkPeaks was not called.
-func (e *Engine) Peaks() []Peak {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	var out []Peak
-	for _, p := range e.peaks {
-		if p.ID != "" {
-			out = append(out, p)
-		}
-	}
-	e.peaks = nil
-	return out
 }
 
 // Quieted is whether the engines are down for a cut microphone (Quiet).
