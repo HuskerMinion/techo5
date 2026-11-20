@@ -226,10 +226,52 @@ func TestANameFromTheSupplicantIsReadBackPlain(t *testing.T) {
 		{`Bob\"s \\ Wi-Fi`, `Bob"s \ Wi-Fi`},
 		{`Caf\xc3\xa9`, "Café"},
 		{`one\ttwo`, "one\ttwo"},
+		{`Garden\xf0\x9f\x8c\xbb\xf0\x9f\x8c\xb5\xf0\x9f\x8c\xb4\xf0\x9f\x8c\x88`, "Garden🌻🌵🌴🌈"},
+		{`Studio-\xe5\xae\xb6\xe5\xba\xad\xe7\xbd\x91\xe7\xbb\x9c`, "Studio-家庭网络"},
+		{`foo\x5`, "foox5"},
 	} {
 		if got := decodeName(c.out); got != c.want {
 			t.Errorf("decodeName(%q) = %q, want %q", c.out, got, c.want)
 		}
+	}
+}
+
+// Scan results arrive with the same printf_encode escaping as status and list_networks, so UTF-8
+// names (such as emoji or CJK) must be unescaped before display or Join length checks, and hidden
+// zeroed SSIDs must be skipped.
+func TestScanDecodesEscapedNames(t *testing.T) {
+	out := strings.Join([]string{
+		"bssid / frequency / signal level / flags / ssid",
+		`02:00:00:00:00:01	5180	-52	[WPA2-PSK-CCMP][ESS]	Garden\xf0\x9f\x8c\xbb\xf0\x9f\x8c\xb5\xf0\x9f\x8c\xb4\xf0\x9f\x8c\x88` + "\r",
+		`02:00:00:00:00:02	5240	-75	[WPA2-PSK-CCMP][ESS]	Studio-\xe5\xae\xb6\xe5\xba\xad\xe7\xbd\x91\xe7\xbb\x9c`,
+		`02:00:00:00:00:03	2412	-58	[WPA2-PSK-CCMP][ESS]	Studio-\xe5\xae\xb6\xe5\xba\xad\xe7\xbd\x91\xe7\xbb\x9c`,
+		`02:00:00:00:00:04	2437	-65	[WPA2-EAP-CCMP][ESS]	Bob\"s \\ Wi-Fi`,
+		"02:00:00:00:00:05\t2462\t-70\t[ESS]\tCafe\r",
+		`02:00:00:00:00:06	2422	-60	[WPA2-PSK-CCMP][ESS]	\x00\x00\x00\x00\x00\x00\x00\x00`,
+		"02:00:00:00:00:07\t5200\t-61\t[WPA2-PSK-CCMP][ESS]\t",
+		"02:00:00:00:00:08\t5220\t-62\t[WPA2-PSK-CCMP][ESS]\t   ",
+	}, "\n")
+
+	got := parseScan(out)
+	want := []Network{
+		{SSID: "Garden🌻🌵🌴🌈", Signal: -52, Secured: true},
+		{SSID: "Studio-家庭网络", Signal: -58, Secured: true},
+		{SSID: `Bob"s \ Wi-Fi`, Signal: -65, Secured: true, Enterprise: true},
+		{SSID: "Cafe", Signal: -70},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("parseScan returned %d networks (%+v), want %d (%+v)", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("got[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	if err := checkName(got[0].SSID); err != nil {
+		t.Errorf("checkName(%q) unexpected error: %v", got[0].SSID, err)
+	}
+	if back := ssidOf(blocks(conf([]string{block(got[0].SSID, "hunter2hunter")}))[0]); back != got[0].SSID {
+		t.Errorf("round-trip SSID = %q, want %q", back, got[0].SSID)
 	}
 }
 
