@@ -3,6 +3,7 @@
 package mic
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -785,11 +786,16 @@ func (c *pairedCapture) Close() error {
 // athenaMeterEvery of capture: per microphone the RMS and the peak, and the reference's RMS, in dBFS
 // after the boost, as the rest of the daemon hears them. For bring-up: it is how a wake word that
 // did not fire is told apart from microphones that heard nothing.
+//
+// Only the first of a capture is said at info, which answers whether the microphones hear anything;
+// the rest are debug. At info every ten seconds they were most of the log, and pushed out of the
+// rotated file everything else a report would need (#653).
 type athenaMeter struct {
 	mic     [maxMics]float64
 	micPeak [maxMics]float32
 	ref     [athenaRefChannels]float64
 	frames  int
+	told    bool
 }
 
 const athenaMeterEvery = 10 * Rate
@@ -814,9 +820,13 @@ func (m *athenaMeter) report() {
 	for i := range ref {
 		ref[i] = db(m.ref[i] / n)
 	}
-	slog.Info("athena: capture levels", "mic_rms_dbfs", rms, "mic_peak_dbfs", peak, "ref_rms_dbfs", ref,
-		"seconds", m.frames/Rate)
-	*m = athenaMeter{}
+	level := slog.LevelDebug
+	if !m.told {
+		level = slog.LevelInfo
+	}
+	slog.Log(context.Background(), level, "athena: capture levels", "mic_rms_dbfs", rms, "mic_peak_dbfs", peak,
+		"ref_rms_dbfs", ref, "seconds", m.frames/Rate)
+	*m = athenaMeter{told: true}
 }
 
 func abs32(v float32) float32 {

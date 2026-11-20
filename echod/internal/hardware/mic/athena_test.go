@@ -3,7 +3,9 @@
 package mic
 
 import (
+	"bytes"
 	"encoding/binary"
+	"log/slog"
 	"math"
 	"strings"
 	"testing"
@@ -371,4 +373,21 @@ func asShow8B(b *testing.B) {
 	c, m, r := Channels, Mics, RefFirst
 	Channels, Mics, RefFirst = show8Channels, show8Mics, show8RefFirst
 	b.Cleanup(func() { Channels, Mics, RefFirst = c, m, r })
+}
+
+// Only a capture's first levels are said at info: at info every ten seconds they were most of the log.
+func TestOnlyTheFirstCaptureLevelsAreSaidAtInfo(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	var m athenaMeter
+	for range 3 {
+		m.frames = athenaMeterEvery
+		m.report()
+	}
+	if n := strings.Count(buf.String(), "capture levels"); n != 1 {
+		t.Errorf("capture levels said %d times at info over three reports, want 1:\n%s", n, buf.String())
+	}
 }
