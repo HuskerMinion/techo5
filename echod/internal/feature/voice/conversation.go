@@ -1950,6 +1950,10 @@ func (c *conversation) reported(dry time.Time) {
 		"dropped", c.source.Dropped())
 }
 
+// SavedWakeWords is the selection the user last made, of what models has (activeWakeWords): what the
+// device should be listening for.
+func SavedWakeWords(models []wake.Model) []string { return activeWakeWords(models, wakeword.Slots) }
+
 // activeWakeWords is the per-slot selection the user last made, filtered to what the device can
 // actually load. Home Assistant takes it as authoritative, so claiming a model that is not here would
 // leave a slot looking armed and deaf.

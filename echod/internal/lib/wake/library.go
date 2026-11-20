@@ -102,6 +102,27 @@ func (l *Library) Reload() {
 	l.Changed.Emit(struct{}{})
 }
 
+// Reread is Reload for a look that usually finds nothing new: it tells listeners only when the models
+// on disk are not the ones it had (#657). Home Assistant's question about what the device can hear is
+// answered from it, so a list read at a bad moment - empty while the disk was not ready, after an update
+// - is not what the device goes on saying until it is restarted.
+func (l *Library) Reread() {
+	models, err := Installed(l.dir)
+	if err != nil {
+		slog.Error("listing wake words failed", "dir", l.dir, "err", err)
+		return
+	}
+
+	l.muOurs.Lock()
+	same := slices.EqualFunc(models, l.ours, func(a, b Model) bool { return a.ID == b.ID && a.Phrase == b.Phrase })
+	l.ours = models
+	l.muOurs.Unlock()
+	if !same {
+		slog.Info("wake words on disk changed since they were last read", "ours", len(models))
+		l.Changed.Emit(struct{}{})
+	}
+}
+
 // Offered records what Home Assistant is hosting, replacing what it offered before.
 func (l *Library) Offered(offers []esphome.ExternalWakeWord) {
 	next := make(map[string]esphome.ExternalWakeWord, len(offers))

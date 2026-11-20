@@ -19,6 +19,13 @@ func Answer(offered []esphome.ExternalWakeWord) []esphome.WakeWord {
 	lib := wake.Lib()
 
 	lib.Offered(offered)
+	// What is on disk and what runs are looked at again rather than taken from start-up (#657): after an
+	// update a device answered with no words at all, or without the ones it was set to, and Home
+	// Assistant showed them as unavailable or as "No wake word" until somebody chose them again.
+	lib.Reread()
+	if Restore != nil {
+		Restore()
+	}
 	words, shadowed := lib.Advertise()
 
 	slog.Info("wake words offered", "count", len(offered),
@@ -35,3 +42,7 @@ func Answer(offered []esphome.ExternalWakeWord) []esphome.WakeWord {
 
 // Refresh loads the running wake words again, downloading any that changed. Detection sets it.
 var Refresh func()
+
+// Restore loads the saved selection again when what runs is not it, before the answer says what runs.
+// Detection sets it.
+var Restore func()
