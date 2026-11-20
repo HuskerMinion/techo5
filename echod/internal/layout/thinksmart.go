@@ -13,8 +13,8 @@ import (
 // panel in a 1280 by 800 landscape device, the Show 8's screen, with two digital microphones, a
 // TAS5782M speaker amplifier, a light and proximity sensor, a camera with a lens cover and a
 // microphone switch. It is not an Echo, but it is a screen device with the Show's kind of userland.
-// It runs a 64-bit mainline kernel (msm8953-mainline, the postmarketOS package) under lk2nd, so the
-// board is read from the device tree, as the Skylight's is.
+// It runs a 64-bit mainline kernel (msm8953-mainline, TECHO5's build in tools/linux/thinksmart/kernel)
+// under lk2nd, so the board is read from the device tree, as the Skylight's is.
 const (
 	// thinkSmartCompatible is the root compatible of the mainline device tree
 	// (arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts): "lenovo,cd-18781y", "qcom,apq8053",
