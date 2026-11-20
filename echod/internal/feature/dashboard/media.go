@@ -457,6 +457,10 @@ func maFavorites() ([]MediaChoice, error) {
 // player the library plays on.
 const LibraryPath = "#techo5-library"
 
+// AlarmsPath is the navigation path of a card that opens the screen's alarms (#651): the settings'
+// Alarms & Timers card, where an alarm is added or opened in its editor.
+const AlarmsPath = "#techo5-alarms"
+
 // MusicTarget is the player music for entity is put on, as its media sheet puts it there: entity itself
 // when it is one of Music Assistant's, else Music Assistant's player of the same name; empty when there
 // is none or Home Assistant cannot say. It takes a look at Home Assistant, so it is for a goroutine of

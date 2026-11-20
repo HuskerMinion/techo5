@@ -12,9 +12,16 @@ import (
 
 func (d *Display) colorOpen() bool { return false }
 
-// tileAction does what a tile's card says. The Spot has no music library: a card that opens it on the
-// Show is nowhere to go here (dashboard.Feature.Tap).
-func (d *Display) tileAction(t *dashTile) { dashboard.Get().Tap(*t.action) }
+// tileAction does what a tile's card says: a card that navigates to dashboard.AlarmsPath opens the
+// alarms, as on the Show. The Spot has no music library: a card that opens it on the Show is nowhere
+// to go here (dashboard.Feature.Tap).
+func (d *Display) tileAction(t *dashTile) {
+	if t.action.View == dashboard.AlarmsPath {
+		d.OpenSheet("alarms")
+		return
+	}
+	dashboard.Get().Tap(*t.action)
+}
 
 func (d *Display) colorTap(int, int) bool { return false }
 
