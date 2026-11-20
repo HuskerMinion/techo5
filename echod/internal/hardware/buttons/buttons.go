@@ -331,6 +331,12 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 			}
 			return fmt.Errorf("buttons: reading %s: %w", d.Path, err)
 		}
+		if e.Type == input.EvSw {
+			if name, ok := switchTaps[e.Code]; ok {
+				c.emit(name, Tap)
+			}
+			continue
+		}
 		if e.Type != input.EvKey {
 			continue
 		}
@@ -352,6 +358,10 @@ func (c *Controller) watch(ctx context.Context, d *input.Device) error {
 		}
 	}
 }
+
+// switchTaps, where a board sets it, are switches (EV_SW codes) reported as a tap of a button each
+// time they move: a slide switch where another device has a button. Nil on every Echo.
+var switchTaps map[uint16]Name
 
 // pressed starts tracking a button that has just gone down.
 func (c *Controller) pressed(name Name) *held {
