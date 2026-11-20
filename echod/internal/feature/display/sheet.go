@@ -23,7 +23,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/netbird"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remote"
@@ -500,36 +499,11 @@ func connectionRows(sv sheetView) []settingRow {
 	rows = append(rows, settingRow{id: "btproxy", label: tr("bluetooth_proxy"), sub: tr("lets_home_assistant_hear_nearby_devices"),
 		kind: ctlToggle, on: st.btProxy})
 	// Tailscale: its row says where it stands; the key goes in on the setup page.
-	if !tailscale.Available() {
-		return rows
-	}
-	ts := tailscale.Get().State()
-	rows = append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
-	// NetBird likewise, always: before a first join its line points to the setup page.
-	if netbird.Available() {
-		nb := netbird.Get().State()
-		rows = append(rows, settingRow{id: "netbird", label: "NetBird", sub: netbirdSub(nb), kind: ctlToggle, on: nb.On})
+	if tailscale.Available() {
+		ts := tailscale.Get().State()
+		rows = append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
 	}
 	return rows
-}
-
-// netbirdSub is the NetBird row's line.
-func netbirdSub(s netbird.Status) string {
-	switch {
-	case !s.On && !config.Get().Netbird.Joined:
-		return tr("ui_needs_a_setup_key_the_setup_page_connections")
-	case !s.On:
-		return tr("ui_reach_this_device_from_away_off")
-	case s.Downloading:
-		return fmt.Sprintf(tr("netbird_downloading"), int(s.Got*100))
-	case s.State == "Connected" && s.Name != "":
-		return fmt.Sprintf(tr("connected_as"), s.Name)
-	case s.State == "NeedsLogin" || s.State == "LoginFailed" || s.State == "SessionExpired":
-		return tr("ui_needs_a_setup_key_the_setup_page_connections")
-	case s.Problem != "":
-		return s.Problem
-	}
-	return tr("ui_starting_variant")
 }
 
 // tailscaleSub is the Tailscale row's line: where the device stands on the tailnet.
@@ -1346,13 +1320,6 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		security.Get().SetSSH(!config.Get().Security.SSH)
 	case "tailscale":
 		go func() { _ = tailscale.Get().SetOn(!config.Get().Tailscale.On) }()
-	case "netbird":
-		// Before a first join the row only points to the setup page: switched on here it would start
-		// the client's download with no key to join with.
-		if !config.Get().Netbird.On && !config.Get().Netbird.Joined {
-			break
-		}
-		go func() { _ = netbird.Get().SetOn(!config.Get().Netbird.On) }()
 	case "remoteapi":
 		remote.Get().SetOn(!config.Get().Remote.On)
 	case "camweb":

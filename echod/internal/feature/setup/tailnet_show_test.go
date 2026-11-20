@@ -14,6 +14,5 @@ type tailnetForm struct {
 func tailnetForms() map[string]tailnetForm {
 	return map[string]tailnetForm{
 		"Tailscale": {tailscaleForm, busyTailscale},
-		"NetBird":   {netbirdForm, busyNetbird},
 	}
 }

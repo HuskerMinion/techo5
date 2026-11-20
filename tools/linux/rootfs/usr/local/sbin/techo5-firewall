@@ -132,8 +132,10 @@ fi
 # which are this house's. By the interface, not by address, so a house numbered in the tailnet's own
 # range (100.64.0.0/10) changes nothing. Made before tailscaled runs: a rule names an interface that
 # need not exist yet. A rule that fails leaves this chain empty too, and says so. NetBird's interface
-# (feature/netbird, docs/netbird.md) goes through the same chain, first in INPUT: its client's own
-# firewall, which enforces the owner's access policies, filters under it and can only narrow it.
+# goes through the same chain, first in INPUT: NetBird is no longer built in, but the techo5-netbird
+# add-on (docs/netbird.md) runs its client on netbird0 and does not start it without this rule. The
+# client's own firewall, which enforces the owner's access policies, filters under it and can only
+# narrow it.
 TSCHAIN=TECHO5-TS
 tsok=1
 for T in iptables-legacy ip6tables-legacy; do

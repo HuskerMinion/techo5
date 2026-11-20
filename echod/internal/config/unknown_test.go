@@ -58,3 +58,46 @@ func TestSettingsANewerBuildWroteAreKept(t *testing.T) {
 		t.Errorf("this build's own change was lost: %v", got["speaker"])
 	}
 }
+
+// The file of a device that had the built-in NetBird on loads, and keeps its NetBird section for the
+// techo5-netbird add-on, which takes the peer's management server from it (#580). Turning the old switch
+// off leaves the rest of the section as it was.
+func TestAFileWithTheBuiltInNetbirdLoads(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	old := `{
+	  "netbird": {"on": true, "management": "https://netbird.example.com", "joined": true},
+	  "tailscale": {"on": true},
+	  "speaker": {"volume": 5}
+	}`
+	if err := os.WriteFile(path, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := st.Get(); !c.Netbird.On || !c.Tailscale.On || c.Speaker.Volume != 5 {
+		t.Fatalf("loaded %+v %+v %+v", c.Netbird, c.Tailscale, c.Speaker)
+	}
+	if err := st.Set().Netbird().Off(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	nb, _ := got["netbird"].(map[string]any)
+	if _, on := nb["on"]; on {
+		t.Errorf("the old switch is still on: %v", nb)
+	}
+	if nb["management"] != "https://netbird.example.com" || nb["joined"] != true {
+		t.Errorf("the section the add-on reads lost its management server: %v", nb)
+	}
+	if ts, _ := got["tailscale"].(map[string]any); ts["on"] != true {
+		t.Errorf("tailscale = %v", got["tailscale"])
+	}
+}

@@ -106,8 +106,8 @@ func TestTheTailscaleInterface(t *testing.T) {
 	}
 }
 
-// NetBird is the tailnet too: its interface is one, and with it connected a tailnet address beyond this
-// device's networks is from away.
+// NetBird, the add-on's (#580), is the tailnet too: its interface is one, and with it up a tailnet
+// address beyond this device's networks is from away.
 func TestNetBirdIsTheTailnetToo(t *testing.T) {
 	if !meshIface(NetbirdTun) || meshIface("wlan0") {
 		t.Errorf("meshIface")
@@ -120,7 +120,7 @@ func TestNetBirdIsTheTailnetToo(t *testing.T) {
 	}
 	NetbirdUp = func() bool { return true }
 	if !Away("100.64.0.20:80") || Away("192.0.2.9:80") {
-		t.Error("with NetBird connected and no interface found")
+		t.Error("with NetBird up and no interface found")
 	}
 }
 
@@ -216,6 +216,18 @@ func TestARequestToTheTailnetAddressIsFromAway(t *testing.T) {
 	TailscaleUp = func() bool { return false }
 	if AwayConn("192.0.2.5:1", "100.64.1.9:554") {
 		t.Error("AwayConn with Tailscale down")
+	}
+	// Nor with NetBird's interface gone; with it there, a connection that reached its address is from
+	// away whatever its source (a NetBird network numbered outside the tailnet's range).
+	wasNB := NetbirdUp
+	t.Cleanup(func() { NetbirdUp = wasNB })
+	NetbirdUp = func() bool { return false }
+	if AwayConn("192.0.2.5:1", "100.64.1.9:554") {
+		t.Error("AwayConn with neither up")
+	}
+	NetbirdUp = func() bool { return true }
+	if !AwayConn("192.0.2.5:1", "100.64.1.9:554") {
+		t.Error("AwayConn with NetBird up")
 	}
 }
 

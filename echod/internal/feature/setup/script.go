@@ -21,7 +21,6 @@ func busy(say string) string {
 const (
 	busyWifi      = "Joining, up to a minute…"
 	busyTailscale = "Joining, up to half a minute…"
-	busyNetbird   = "Joining, up to two minutes…"
 	busySound     = "Sending…"
 	busyPack      = "Loading the pack…"
 	busyInstall   = "Starting the install…"

@@ -52,7 +52,7 @@ var readOnly = []string{
 	// What it runs.
 	"check_for_updates", "update_automatically", "update_channel", "restart", "purge_cache",
 	// The tailnet, and setting up from afar.
-	"tailscale", "netbird", "setup_remote", "setup_let_in",
+	"tailscale", "setup_remote", "setup_let_in",
 }
 
 // Writable is whether the API may change e. Exported for the test that walks every entity the device has.

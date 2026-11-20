@@ -79,7 +79,6 @@ var keptByRestore = map[string]keptSetting{
 	"update_automatically":             {func(c *config.Config) { c.Update.AutoInstall = true }, func(c config.Config) bool { return c.Update.AutoInstall }},
 	"update_channel":                   {func(c *config.Config) { c.Update.Channel = "dev" }, func(c config.Config) bool { return c.Update.Channel == "dev" }},
 	"tailscale":                        {func(c *config.Config) { c.Tailscale.On = true }, func(c config.Config) bool { return c.Tailscale.On }},
-	"netbird":                          {func(c *config.Config) { c.Netbird.On = true }, func(c config.Config) bool { return c.Netbird.On }},
 }
 
 // notASetting is the read-only entities with no setting behind them for a file to carry: presses,

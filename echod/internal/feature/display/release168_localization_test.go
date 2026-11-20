@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/netbird"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/streaming"
 )
 
@@ -49,34 +48,11 @@ func TestV168CameraSettingsTranslateWithoutChangingValues(t *testing.T) {
 	}
 }
 
-func TestV168NetbirdAndStreamingMessages(t *testing.T) {
+func TestV168StreamingMessages(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	t.Cleanup(func() { _ = config.Set().Screen().Language("") })
-	// Never joined: the row points to the setup page.
-	if got := netbirdSub(netbird.Status{}); got != "Needs a setup key: the setup page, Network" {
-		t.Errorf("never joined: %q", got)
-	}
-	_ = config.Set().Netbird().Joined("")
 	for _, lang := range []string{"en", "ja", "pt"} {
 		_ = config.Set().Screen().Language(lang)
-		for _, tc := range []struct {
-			state             netbird.Status
-			english, japanese string
-		}{
-			{netbird.Status{}, "Reach this device from away: off", "外部からのアクセス：オフ"},
-			{netbird.Status{On: true, Downloading: true, Got: 0.37}, "Downloading NetBird, 37%", "NetBirdをダウンロード中：37%"},
-			{netbird.Status{On: true, State: "Connected", Name: "My Show"}, "Connected as My Show", "My Showとして接続済み"},
-			{netbird.Status{On: true, State: "NeedsLogin"}, "Needs a setup key: the setup page, Network", "セットアップ画面のNetworkでセットアップキーを設定"},
-			{netbird.Status{On: true, Problem: "A server-specific problem"}, "A server-specific problem", "A server-specific problem"},
-		} {
-			want := tc.english
-			if lang == "ja" {
-				want = tc.japanese
-			}
-			if got := netbirdSub(tc.state); got != want {
-				t.Errorf("%s: %q, want %q", lang, got, want)
-			}
-		}
 		for _, row := range withStreaming(nil) {
 			if row.id == "airplay2" {
 				want := "Group it with other AirPlay 2 speakers"

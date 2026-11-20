@@ -569,7 +569,7 @@ func statusText(s Status) string {
 }
 
 // Fenced says whether the firewall's tailnet chain (techo5-firewall, TECHO5-TS: 6053, 8181, 22 and ping)
-// stands in front of iface, and why not when it does not. Neither Tailscale nor NetBird starts without it:
+// stands in front of iface, and why not when it does not. Tailscale does not start without it:
 // a firewall that could not make its rules leaves Wi-Fi open, which is the house's own, but a tailnet
 // open to every port is open to whoever the tailnet lets reach the device. A variable, for tests.
 var Fenced = func(iface string) error {
@@ -585,12 +585,6 @@ var Fenced = func(iface string) error {
 	}
 	return nil
 }
-
-// Hostname is hostname, for NetBird's name for the device (feature/netbird), which follows the same rules.
-func Hostname(name string) string { return hostname(name) }
-
-// LinkKeyed is encrypted, for NetBird, which needs the same of the link.
-func LinkKeyed() bool { return encrypted() }
 
 // hostname is the device's name as a tailnet name: lower case, letters and digits, hyphens between.
 func hostname(name string) string {

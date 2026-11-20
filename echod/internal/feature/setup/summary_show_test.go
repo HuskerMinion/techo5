@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/netbird"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tailscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 )
@@ -25,8 +24,6 @@ func TestScreenSummaryLines(t *testing.T) {
 		{join(dashboardServerSummary(config.Dashboard{Server: "192.168.1.20:9555"}, nil)), "Set up · no key"},
 		{join(tailscaleSummary(tailscale.Status{})), "Off"},
 		{join(tailscaleSummary(tailscale.Status{On: true, State: "Running", Name: "kitchen-show"})), "On as kitchen-show"},
-		{join(netbirdSummary(netbird.Status{})), "Off"},
-		{join(netbirdSummary(netbird.Status{Joining: true, Downloading: true, Got: 0.4})), "Downloading · 40%"},
 	} {
 		if c.got != c.want {
 			t.Errorf("got %q, want %q", c.got, c.want)

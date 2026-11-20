@@ -414,8 +414,6 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveVideo(r)
 	case "tailscale":
 		problem = saveTailscale(r)
-	case "netbird":
-		problem = saveNetbird(r)
 	case "timezone":
 		zone := strings.TrimSpace(r.PostFormValue("zone"))
 		switch {

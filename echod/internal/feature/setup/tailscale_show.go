@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/HuskerMinion/techo5/echod/internal/feature/netbird"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/tailscale"
 )
 
@@ -90,8 +89,8 @@ func saveTailscale(r *http.Request) string {
 	return ""
 }
 
-// statusTailnet writes, for the Status tab, where the device stands on a tailnet or NetBird network
-// when it is meant to be on one; nothing for one that is not turned on.
+// statusTailnet writes, for the Status tab, where the device stands on the tailnet when it is meant to
+// be on one; nothing when it is not turned on.
 func statusTailnet(w http.ResponseWriter) {
 	more := ` <a href="/setup?tab=network">Network</a> has it.`
 	if hasTailnet() {
@@ -103,17 +102,6 @@ func statusTailnet(w http.ResponseWriter) {
 			statusLine(w, "bad", "Tailscale", "is not on the tailnet: "+html.EscapeString(st.Problem)+more)
 		case st.On:
 			statusLine(w, "", "Tailscale", "is starting.")
-		}
-	}
-	if netbird.Available() {
-		st := netbird.Get().State()
-		switch {
-		case st.State == "Connected" && st.Name != "":
-			statusLine(w, "ok", "NetBird", "on the network as <strong>"+html.EscapeString(st.Name)+"</strong>.")
-		case st.On && st.Problem != "":
-			statusLine(w, "bad", "NetBird", "is not on the network: "+html.EscapeString(st.Problem)+more)
-		case st.On:
-			statusLine(w, "", "NetBird", "is starting.")
 		}
 	}
 }

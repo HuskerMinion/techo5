@@ -53,7 +53,7 @@ var personal = []string{
 	"wake-clips",             // wake word clips kept
 	"ssh",                    // SSH keys allowed in
 	"tailscale",              // Tailscale's login
-	"netbird",                // NetBird's login
+	"netbird",                // what the built-in NetBird left: its peer, for the add-on's migrate (#580)
 	"tessera-layout.json",    // the Tessera dashboard's layout
 	"ntp-server",             // the home's time server
 	"timezone",               // the time zone chosen here, which follows Home Assistant again

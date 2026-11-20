@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strings"
 )
 
@@ -34,9 +35,9 @@ func FromTailnet(remote string) bool {
 // TunName is the Tailscale interface's name, as tailscaled is started with it (feature/tailscale).
 const TunName = "tailscale0"
 
-// NetbirdTun is NetBird's, as its client is started with it (feature/netbird). NetBird numbers its
-// networks in the same range as Tailscale, and everything here holds for it alike: "the tailnet" is
-// either.
+// NetbirdTun is NetBird's, as the techo5-netbird add-on starts its client (#580); the firewall sends
+// it through its tailnet chain by this name. NetBird numbers its networks in the same range as
+// Tailscale, and everything here holds for it alike: "the tailnet" is either.
 const NetbirdTun = "netbird0"
 
 // TailscaleUp is whether Tailscale says it is connected (feature/tailscale sets it): then a tailnet
@@ -44,8 +45,12 @@ const NetbirdTun = "netbird0"
 // networking).
 var TailscaleUp = func() bool { return false }
 
-// NetbirdUp is the same for NetBird (feature/netbird sets it).
-var NetbirdUp = func() bool { return false }
+// NetbirdUp is the same for NetBird: whether its interface is there, which the add-on's client makes
+// while it runs. One stat, cheap enough for every request. A variable, for tests.
+var NetbirdUp = func() bool {
+	_, err := os.Stat("/sys/class/net/" + NetbirdTun)
+	return err == nil
+}
 
 // meshUp is whether either says it is connected.
 func meshUp() bool { return TailscaleUp() || NetbirdUp() }

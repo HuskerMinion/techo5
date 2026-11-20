@@ -63,7 +63,6 @@ func TestTheBrowserAsksForWhatTheDeviceWouldRefuse(t *testing.T) {
 
 	for _, v := range []url.Values{
 		{"what": {"tailscale"}, "key": {" "}},
-		{"what": {"netbird"}, "key": {""}},
 		{"what": {"calendar"}, "name": {"Family"}, "url": {""}},
 		{"what": {"alarm_add"}, "kind": {"alarm"}, "at": {""}},
 	} {

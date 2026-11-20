@@ -197,7 +197,7 @@ func download(ctx context.Context, b Binary, to string, progress func(float32)) 
 }
 
 // Download is download for another feature's file, one the device fetches on its own rather than with
-// an update (feature/netbird): kept beside to until it is whole, and at to only once its size and
+// an update (feature/cjkfont): kept beside to until it is whole, and at to only once its size and
 // SHA-256 are b's.
 func Download(ctx context.Context, b Binary, to string, progress func(float32)) error {
 	return download(ctx, b, to, progress)

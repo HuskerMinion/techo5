@@ -301,7 +301,7 @@ func ClearSecrets(c *Config) {
 	for i := range c.Calendar.Links {
 		c.Calendar.Links[i].URL = ""
 	}
-	// Whether this device is on a tailnet is its own, and never in a file; NetBird's alike.
+	// Whether this device is on a tailnet is its own, and never in a file; the old NetBird switch alike.
 	c.Tailscale = Tailscale{}
 	c.Netbird = Netbird{}
 	scrubUserinfo(reflect.ValueOf(c).Elem())
@@ -459,7 +459,7 @@ func KeepOwn(c *Config, from Config) {
 	c.Microphone.ClapSense = from.Microphone.ClapSense
 	c.CamStream = from.CamStream
 	c.Remote.On = from.Remote.On
-	// Being on a tailnet is this device's: a restore never turns Tailscale or NetBird on or off.
+	// Being on a tailnet is this device's: a restore never turns Tailscale or the old NetBird on or off.
 	c.Tailscale = from.Tailscale
 	c.Netbird = from.Netbird
 	// Answering for the others when this one heard best keeps measuring the room and talks to them on the

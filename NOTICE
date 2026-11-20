@@ -430,12 +430,6 @@ Tailscale, https://github.com/tailscale/tailscale (BSD 3-Clause License)
   source by tools/linux/build-tailscaled.sh, unmodified. Its license is in every root filesystem,
   /usr/share/licenses/tailscale.
 
-NetBird, https://github.com/netbirdio/netbird (BSD 3-Clause License, for the client)
-  Not in any image: when NetBird is switched on, the device downloads the client from TECHO5's release
-  (netbird-arm64.tar.gz, built from NetBird's source by tools/linux/build-netbird.sh, unmodified).
-  Copyright (c) 2022-2026 NetBird GmbH & AUTHORS. Its license file travels with it in the archive and is
-  kept beside the client on the device.
-
 Noto Sans JP, https://github.com/google/fonts (SIL Open Font License 1.1)
   Not in any image or daemon: a device whose screen language is Japanese downloads it from TECHO5's
   release (techo5-noto-sans-jp.tar.gz). Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved
