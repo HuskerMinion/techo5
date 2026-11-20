@@ -1021,9 +1021,10 @@ other Shows don't have the switches.
   pinks, violets, blues and oranges round the whole edge of the screen that moves with the voice,
   along the top and bottom only while the device thinks, and what was heard and the answer on a card
   of frosted glass a little above the middle. An answer longer than the card's four lines scrolls up
-  through it as it is said, and stays on its last lines once it is. A request opens with a gold globe
-  at the right edge and a wave of pink crossing the screen. During night hours it is Cue and captions
-  instead (red over the night clock), so the colors don't light the room.
+  through it as it is said, and stays on its last lines once it is; a very long one is cut after 40
+  lines. A request opens with a gold globe at the right edge and a wave of pink crossing the screen.
+  During night hours it is Cue and captions instead (red over the night clock), so the colors don't
+  light the room.
   The screen under a cue keeps working: a tap there does what it always does, and a tap on the
   captions (or Rainbow's card) puts them away. Stop a request by voice or with the stop word. A page
   with buttons to answer (a call, a ringing alarm, the settings, a camera) gets neither the light nor

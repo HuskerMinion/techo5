@@ -80,6 +80,33 @@ func TestAShortAnswerDoesNotScroll(t *testing.T) {
 	}
 }
 
+// A very long answer, such as an AI assistant's of a few thousand characters, is laid out to
+// cardMost, the last line ending in an ellipsis, so the card's image stays a few megabytes (about
+// 4.5 MB on a Show 5, against 25 MB for 8000 characters uncut); it still scrolls. On the Show 5's screen, where a line holds the fewest words.
+func TestAVeryLongAnswerIsCutAtTheMostLines(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	huge := strings.Repeat(longReply+" ", 20) // about 8000 characters
+	if got := len(wrapLines(f.Reply, huge, int(cardW*g.k-2*cardPad*g.k), 0)); got <= cardMost {
+		t.Fatalf("the test answer is only %d lines", got)
+	}
+	w := newCardWords(g, f, "tell me everything about the weather", huge, true, "k")
+	if len(w.chars) != cardMost || !w.scrolls() {
+		t.Fatalf("%d lines laid out to scroll, want %d", len(w.chars), cardMost)
+	}
+	if want := float64(cardMost-cardLines) * w.lineH; w.more != want {
+		t.Errorf("%.0f pixels below the window, want %.0f", w.more, want)
+	}
+	last := wrapLines(f.Reply, huge, int(cardW*g.k-2*cardPad*g.k), cardMost)[cardMost-1]
+	if !strings.HasSuffix(last, "…") {
+		t.Errorf("the last line %q has no ellipsis", last)
+	}
+	// The image is the title and cardMost lines, not the whole answer.
+	if h := w.img.Rect.Dy(); float64(h) > float64(cardMost+cardHeard+2)*w.lineH {
+		t.Errorf("the image is %d pixels tall for %d lines of %.0f", h, cardMost, w.lineH)
+	}
+}
+
 // A long answer is laid out whole, the card as tall as four lines of it, and the window scrolls down it
 // with the voice to rest on its end; the edges fade where there is more. On the Show 8's screen and the
 // Show 5's.

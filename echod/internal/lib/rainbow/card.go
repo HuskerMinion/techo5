@@ -24,6 +24,8 @@ import (
 // An answer longer than the card's cardLines is laid out whole and seen through a window of that many
 // lines, which moves down it as the voice says it, the line being said kept near the top, and rests on
 // the last lines once it is all said. The window's edges fade a little where there is more past them.
+// An answer past cardMost lines is cut there with an ellipsis: the whole of it is one image, and a reply
+// of a few thousand characters would otherwise make one of many megabytes.
 
 // The card's size and timing, in design units and seconds.
 const (
@@ -34,6 +36,7 @@ const (
 	cardDots   = 56.0 // room kept at the right for the thinking dots
 	cardMin    = 64.0 // the height of a card of one line
 	cardLines  = 4    // the most lines an answer takes on the card: a longer one scrolls
+	cardMost   = 40   // the most lines of an answer it scrolls through: the last is cut with an ellipsis
 	scrollLead = 1.0  // the lines kept over the one being said, while there are lines to scroll
 	fadeDepth  = 0.7  // how far the window's edge fades where there is more past it
 	cardHeard  = 3    // and what was heard, over it or alone: the whole question, not one line of it
@@ -240,8 +243,8 @@ func (c *card) box(g *geometry) (x0, y0, x1, y1 float64) {
 }
 
 // newCardWords lays out the words for the card: what was heard, up to cardHeard lines; or for an
-// answer, what was heard as the title and the answer under it, all of it, the card as tall as
-// cardLines of it.
+// answer, what was heard as the title and the answer under it, up to cardMost lines of it, the card as
+// tall as cardLines of it.
 func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key string) *cardWords {
 	k := g.k
 	w := int(cardW * k)
@@ -266,7 +269,7 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 			}
 			title = len(lines)
 		}
-		for _, l := range wrapLines(f.Reply, reply, int(float64(w)-2*pad), 0) {
+		for _, l := range wrapLines(f.Reply, reply, int(float64(w)-2*pad), cardMost) {
 			lines = append(lines, line{f.Reply, l, replyInk})
 		}
 	}
