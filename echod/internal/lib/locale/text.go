@@ -263,6 +263,7 @@ var uiEnglish = map[string]string{
 	"for_muting_and_timers":                          "For muting and timers",
 	"louder_speech":                                  "Louder speech",
 	"media_playback":                                 "Playback",
+	"media_library":                                  "Library",
 	"replies_and_announcements":                      "Replies and announcements",
 	"for_timers":                                     "For timers",
 	"forget_device":                                  "Forget %s",
@@ -1239,6 +1240,7 @@ var uiTranslations = map[string]map[string]string{
 		"sunrise_skip_done":             "Omitida la alarma de las %s",
 		"sunrise_skip_refused":          "No se pudo omitir la alarma de las %s",
 		"media_playback":                "Reproducción",
+		"media_library":                 "Biblioteca",
 		"ui_listening_turn":             "Escuchando…",
 		"ui_thinking_turn":              "Pensando…",
 		"ui_thinking":                   "Pensando",
@@ -1933,6 +1935,7 @@ var uiTranslations = map[string]map[string]string{
 		"look":                          "Apparence",
 		"lyrics":                        "Paroles",
 		"media_playback":                "Lecture",
+		"media_library":                 "Bibliothèque",
 		"microphone":                    "Microphone",
 		"microphone_off":                "MICROPHONE DÉSACTIVÉ",
 		"no_wifi":                       "PAS DE WI-FI",
@@ -3057,6 +3060,7 @@ var uiTranslations = map[string]map[string]string{
 		"for_muting_and_timers":                          "Para silenciar e temporizadores",
 		"louder_speech":                                  "Voz máis alta",
 		"media_playback":                                 "Reprodución",
+		"media_library":                                  "Biblioteca",
 		"replies_and_announcements":                      "Respostas e anuncios",
 		"for_timers":                                     "Para temporizadores",
 		"forget_device":                                  "Esquecer %s",
@@ -4109,6 +4113,7 @@ var uiTranslations = map[string]map[string]string{
 		"for_muting_and_timers":                          "Per silenziamento e timer",
 		"louder_speech":                                  "Voce più alta",
 		"media_playback":                                 "Riproduzione",
+		"media_library":                                  "Libreria",
 		"replies_and_announcements":                      "Risposte e annunci",
 		"for_timers":                                     "Per i timer",
 		"forget_device":                                  "Dimentica %s",
@@ -5463,6 +5468,7 @@ var uiTranslations = map[string]map[string]string{
 		"lyrics": "Songtekst",
 		// Playback
 		"media_playback": "Afspelen",
+		"media_library":  "Bibliotheek",
 		// Microphone
 		"microphone": "Microfoon",
 		// MICROPHONE OFF
@@ -6976,6 +6982,7 @@ var uiTranslations = map[string]map[string]string{
 		"for_muting_and_timers":                          "ミュートとタイマー用",
 		"louder_speech":                                  "音声を大きく",
 		"media_playback":                                 "再生",
+		"media_library":                                  "ライブラリ",
 		"replies_and_announcements":                      "応答とアナウンス",
 		"for_timers":                                     "タイマー用",
 		"forget_device":                                  "%sの登録を解除",
@@ -8177,6 +8184,7 @@ var uiTranslations = map[string]map[string]string{
 		"louder_speech": "Sprache lauter",
 		// Replies and announcements
 		"media_playback":            "Wiedergabe",
+		"media_library":             "Bibliothek",
 		"replies_and_announcements": "Antworten und Ansagen",
 		// For timers
 		"for_timers": "Für Timer",
@@ -10276,6 +10284,7 @@ var uiTranslations = map[string]map[string]string{
 		"ui_same_wake_word_twice": "İki yuvada aynı kelime: yalnızca biri yanıt verir",
 		// The player screen (feature/media/title.go, #348).
 		"media_playback": "Oynatma",
+		"media_library":  "Kütüphane",
 		// Hardcoded strings moved into the catalog (#353).
 		"ui_setup_browser_waiting":       "Bir tarayıcı izin istiyor: eylem düğmesine basın",
 		"ui_setup_open_url":              "Aç: %s",

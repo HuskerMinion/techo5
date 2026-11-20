@@ -681,8 +681,14 @@ HTTP.
   **Now playing album** and **Now playing state** (playing, paused or idle). The names are as the app
   or the station's service sent them. A phone over Bluetooth sends none the device reads, so only the
   source is filled in for it; Radio is whatever the **Radio station** sensor names, with its title and
-  artist. While the device holds a track the state says whether it is playing or paused; once it lets
-  the track go the others are empty and the state reads idle. When an app is paused on the phone, the
+  artist. A Music Assistant track is named by the service it plays from when Home Assistant says which
+  (Spotify, Plex, YouTube Music, Tidal, Qobuz, Deezer, Apple Music, SoundCloud, Jellyfin, Radio for
+  Radio Browser and TuneIn, Library for its own files), on the sensor and on the Now Playing page alike.
+  This needs the device's Home Assistant token
+  ([home_assistant action](actions.md#connect-the-device-to-home-assistant)); without it, or for another
+  provider, it stays Music Assistant. While the device holds a track the state says whether it is
+  playing or paused; once it lets the track go the others are empty and the state reads idle. When an
+  app is paused on the phone, the
   device keeps the track paused or lets it go a few seconds after the phone stops sending, depending
   on the app, so an automation should go by the state rather than by how long a pause takes. A Music
   Assistant track paused or stopped while it played here stays named, with the state paused, for up to
