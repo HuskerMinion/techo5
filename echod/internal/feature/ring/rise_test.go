@@ -26,6 +26,13 @@ func TestRingGain(t *testing.T) {
 	if g := (&ringer{from: from}).gain(from); g != 1 {
 		t.Errorf("a ring that does not rise starts at %v of full", g)
 	}
+	// RiseDB is the same climb in dB, for an alarm's music (#651).
+	if got := RiseDB(15*time.Second, time.Minute); math.Abs(got+riseFloor*3/4) > 0.01 {
+		t.Errorf("a quarter of the way at %.1f dB", got)
+	}
+	if RiseDB(0, 0) != 0 || RiseDB(2*time.Minute, time.Minute) != 0 {
+		t.Error("no rise, or a rise that is over, is not at full")
+	}
 }
 
 // The bell plays a rising ring quieter first and louder later.

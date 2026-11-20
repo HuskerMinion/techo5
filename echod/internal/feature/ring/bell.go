@@ -54,8 +54,11 @@ var (
 		}
 		step := Level()
 		speaker.Sound().Interject(func(p *speaker.Player) { p.Ringing(on, step) })
-		speaker.Sound().Backgrounds().Duck("ring", on)
 	}
+
+	// duck is the music ducked under the chime. Apart from attend, since a ring that makes no sound of
+	// its own (StartQuiet) takes the room without ducking it: the music is what it wakes somebody with.
+	duck = func(on bool) { speaker.Sound().Backgrounds().Duck("ring", on) }
 )
 
 // bell is the one thing on the device that rings. An alarm and a timer used to have a loop each,
@@ -66,7 +69,9 @@ var bell struct {
 	mu      sync.Mutex
 	rings   []*ringer
 	running bool
-	wake    chan struct{}
+	// ducked is whether the music is ducked, which it is while any ring on the bell chimes.
+	ducked bool
+	wake   chan struct{}
 }
 
 func init() { bell.wake = make(chan struct{}, 1) }
@@ -87,8 +92,10 @@ type ringer struct {
 	// whole bell, so one that starts during the offer still sounds rather than joining a silence
 	// nobody asked of it, and is not ended when the offer runs out.
 	silenced bool
-	done     func() // its share of Sounding
-	ended    func()
+	// quiet is a ring with no chime of its own, until sound gives it one (StartQuiet).
+	quiet bool
+	done  func() // its share of Sounding
+	ended func()
 }
 
 // Start rings: the chime every RingEvery, the light pulsing and the music ducked under it, until
@@ -108,9 +115,31 @@ func Start(what, label string, notes []speaker.Note, ended func()) (stop func())
 // StartRising is Start for a ring that comes up from quiet to its full level over rise (#284): an
 // alarm that wakes somebody gently. Its first chime is riseFloor below full.
 func StartRising(what, label string, notes []speaker.Note, rise time.Duration, ended func()) (stop func()) {
+	r := start(what, label, notes, rise, false, ended)
+	return r.stop
+}
+
+// StartQuiet is Start for a ring that makes no sound of its own: an alarm that wakes somebody with
+// music (#651), which is all the sound there is. It is a ring in every other way - it sounds, it is
+// stopped, silenced, snoozed and rung out as any other - and the music is not ducked under it. sound
+// gives it the chime notes after all, rising from now over rise, for music that did not start.
+func StartQuiet(what, label string, ended func()) (stop func(), sound func(notes []speaker.Note, rise time.Duration)) {
+	r := start(what, label, nil, 0, true, ended)
+	return r.stop, func(notes []speaker.Note, rise time.Duration) {
+		bell.mu.Lock()
+		r.notes, r.from, r.rise, r.quiet = notes, time.Now(), rise, false
+		duckForRings()
+		bell.mu.Unlock()
+		nudge()
+	}
+}
+
+// start puts a ring on the bell, and the bell up if it is not.
+func start(what, label string, notes []speaker.Note, rise time.Duration, quiet bool, ended func()) *ringer {
 	sound, leave := Sounding(), begin(what, label)
 	now := time.Now()
-	r := &ringer{what: what, notes: notes, until: now.Add(ringFor), from: now, rise: rise, ended: ended, done: func() { sound(); leave() }}
+	r := &ringer{what: what, notes: notes, until: now.Add(ringFor), from: now, rise: rise, quiet: quiet, ended: ended,
+		done: func() { sound(); leave() }}
 
 	bell.mu.Lock()
 	bell.rings = append(bell.rings, r)
@@ -119,14 +148,26 @@ func StartRising(what, label string, notes []speaker.Note, rise time.Duration, e
 		attend(true)
 		safe.Go("bell", ringBell)
 	}
+	duckForRings()
 	bell.mu.Unlock()
 	nudge()
+	return r
+}
 
-	return func() {
-		bell.mu.Lock()
-		r.stopped = true
-		bell.mu.Unlock()
-		nudge()
+// stop is the stop Start hands back.
+func (r *ringer) stop() {
+	bell.mu.Lock()
+	r.stopped = true
+	bell.mu.Unlock()
+	nudge()
+}
+
+// duckForRings ducks the music while a ring on the bell chimes, and only then. Called with bell.mu held.
+func duckForRings() {
+	want := slices.ContainsFunc(bell.rings, func(r *ringer) bool { return !r.quiet })
+	if want != bell.ducked {
+		bell.ducked = want
+		duck(want)
 	}
 }
 
@@ -170,14 +211,21 @@ const riseFloor = 30.0
 // gain is how loud the ring is at now, as a share of its full level: full for one that does not rise
 // and for one whose rise is over, and in between a steady climb in dB, which the ear hears as even.
 func (r *ringer) gain(now time.Time) float64 {
-	if r.rise <= 0 {
-		return 1
+	return math.Pow(10, RiseDB(now.Sub(r.from), r.rise)/20)
+}
+
+// RiseDB is how far under full a ring that comes up over rise is, since it started, in dB: riseFloor
+// at first, then a steady climb, and 0 once the rise is over or for no rise at all. An alarm's music
+// comes up the same way (#651).
+func RiseDB(since, rise time.Duration) float64 {
+	if rise <= 0 {
+		return 0
 	}
-	f := float64(now.Sub(r.from)) / float64(r.rise)
+	f := float64(since) / float64(rise)
 	if f >= 1 {
-		return 1
+		return 0
 	}
-	return math.Pow(10, -riseFloor*(1-max(f, 0))/20)
+	return -riseFloor * (1 - max(f, 0))
 }
 
 // Level is how loud a ring goes, in the media volume's steps: its own setting, not the media volume.
@@ -227,8 +275,9 @@ func ringBell() {
 		var loud [][]speaker.Note
 		var gains []float64
 		wait := time.Duration(-1)
+		duckForRings()
 		for _, r := range bell.rings {
-			if !r.silenced {
+			if !r.silenced && !r.quiet {
 				loud = append(loud, r.notes)
 				gains = append(gains, r.gain(now))
 			}

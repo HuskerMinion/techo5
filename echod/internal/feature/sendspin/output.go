@@ -68,6 +68,9 @@ type out struct {
 	// gain is what frames are multiplied by now and target what a duck has asked for: gain moves toward
 	// it over duckRamp, as media's stream does, since a jump of 15 dB either way is heard as a step (#509).
 	gain, target float32
+	// duckDB and lowerDB are what target is made of: a duck, and the level an alarm's music is held at
+	// as it comes up (Lower), in dB under full.
+	duckDB, lowerDB int
 	// level is the stream's own volume on top of gain, for a protocol whose server sets a client's
 	// volume without it being the device's (Snapcast); 1 for Sendspin, which moves the device's.
 	level float32
@@ -109,6 +112,7 @@ type out struct {
 
 var (
 	_ speaker.Producer = (*out)(nil)
+	_ speaker.Lowerer  = (*out)(nil)
 	_ speaker.Source   = (*out)(nil)
 )
 
@@ -453,14 +457,26 @@ func (o *out) Resume() {
 // Duck always quietens, never pauses, whatever config.Media.OnTurn says: a hole in one room of a
 // whole-house stream is worse, and the canceller keeps a live reference.
 func (o *out) Duck(db int) {
-	gain := float32(1)
-	if db < 0 {
-		gain = float32(math.Pow(10, float64(db)/20))
-	}
-
 	o.mu.Lock()
-	o.target = gain
+	o.duckDB = min(db, 0)
+	o.target = dbGain(o.duckDB + o.lowerDB)
 	o.mu.Unlock()
+}
+
+// Lower implements speaker.Lowerer: the room is held db under full, apart from any duck (#651).
+func (o *out) Lower(db int) {
+	o.mu.Lock()
+	o.lowerDB = min(db, 0)
+	o.target = dbGain(o.duckDB + o.lowerDB)
+	o.mu.Unlock()
+}
+
+// dbGain is db under full as a gain, 1 for none.
+func dbGain(db int) float32 {
+	if db >= 0 {
+		return 1
+	}
+	return float32(math.Pow(10, float64(db)/20))
 }
 
 // Requeue has nothing to do: the level is applied as frames are rendered, so none are waiting at the

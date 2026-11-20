@@ -36,6 +36,38 @@ type Arbiter struct {
 	// hold is the producer the hold stood down, so a retake by it during the same hold is not
 	// suspended a second time.
 	hold Producer
+	// lower is the level every producer is held at under full, in dB and 0 for none (Lower).
+	lower int
+}
+
+// Lowerer is a producer that can be held under its own level as well as ducked (Arbiter.Lower).
+type Lowerer interface {
+	Lower(db int)
+}
+
+// Lower holds the background at db under full, 0 for full again: an alarm's music coming up from
+// quiet (#651). It is not a duck. A duck is a turn's, and a track set to pause under a turn would
+// pause for it, where this has to stay audible however quiet it is. It lasts across tracks, so one
+// that starts while it holds starts quiet.
+func (a *Arbiter) Lower(db int) {
+	db = max(min(db, 0), minDuck)
+	a.mu.Lock()
+	if a.lower == db {
+		a.mu.Unlock()
+		return
+	}
+	a.lower = db
+	all := append([]Producer(nil), a.stack...)
+	a.mu.Unlock()
+	for _, p := range all {
+		lowerTo(p, db)
+	}
+}
+
+func lowerTo(p Producer, db int) {
+	if l, ok := p.(Lowerer); ok {
+		l.Lower(db)
+	}
 }
 
 // Backgrounds is this driver's arbiter, made on first use. Per driver, not per package: echoctl
@@ -61,7 +93,7 @@ func (a *Arbiter) Took(p Producer) {
 	a.drop(p)
 	stood := a.top()
 	a.stack = append(a.stack, p)
-	held, duck := a.held, a.duck
+	held, duck, lower := a.held, a.duck, a.lower
 	hold := a.hold
 	if below && held {
 		a.hold = p // its one suspension now stands for the hold, which ends by resuming the top
@@ -74,6 +106,9 @@ func (a *Arbiter) Took(p Producer) {
 		stood.Suspend()
 	}
 	p.Duck(duck)
+	if lower != 0 {
+		lowerTo(p, lower)
+	}
 	switch {
 	case below && !held:
 		p.Resume()
