@@ -164,6 +164,9 @@ type Display struct {
 	answerTime *esphome.Select
 	// idleDimSel is Dim after idle (idle_dim.go).
 	idleDimSel *esphome.Select
+	// dimBtn and dimSensor are the Dim screen button and the Screen dimmed sensor (idle_dim_show.go).
+	dimBtn     *esphome.Button
+	dimSensor  *esphome.BinarySensor
 	turnStyle  *esphome.Select
 	timerStyle *esphome.Select
 	skinSl     *esphome.Select
@@ -290,9 +293,11 @@ type Display struct {
 	// night schedule rather than by anyone.
 	touchedAt time.Time
 	// usedAt is when the screen was last in use other than by a finger (a turn, a call, somebody near),
-	// and idleDimmed whether Dim after idle has it down (idle_dim_show.go).
+	// idleDimmed whether Dim after idle or the Dim screen button has it down, and dimAskedAt when that
+	// button was pressed (idle_dim_show.go).
 	usedAt     time.Time
 	idleDimmed bool
+	dimAskedAt time.Time
 	nightDark  bool
 
 	// nightGlow is the screen turned down to a night light by the night schedule, until a touch or
@@ -599,6 +604,7 @@ func build() *Display {
 	d.glowLevel = glowNumber(d)
 	d.dimmestNum = dimmestNumber(d)
 	d.idleDimSel = idleDimSelect(d)
+	d.dimBtn, d.dimSensor = dimButton(d), dimmedSensor()
 	d.lang = langSelect()
 	voice.Changed.Listen(d.changed)
 	media.Get().OnVolume.Listen(d.volumeMoved)
@@ -694,7 +700,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.saverBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel,
+	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.saverBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel, d.dimBtn, d.dimSensor,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.pop.shown, d.pop.popping, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.nightInfoSw, d.fontSel, d.textSizeSel}, d.lookEnts...)
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
@@ -728,6 +734,7 @@ func (d *Display) Restore(c config.Config) {
 	cameraShadeSel.Set(cameraShades[cameraShadeIndex()].label)
 	d.answerTime.Set(answerTimes[answerTimeIndex()].label)
 	d.idleDimSel.Set(idleDims[idleDimIndex()].label)
+	d.dimSensor.Set(false)
 	d.clockPos.Set(clockPositions[clockPositionIndex()].label)
 	d.dateCol.Set(dateColors[dateColorIndex()].label)
 	d.weatherPos.Set(weatherPositions[weatherPositionIndex()].label)

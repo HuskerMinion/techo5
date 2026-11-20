@@ -893,11 +893,18 @@ other Shows don't have the switches.
   device with a light sensor, the screen follows the room's light, up to the brightness you set. On
   the Show, **Dimmest** (**Auto-brightness dimmest** in Home Assistant) sets how dark it goes in a
   dark room.
-- **Dim after idle** (Show, Never by default; Settings > Display, or **Dim after idle** in Home
+- **Dim after idle** (Show and Panel, Never by default; Settings > Display, or **Dim after idle** in Home
   Assistant): after 1 to 30 minutes with no touch, no voice turn and, with Presence detection on,
   nobody seen near, the screen fades down to its **Dimmest** share of the brightness. A touch, a turn
   or somebody coming near brings it straight back. Not at night, which has its own rules, and not
   while a call, an alarm, a timer or the settings are up.
+- **Dim screen** and **Screen dimmed** (Show and Panel, in Home Assistant): the **Dim screen** button
+  takes the screen down to its **Dimmest** now, as Dim after idle would, and the device brings it back
+  up itself at the next touch, turn or somebody near, or when the **Screen** light is set. It does
+  this even with Dim after idle at Never. A press does nothing at night, on a screen that is out, or
+  while something is going on. **Screen dimmed** is a binary sensor that is on while the screen is
+  down at its Dimmest, by the button or by Dim after idle. The **Screen** light keeps its brightness
+  the whole time.
 - **Font**: the font of every word the screen draws: the clock, the date, the weather, the settings
   and the rest (not the icons). *Go*, the screen's own and the default, *Inter*, *MuseoModerno*,
   *Exo*, *Overpass*, *Saira*, *Comic Neue*, *Open Sans*, *Google Sans Flex* or *Go Mono*. Each is sized so a line
@@ -1216,7 +1223,9 @@ device's fonts folder over SSH ([Set the SSH authorized keys](actions.md#set-the
   that only lights a dark screen too, stays on while a finger is down, and goes off 30 seconds after
   the last one lifted, so tapping on keeps it on. An automation that puts the screen out after a
   while can wait for it: `binary_sensor.<device>_screen_touched` off `for:` 5 minutes. It says only
-  that the screen was touched, not where.
+  that the screen was touched, not where. To dim rather than put it out, the automation presses
+  **Dim screen** instead: the device brings the screen back up at the next touch or turn by itself,
+  so nothing has to undo it.
 
 ## 7. Voice
 
