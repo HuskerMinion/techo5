@@ -99,9 +99,16 @@ func LibraryReady() bool {
 	return ready
 }
 
-// handOff is Stream.handOff: a url Play started that the device could not decode.
-func handOff(url string, wanted func() bool) {
-	if err := viaLibrary(url, wanted); err != nil && !errors.Is(err, errNoLibrary) && !errors.Is(err, errOvertaken) {
+// handOff is Stream.handOff: a url Play started that the device could not decode, handed to the music
+// library. With no library set up, OnUnplayable says so, unless something else was asked for since.
+func (p *Player) handOff(url string, wanted func() bool) {
+	err := viaLibrary(url, wanted)
+	switch {
+	case errors.Is(err, errNoLibrary):
+		if wanted() {
+			p.OnUnplayable.Emit(url)
+		}
+	case err != nil && !errors.Is(err, errOvertaken):
 		slog.Warn("media: the music library did not play it either", "url", url, "err", err)
 	}
 }

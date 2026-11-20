@@ -16,23 +16,28 @@ import (
 
 func TestBinaryDigits(t *testing.T) {
 	defer clock24.Store(false)
+	defer noAMPM.Store(false)
 	for _, c := range []struct {
 		h, m, s int
 		h24     bool
+		bare    bool // 12-hour with no AM/PM
 		want    [6]int
 	}{
-		{14, 7, 38, false, [6]int{0, 2, 0, 7, 3, 8}},
-		{14, 7, 38, true, [6]int{1, 4, 0, 7, 3, 8}},
-		{0, 5, 9, false, [6]int{1, 2, 0, 5, 0, 9}}, // midnight is 12 on a 12-hour clock
-		{0, 5, 9, true, [6]int{0, 0, 0, 5, 0, 9}},
-		{12, 59, 59, false, [6]int{1, 2, 5, 9, 5, 9}},
-		{23, 0, 0, true, [6]int{2, 3, 0, 0, 0, 0}},
-		{23, 0, 0, false, [6]int{1, 1, 0, 0, 0, 0}},
+		{14, 7, 38, false, false, [6]int{0, 2, 0, 7, 3, 8}},
+		{14, 7, 38, true, false, [6]int{1, 4, 0, 7, 3, 8}},
+		{0, 5, 9, false, false, [6]int{1, 2, 0, 5, 0, 9}}, // midnight is 12 on a 12-hour clock
+		{0, 5, 9, true, false, [6]int{0, 0, 0, 5, 0, 9}},
+		{12, 59, 59, false, false, [6]int{1, 2, 5, 9, 5, 9}},
+		{23, 0, 0, true, false, [6]int{2, 3, 0, 0, 0, 0}},
+		{23, 0, 0, false, false, [6]int{1, 1, 0, 0, 0, 0}},
+		{15, 0, 0, false, true, [6]int{0, 3, 0, 0, 0, 0}}, // with no AM/PM it is still a 12-hour clock
+		{0, 30, 0, false, true, [6]int{1, 2, 3, 0, 0, 0}},
 	} {
 		clock24.Store(c.h24)
+		noAMPM.Store(c.bare)
 		got := binaryDigits(time.Date(2026, 9, 16, c.h, c.m, c.s, 0, time.UTC))
 		if got != c.want {
-			t.Errorf("%02d:%02d:%02d (24h %v) = %v, want %v", c.h, c.m, c.s, c.h24, got, c.want)
+			t.Errorf("%02d:%02d:%02d (24h %v, no AM/PM %v) = %v, want %v", c.h, c.m, c.s, c.h24, c.bare, got, c.want)
 		}
 		// Each digit fits in its column's lights.
 		for i, d := range got {

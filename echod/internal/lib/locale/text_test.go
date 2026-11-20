@@ -280,7 +280,7 @@ func TestSkipWords(t *testing.T) {
 func TestOnceHardcodedWordsAreInEveryCatalog(t *testing.T) {
 	keys := []string{"popup_started", "popup_in_a_minute", "popup_in_d_minutes", "popup_in_an_hour", "popup_at_s",
 		"reminder_untitled", "hint_no_start", "hint_favorite", "hint_no_home", "hint_play_failed", "hint_dropping",
-		"call_muted", "silenced", "press_again_to_snooze_d_min"}
+		"hint_unplayable", "call_muted", "silenced", "press_again_to_snooze_d_min"}
 	for key := range uiEnglish {
 		if strings.HasPrefix(key, "clock_style_") && key != "clock_style_label" && key != "clock_style_description" {
 			keys = append(keys, key)

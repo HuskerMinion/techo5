@@ -63,12 +63,32 @@ func TestAStreamLeftOffSaysSo(t *testing.T) {
 	}
 }
 
+// A station whose stream the device cannot decode, with no music library to play it, says so; a song
+// played after the station, or a station asked for long ago, does not.
+func TestAStationThatCannotBeDecodedSaysSo(t *testing.T) {
+	r := newHintRig(t, 50*time.Millisecond)
+	f := r.f
+	f.url, f.asked, f.askedAt, f.stationURL = "http://p/1", "KXYZ", time.Now(), "http://p/1"
+	f.unplayable("http://p/1")
+	if h := r.note(t, "the stream cannot be decoded"); h.Title != "Radio" || h.Message != HintText(UnplayableHint) {
+		t.Errorf("the stream cannot be decoded: the note is %+v", h)
+	}
+	f.unplayable("http://p/song")
+	f.askedAt = time.Now().Add(-askedFor - time.Minute)
+	f.unplayable("http://p/1")
+	select {
+	case h := <-r.hints:
+		t.Errorf("a note for a stream that is not the station's: %+v", h)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 // What the notes say is the kind of failure, in a card's three lines, and nothing of an address: in
 // every language the screen has.
 func TestTheRadioNotesAreShortAndPlain(t *testing.T) {
 	var notes []string
 	for _, lang := range []string{"", "de", "es", "fr", "gl", "it", "ja", "nl", "tr"} {
-		for _, key := range []string{NoHomeHint, PlayFailedHint, DroppingHint} {
+		for _, key := range []string{NoHomeHint, PlayFailedHint, DroppingHint, UnplayableHint} {
 			m := locale.Text(lang, key)
 			if m == key {
 				t.Errorf("%s: no words for %s", lang, key)

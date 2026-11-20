@@ -855,6 +855,8 @@ other Shows don't have the switches.
 ### Clock and home screen
 
 - **Clock format**, **Clock position** and **Date color** (Date color on the Show only). Clock
+  format is *12-hour*, *12-hour, no AM/PM* or *24-hour*; *no AM/PM* leaves it off the clock face
+  only, so an alarm's or an event's time in a line of text still says which. Clock
   position puts a smaller clock at the foot of the screen, in a bottom corner or between them
   (*Bottom left*, *Bottom center*, *Bottom right*), so a photo stays in view. Every style goes there
   except *Dashboard*, *Agenda* and *World*, which keep the whole screen. On the Spot, Clock position is
@@ -2586,9 +2588,10 @@ offered there. The Skylight has not been tried.
 
 ### The buttons in Home Assistant
 
-Each of the device's buttons is an event entity in Home Assistant (**Action button**, **Mute
-button**, **Volume down button**, **Volume up button**, and **Power button** where there is one).
-The device acts on a press itself as well; the events are there so an automation can act on one too.
+Each of the device's buttons is an event entity in Home Assistant: **Mute button**, **Volume down
+button** and **Volume up button**, and on the Dots, the Echo 2nd gen and the Echo Input an **Action
+button** too. Only the buttons the device has are listed: the Shows and the Spot have no action
+button, and the Echo Input has only its action and mute buttons. The device acts on a press itself as well; the events are there so an automation can act on one too.
 
 - `press`: a short press, as it is let go. A volume key reports it as it goes down.
 - `hold`: held for 0.7 seconds, as it happens.
@@ -2622,9 +2625,22 @@ stops it at shutdown: write it to run for as long as the device is up, or to han
 supervision. A script that does not exit is not waited for, and one that fails cannot hold up the
 daemon.
 
-This is on the Echo Show builds (Show 8 2nd gen included) and the Skylight; the Dot, Echo and Spot
-builds do not run it yet. Anyone with SSH or a root shell can leave a script here that runs at every
-boot, so only put something here you trust.
+Every build that boots TECHO5's Linux runs it: the Echo Show builds (Show 8 2nd gen included), the
+Skylight and the Echo Spot, and the TECHO5 Dot builds for the Echo Dot 2nd gen, the Echo 2nd gen, the
+Echo Dot 3rd gen and the Echo Input. On the Dot builds it is started last, after the daemon has been
+let start and the check that commits an update is under way. Their logs are also kept to about 1 MB
+each while the device is up, so a long boot's earlier output moves to `rc.local.log.1`. A Dot has no
+clock that keeps time while it is off, so the time may not be set yet when the script starts: wait for
+it before anything that needs it, such as a certificate check. TECHO5 Panel
+is an Android app, not a Linux image, so it has no `rc.local`.
+
+The Dot builds are small. The Echo Dot 2nd gen has about 445 MB of its 481 MB free with everything
+running, and the Echo Dot 3rd gen about 420 MB of its 470 MB when idle, with about 1 GB free on
+userdata. A helper that uses up the memory can get the daemon stopped, and an update that cannot keep
+the daemon up is rolled back, so keep what runs there light. The Echo Spot has 2 GB of memory.
+
+Anyone with SSH or a root shell can leave a script here that runs at every boot, so only put
+something here you trust.
 
 ## Questions and problems
 

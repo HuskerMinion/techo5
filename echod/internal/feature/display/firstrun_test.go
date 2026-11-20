@@ -97,7 +97,7 @@ func TestFirstRunLanguageStep(t *testing.T) {
 	d, _ := firstRunDisplay(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
-	setClock24(nil, false)
+	setClockFormat(nil, false, false)
 	setStep(t, frLanguage)
 	if v := d.firstRunView(time.Now()); v.lang != "en" {
 		t.Fatalf("an unset language shows %q chosen", v.lang)
@@ -137,7 +137,7 @@ func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
 	if err := config.Set().Screen().Clock24(true); err != nil {
 		t.Fatal(err)
 	}
-	setClock24(nil, true)
+	setClockFormat(nil, true, false)
 	setStep(t, frLanguage)
 	v := d.firstRunView(time.Now())
 	if v.lang != "en" || config.Get().Screen.Language != "" {
@@ -153,6 +153,36 @@ func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
 	if c := config.Get().Screen; c.Language != "" || !c.Clock24 || !clock24.Load() {
 		t.Fatalf("a tap on the lit English: language %q, 24 hours %v, drawn %v", c.Language, c.Clock24, clock24.Load())
 	}
+}
+
+// A 12-hour clock set to go without its AM/PM keeps that through the language step: a language
+// picking its clock, and the clock button, change only 12 or 24 hours.
+func TestFirstRunKeepsNoAMPM(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was24, wasBare := clock24.Load(), noAMPM.Load()
+	t.Cleanup(func() { clock24.Store(was24); noAMPM.Store(wasBare) })
+	if err := config.Set().Screen().ClockFormat(false, true); err != nil {
+		t.Fatal(err)
+	}
+	setClockFormat(nil, false, true)
+	setStep(t, frLanguage)
+	kept := func(what string, want24 bool) {
+		t.Helper()
+		if c := config.Get().Screen; c.Clock24 != want24 || !c.NoAMPM || clock24.Load() != want24 || !noAMPM.Load() {
+			t.Fatalf("%s: 24 hours %v, no AM/PM %v (drawn %v, %v); want 24 hours %v and no AM/PM kept",
+				what, c.Clock24, c.NoAMPM, clock24.Load(), noAMPM.Load(), want24)
+		}
+	}
+	de := -1
+	for i, l := range frLangs {
+		if l.Code == "de" {
+			de = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[de])
+	kept("a tap on Deutsch", true)
+	tapButton(t, d, "clock")
+	kept("the clock button", false)
 }
 
 // Japanese is named in its own script once a font here draws it, and romanized until then, rather

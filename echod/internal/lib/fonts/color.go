@@ -166,11 +166,14 @@ func parseColor(colr, cpal []byte) (*colorFont, error) {
 	}
 	be := binary.BigEndian
 	nBase := int(be.Uint16(colr[2:]))
-	baseAt, layerAt := int(be.Uint32(colr[4:])), int(be.Uint32(colr[8:]))
 	nLayer := int(be.Uint16(colr[12:]))
-	if baseAt+6*nBase > len(colr) || layerAt+4*nLayer > len(colr) {
+	// The offsets are checked as 64-bit numbers: on a 32-bit board an offset past 2 GB would be negative
+	// as an int, and pass a check made with ints.
+	baseAt64, layerAt64 := int64(be.Uint32(colr[4:])), int64(be.Uint32(colr[8:]))
+	if baseAt64+6*int64(nBase) > int64(len(colr)) || layerAt64+4*int64(nLayer) > int64(len(colr)) {
 		return nil, errColor
 	}
+	baseAt, layerAt := int(baseAt64), int(layerAt64) // within the table, so they fit
 	c := &colorFont{}
 	if cpal != nil {
 		pal, err := parsePalette(cpal)
@@ -209,14 +212,16 @@ func parsePalette(cpal []byte) ([]color.NRGBA, error) {
 	}
 	be := binary.BigEndian
 	entries, palettes := int(be.Uint16(cpal[2:])), int(be.Uint16(cpal[4:]))
-	records, recordsAt := int(be.Uint16(cpal[6:])), int(be.Uint32(cpal[8:]))
+	records, recordsAt64 := int(be.Uint16(cpal[6:])), int64(be.Uint32(cpal[8:]))
 	if palettes == 0 {
 		return nil, nil
 	}
 	first := int(be.Uint16(cpal[12:]))
-	if first+entries > records || recordsAt+4*records > len(cpal) {
+	// The offset is checked as a 64-bit number, as parseColor's are.
+	if first+entries > records || recordsAt64+4*int64(records) > int64(len(cpal)) {
 		return nil, errColor
 	}
+	recordsAt := int(recordsAt64)
 	out := make([]color.NRGBA, entries)
 	for i := range out {
 		rec := cpal[recordsAt+4*(first+i):]
@@ -236,9 +241,23 @@ type colorGlyph struct {
 	ppem    fixed.Int26_6
 }
 
-// colorOf is r as a color glyph, if the layer that draws it draws it as one.
+// maxColorEms is the most a color glyph's layers may cover together, in squares of the font's size:
+// an emoji covers about one. A broken font whose layers lie far apart would otherwise have tone ask for
+// a buffer of their whole span, which can be more memory than the board has.
+const maxColorEms = 16
+
+// maxColorPixels is the most a color glyph's layers may cover together at any size, in pixels.
+const maxColorPixels = 1 << 22
+
+// colorOf is r as a color glyph, if the layer that draws it draws it as one. A glyph whose layers
+// together cover more than maxColorEms or maxColorPixels is not drawn as one but as its plain glyph:
+// the check is made here, inside the layer's guard, so drawing in color and drawing as one tint are
+// both kept within it.
 func (s *Stack) colorOf(r rune) (cg colorGlyph, ok bool) {
-	if !s.colored || s.size <= 0 {
+	// ASCII is not looked up, which saves a search of the layers for every letter of a line: the Go
+	// layer, ahead of every font of one's own, has a glyph for each printable ASCII character, and the
+	// emoji font leaves ASCII out (tools/fonts/make_color_emoji_font.py), so none is a color glyph.
+	if !s.colored || s.size <= 0 || r < 0x80 {
 		return cg, false
 	}
 	s.mu.Lock()
@@ -257,7 +276,7 @@ func (s *Stack) colorOf(r rune) (cg colorGlyph, ok bool) {
 			if layers := l.color.glyph(g); layers != nil {
 				adv, aok := l.Face.GlyphAdvance(r)
 				cg = colorGlyph{l.Font, l.color, g, layers, adv, fixed.Int26_6(s.size * 64)}
-				ok = aok
+				ok = aok && cg.fits()
 			}
 		}) {
 			return cg, ok
@@ -273,6 +292,15 @@ func (cg colorGlyph) each(fn func(l colorLayer, mask *image.Alpha, at image.Rect
 			fn(l, m, m.Rect.Add(at))
 		}
 	}
+}
+
+// fits is whether the glyph's layers together cover no more than maxColorEms squares of its size and
+// no more than maxColorPixels, so that drawing it as one tint asks for a buffer of a sane size.
+func (cg colorGlyph) fits() bool {
+	b := cg.bounds()
+	area := int64(b.Dx()) * int64(b.Dy())
+	em := int64(cg.ppem.Ceil())
+	return area <= maxColorEms*em*em && area <= maxColorPixels
 }
 
 // bounds is where the glyph's layers have ink, from its origin.

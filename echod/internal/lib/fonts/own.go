@@ -41,6 +41,15 @@ const (
 	MaxOwnFiles = 8
 )
 
+// Fetched is the fonts feature/cjkfont downloads into the folder: the Japanese font and the two emoji
+// fonts. They are not the owner's, so they do not count toward the limits above, which are on what the
+// owner puts there: an owner with eight fonts of their own still has emoji. They are still tried in the
+// order of their names among the others, the color emoji font before the black-and-white one.
+var Fetched = []string{"zz-noto-sans-jp.ttf", "zz-noto-emoji.ttf", "zz-fluent-emoji.ttf"}
+
+// fetched is whether the file called name is one of Fetched.
+func fetched(name string) bool { return slices.Contains(Fetched, name) }
+
 // OwnFont is one of them as the setup page lists it: its file, its size, and the name the font gives
 // itself, or why it is not used.
 type OwnFont struct {
@@ -232,21 +241,26 @@ func load(files []fileSig) {
 	prev := ownFonts()
 	listed := []OwnFont{}
 	var inUse []ownEntry
-	var total int64
+	var total int64 // of the owner's fonts in use, not the fetched ones
+	owners := 0     // the owner's fonts in use
 	for _, sig := range files {
 		o := OwnFont{File: sig.name, Size: sig.size}
+		mine := !fetched(sig.name)
 		switch {
-		case len(inUse) >= MaxOwnFiles:
+		case mine && owners >= MaxOwnFiles:
 			o.Problem = fmt.Sprintf("only the first %d fonts are used", MaxOwnFiles)
 		case o.Size > MaxOwnFile:
 			o.Problem = fmt.Sprintf("bigger than %d MB", MaxOwnFile>>20)
-		case total+o.Size > MaxOwnTotal:
+		case mine && total+o.Size > MaxOwnTotal:
 			o.Problem = fmt.Sprintf("the fonts together would be over %d MB", MaxOwnTotal>>20)
 		default:
 			path := filepath.Join(Dir, sig.name)
 			if i := slices.IndexFunc(prev, func(e ownEntry) bool { return e.sig().same(sig) && sameFile(path, e.fh) }); i >= 0 {
 				o.Name = safeFontName(prev[i].font)
-				total += o.Size
+				if mine {
+					total += o.Size
+					owners++
+				}
 				inUse = append(inUse, prev[i])
 				break
 			}
@@ -256,7 +270,10 @@ func load(files []fileSig) {
 				break
 			}
 			o.Name = name
-			total += o.Size
+			if mine {
+				total += o.Size
+				owners++
+			}
 			c, err := readColor(fh)
 			if err != nil {
 				// Its glyphs are still drawn, each as its own outline, in the text's color.
@@ -461,7 +478,7 @@ func AddOwn(name string, r io.Reader) error {
 	var total int64
 	files := 0
 	for _, o := range Own() {
-		if o.File != name && o.Problem == "" {
+		if o.File != name && o.Problem == "" && !fetched(o.File) {
 			total += o.Size
 			files++
 		}

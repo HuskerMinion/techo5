@@ -94,6 +94,9 @@ type Screen struct {
 
 	// Clock24 shows times on the screen as 15:04 instead of 3:04 PM.
 	Clock24 bool `json:"clock_24,omitempty"`
+	// NoAMPM leaves the AM/PM off a 12-hour clock face: 3:04 alone. Times within a line of text (an
+	// alarm's, an event's) keep theirs, where a bare 7:00 could be either. No effect on a 24-hour clock.
+	NoAMPM bool `json:"no_ampm,omitempty"`
 
 	// CameraMinutes is how long a camera opened from the screen stays up: 0 for the default minute,
 	// -1 until it is tapped closed.
@@ -388,6 +391,11 @@ func (w ScreenWriter) Welcomed(v bool) error {
 
 func (w ScreenWriter) Clock24(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.Clock24 = v })
+}
+
+// ClockFormat sets the 24-hour clock and the AM/PM together, as one choice.
+func (w ScreenWriter) ClockFormat(h24, noAMPM bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.Clock24, c.Screen.NoAMPM = h24, noAMPM })
 }
 
 func (w ScreenWriter) CameraMinutes(v int) error {

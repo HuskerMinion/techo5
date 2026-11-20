@@ -41,7 +41,9 @@ type nextText struct{ ends, label string }
 
 // nextTimer is the running timer that ends soonest. With none running, it is the paused one with the
 // least left, which has no moment it ends at: its end is empty and its label says what it has left.
-// Silent timers are left out: what they show is a wait that is Home Assistant's own.
+// Silent timers are left out: what they show is a wait that is Home Assistant's own. So is a running
+// timer already at zero, one of Home Assistant's whose finishing event has yet to arrive: its end has
+// gone by, and is not one to count down to.
 //
 // The timers are read under the lock: a pause or a change from Home Assistant writes to them under it
 // while this runs. It takes the moment rather than reading the clock, so what it says can be tested
@@ -50,7 +52,7 @@ func (t *Timers) nextTimer(now time.Time) nextText {
 	t.mu.Lock()
 	var pick *timer
 	for _, c := range t.held {
-		if c.silent {
+		if c.silent || c.active && c.remaining(now) <= 0 {
 			continue
 		}
 		if pick == nil || sooner(c, pick, now) {
