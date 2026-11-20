@@ -33,6 +33,10 @@ type source struct {
 	// lightOnly is a wake light and no more: at its time the night ends, without a sound.
 	lightOnly bool
 
+	// resume is a snooze of a ring whose music was paused, to be resumed where it was (wake.go). Not
+	// saved: after a restart the snooze starts its music again.
+	resume bool
+
 	// skips are the occurrences of this alarm left out, by exact moment. They belong to an alarm set
 	// on the device that repeats: leaving one out neither turns it off nor changes its days, so its
 	// next occurrence after the marked one is found as usual. They are kept until the alarm is

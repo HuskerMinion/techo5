@@ -2216,12 +2216,18 @@ light ring's sunrise and nothing else: no sound, and no night to end.
 sound: a station from the radio's list, as the radio page shows it, or one of Music Assistant's
 favorite playlists, albums or radio stations (with a music library set up on the device). On a Dot,
 set it on the setup page or with the [alarm_wake_with action](actions.md#wake-with-music). The music
-plays on the device's own speaker, at the music volume, and the alarm is a ring as any other: it shows,
-**Gets louder** brings the music up from quiet, a press that quiets the ring quiets the music, Stop
-stops it, and Snooze stops it and starts it again when the snooze ends. If the music isn't heard
-within 8 seconds, stops for 8 seconds while the alarm rings, or can't play at all (no network, Music
-Assistant not set up or not answering, the station gone from the list, the music muted or at 0), the
-alarm sound rings instead, so nobody oversleeps. The wake light works as with any alarm. A light-only or silent alarm has no **Wake with**.
+plays on the device's own speaker at the **Ring volume**, not the music volume, for as long as the
+alarm rings, so a volume turned down (or muted) the night before doesn't make it quiet; the music
+volume is back as it was when the alarm ends. The alarm is a ring as any other: it shows, **Gets
+louder** brings the music up from quiet to the ring volume, a press that quiets the ring quiets the
+music, and Stop stops it. Snooze pauses a Music Assistant favorite and resumes it where it was when
+the snooze ends; if that doesn't work within 4 seconds (the queue is gone, say), the favorite starts
+again from the top. A radio station is live, so there is nowhere to resume from: Snooze stops it and
+it starts again when the snooze ends. If the music isn't heard within 8 seconds, stops for 8 seconds
+while the alarm rings, or can't play at all (no network, Music Assistant not set up or not answering,
+the station gone from the list), the alarm sound rings instead, so nobody oversleeps. With the ring
+volume at 0 the alarm sound rings, silent, as it would for any alarm. The wake light works as with
+any alarm. A light-only or silent alarm has no **Wake with**.
 
 A dashboard card can open the alarms on a Show or a Spot: see
 [docs/dashboards.md](dashboards.md#alarms).

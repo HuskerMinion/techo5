@@ -73,6 +73,10 @@ type Ring struct {
 	// lit is a ring with a wake light, its own or a folded alarm's: the light stays at full while it
 	// rings and through its snooze (sunrise.go).
 	lit bool
+
+	// playing is a ring whose music is playing (wake.go): a snooze of it pauses the music, and its
+	// snooze resumes it. Under Alarms.mu.
+	playing bool
 }
 
 // folded is an alarm that joined a ring already sounding.
@@ -658,7 +662,7 @@ func (a *Alarms) fire(s source, now time.Time) {
 		// alarm sound after all if the music is not heard.
 		stop, sound := startQuiet("alarm", s.label, a.rang)
 		a.silence = stop
-		goWake(func() { a.playWake(r, w, rise, sound) })
+		goWake(func() { a.playWake(r, w, rise, s.resume, sound) })
 	} else {
 		a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
 	}
@@ -889,7 +893,7 @@ func (a *Alarms) SnoozeFor(minutes int) bool {
 	r.snoozed = true
 	now := time.Now()
 	at := now.Add(time.Duration(minutes) * time.Minute).Truncate(time.Second)
-	a.snoozed = append(a.snoozed, source{key: "snooze:" + r.Key, label: r.Label, once: at, lit: r.lit})
+	a.snoozed = append(a.snoozed, source{key: "snooze:" + r.Key, label: r.Label, once: at, lit: r.lit, resume: r.playing})
 	a.lastSnooze = snoozeMade{made: now, until: at, minutes: minutes}
 	a.mu.Unlock()
 

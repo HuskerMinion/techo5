@@ -25,15 +25,19 @@ import (
 // Waking with music (#651). An alarm can wake somebody with a radio station or a Music Assistant
 // favorite in place of its alarm sound. It is still a ring in every way but the sound: it shows, it is
 // stopped and snoozed and rings out as any other, and Home Assistant's events are the same. The music
-// plays on this device's own speaker, the way the radio page or the music library plays it here, and
-// comes up from quiet as the alarm sound does when it gets louder.
+// plays on this device's own speaker, the way the radio page or the music library plays it here, at
+// the ring volume rather than the music's for as long as it rings (so a volume turned down the night
+// before does not make it quiet), and comes up from quiet as the alarm sound does when it gets louder.
 //
 // The music has to be heard within wakeWithin, or the alarm sound rings instead, so that a station that
-// is down, a network that is not there or a Music Assistant that does not answer never means
-// somebody oversleeps; music that stops while the alarm rings has as long to come back. Music that cannot be played at all - no Music Assistant set up, a station gone
-// from the radio's list, the music muted - rings the alarm sound at once.
+// is down, a network that is not there or a Music Assistant that does not answer never means somebody
+// oversleeps; music that stops while the alarm rings has as long to come back. Music that cannot be
+// played at all - no Music Assistant set up, a station gone from the radio's list - rings the alarm
+// sound at once.
 //
-// A snooze stops the music, and the snooze ringing starts it again. A stop stops it.
+// A snooze pauses a Music Assistant favorite, and the snooze ringing resumes it where it was; a resume
+// that does not come within half of wakeWithin starts the favorite again. A radio stream is live, with
+// nowhere to resume from: a snooze stops it and the snooze ringing starts it again. A stop stops it.
 
 var (
 	// wakeWithin is how long the music has to be heard before the alarm sound takes over: long enough
@@ -54,12 +58,17 @@ var (
 	wakeReady = musicReady
 	// wakeStart starts the music; it may wait, up to wakeWithin, until it plays or did not.
 	wakeStart = startMusic
+	// wakeResume plays Music Assistant's queue here again from where it was paused.
+	wakeResume = resumeMusic
 	// wakeHeard is whether music is what the room hears.
 	wakeHeard = func() bool { return media.Get().Audible() }
-	// wakeStop stops the music.
-	wakeStop = stopMusic
+	// wakeStop stops the music, and wakePause pauses it.
+	wakeStop  = stopMusic
+	wakePause = func() { media.Get().PauseAudible() }
 	// wakeLower holds the music db under full, 0 for full (speaker.Arbiter.Lower).
 	wakeLower = func(db int) { speaker.Sound().Backgrounds().Lower(db) }
+	// wakeVolume plays the music at step, the ring volume, until release (media.Player.HoldVolume).
+	wakeVolume = func(step int) (release func()) { return media.Get().HoldVolume(step) }
 )
 
 // wakeHushed is the music while the ring is silenced or hushed for a word: as far down as a duck goes.
@@ -76,17 +85,30 @@ func wakeOf(key string) config.WakeWith {
 	return config.WakeWith{}
 }
 
-// playWake plays w for the ring r, which StartQuiet started, for as long as r rings unsnoozed. sound
-// gives the ring its alarm sound when the music cannot be played or is not heard in time.
-func (a *Alarms) playWake(r *Ring, w config.WakeWith, rise time.Duration, sound func([]speaker.Note, time.Duration)) {
+// wakeTry is one way of getting the music going: resuming it, or starting it.
+type wakeTry struct {
+	how    string
+	within time.Duration
+	start  func(context.Context) error
+}
+
+// playWake plays w for the ring r, which StartQuiet started, for as long as r rings unsnoozed; resume
+// is the ring of a snooze that paused it. sound gives the ring its alarm sound when the music cannot be
+// played or is not heard in time.
+func (a *Alarms) playWake(r *Ring, w config.WakeWith, rise time.Duration, resume bool, sound func([]speaker.Note, time.Duration)) {
 	still := func() bool {
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		return a.ringing == r && !r.snoozed
 	}
+	release := func() {}
 	tone := func(why string, err error) {
 		slog.Warn("alarm: ringing the alarm sound instead of the music", "wake_with", w.String(), "why", why, "err", err)
+		a.mu.Lock()
+		r.playing = false
+		a.mu.Unlock()
 		wakeLower(0)
+		release()
 		if still() {
 			sound(speaker.AlarmSound(a.Sound()), rise)
 		}
@@ -99,43 +121,69 @@ func (a *Alarms) playWake(r *Ring, w config.WakeWith, rise time.Duration, sound 
 	if wakeHeard() {
 		wakeStop()
 	}
+	release = wakeVolume(ring.Level())
+	defer func() { release() }()
 	floor := int(math.Round(ring.RiseDB(0, rise)))
 	wakeLower(floor)
 	defer wakeLower(0)
 
-	ctx, cancel := context.WithTimeout(context.Background(), wakeWithin+time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	started := make(chan error, 1)
-	safe.Go("alarm music", func() { started <- wakeStart(ctx, w, still) })
+	tries := []wakeTry{{"start", wakeWithin, func(ctx context.Context) error { return wakeStart(ctx, w, still) }}}
+	if resume && w.Kind == config.WakeMusic {
+		tries = append([]wakeTry{{"resume", wakeWithin / 2, wakeResume}}, tries...)
+	}
+	var (
+		try     wakeTry
+		started chan error
+		asked   time.Time
+	)
+	// next begins the next try, and says whether there was one.
+	next := func() bool {
+		if len(tries) == 0 {
+			return false
+		}
+		try, tries = tries[0], tries[1:]
+		ch := make(chan error, 1)
+		started, asked = ch, time.Now()
+		start := try.start
+		tctx, tcancel := context.WithTimeout(ctx, try.within+time.Second)
+		safe.Go("alarm music", func() { defer tcancel(); ch <- start(tctx) })
+		return true
+	}
+	next()
 
 	// heard is when the music was first heard, and last when it was last: music that stops while the
 	// alarm rings (a station that drops and does not come back) is given wakeWithin too.
-	asked := time.Now()
 	var heard, last time.Time
 	for still() {
 		now := time.Now()
-		if heard.IsZero() {
+		on := wakeHeard()
+		if heard.IsZero() && !on {
+			var err error
 			select {
-			case err := <-started:
-				if err != nil {
-					wakeStop()
-					tone("it would not play", err)
+			case err = <-started:
+			default:
+			}
+			if err != nil || now.Sub(asked) >= try.within {
+				slog.Info("alarm: the music did not come", "how", try.how, "wake_with", w.String(), "err", err)
+				wakeStop()
+				if !next() {
+					tone("it was not heard in time", err)
 					return
 				}
-			default:
 			}
 		}
 		switch {
-		case wakeHeard():
+		case on:
 			if heard.IsZero() {
 				heard = now
-				slog.Info("alarm: waking with music", "wake_with", w.String(), "after", now.Sub(asked).Round(time.Millisecond))
+				a.mu.Lock()
+				r.playing = true
+				a.mu.Unlock()
+				slog.Info("alarm: waking with music", "wake_with", w.String(), "how", try.how, "after", now.Sub(asked).Round(time.Millisecond))
 			}
 			last = now
-		case heard.IsZero() && now.Sub(asked) >= wakeWithin:
-			wakeStop()
-			tone("it was not heard in time", nil)
-			return
 		case !heard.IsZero() && now.Sub(last) >= wakeWithin:
 			wakeStop()
 			tone("it stopped and did not come back", nil)
@@ -151,13 +199,22 @@ func (a *Alarms) playWake(r *Ring, w config.WakeWith, rise time.Duration, sound 
 		wakeLower(db)
 		time.Sleep(wakeEvery)
 	}
+	a.mu.Lock()
+	snoozed := r.snoozed
+	a.mu.Unlock()
+	if snoozed && w.Kind == config.WakeMusic && !heard.IsZero() {
+		wakePause()
+		return
+	}
 	wakeStop()
 }
 
 // musicReady is wakeReady: why w cannot be played now, or nil.
 func musicReady(w config.WakeWith) error {
-	if media.Get().Muted() || media.Get().Volume() == 0 {
-		return errors.New("the music is muted or at no volume")
+	// The music plays at the ring volume, so a ring volume of 0 is as silent for it as for the alarm
+	// sound: somebody chose that, and the alarm sound is what they chose it for.
+	if ring.Level() == 0 {
+		return errors.New("the ring volume is 0")
 	}
 	switch w.Kind {
 	case config.WakeRadio:
@@ -209,6 +266,23 @@ func startMusic(ctx context.Context, w config.WakeWith, wanted func() bool) erro
 		return c.PlayChecked(ctx, player, w.URI, wakeWithin, time.Second, wanted)
 	}
 	return errors.New("nothing to play")
+}
+
+// resumeMusic is wakeResume: this device's player at Music Assistant plays its queue again from where
+// it was paused (the way a play on the device resumes it, home's resumeMusicAssistant).
+func resumeMusic(ctx context.Context) error {
+	c, own, err := maPlayer()
+	if err != nil {
+		return err
+	}
+	p, err := c.Player(ctx, own)
+	if err != nil {
+		return err
+	}
+	if !p.Available {
+		return errors.New("this device is not connected to the music library right now")
+	}
+	return c.Resume(ctx, p.ID)
 }
 
 // stopMusic is wakeStop: what plays here stops, as the radio page's Stop stops it.

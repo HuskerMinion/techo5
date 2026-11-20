@@ -27,12 +27,22 @@ type music struct {
 	plays   bool  // whether a start is heard
 	heard   atomic.Bool
 	running sync.WaitGroup
+
+	// pauses and resumes count the music paused for a snooze and resumed after it; resumeErr is what a
+	// resume says, and resumePlays whether one is heard.
+	pauses, resumes int
+	resumeErr       error
+	resumePlays     bool
+	// held is the level the music was held at, -1 once let go, and holds how many times it was held.
+	held, holds int
 }
 
 func fakeMusic(t *testing.T) *music {
 	t.Helper()
 	m := &music{plays: true}
-	was := []any{wakeWithin, wakeEvery, startQuiet, goWake, wakeReady, wakeStart, wakeHeard, wakeStop, wakeLower}
+	m.resumePlays = true
+	was := []any{wakeWithin, wakeEvery, startQuiet, goWake, wakeReady, wakeStart, wakeHeard, wakeStop, wakeLower,
+		wakeResume, wakePause, wakeVolume}
 	wakeWithin, wakeEvery = 150*time.Millisecond, 5*time.Millisecond
 	startQuiet = func(what, label string, ended func()) (func(), func([]speaker.Note, time.Duration)) {
 		stop, sound := ring.StartQuiet(what, label, ended)
@@ -60,6 +70,23 @@ func fakeMusic(t *testing.T) *music {
 	wakeHeard = m.heard.Load
 	wakeStop = func() { m.mu.Lock(); m.stops++; m.mu.Unlock(); m.heard.Store(false) }
 	wakeLower = func(db int) { m.mu.Lock(); m.levels = append(m.levels, db); m.mu.Unlock() }
+	wakeResume = func(context.Context) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.resumes++
+		if m.resumeErr == nil && m.resumePlays {
+			m.heard.Store(true)
+		}
+		return m.resumeErr
+	}
+	wakePause = func() { m.mu.Lock(); m.pauses++; m.mu.Unlock(); m.heard.Store(false) }
+	wakeVolume = func(step int) func() {
+		m.mu.Lock()
+		m.held, m.holds = step, m.holds+1
+		m.mu.Unlock()
+		var once sync.Once
+		return func() { once.Do(func() { m.mu.Lock(); m.held = -1; m.mu.Unlock() }) }
+	}
 	t.Cleanup(func() {
 		m.running.Wait()
 		wakeWithin, wakeEvery = was[0].(time.Duration), was[1].(time.Duration)
@@ -68,6 +95,8 @@ func fakeMusic(t *testing.T) *music {
 		wakeReady = was[4].(func(config.WakeWith) error)
 		wakeStart = was[5].(func(context.Context, config.WakeWith, func() bool) error)
 		wakeHeard, wakeStop, wakeLower = was[6].(func() bool), was[7].(func()), was[8].(func(int))
+		wakeResume, wakePause = was[9].(func(context.Context) error), was[10].(func())
+		wakeVolume = was[11].(func(int) func())
 	})
 	return m
 }
@@ -76,6 +105,14 @@ func (m *music) state() (started []config.WakeWith, stops, sounds int, levels []
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]config.WakeWith(nil), m.started...), m.stops, m.sounds, append([]int(nil), m.levels...)
+}
+
+// volume is the level the music is held at (-1 once let go, 0 before it was held), how many times it
+// was held, and the pauses and resumes.
+func (m *music) volume() (held, holds, pauses, resumes int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.held, m.holds, m.pauses, m.resumes
 }
 
 func until(t *testing.T, what string, ok func() bool) {
@@ -110,9 +147,15 @@ func TestAnAlarmWakesWithItsMusic(t *testing.T) {
 	m := fakeMusic(t)
 	got := events(t)
 	a, src := wakeAlarm(t, radio)
+	if err := config.Set().Alarms().RingVolume(9); err != nil {
+		t.Fatal(err)
+	}
 	a.fire(src, time.Now())
 	until(t, "the music", func() bool { s, _, _, _ := m.state(); return len(s) == 1 })
 	time.Sleep(2 * wakeWithin)
+	if held, holds, _, _ := m.volume(); held != 9 || holds != 1 {
+		t.Errorf("the music is held at %d (%d times), want the ring volume 9", held, holds)
+	}
 	started, _, sounds, _ := m.state()
 	if started[0] != radio || sounds != 0 || !a.Ringing() || !ring.IsSounding() {
 		t.Fatalf("started %+v, %d alarm sounds, ringing %v", started, sounds, a.Ringing())
@@ -122,6 +165,9 @@ func TestAnAlarmWakesWithItsMusic(t *testing.T) {
 	m.running.Wait()
 	if _, _, _, levels := m.state(); levels[len(levels)-1] != 0 {
 		t.Errorf("the music was left at %d dB", levels[len(levels)-1])
+	}
+	if held, _, _, _ := m.volume(); held != -1 {
+		t.Errorf("the stop left the music held at %d", held)
 	}
 	e := waitFor(t, got, 2)
 	if e[0]["event"] != "ringing" || e[0]["wake_with"] != "radio: WXYZ" || e[1]["event"] != "stopped" || e[1]["wake_with"] != "radio: WXYZ" {
@@ -142,6 +188,9 @@ func TestMusicNotHeardInTimeRingsTheAlarmSound(t *testing.T) {
 	}
 	if _, stops, _, _ := m.state(); stops != 1 || !a.Ringing() {
 		t.Errorf("%d stops; ringing %v", stops, a.Ringing())
+	}
+	if held, _, _, _ := m.volume(); held != -1 {
+		t.Errorf("the alarm sound left the music held at %d", held)
 	}
 }
 
@@ -192,7 +241,8 @@ func TestMusicThatCannotPlayRingsTheAlarmSoundAtOnce(t *testing.T) {
 	}
 }
 
-// Snooze stops the music, and the snooze ringing starts it again; the snooze is as long as ever.
+// Snooze stops a radio station, which is live, and the snooze ringing starts it again; the snooze is as
+// long as ever, and the volume is let go of meanwhile.
 func TestSnoozingMusicStopsItAndTheSnoozeBringsItBack(t *testing.T) {
 	m := fakeMusic(t)
 	a, src := wakeAlarm(t, radio)
@@ -203,6 +253,10 @@ func TestSnoozingMusicStopsItAndTheSnoozeBringsItBack(t *testing.T) {
 		t.Fatal("not snoozed")
 	}
 	until(t, "the music to stop", func() bool { _, stops, _, _ := m.state(); return stops == 1 && !a.Ringing() })
+	m.running.Wait()
+	if held, _, pauses, _ := m.volume(); held != -1 || pauses != 0 {
+		t.Errorf("snoozed: held at %d, %d pauses", held, pauses)
+	}
 	a.mu.Lock()
 	snoozed := append([]source(nil), a.snoozed...)
 	a.mu.Unlock()
@@ -312,5 +366,58 @@ func TestWakeWithFromHomeAssistant(t *testing.T) {
 	}
 	if err := a.SetWake("nope", morning); err == nil {
 		t.Error("an alarm that is not there was set")
+	}
+}
+
+// A Music Assistant favorite is paused for a snooze and resumed where it was when the snooze rings; a
+// resume that fails, or is not heard, starts the favorite again, and failing that the alarm sound rings.
+func TestSnoozingAFavoriteResumesIt(t *testing.T) {
+	morning := config.WakeWith{Kind: config.WakeMusic, Name: "Morning", URI: "library://playlist/1"}
+	for _, c := range []struct {
+		name               string
+		resumeErr          error
+		resumePlays, plays bool
+		starts, sounds     int
+	}{
+		{"resumed", nil, true, true, 1, 0},
+		{"the queue is gone", errors.New("no queue"), false, true, 2, 0},
+		{"the resume is not heard", nil, false, true, 2, 0},
+		{"nothing plays", errors.New("no queue"), false, false, 2, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := fakeMusic(t)
+			a, src := wakeAlarm(t, morning)
+			a.fire(src, time.Now())
+			until(t, "the ring to hear the music", func() bool {
+				a.mu.Lock()
+				defer a.mu.Unlock()
+				return a.ringing != nil && a.ringing.playing
+			})
+			if !a.Snooze() {
+				t.Fatal("not snoozed")
+			}
+			m.running.Wait()
+			_, stops, _, _ := m.state()
+			if held, _, pauses, _ := m.volume(); pauses != 1 || stops != 0 || held != -1 {
+				t.Fatalf("snoozed: %d pauses, %d stops, held at %d", pauses, stops, held)
+			}
+			a.mu.Lock()
+			snoozed := a.snoozed[0]
+			a.mu.Unlock()
+			m.mu.Lock()
+			m.resumeErr, m.resumePlays, m.plays = c.resumeErr, c.resumePlays, c.plays
+			m.mu.Unlock()
+			a.fire(snoozed, time.Now())
+			if c.sounds > 0 {
+				until(t, "the alarm sound", func() bool { _, _, sounds, _ := m.state(); return sounds == c.sounds })
+			} else {
+				until(t, "the music again", func() bool { return m.heard.Load() })
+				time.Sleep(2 * wakeWithin)
+			}
+			started, _, sounds, _ := m.state()
+			if _, _, _, resumes := m.volume(); resumes != 1 || len(started) != c.starts || sounds != c.sounds {
+				t.Errorf("%d resumes, %d starts, %d alarm sounds; want 1, %d, %d", resumes, len(started), sounds, c.starts, c.sounds)
+			}
+		})
 	}
 }
