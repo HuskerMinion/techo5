@@ -1471,7 +1471,11 @@ ordinary turn.
 ringing alarm or timer, an answer, an announcement or the music. After an alarm it also lets go of a
 wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
 isn't cut off. **Stop word threshold** (on the device's microphone in Home Assistant, 0.70 to start
-with) sets how sure it has to be. At the top of its range, the stop word is off.
+with) sets how sure it has to be. At the top of its range, the stop word is off. A "stop" that came
+close and wasn't heard leaves a `wake near miss` line with `slot=101` in the device's log, and shows in
+the setup page's [scores](#watching-the-wake-word-scores). Said over an answer or music with echo
+cancellation active, it counts as close from further under the threshold than other words do: how
+close it came there is what says whether to lower the threshold.
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
@@ -1916,6 +1920,15 @@ your own**, on a device with microphones.
 - **Last heard** lists the latest detections, near misses, wakes the device was unsure of (with
   **Confirm wake with Home Assistant** on: a score over its threshold but under the wake word's), and
   words that became ready or were taken out, each with the numbers its line in the log has.
+- A near miss is a word that scored at least 0.5 and stayed under what it was judged against. During
+  playback with echo cancellation active, the stop word also counts one from 0.15 under what it is
+  judged against, if that is lower (never under 0.30): it is then judged against 0.50 at any threshold
+  up to 0.60, and a try that came close would leave nothing behind. With a 0.60 cutoff that is from
+  0.45, with 0.50 from 0.35; in a quiet room it is 0.5, as for every other word. The ones under 0.5 have
+  the floor they were judged by at the end of the log line (`floor=0.35`), and the cutoff in force when
+  the word peaked (for a "stop" said just as an answer ends, the one for playback). They are only
+  listed and logged: they don't duck the music, hush a ringing alarm or get kept as a wake clip, as a
+  near miss from 0.5 up still does.
 - **Watch** draws each word's highest score in the last two seconds as a bar, with a line where its
   cutoff is, and adds what is heard as it happens. Scores just after a wake or an unmute, while the device
   holds detections back, don't count toward the bar. Without script, **Refresh** brings the table and the
