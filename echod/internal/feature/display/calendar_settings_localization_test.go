@@ -168,7 +168,7 @@ func TestDisplayCalendarJapaneseTextFitsShow5(t *testing.T) {
 		if label != row.label || sub != row.sub {
 			t.Errorf("%s would be truncated: %q / %q", row.id, label, sub)
 		}
-		if end+r.s(rowGap)+r.controlWidth(row) > card.Max.X-r.s(26) {
+		if end+r.s(rowGap)+r.controlWidth(card, row) > card.Max.X-r.s(26) {
 			t.Errorf("%s overlaps its control", row.id)
 		}
 	}

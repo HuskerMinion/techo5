@@ -189,7 +189,7 @@ func TestJapaneseDrawerLayoutFitsShow5(t *testing.T) {
 			if label != row.label || sub != row.sub {
 				t.Fatalf("tab %d: %s text is truncated: %q / %q", tab, row.id, label, sub)
 			}
-			if end+r.s(rowGap)+r.controlWidth(row) > panel.Max.X-r.s(26) {
+			if end+r.s(rowGap)+r.controlWidth(panel, row) > panel.Max.X-r.s(26) {
 				t.Fatalf("tab %d: %s text overlaps its control", tab, row.id)
 			}
 		}
