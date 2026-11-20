@@ -81,6 +81,10 @@ func (u *Firmware) autoLoop(ctx context.Context) {
 		}
 		u.Check(ctx)
 		if v := u.Offered(); v != "" {
+			if heldBack(v) {
+				slog.Info("not installing the release rolled back from by itself; waiting for a newer one", "version", v)
+				continue
+			}
 			slog.Info("installing an update by itself, overnight", "version", v)
 			u.Install(ctx)
 		}

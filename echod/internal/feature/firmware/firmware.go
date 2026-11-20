@@ -44,6 +44,10 @@ type Firmware struct {
 	events  *esphome.Event
 	auto    *esphome.Switch
 
+	// rollback and other are on a device that boots from slots only (rollback.go).
+	rollback *esphome.Button
+	other    *esphome.TextSensor
+
 	mu    sync.Mutex
 	found update.Manifest
 	// appOffered is what a panel's app last said its release server offers, newer than this build, or
@@ -113,6 +117,7 @@ func Get() *Firmware {
 func build() *Firmware {
 	u := &Firmware{}
 	u.buildAuto()
+	u.buildRollback()
 
 	u.entity = &esphome.Update{
 		Base: esphome.Base{
@@ -222,8 +227,20 @@ func (u *Firmware) announce() {
 		}
 
 		event, detail := EventInstalled, "installed "+layout.Version
-		if u.rolledBack != "" {
+		held := config.Get().Update.HeldBack
+		switch {
+		case u.rolledBack != "":
 			event, detail = EventRolledBack, "rolled back from "+u.rolledBack
+		case held != "" && held == config.Get().Update.LastVersion:
+			// The Roll back button (rollback.go): the slot this boot came from is the one it left.
+			event, detail = EventRolledBack, "rolled back from "+held+" to "+layout.Version
+		}
+		// Once something newer than the release rolled back from runs here, there is nothing left to
+		// hold back.
+		if held != "" && !update.HeldBack(layout.Version, held) {
+			if err := config.Set().Update().HeldBack(""); err != nil {
+				slog.Error("clearing the release held back failed", "err", err)
+			}
 		}
 		u.Settled(event, detail)
 
@@ -478,5 +495,9 @@ func (u *Firmware) Entities() []esphome.Entity {
 		// A panel follows no channel of its own (its app updates it): no Stable or Dev to choose.
 		return []esphome.Entity{u.entity, u.look, u.status, u.events, u.auto}
 	}
-	return []esphome.Entity{u.entity, u.channel, u.look, u.status, u.events, u.auto}
+	entities := []esphome.Entity{u.entity, u.channel, u.look, u.status, u.events, u.auto}
+	if _, ok := update.OtherSlot(); ok {
+		entities = append(entities, u.rollback, u.other)
+	}
+	return entities
 }

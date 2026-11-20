@@ -366,6 +366,10 @@ python3 tools/install-show.py --name "Kitchen" --let-home-assistant-add
    on. **Install updates automatically** (in Home Assistant, or on the setup page's System tab,
    under Updates) installs a new release by itself between 2 and 5 AM, while nothing is playing. It
    is off until you turn it on.
+   A regression that shows up after an update has committed itself is undone with **Roll back** in
+   Home Assistant (diagnostic): the device boots the release in its other slot again, which
+   **Other slot** shows. It refuses unless that slot is one that committed itself, and installing
+   updates automatically skips the release rolled back from until a newer one is out.
 5. **Optional:**
    - [phone calls](phone.md) through your own SIP provider;
    - SSH (keys only) through the `ssh_keys` action and the SSH switch;

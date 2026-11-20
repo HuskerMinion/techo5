@@ -13,6 +13,11 @@ type Update struct {
 	// AutoInstall installs an update the channel offers by itself, overnight while nothing is playing,
 	// for a device nobody is going to press Install on: one with no Home Assistant, far away.
 	AutoInstall bool `json:"auto_install,omitempty"`
+
+	// HeldBack is the release a rollback (Home Assistant's Roll back button) went back from. Installing
+	// updates by themselves leaves it, and anything no newer, alone, so the same release is not put back
+	// the next night; one newer than it is installed as usual. Pressing Install still installs it.
+	HeldBack string `json:"held_back,omitempty"`
 }
 
 const DefaultChannel = "stable"
@@ -33,4 +38,8 @@ func (w UpdateWriter) AutoInstall(v bool) error {
 
 func (w UpdateWriter) LastVersion(v string) error {
 	return w.st.Update(func(c *Config) { c.Update.LastVersion = v })
+}
+
+func (w UpdateWriter) HeldBack(v string) error {
+	return w.st.Update(func(c *Config) { c.Update.HeldBack = v })
 }
