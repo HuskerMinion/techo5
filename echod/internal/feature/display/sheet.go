@@ -396,13 +396,16 @@ func generalRows(sv sheetView) []settingRow {
 	}
 	rows := []settingRow{{label: tr("name"), sub: tr("change_it_on_the_setup_page"), kind: ctlValue, value: st.name}}
 	rows = append(rows, calendarRows()...)
-	return append(rows,
+	rows = append(rows,
 		settingRow{id: "weather", label: tr("weather"), sub: tr("shown_with_the_clock"), kind: ctlChoice, value: st.weather, button: tr("ui_show")},
 		settingRow{id: "timezone", label: tr("time_zone"), sub: zoneSub(), kind: ctlChoice, value: zoneValue()},
 		settingRow{id: "screenlang", label: tr("screen_language"), sub: tr("its_dates_its_weather_and_what_it_listens_for"),
 			kind: ctlChoice, value: langLabels()[langIndex()]},
 		updates,
-		settingRow{label: tr("about"), kind: ctlValue, value: deviceModel + " · slot " + st.slot},
+		settingRow{label: tr("about"), kind: ctlValue, value: deviceModel + " · slot " + st.slot})
+	// A panel's tablet has settings of its own, which the panel as its home screen keeps out of reach.
+	rows = append(rows, androidSettingsRows(st.now)...)
+	return append(rows,
 		restart,
 		giftResetRow(st.now),
 	)
@@ -1383,6 +1386,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		}
 	case "giftreset":
 		giftResetTap()
+	case "androidsettings":
+		androidSettingsTap()
 	case "restart":
 		d.mu.Lock()
 		armed := !d.restartArm.IsZero() && time.Since(d.restartArm) < restartWindow

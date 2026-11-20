@@ -1088,6 +1088,12 @@ var uiEnglish = map[string]string{
 	"firstrun_spot_manual":          "Updates wait for you.",
 	"firstrun_spot_auto":            "Updates install overnight.",
 	"firstrun_spot_hear":            "Did you hear that?",
+
+	// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+	"android_settings": "Android settings",
+	"this_tablet_s_own_settings_wi_fi_display_apps": "This tablet's own settings: Wi-Fi, display, apps",
+	"ui_open": "Open",
+	"ui_this_tablet_has_no_settings_screen_to_open": "This tablet has no settings screen to open",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -1672,6 +1678,12 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "Silenciada · pulsa un botón de volumen o de micrófono para posponer %d min",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Ajustes de Android",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Los ajustes propios de esta tableta: wifi, pantalla, aplicaciones",
+		"ui_open": "Abrir",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Esta tableta no tiene una pantalla de ajustes que abrir",
 	},
 	"fr": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -2737,6 +2749,12 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "Son coupé ; bouton de volume ou de micro pour répéter dans %d min",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Paramètres Android",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Les paramètres de cette tablette : Wi-Fi, affichage, applications",
+		"ui_open": "Ouvrir",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Cette tablette n'a pas d'écran de paramètres à ouvrir",
 	},
 	"gl": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -3798,6 +3816,12 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "Silenciado · preme un botón de volume ou de micrófono para adiar %d min",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Axustes de Android",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Os axustes propios desta tableta: wifi, pantalla, aplicacións",
+		"ui_open": "Abrir",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Esta tableta non ten unha pantalla de axustes que abrir",
 	},
 	"it": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -4863,6 +4887,12 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "Silenziato · premi un tasto del volume o del microfono per posticipare di %d min",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Impostazioni di Android",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Le impostazioni di questo tablet: Wi-Fi, display, app",
+		"ui_open": "Apri",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Questo tablet non ha una schermata di impostazioni da aprire",
 	},
 	"nl": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -6677,6 +6707,12 @@ var uiTranslations = map[string]map[string]string{
 		"wi_fi": "Wifi",
 		// Connected
 		"wifi_connected": "Verbonden",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Android-instellingen",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "De eigen instellingen van deze tablet: wifi, scherm, apps",
+		"ui_open": "Openen",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Deze tablet heeft geen instellingenscherm om te openen",
 	},
 	"ja": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -7742,6 +7778,12 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "消音中・音量またはマイクのボタンを押すと%d分スヌーズ",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Androidの設定",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "このタブレット自体の設定：Wi-Fi、ディスプレイ、アプリ",
+		"ui_open": "開く",
+		"ui_this_tablet_has_no_settings_screen_to_open": "このタブレットには開ける設定画面がありません",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -9434,6 +9476,12 @@ var uiTranslations = map[string]map[string]string{
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		// Silenced · press a volume or microphone button to snooze %d min
 		"silenced_press_a_button_to_snooze_d_min": "Stumm · Lautstärke- oder Mikrofontaste drücken für %d min Schlummern",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Android-Einstellungen",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Die eigenen Einstellungen dieses Tablets: WLAN, Display, Apps",
+		"ui_open": "Öffnen",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Dieses Tablet hat keinen Einstellungsbildschirm zum Öffnen",
 	},
 	"tr": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -10500,5 +10548,11 @@ var uiTranslations = map[string]map[string]string{
 
 		// The ringing page's note under a silenced alarm: which buttons snooze it.
 		"silenced_press_a_button_to_snooze_d_min": "Susturuldu · %d dk ertelemek için ses veya mikrofon düğmesine bas",
+
+		// The panel's Android settings row: the tablet's own settings (android_settings_panel.go).
+		"android_settings": "Android ayarları",
+		"this_tablet_s_own_settings_wi_fi_display_apps": "Bu tabletin kendi ayarları: Wi-Fi, ekran, uygulamalar",
+		"ui_open": "Aç",
+		"ui_this_tablet_has_no_settings_screen_to_open": "Bu tablette açılacak bir ayarlar ekranı yok",
 	},
 }
