@@ -3,7 +3,7 @@
 The ThinkSmart View is an 8 inch desk display Lenovo sold for Teams and Zoom: a Qualcomm APQ8053
 (eight Cortex-A53 cores, 2 GB), an 800x1280 panel that stands landscape, two digital microphones, a
 speaker, a camera with a sliding cover, a microphone switch and a light sensor. TECHO5 runs on it
-with the 64-bit msm8953-mainline kernel postmarketOS packages and the Show's 32-bit userland, as on
+with TECHO5's 64-bit build of the msm8953-mainline kernel (`kernel/`) and the Show's 32-bit userland, as on
 the 2nd gen Show 8 and the Skylight.
 
 Status: tried on two units, one with each of the panels Lenovo fitted. Not in the releases, and there is no installer yet:
@@ -27,14 +27,15 @@ the steps below are by hand, from a unit that already runs Linux.
 | Firewall | techo5-firewall as on every Show, with `xt_owner` and `xt_recent` built for this kernel |
 
 Not there: a USB gadget (the rescue environment is reached over Wi-Fi and SSH only), the GPU for
-the screen, the hardware video decoder for the camera stream, a kernel of TECHO5's own.
+the screen, the hardware video decoder for the camera stream, kernel updates.
 
 ## How it boots
 
-lk2nd is in the `boot` partition. It reads `extlinux/extlinux.conf`, the kernel, the device tree and
-postmarketOS's initramfs from the first partition of an MBR inside what was Android's `system`
-partition. That initramfs maps the MBR's two partitions into the device mapper (`system1`,
-`system2`), mounts the one `pmos_root_uuid` names as the root and runs its `/sbin/init`.
+lk2nd is in the `boot` partition. It reads `extlinux/extlinux.conf`, the kernel and the device tree
+from the first partition of an MBR inside what was Android's `system` partition. There is no
+initramfs: the kernel's command line has its device mapper make the MBR's two partitions
+(`dm-mod.create`, `system1` and `system2`, by the GPT name `system` and the image's offsets), and the
+kernel mounts `system2` read-only as `/` and runs its `/sbin/init`.
 
 So `system2` is the slot store and its `/sbin/init` is `init` here: the Skylight's, with this boot
 chain under it. It mounts `techo5-data`, a GPT partition after `system` that `repartition.sh` makes,
@@ -42,45 +43,27 @@ links the audio DSP's firmware from the unit's modem partition where the kernel 
 the kernel's modules, binds the store's `/lib/modules` and `/lib/firmware` into the slot and pivots
 into it, or stays as the rescue environment.
 
-The initramfs takes an MBR with exactly two partitions and grows the second over any free space
-after it, which is why the data is not a third partition there, and why the image fills `system`.
+## The kernel
 
-## The kernel's files
+`kernel/build.sh` builds it from msm8953-mainline `v7.1.3-r0`, the tree postmarketOS packages for
+this SoC, with the speaker amplifier and camera drivers, the audio and video decoder patches, the
+camera in the device tree, and a configuration trimmed to this board ([kernel/README.md](kernel/README.md)).
+`uname -r` is `7.1.3-techo5-thinksmart`. It gives `vmlinuz` and the device tree for `mkimage.sh -K`
+and `modules.tar` for `mkstore.sh -M`. Nothing updates it over the air yet: the kernel, its modules
+and firmware are outside the slots.
 
-The kernel is not built here. It is postmarketOS's `linux-postmarketos-qcom-msm8953` 7.1.3
-(msm8953-mainline `v7.1.3-r0`), and it stays what it is: nothing updates it over the air, and the
-modules in the store are the ones for it. What goes with it:
-
-- `vmlinuz`, `initramfs` and `apq8053-lenovo-cd-18781y.dtb`, from the package (`/boot` of a unit
-  running it): `mkimage.sh -b`.
-- `/usr/lib/modules/7.1.3-msm8953` and `/lib/firmware`, from the same unit: `mkstore.sh -M` and `-F`.
-- Out-of-tree modules in the modules' `extra/`, built against that source and configuration with
-  clang 22, as [m0s4ik/thinksmart-view-debian](https://github.com/m0s4ik/thinksmart-view-debian)
-  describes (driver/tas5782m/README.md there): `snd-soc-tas5782m.ko` (rickx's driver; without it
-  there is no sound card), `vcnl4000.ko`, `s5kc505a.ko`, and from `kernel/netfilter` here `xt_owner.ko`
-  and `xt_recent.ko`. `depmod` is run over the tree afterwards.
-- Three of the package's own modules rebuilt with that project's patches, in place of the package's:
-  `q6asm.ko` and `q6asm-dai.ko` (driver/q6asm there: without them playback stalls when a stream is
-  stopped and started again, which the daemon does all the time) and `venus-core.ko` (driver/venus).
-- The device tree with the camera in it, `apq8053-lenovo-cd-18781y-camera.dtb`, from the same
-  project (driver/s5kc505a): `mkimage.sh -d`.
-
-`kernel/netfilter` builds the two netfilter modules the package's configuration leaves out, from
-the kernel's own files:
-
-```
-cp linux-7.1.3/net/netfilter/xt_owner.c linux-7.1.3/net/netfilter/xt_recent.c tools/linux/thinksmart/kernel/netfilter/
-make -C linux-7.1.3 ARCH=arm64 LLVM=1 LLVM_SUFFIX=-22 KBUILD_MODPOST_WARN=1 M=$PWD/tools/linux/thinksmart/kernel/netfilter modules
-```
+The firmware (`mkstore.sh -F`) is `/lib/firmware` of a unit running postmarketOS or the Debian
+project's image: Wi-Fi, Bluetooth and the GPU. The audio DSP's is the unit's own.
 
 ## Building an image
 
 ```
 DEVICE_OVERLAY=tools/linux/thinksmart/overlay tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
-tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -M modules.tar -F firmware.tar \
-	-U <uuid> -S 2048 -o store.img
-tools/linux/thinksmart/mkimage.sh -b boot.tar -d apq8053-lenovo-cd-18781y-camera.dtb \
-	-s store.img -u <uuid> -o system.img
+tools/linux/thinksmart/kernel/build.sh
+K=~/techo5-thinksmart-kbuild/out
+tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -M $K/modules.tar -F firmware.tar \
+	-S 2048 -o store.img
+tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
 ```
 
 `-k <authorized_keys>` and `-W <wpa_supplicant.conf>` make a bench image: SSH with that key from
@@ -115,4 +98,4 @@ slots and are not updated.
 - `repartition.sh`: run on the unit, makes `techo5-data`.
 - `rescue-profile.sh`: the rescue environment's login text.
 - `overlay/`: the board's `device.conf`, `mdev.conf`, and `/lib/modules` for the store's to be bound on.
-- `kernel/netfilter/`: the build file for `xt_owner` and `xt_recent`.
+- `kernel/`: the kernel's build, its drivers, patches and configuration.

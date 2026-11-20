@@ -1,7 +1,7 @@
 #!/bin/bash
 # mkstore.sh — the techo5-store image for the Lenovo ThinkSmart View (APQ8053): a slot store whose
-# root is also the boot environment, because postmarketOS's initramfs mounts it as the root and runs
-# its /sbin/init. Made from tools/linux/skylight/mkstore.sh; the board, its init and the kernel's
+# root is also the boot environment: the kernel mounts it as the root and runs its /sbin/init.
+# Made from tools/linux/skylight/mkstore.sh; the board, its init and the kernel's
 # modules and firmware differ.
 #
 #   mkstore.sh -r <rootfs.tar.gz> -k <authorized_keys>|none -M <modules.tar> -F <firmware.tar>
@@ -13,15 +13,14 @@
 # files (Ubuntu's AppArmor, kernel.apparmor_restrict_unprivileged_userns), run it as root with
 # --inner. What it makes:
 #
-#   /sbin/init            tools/linux/thinksmart/init (the initramfs runs it)
+#   /sbin/init            tools/linux/thinksmart/init (the kernel runs it)
 #   /bin, /lib, /usr ...  Alpine armv7 + dropbear, wpa_supplicant 2.9, iw, e2fsprogs, udhcpd:
 #                         the rescue environment, which never changes with an update
 #   /bin/busybox.static   PID 1's interpreter
-#   /lib/modules, /lib/firmware   -M and -F: the kernel's own, as tar files of modules/<version> and
-#                         firmware/ (from a unit running that kernel, or the kernel's packages, with
-#                         the out-of-tree snd-soc-tas5782m.ko in extra/). They go with the kernel in
-#                         lk2nd's boot partition, not with a slot, and are bound into the slot that
-#                         boots. The audio DSP's firmware is the unit's own, read from its modem
+#   /lib/modules, /lib/firmware   -M and -F: tar files of modules/<version> (kernel/build.sh's
+#                         modules.tar) and firmware/ (from a unit running Linux). They go with the
+#                         kernel in lk2nd's boot partition, not with a slot, and are bound into the
+#                         slot that boots. The audio DSP's firmware is the unit's own, read from its modem
 #                         partition at boot, and is not in the image.
 #   /root/.ssh/authorized_keys   <authorized_keys>: the rescue's SSH keys, and the slot's bench keys
 #                         (BENCH_SSH_KEYS in device.conf); `-k none` leaves it empty, as an image
@@ -106,11 +105,8 @@ ln -s /run/resolv.conf "$R/etc/resolv.conf"
 say "boot and rescue files"
 install -m 755 "$INPUTS/busybox.static" "$R/bin/busybox.static"
 lf() { sed 's/\r$//' "$1" > "$2"; chmod "$3" "$2"; }
-# postmarketOS's initramfs runs /sbin/init of the root it mounted, and wants an /etc/os-release there
-# (Alpine's base has one).
 rm -f "$R/sbin/init"
 lf "$HERE/init" "$R/sbin/init" 755
-[ -e "$R/etc/os-release" ] || { echo "mkstore: the base has no /etc/os-release, which postmarketOS's initramfs asks for" >&2; exit 1; }
 # What turns up after the first pass of drivers asks mdev for its own (the store's /sbin/init).
 printf '$MODALIAS=.*\troot:root\t0660\t@modprobe -qb "$MODALIAS"\n' > "$R/etc/mdev.conf"
 install -d "$R/usr/local/sbin" "$R/usr/local/bin" "$R/etc/profile.d"
@@ -163,7 +159,7 @@ tar -xf "$MODULES" -C "$R/lib" --no-same-owner
 tar -xf "$FIRMWARE" -C "$R/lib" --no-same-owner
 kver=$(ls "$R/lib/modules" | head -1)
 [ -s "$R/lib/modules/$kver/modules.dep" ] || { echo "mkstore: $MODULES holds no modules/<version>/modules.dep" >&2; exit 1; }
-[ -e "$R/lib/modules/$kver/extra/snd-soc-tas5782m.ko" ] || echo "mkstore: warning: no snd-soc-tas5782m.ko in the modules: the unit will have no sound" >&2
+[ -n "$(find "$R/lib/modules/$kver" -name 'snd-soc-tas5782m.ko*')" ] || echo "mkstore: warning: no snd-soc-tas5782m.ko in the modules: the unit will have no sound" >&2
 install -d "$R/lib/firmware/msm-firmware-loader"
 say "kernel modules: $kver, $(find "$R/lib/modules" -name '*.ko*' | wc -l) of them"
 # techo5-data is made at the first boot (the store's /sbin/init).

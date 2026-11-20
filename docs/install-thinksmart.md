@@ -6,7 +6,7 @@ camera with a sliding cover, a microphone switch, Wi-Fi and Bluetooth. TECHO5 re
 system with TECHO5's own Linux, which talks to Home Assistant.
 
 There is no installer for it yet, and no release carries its image. This page is the steps by hand:
-you build the image yourself, from files taken off your own unit, and write it over the SoC's
+you build the kernel and the image yourself, with firmware taken off your own unit, and write it over the SoC's
 emergency download mode (EDL).
 
 > **Read this first.** This has been tried on two units, one with each panel. It erases Android and
@@ -14,12 +14,11 @@ emergency download mode (EDL).
 > is the only way back to Lenovo's firmware. Do it on a unit you can afford to lose, and keep it on
 > its power adapter the whole time. This is a hobby project, not a product.
 >
-> Both units ran the Debian project's image between steps 4 and 5, so two things here are written
+> Both units ran the Debian project's image before TECHO5's, so two things here are written
 > from how they should go and not from having been done: step 6 run from the bootstrap (it was run
 > from Debian), and the rescue screen (no slot has failed to start yet).
 
-Placeholders: `<unit>` is the unit's address on your network, `<uuid>` a UUID you make once
-(`cat /proc/sys/kernel/random/uuid`).
+`<unit>` is the unit's address on your network.
 
 ## What works
 
@@ -42,21 +41,20 @@ The hardware notes, and how the unit boots, are in
 - A ThinkSmart View CD-18781Y with its power supply.
 - A **USB-A to USB-C** cable. The unit's USB-C port has no CC resistors, so a plain C-to-C cable is
   often not seen.
-- A Linux computer (x86_64), with root, about 20 GB free, and what
-  [building.md](building.md) asks for to build a root filesystem.
+- A Linux computer (x86_64), with root, about 20 GB free, what [building.md](building.md) asks for
+  to build a root filesystem, and what the kernel build asks for
+  ([tools/linux/thinksmart/kernel](../tools/linux/thinksmart/kernel/README.md#building)).
 - [bkerler/edl](https://github.com/bkerler/edl) (`pip install git+https://github.com/bkerler/edl`
   in a venv). Stop ModemManager while you use it (`sudo systemctl stop ModemManager`): it takes the
   device otherwise.
 - From [rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart): `prebuilt/lk2nd.img`
   and the postmarketOS bootstrap image from its releases
   (`bootstrap-pmos-ssh-generic-qcom-msm8953.img`, with its `.sha256`).
-- From [m0s4ik/thinksmart-view-debian](https://github.com/m0s4ik/thinksmart-view-debian): its
-  `driver/` folder, for the modules the kernel package does not have.
-
-Steps 1 to 4 are that project's own route as far as a unit running Linux, and its
+Steps 1 and 2 are [m0s4ik/thinksmart-view-debian](https://github.com/m0s4ik/thinksmart-view-debian)'s
+own route as far as a unit running Linux, and its
 [install guide](https://github.com/m0s4ik/thinksmart-view-debian/blob/main/docs/install.md) has
-them at length. A unit that already runs its Debian image starts at step 5, and takes the kernel's
-files from `/boot`, `/usr/lib/modules` and `/usr/lib/firmware` there.
+them at length. A unit that already runs its Debian image starts at step 3, and takes the firmware
+from `/usr/lib/firmware` there.
 
 ## Entering EDL
 
@@ -104,60 +102,38 @@ edl reset
 
 Android does not boot again after this. The unit joins your Wi-Fi; find its address in your router.
 
-## 3. The kernel's files
+## 3. The firmware
 
-The bootstrap comes with an older kernel. On the unit, take the one this port was made on:
-
-```
-ssh root@<unit>
-apk update && apk upgrade linux-postmarketos-qcom-msm8953      # to 7.1.3
-ln -s /usr/lib/modules/7.1.3-msm8953 /lib/modules/7.1.3-msm8953 && depmod -a 7.1.3-msm8953
-reboot
-```
-
-Then, on the computer, take what belongs to that kernel:
+TECHO5's image takes the Wi-Fi, Bluetooth and GPU firmware from the bootstrap. On the computer:
 
 ```
-ssh root@<unit> 'cd /boot && tar -cf - vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb' > boot.tar
-ssh root@<unit> 'tar -C /usr/lib -cf - modules/7.1.3-msm8953' > modules.tar
 ssh root@<unit> 'tar -C /lib --exclude=msm-firmware-loader -cf - firmware' > firmware.tar
 ```
 
-## 4. The modules the package does not have
+The audio DSP's firmware is not in it: that is the unit's own, in its modem partition, and TECHO5
+links it from there at every boot.
 
-Eight modules are built against the kernel's source (msm8953-mainline `v7.1.3-r0`) and the unit's
-own `/boot/config`, with clang 22, as the Debian project's
-[driver/tas5782m/README.md](https://github.com/m0s4ik/thinksmart-view-debian/blob/main/driver/tas5782m/README.md)
-describes: built with GCC they load and then fail.
+## 4. The kernel
 
-| Module | From | Without it |
-| --- | --- | --- |
-| `snd-soc-tas5782m.ko` | the Debian project's `driver/tas5782m` | no sound card: no speaker and no microphones |
-| `vcnl4000.ko` | its `driver/vcnl4000` | no light sensor |
-| `s5kc505a.ko`, and `apq8053-lenovo-cd-18781y-camera.dtb` | its `driver/s5kc505a` | no camera |
-| `xt_owner.ko`, `xt_recent.ko` | [tools/linux/thinksmart/kernel/netfilter](../tools/linux/thinksmart/kernel/netfilter) here | the firewall leaves the video decoder unfenced and AirPlay 2 off |
-| `q6asm.ko`, `q6asm-dai.ko` | its `driver/q6asm`, in place of the package's own | playback stalls when a stream stops and starts again |
-| `venus-core.ko` | its `driver/venus`, in place of the package's own | no hardware video decoder |
-
-The first five go into the modules' `extra/`, the last three over the package's own files
-(`kernel/sound/soc/qcom/qdsp6/` and `kernel/drivers/media/platform/qcom/venus/`), and `depmod` makes
-the index again:
+TECHO5's kernel for this board is built from source: msm8953-mainline `v7.1.3-r0` with the
+speaker amplifier and camera drivers and the patches the board needs
+([tools/linux/thinksmart/kernel](../tools/linux/thinksmart/kernel/README.md)). On Linux or WSL with
+the aarch64 and armhf cross compilers:
 
 ```
-mkdir tree && tar -xf modules.tar -C tree
-cp snd-soc-tas5782m.ko vcnl4000.ko s5kc505a.ko xt_owner.ko xt_recent.ko tree/modules/7.1.3-msm8953/extra/
-mkdir -p lib && mv tree/modules lib/ && depmod -b . 7.1.3-msm8953
-tar -C lib -cf modules.tar modules/7.1.3-msm8953
+tools/linux/thinksmart/kernel/build.sh
 ```
+
+It leaves `vmlinuz`, the device tree and `modules.tar` in `~/techo5-thinksmart-kbuild/out`.
 
 ## 5. The image
 
 ```
+K=~/techo5-thinksmart-kbuild/out
 DEVICE_OVERLAY=tools/linux/thinksmart/overlay tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
 tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k ~/.ssh/id_ed25519.pub -W wpa_supplicant.conf \
-	-M modules.tar -F firmware.tar -U <uuid> -S 2048 -o store.img
-tools/linux/thinksmart/mkimage.sh -b boot.tar -d apq8053-lenovo-cd-18781y-camera.dtb \
-	-s store.img -u <uuid> -o system.img
+	-M $K/modules.tar -F firmware.tar -S 2048 -o store.img
+tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
 ```
 
 `deploy-rootfs.sh` is the build every Show's root filesystem comes from
@@ -231,8 +207,9 @@ The kernel, its modules and its firmware are outside the slots and stay as the i
 
 ## If it does not start
 
-- **Text on the screen that stops**: the last lines say where. `pmos.debug-shell` on the kernel's
-  command line (`mkimage.sh -a pmos.debug-shell`) stops in postmarketOS's initramfs instead.
+- **Text on the screen that stops**: the last lines say where. A line about `device-mapper` or
+  `VFS: Unable to mount root` means the kernel did not find the store in the `system` partition:
+  check that the partition table from `repartition.sh` is on the unit.
 - **The screen says RESCUE**: no slot could be started. The unit is on your Wi-Fi with SSH, if the
   image was built with `-k` and `-W`; `cat /data/techo5-linux/init.log` says what the boot did.
 - **Nothing at all**: enter EDL and write the image again, or go back.
