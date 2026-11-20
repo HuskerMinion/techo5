@@ -76,10 +76,22 @@ func openStream(m *alsa.Mixer, f cardFormat) (*alsa.Playback, error) {
 		Rate:       f.rate,
 		Format:     format,
 		Bits:       f.bits,
-		PeriodSize: period * f.rate / Rate,
+		PeriodSize: hwPeriod(period * f.rate / Rate),
 		Periods:    periods,
 		StartFull:  startFull,
 	})
+}
+
+// periodStep, where a board sets it, is what its card takes periods in multiples of: the ring's period
+// is the player's rounded up to it. Zero on every Echo, whose cards take the player's own.
+var periodStep int
+
+// hwPeriod is the period the card is asked for: n, or n rounded up to the board's periodStep.
+func hwPeriod(n int) int {
+	if periodStep <= 0 {
+		return n
+	}
+	return (n + periodStep - 1) / periodStep * periodStep
 }
 
 // reopenPlayback opens the stream again in f, on the card openDevice found, once the old one is closed.
