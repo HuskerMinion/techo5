@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // The DHCP client. A boot with no network starts none (techo5-net stops at "no network configured"),
@@ -84,6 +86,49 @@ func startDHCP() bool {
 		slog.Warn("wifi: starting the DHCP client failed", "err", err)
 		return false
 	}
-	slog.Info("wifi: started a DHCP client: the boot had no network to start one for")
+	slog.Info("wifi: started a DHCP client")
 	return true
+}
+
+// RestartDHCP stops the DHCP client and starts another. A client outlives the interface it was started
+// on: when the Wi-Fi chip resets itself, its driver takes wlan0 away and makes a new one, and the old
+// client goes on with sockets on an interface that is gone, so asking it again gets nothing. A new one
+// starts on the wlan0 there is now. A fixed address goes through techo5-net, as a renewal does.
+func RestartDHCP() {
+	if AddressSupported() && LoadAddress().Fixed {
+		renewLease()
+		return
+	}
+	stopDHCP()
+	startDHCP()
+}
+
+// stopDHCP ends the client the pid file names, and waits a moment for it to be gone so that starting
+// the next one does not find it still running.
+func stopDHCP() {
+	b, err := os.ReadFile(dhcpPid)
+	if err != nil {
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 || !isDHCPClient(pid) {
+		return
+	}
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Signal(syscall.SIGTERM)
+	}
+	for i := 0; i < 20 && dhcpRunning(); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// isDHCPClient is whether the process is udhcpc (busybox's applet, by the name it was started as), so
+// a pid file left from a client long gone never ends a process that took its number since.
+var isDHCPClient = func(pid int) bool {
+	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	if err != nil {
+		return false
+	}
+	name, _, _ := strings.Cut(string(b), "\x00")
+	return filepath.Base(name) == "udhcpc"
 }

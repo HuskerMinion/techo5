@@ -56,7 +56,7 @@ func TestNoFolderNoFonts(t *testing.T) {
 	}
 	if f, _ := Face(Go, false, 30); f == nil {
 		t.Fatal("no face")
-	} else if _, ok := f.(*opentype.Face); !ok {
+	} else if !goAlone(f) {
 		t.Errorf("Go with no fonts of one's own is a %T", f)
 	}
 }
@@ -198,6 +198,44 @@ func TestOwnFontsLimit(t *testing.T) {
 	}
 	if err := AddOwn("z.ttf", bytes.NewReader(b)); err == nil {
 		t.Error("a font past the limit was taken")
+	}
+}
+
+// The fonts feature/cjkfont fetches do not count toward the owner's limits: with as many fonts of the
+// owner's own as the folder takes, the emoji fonts are still used, the color one first, and there is
+// still no room for another of the owner's.
+func TestFetchedFontsAreNotCountedAsTheOwners(t *testing.T) {
+	dir := ownDir(t)
+	b := bundled(t, "comicneue")
+	for i := range MaxOwnFiles {
+		write(t, dir, string(rune('a'+i))+".ttf", b)
+	}
+	emoji := bundled(t, "opensans")
+	write(t, dir, "zz-noto-emoji.ttf", emoji)
+	write(t, dir, "zz-fluent-emoji.ttf", emoji)
+	Rescan()
+	for _, o := range Own() {
+		if o.Problem != "" {
+			t.Errorf("%s is not used: %s", o.File, o.Problem)
+		}
+	}
+	var used []string
+	for _, e := range ownFonts() {
+		used = append(used, e.file)
+	}
+	if n := len(used); n != MaxOwnFiles+2 || used[n-2] != "zz-fluent-emoji.ttf" || used[n-1] != "zz-noto-emoji.ttf" {
+		t.Errorf("used %v", used)
+	}
+	if err := AddOwn("y.ttf", bytes.NewReader(b)); err == nil {
+		t.Error("a font past the owner's limit was taken")
+	}
+	// With one of the owner's taken out, there is room for one again.
+	if err := os.Remove(filepath.Join(dir, "a.ttf")); err != nil {
+		t.Fatal(err)
+	}
+	Rescan()
+	if err := AddOwn("y.ttf", bytes.NewReader(b)); err != nil {
+		t.Errorf("with room for one of the owner's: %v", err)
 	}
 }
 

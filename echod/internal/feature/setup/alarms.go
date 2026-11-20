@@ -30,7 +30,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 	v := alarm.Get().View(now)
 	timers := timer.Get().List(now)
 
-	fieldsetOpen(w, "alarm_edit", "Coming up")
+	sectionOpen(w, "alarm_edit", "Coming up")
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">A reminder says its words once and stays on the screen until it is
 	  dismissed; an alarm with words says them when it starts ringing.</p>`)
 	shown := 0
@@ -56,13 +56,13 @@ func alarmsSection(w http.ResponseWriter, token string) {
 		}
 		fmt.Fprint(w, `<button type="submit" class="quiet">Cancel snoozes</button></form>`)
 	}
-	fmt.Fprint(w, `</fieldset>`)
+	sectionClose(w)
 
 	addDrawer(w, token)
 
 	if len(v.Followed) > 0 {
-		fmt.Fprint(w, `<fieldset><legend>From Home Assistant</legend>
-		 <p class="note" style="margin-top:0">Helpers this device follows as alarms. Change them in Home Assistant.</p>`)
+		sectionOpen(w, "haalarms", "From Home Assistant")
+		fmt.Fprint(w, `<p class="note" style="margin-top:0">Helpers this device follows as alarms. Change them in Home Assistant.</p>`)
 		for _, f := range v.Followed {
 			when := "not set"
 			if !f.At.IsZero() {
@@ -75,7 +75,7 @@ func alarmsSection(w http.ResponseWriter, token string) {
 			fmt.Fprintf(w, `<p style="margin:.3rem 0"><span class="chip">Alarm</span> <strong>%s</strong> %s <span class="where">· %s</span></p>`,
 				html.EscapeString(when), html.EscapeString(cmpOr(f.Label, f.Entity)), state)
 		}
-		fmt.Fprint(w, `</fieldset>`)
+		sectionClose(w)
 	}
 
 	prefsSection(w, token)
@@ -152,7 +152,7 @@ func alarmDrawer(w http.ResponseWriter, token string, a config.Alarm) {
 }
 
 func addDrawer(w http.ResponseWriter, token string) {
-	// The drawer is not in a fieldset of its own, so it is the section: it stays open when the page comes
+	// The drawer is not in a card of its own, so it is the section: it stays open when the page comes
 	// back from it, with what happened said inside.
 	open := ""
 	if cameBackTo(w, "alarm_add") {
@@ -185,7 +185,7 @@ func addDrawer(w http.ResponseWriter, token string) {
 
 func prefsSection(w http.ResponseWriter, token string) {
 	c := config.Get()
-	fieldsetOpen(w, "alarm_prefs", "For every alarm on this device")
+	sectionOpen(w, "alarm_prefs", "For every alarm on this device", alarmPrefsSummary(c.Alarms.Snooze(), ring.Level(), alarm.Get().Sound())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "alarm_prefs")
 	fmt.Fprintf(w, `<div class="row">
@@ -213,8 +213,19 @@ func prefsSection(w http.ResponseWriter, token string) {
 	 <p class="note">Ring volume is only for alarms and timers, not the music. At 0 they make no sound. The
 	  default wake light is for alarms that don't choose their own. Gets louder starts an alarm 30 dB under its
 	  ring volume and brings it up to it. What an alarm says is spoken by Home
-	  Assistant, after the first chime.</p>
-	 <div class="btns"><button type="submit">Save</button></div></form></fieldset>`)
+	  Assistant, after the first chime.</p>`)
+	alsoOnRow(w, token, "alarm_prefs")
+	fmt.Fprint(w, `<div class="btns"><button type="submit">Save</button></div></form>`)
+	sectionClose(w)
+}
+
+// alarmPrefsSummary is the line on the shut card: the snooze, the ring volume and the sound.
+func alarmPrefsSummary(snooze, ringVolume int, sound string) []string {
+	out := []string{fmt.Sprintf("Snooze %d min", snooze), fmt.Sprintf("ring volume %d", ringVolume)}
+	if sound != "" {
+		out = append(out, sound)
+	}
+	return out
 }
 
 // whenFields are an alarm's time and words.

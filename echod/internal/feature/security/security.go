@@ -106,6 +106,13 @@ func (f *Feature) Restore(c config.Config) {
 	f.ssh.Set(c.Security.SSH)
 	f.camera.Set(c.Security.Camera)
 	f.screen.Set(c.Security.Screen)
+	// A device that had Screen web access on before /screen.png asked for a key gets one now, so the
+	// setup page has the new address to give.
+	if webPages && c.Security.Screen && c.Security.ScreenKey == "" {
+		if err := config.Set().Security().ScreenKey(NewBabyKey()); err != nil {
+			slog.Error("screen web access: saving the page's key failed", "err", err)
+		}
+	}
 	f.talk.Set(c.Security.TalkBack)
 	f.takes.Set(c.Security.Takes)
 	f.baby.Set(c.Security.Baby)
@@ -176,7 +183,32 @@ func (f *Feature) SetSSH(on bool) {
 }
 
 func (f *Feature) SetCamera(on bool) { f.set(f.camera, on, config.Set().Security().Camera) }
-func (f *Feature) SetScreen(on bool) { f.set(f.screen, on, config.Set().Security().Screen) }
+
+// SetScreen opens /screen.png, or shuts it. The key the page asks for is made the first time the switch
+// goes on; the setup page can replace it.
+func (f *Feature) SetScreen(on bool) {
+	if on && config.Get().Security.ScreenKey == "" {
+		if err := config.Set().Security().ScreenKey(NewBabyKey()); err != nil {
+			slog.Error("screen web access: saving the page's key failed; staying off", "err", err)
+			f.screen.Set(false)
+			return
+		}
+	}
+	f.set(f.screen, on, config.Set().Security().Screen)
+}
+
+// ScreenPage reports whether this device has /screen.png and its switch: every one with a screen.
+func ScreenPage() bool { return webPages }
+
+// ReplaceScreenKey gives /screen.png a new key, so the old address stops working at once.
+func (f *Feature) ReplaceScreenKey() error {
+	if err := config.Set().Security().ScreenKey(NewBabyKey()); err != nil {
+		return err
+	}
+	slog.Info("security", "setting", "screen_web_access key", "replaced", true)
+	f.Changed.Emit(struct{}{})
+	return nil
+}
 
 // SetTalkBack allows the camera page's Talk, or ends a talk and takes Talk away.
 func (f *Feature) SetTalkBack(on bool) { f.set(f.talk, on, config.Set().Security().TalkBack) }
@@ -199,7 +231,8 @@ func (f *Feature) SetBaby(on bool) {
 	f.set(f.baby, on, config.Set().Security().Baby)
 }
 
-// NewBabyKey is a new secret for the baby monitor's link: 128 random bits, which nobody can guess.
+// NewBabyKey is a new secret for a link, the baby monitor's or /screen.png's: 128 random bits, which
+// nobody can guess.
 func NewBabyKey() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

@@ -27,7 +27,7 @@ var providerNames = map[string]string{"openai": "OpenAI", "xai": "xAI (Grok)", "
 func realtimeSection(w http.ResponseWriter, token string) {
 	c := config.Get()
 	rt := c.Realtime
-	fieldsetOpen(w, "realtime", "Realtime voice")
+	sectionOpen(w, "realtime", "Realtime voice", realtimeSummary(c)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "realtime")
 	who := "the provider chosen"
@@ -76,7 +76,26 @@ func realtimeSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `<label><input type="checkbox" name="slot%d" value="yes" style="width:auto"%s> %s</label><br>`,
 			i, checkedIf(on), html.EscapeString(name))
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// realtimeSummary is the line on the shut card: Off until a wake word answers with it; then the
+// provider and the minutes used today. Neither the key nor the token is said.
+func realtimeSummary(c config.Config) []string {
+	rt := c.Realtime
+	on := false
+	for _, i := range realtimeChoices(c) {
+		on = on || i < len(c.Wake.Words) && c.Wake.Words[i].Realtime
+	}
+	if !on || rt.Provider == "" {
+		return []string{"Off"}
+	}
+	who := rt.Provider
+	if n, ok := providerNames[rt.Provider]; ok {
+		who = n
+	}
+	return []string{"On", who, fmt.Sprintf("%d of %d min today", usedMinutes(rt), rt.Daily())}
 }
 
 // realtimeChoices is the slots there are to choose: those with a wake word, the first always. Ticking

@@ -191,14 +191,22 @@ func fromDevice(d bluez.Device) (Advertisement, bool) {
 		data = append(data, byte(len(payload)+1), typ)
 		data = append(data, payload...)
 	}
-	var short []byte
+	// A service a device names with a full UUID goes in its own list: Home Assistant's integrations
+	// find devices by these as much as by the short ones (a Flic button in pairing mode has only a
+	// 128-bit one), and leaving them out made such devices impossible to discover through a Show.
+	var short, long []byte
 	for _, u := range d.UUIDs {
 		if v, ok := uuid16(u); ok {
 			short = binary.LittleEndian.AppendUint16(short, v)
+		} else if raw, err := uuid128(u); err == nil {
+			long = append(long, raw...)
 		}
 	}
 	if len(short) > 0 {
 		add(0x03, short) // complete list of 16-bit service UUIDs
+	}
+	if len(long) > 0 {
+		add(0x07, long) // complete list of 128-bit service UUIDs
 	}
 	for u, sd := range d.ServiceData {
 		if v, ok := uuid16(u); ok {

@@ -31,9 +31,16 @@ func TestTheSecretsAreTakenOut(t *testing.T) {
 	var c config.Config
 	c.CamStream.Pass, c.Remote.Secret, c.Home.HouseWord = "camera-password-value", "remote-secret-value", "our long house word"
 	c.Home.Immich.Key = "immich-key-value"
+	c.Security.ScreenKey, c.Security.BabyKey = "screen-key-value", "baby-key-value"
 	c.Home.Go2RTC.Base = "http://admin:go2rtc-password@go2rtc.example:1984"
+	c.TalkBack.Pass = "talk-back-password"
+	c.TalkBack.Cameras = map[string]string{"camera.porch": "rtsp://admin:porch-camera-password@camera.example/main"}
+	c.TalkBack.Pictures = map[string]string{"camera.porch": "rtsp://admin:porch-picture-password@camera.example/sub"}
+	c.Security.LockPIN = "salted-hash-of-the-pin"
+	c.Deck.Computers = []config.DeckComputer{{Name: "Desk", Addr: "desk.example", Key: "deck-pairing-key"}}
 	got := secrets(c)
-	for _, want := range []string{"camera-password-value", "remote-secret-value", "our long house word", "immich-key-value", "go2rtc-password"} {
+	for _, want := range []string{"camera-password-value", "remote-secret-value", "our long house word", "immich-key-value", "screen-key-value", "baby-key-value", "go2rtc-password",
+		"talk-back-password", "porch-camera-password", "porch-picture-password", "salted-hash-of-the-pin", "deck-pairing-key"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("%q is not among the secrets", want)
 		}

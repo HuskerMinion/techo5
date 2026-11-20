@@ -676,6 +676,9 @@ the backup. Every step: **[docs/install-skylight.md](docs/install-skylight.md)**
 - [docs/training-wake-word.md](docs/training-wake-word.md): training a wake word of your own with
   [wakesmith](https://github.com/HuskerMinion/wakesmith), or by hand in any language.
 - [CONTRIBUTING.md](CONTRIBUTING.md): reporting problems, trying a build on your device, and pull requests.
+- [Add-ons others have made](docs/external-asp.md#add-ons-others-have-made): extras made and kept by
+  their authors, not by TECHO5, that run from userdata and outlast updates. Making one of your own:
+  [running something at boot](docs/setup.md#running-something-of-your-own-at-boot).
 
 ## Sister projects
 

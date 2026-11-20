@@ -261,6 +261,16 @@ func newFeature(pics pictures) *Feature {
 				return nil, f.NotifyPictureSized(c.String("message"), c.String("title"), c.String("picture"), c.String("chime"), c.String("speak"), c.String("sound"), c.String("tag"), c.Int("seconds"), c.String("size"))
 			},
 		},
+		{
+			// Takes a notification down before its time, for news that is over. Nothing up to take down is
+			// not an error: the notification may have been tapped away or run out already.
+			Name: "notify_clear",
+			Args: []esphome.Arg{{Name: "tag", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				f.Clear(c.String("tag"))
+				return nil, nil
+			},
+		},
 	}
 	return f
 }
@@ -502,14 +512,30 @@ func (f *Feature) Dismiss() bool { return f.dismiss("") }
 func (f *Feature) DismissID(id string) bool { return id != "" && f.dismiss(id) }
 
 func (f *Feature) dismiss(id string) bool {
+	return f.end("dismissed", func(n *Notification) bool { return id == "" || n.ID == id })
+}
+
+// Clear takes the notification Home Assistant sent down before its time, because Home Assistant asked:
+// the one up if tag is "", or only if it carries tag. It says whether it took one down. A note or an
+// alert of the device's own is not Home Assistant's to clear.
+func (f *Feature) Clear(tag string) bool {
+	tag = strings.TrimSpace(tag)
+	// As tick, not between a picture's view going up and its notification being put.
+	f.order.Lock()
+	defer f.order.Unlock()
+	return f.end("cleared", func(n *Notification) bool { return !n.Own && (tag == "" || n.Tag == tag) })
+}
+
+// end takes the notification up down if it is the one wanted, and reports why.
+func (f *Feature) end(why string, wanted func(*Notification) bool) bool {
 	f.mu.Lock()
 	n := f.up
-	if n == nil || (id != "" && n.ID != id) {
+	if n == nil || !wanted(n) {
 		f.mu.Unlock()
 		return false
 	}
 	f.up = nil
-	f.report(*n, "dismissed")
+	f.report(*n, why)
 	f.mu.Unlock()
 	if n.Kind == Picture && f.pics != nil {
 		f.pics.HidePicture(n.ID)

@@ -226,13 +226,18 @@ type Feature struct {
 	refused            RunResult // the last start from the screen that could not be made
 	lastCount, lastGap int
 
-	// keepTake is where a run's takes go, and wakeWord the word they are of and the front end it is
-	// scored on: both feature/detect's, set as it starts (SetWakeWord), since this package cannot call it.
-	keepTake atomic.Pointer[func(Capture)]
-	wakeWord atomic.Pointer[func() (word, front string)]
-	// wordNow is the word as wakeWord last said it (WakeWordChanged), for RunBlocked, which the screen
-	// asks on every frame of its settings and which must not wait on the wake word engine for it.
-	wordNow atomic.Pointer[wakeWordNow]
+	// pickSlot is the slot of the word the next run is of, plus one (RunWord): 0 for the first loaded.
+	// Memory only, as lastCount and lastGap are.
+	pickSlot int
+
+	// keepTake is where a run's takes go, and wakeWords the words loaded that they can be of, with the
+	// front end each is scored on: both feature/detect's, set as it starts (SetWakeWords), since this
+	// package cannot call it.
+	keepTake  atomic.Pointer[func(Capture)]
+	wakeWords atomic.Pointer[func() []SlotWord]
+	// wordsNow is the words as wakeWords last said them (WakeWordChanged), for RunBlocked, which the
+	// screen asks on every frame of its settings and which must not wait on the wake word engine for it.
+	wordsNow atomic.Pointer[[]SlotWord]
 
 	// running and tailUntil are read on every frame of the wake word's stream to Home Assistant
 	// (through voice.YieldTo) and by detect for every word heard, so they are not behind mu. running is

@@ -3,6 +3,7 @@ package share
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 )
 
 // rig is this device as "Kitchen", three settings of its own, and what it sends, kept.
@@ -198,12 +200,31 @@ func TestACopy(t *testing.T) {
 	if got["screen_theme"] != Applied || r.theme.Get() != "Light" || got["slideshow_shuffle"] != Applied || !r.shuffle.Get() {
 		t.Fatalf("%v theme %q shuffle %v", got, r.theme.Get(), r.shuffle.Get())
 	}
-	if from := config.Get().Share.From["screen_theme"]; from.N != 41 || from.Device != "Office" {
-		t.Errorf("a copy is not the latest change: %+v", from)
+	if from := config.Get().Share.From["screen_theme"]; from.N != 41 || from.Device != "Kitchen" || from.Via != "Office" {
+		t.Errorf("a copy is not the latest change, numbered here: %+v", from)
 	}
 	waitFor(t, func() bool { return len(r.sentTo("Bedroom")) == 1 })
 	if m := r.sentTo("Bedroom")[0]; m.Kind != "set" || m.Items[0].Value != "Light" || m.Items[0].N != 41 {
 		t.Errorf("passed on as %+v", m)
+	}
+}
+
+// A copy, then a link and a change on the device that copied: the two settle on one value. The copy was
+// put down as the sender's, under a number the sender never had; its next change took the same number,
+// and each device refused the other's as older, linked and apart for good.
+func TestACopyThenALinkSettles(t *testing.T) {
+	r := newRig(t)
+	r.receive(t, "Office", message{Kind: "copy", Items: []item{{ID: "bass", Value: "3", N: 0, Origin: "Office"}}})
+	link(t, "bass", "Office")
+	// Office changes bass by itself, numbered from what it has: nothing, so 1.
+	// Before, the copy was put down here as Office's number 1, and this was refused as older with
+	// Office's own answer refused the same way. Now the two number 1s are by different devices, and the
+	// names settle it the same way on both.
+	if got := r.receive(t, "Office", set("bass", "-2", 1, "Office")); got["bass"] != Applied || r.bass.Get() != -2 {
+		t.Fatalf("%v, bass %v", got, r.bass.Get())
+	}
+	if here := config.Get().Share.From["bass"]; here.N != 1 || here.Device != "Office" {
+		t.Errorf("%+v", here)
 	}
 }
 
@@ -829,5 +850,54 @@ func TestCatchingUpIsOneAtATime(t *testing.T) {
 	close(hold)
 	if n != 1 {
 		t.Fatalf("sent %d times at once", n)
+	}
+}
+
+// A get is answered with what this device has for the settings on the list, never one kept its own nor
+// one off the list, and nothing at all with sharing off.
+func TestAGetIsAnswered(t *testing.T) {
+	r := newRig(t)
+	r.bass.Set(2)
+	_ = config.Set().Share().Update(func(s *config.Share) { s.Keep = append(s.Keep, "slideshow_shuffle") })
+	rep := r.receiveReply(t, "Office", message{Kind: "get", Items: []item{{ID: "bass"}, {ID: "screen_theme"},
+		{ID: "slideshow_shuffle"}, {ID: "sendspin"}, {ID: "screen_clock_style"}}})
+	want := map[string]string{"bass": "2", "screen_theme": "Dark"}
+	if len(rep.Values) != len(want) || rep.Values["bass"] != "2" || rep.Values["screen_theme"] != "Dark" {
+		t.Errorf("answered %v, want %v", rep.Values, want)
+	}
+	_ = config.Set().Share().On(false)
+	if rep := r.receiveReply(t, "Office", message{Kind: "get", Items: []item{{ID: "bass"}}}); len(rep.Values) != 0 {
+		t.Errorf("answered %v with sharing off", rep.Values)
+	}
+}
+
+// Values asks each device and keeps only what was asked; one that fails is left out.
+func TestValues(t *testing.T) {
+	r := newRig(t)
+	r.f.send = func(_ context.Context, to string, body []byte) ([]byte, error) {
+		switch to {
+		case "Garage":
+			return nil, errors.New("not on the network now")
+		case "Den":
+			return json.Marshal(reply{Results: map[string]string{"bass": NotTaking}})
+		case "Attic":
+			return nil, announce.ErrShareNotTaking
+		case "Hall":
+			return json.Marshal(reply{Results: map[string]string{}})
+		}
+		return json.Marshal(reply{Values: map[string]string{"bass": "1", "treble": "4", "sendspin": "on"}})
+	}
+	got := r.f.Values(context.Background(), []string{"bass", "sendspin"}, []string{"Office", "Garage", "Kitchen", "Den", "Attic", "Hall"})
+	if len(got) != 4 || len(got["Office"]) != 1 || got["Office"]["bass"] != "1" {
+		t.Errorf("%v", got)
+	}
+	if v, ok := got["Den"]; !ok || v != nil {
+		t.Errorf("a device with sharing off is not said to be: %v", got)
+	}
+	if v, ok := got["Attic"]; !ok || v != nil {
+		t.Errorf("a device whose share route is shut (sharing off) is not said to be: %v", got)
+	}
+	if v, ok := got["Hall"]; !ok || v == nil || len(v) != 0 {
+		t.Errorf("a device that keeps every setting its own is not said to have answered: %v", got)
 	}
 }

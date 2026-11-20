@@ -78,7 +78,7 @@ func TestASaveComesBackToItsTab(t *testing.T) {
 		t.Errorf("sent back to %s", to)
 	}
 	body := get(f, to.RequestURI(), c).Body.String()
-	if !strings.Contains(body, `<fieldset id="sec-house"><legend>Announcements</legend><div class="banner ok" role="status">Saved.</div>`) {
+	if !strings.Contains(body, `<details class="card" id="sec-house" open><summary><span class="ttl">Announcements</span><span class="sum">On · house word set</span></summary><div class="in"><div class="banner ok" role="status">Saved.</div>`) {
 		t.Error("Saved is not said in the section the save was made in")
 	}
 	if strings.Count(body, `class="banner ok"`) != 1 {
@@ -112,7 +112,7 @@ func TestWhatHappenedIsSaidAboveWhenItsSectionIsNotThere(t *testing.T) {
 	f, c := in(t)
 	for _, at := range []string{"", "house", "nonsense", `%22%3E%3Cb%3Ehello`} {
 		body := get(f, "/setup?tab=system&saved=1&at="+at, c).Body.String()
-		top := strings.Index(body, `</h2><div class="banner ok" role="status">Saved.</div>`)
+		top := strings.Index(body, `</h2></div><div class="banner ok" role="status">Saved.</div>`)
 		if top < 0 || strings.Count(body, `class="banner ok"`) != 1 {
 			t.Errorf("at=%q: Saved is not said once, above the sections", at)
 		}
@@ -121,7 +121,7 @@ func TestWhatHappenedIsSaidAboveWhenItsSectionIsNotThere(t *testing.T) {
 		}
 	}
 	body := get(f, "/setup?tab=system&problem=no&at=timezone", c).Body.String()
-	if !strings.Contains(body, `<fieldset id="sec-timezone"><legend>Time zone</legend><div class="banner bad" role="alert">no</div>`) ||
+	if !regexp.MustCompile(`<details class="card" id="sec-timezone" open><summary><span class="ttl">Time zone</span><span class="sum">[^<]*</span></summary><div class="in"><div class="banner bad" role="alert">no</div>`).MatchString(body) ||
 		strings.Count(body, `class="banner bad" role="alert"`) != 1 {
 		t.Error("a problem is not said once, in its section")
 	}
@@ -304,7 +304,7 @@ func formsInTheCode(t *testing.T) map[string]string {
 					lit(n.Args[2], name+": a form")
 				case ok && fn.Name == "back" && len(n.Args) == 3:
 					lit(n.Args[0], name+": a page that comes back")
-				case ok && (fn.Name == "fieldsetOpen" || fn.Name == "sayHere" || fn.Name == "cameBackTo") && len(n.Args) >= 2:
+				case ok && (fn.Name == "sectionOpen" || fn.Name == "sayHere" || fn.Name == "cameBackTo") && len(n.Args) >= 2:
 					lit(n.Args[1], name+": a section")
 				}
 			}

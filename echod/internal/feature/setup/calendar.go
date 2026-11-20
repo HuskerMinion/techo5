@@ -17,7 +17,7 @@ import (
 // addresses are secrets, so what is kept is listed by name only.
 func calendarLinksSection(w http.ResponseWriter, token string) {
 	links := config.Get().Calendar.Links
-	fieldsetOpen(w, "calendar", "Calendars from a link")
+	sectionOpen(w, "calendar", "Calendars from a link", calendarLinksSummary(links)...)
 	if len(links) == 0 {
 		fmt.Fprint(w, `<p style="margin:0">None yet.</p>`)
 	}
@@ -37,7 +37,21 @@ func calendarLinksSection(w http.ResponseWriter, token string) {
 	  iCloud: share the calendar as a <strong>Public Calendar</strong> and copy the link. Outlook: Settings,
 	  Calendar, Shared calendars, <strong>Publish a calendar</strong>, the ICS link. Anyone with the address
 	  can read the calendar, so this page never shows it again. The device reads it every 15 minutes.</p>
-	 <p><button type="submit">Add</button></p></form></fieldset>`)
+	 <p><button type="submit">Add</button></p></form>`)
+	sectionClose(w)
+}
+
+// calendarLinksSummary is the line on the shut card: the calendars by name. Their addresses are secrets
+// and are never on it.
+func calendarLinksSummary(links []config.CalendarLink) []string {
+	if len(links) == 0 {
+		return []string{"None added"}
+	}
+	var names []string
+	for _, l := range links {
+		names = append(names, l.Name)
+	}
+	return []string{strings.Join(names, ", ")}
 }
 
 func saveCalendarLink(r *http.Request) string {
@@ -79,7 +93,7 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 	if s == nil || len(s.Calendar) == 0 {
 		return
 	}
-	fieldsetOpen(w, "calendar-look", "The calendar's look")
+	sectionOpen(w, "calendar-look", "The calendar's look")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "calendar-look")
 	for _, c := range s.Calendar {
@@ -92,8 +106,10 @@ func calendarLookSection(w http.ResponseWriter, token string) {
 		fmt.Fprintf(w, `</select><p class="note">%s</p>`, html.EscapeString(c.Note))
 	}
 	fmt.Fprint(w, `<p class="note">Also on the screen, under Settings, Display, Calendar, and in Home Assistant.
-	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`)
+	 Which calendars show is chosen on the calendar page itself, with the chips over the month.</p>`)
+	alsoOnRow(w, token, "calendar-look")
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 func saveCalendarLook(r *http.Request) string {

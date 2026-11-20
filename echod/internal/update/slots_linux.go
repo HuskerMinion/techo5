@@ -5,6 +5,7 @@ package update
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,7 +23,8 @@ import (
 // while, or fall back after three failed boots. So the daemon's own trial machinery is not
 // involved: install, reboot, and the slots take it from there.
 
-const (
+// The slot paths are variables so a test can point them at a store of its own and a stand-in slotctl.
+var (
 	// slotFile is left by the initramfs and names the booted slot; its presence is what makes this a
 	// slot system.
 	slotFile = "/run/techo5/slot"
@@ -30,9 +32,15 @@ const (
 	// slotctl is the slot tool on the rootfs.
 	slotctl = "/usr/local/sbin/slotctl"
 
-	// rootfsDir is where tarballs land: the data partition survives slot changes.
-	rootfsDir = "/data/techo5-linux"
+	// storeDir is the slot store, mounted read-only under a running slot.
+	storeDir = "/store"
+
+	// rollbackReboot restarts the device after a rollback (a stand-in in tests).
+	rollbackReboot = rebootIntoSlot
 )
+
+// rootfsDir is where tarballs land: the data partition survives slot changes.
+const rootfsDir = "/data/techo5-linux"
 
 // slotSystem reports whether this daemon runs from a rootfs slot.
 func slotSystem() bool {
@@ -107,6 +115,57 @@ func rebootIntoSlot() error {
 	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
 		bootreason.Unmark()
 		return fmt.Errorf("update: rootfs installed but the reboot failed: %w", err)
+	}
+	return nil
+}
+
+// bootedSlot is the slot the initramfs booted, a or b, or "" off a slot.
+func bootedSlot() string {
+	b, err := os.ReadFile(slotFile)
+	if err != nil {
+		return ""
+	}
+	return string(bytes.TrimSpace(b))
+}
+
+// OtherSlot is the slot a rollback would go back to; false on a device that does not boot from slots.
+func OtherSlot() (Slot, bool) {
+	if !slotSystem() {
+		return Slot{}, false
+	}
+	return otherSlotIn(storeDir, bootedSlot()), true
+}
+
+// RollBack boots the other slot's release in place of this one: slotctl marks the booted slot bad and
+// the other active (and tells the boot layer, where there is one), and the device reboots into it. It
+// refuses, before anything is written, unless the other slot is good, and while an install is running,
+// which is about to replace the other slot. rolled, when not nil, is called once slotctl has switched
+// and before the reboot, for what has to be saved first.
+func RollBack(rolled func()) error {
+	if !installing.TryLock() {
+		return ErrInstalling
+	}
+	defer installing.Unlock()
+
+	if !slotSystem() {
+		return errors.New("update: this device does not boot from slots, so there is nothing to roll back to")
+	}
+	booted := bootedSlot()
+	other := otherSlotIn(storeDir, booted)
+	if err := canRollBack(booted, other); err != nil {
+		return err
+	}
+	slog.Warn("update: rolling back to the other slot", "from", booted, "to", other.Name, "version", other.Version)
+	out, err := exec.Command(slotctl, "rollback").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("update: slotctl rollback: %w: %s", err, bytes.TrimSpace(out))
+	}
+	slog.Warn("update: rolled back, rebooting", "slotctl", string(bytes.TrimSpace(out)))
+	if rolled != nil {
+		rolled()
+	}
+	if err := rollbackReboot(); err != nil {
+		return fmt.Errorf("%w (%v)", ErrRebootAfterRollback, err)
 	}
 	return nil
 }

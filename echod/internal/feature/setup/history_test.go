@@ -27,7 +27,7 @@ func TestHistorySectionEscapesAndWithholds(t *testing.T) {
 	})
 	f, c := in(t)
 	page := get(f, "/setup?tab=voice", c).Body.String()
-	for _, want := range []string{"<legend>Recent voice requests</legend>", "&lt;script&gt;alert(1)&lt;/script&gt;", "ok &amp; done",
+	for _, want := range []string{`<span class="ttl">Recent voice requests</span>`, "&lt;script&gt;alert(1)&lt;/script&gt;", "ok &amp; done",
 		"listen 1.2 seconds, think 0.8 seconds", "(not kept: Send voice text is off)", "<td>0.91</td>", "<td>stopped</td>"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the section has no %q", want)

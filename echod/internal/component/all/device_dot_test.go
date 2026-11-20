@@ -15,7 +15,7 @@ var notOnThisDevice = []string{
 	// Its Wi-Fi comes up without the boot scripts' network keeper (feature/wifiband).
 	"wifi_prefer_5ghz",
 	"slideshow_folder", "slideshow_interval",
-	"slideshow_mode", "slideshow_screensaver_idle", "slideshow_screensaver_overlay", "slideshow_screensaver_position", "slideshow_screensaver_weather",
+	"slideshow_mode", "slideshow_screensaver_idle", "slideshow_screensaver_overlay", "slideshow_screensaver_position", "slideshow_screensaver_show", "slideshow_screensaver_weather",
 	"slideshow_shuffle", "slideshow_subfolders", "slideshow_weather_art", "slideshow_whole_photo", "slideshow_pairs", "slideshow_caption", "immich_favorites", "immich_from", "immich_person", "immich_to", "talk_back", "weather_alerts",
 	"screen_clock_tap", "screen_dashboard_return", "screen_dashboard_tiles", "screen_dashboard_layout", "screen_dashboard_handle", "screen_clock_style_swipe", "screen_volume_swipe", "screen_night_tap_lifts", "screen_night_info", "screen_night_alarm",
 	"screen_font", "screen_text_size", "screen_power", "screen_touched", "screen_ignores_room_lights", "tessera_screen",
@@ -27,7 +27,7 @@ var notOnThisDevice = []string{
 // all_test.go's stand-in for a missing TAS5805M comes too late for the media player, built before it.
 // louder_top_volume is put up where a tuning set has a lift for it (hardware/speaker/louder_top.go):
 // the Dot 2nd gen's, not the Dot 3rd gen's (donut), which plays untuned.
-var deviceSpecific = append(append([]string{"airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}, louderTop()...), jackSleep()...)
+var deviceSpecific = append(append([]string{"button_action", "airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}, louderTop()...), jackSleep()...)
 
 // headphone_jack_sleep is put up where there is a jack (hardware/speaker/jack.go): not on the Echo Input.
 func jackSleep() []string {

@@ -693,10 +693,12 @@ func (c *conversation) turnEvent(e event) {
 		if c.phase == phaseIdle {
 			return
 		}
+		// The log keeps the reply as the voice got it, tags and all, to tell what the voice was asked for.
 		slog.Info("replying", "slot", c.slot+1, "text", activity.Said(e.text))
-		c.log.Replied(e.text)
-		c.turn.Replying(e.text)
-		c.shown.Reply = e.text
+		shown := withoutTags(e.text)
+		c.log.Replied(shown)
+		c.turn.Replying(shown)
+		c.shown.Reply = shown
 		replyArrived(time.Now(), e.spoken)
 		Changed.Emit(c.shown)
 		if c.phase == phaseListening {

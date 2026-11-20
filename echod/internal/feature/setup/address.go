@@ -32,7 +32,7 @@ func addressSection(w http.ResponseWriter, token string) {
 // addressForm is the section for a setting, and why the last change was not kept if it was not: apart
 // from whether this device offers it, so it can be drawn where there is no Wi-Fi to ask.
 func addressForm(w http.ResponseWriter, token string, a wifi.Address, reason string) {
-	fieldsetOpen(w, "address", "Network address")
+	sectionOpen(w, "address", "Network address", addressSummary(a, reason)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "address")
 	if reason != "" {
@@ -69,8 +69,22 @@ func addressForm(w http.ResponseWriter, token string, a wifi.Address, reason str
 	  once it is on that Wi-Fi again and the gateway answers. Saving the same address again tries it again
 	  at once. Home Assistant follows the device to a new address by itself, about two minutes after the
 	  change.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		checked(!a.Fixed), checked(a.Fixed), html.EscapeString(a.CIDR()), html.EscapeString(ipString(a)), html.EscapeString(dns))
+	sectionClose(w)
+}
+
+// addressSummary is the line on the shut card: automatic or fixed, with the fixed address, and when the
+// last change was not kept.
+func addressSummary(a wifi.Address, reason string) []string {
+	out := []string{"Automatic (DHCP)"}
+	if a.Fixed {
+		out = []string{"Fixed", a.CIDR()}
+	}
+	if reason != "" {
+		out = append(out, "last change not kept")
+	}
+	return out
 }
 
 func ipString(a wifi.Address) string {

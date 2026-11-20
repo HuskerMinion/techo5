@@ -340,6 +340,7 @@ func Get() *Feature {
 			shared.mu.Unlock()
 		})
 		media.Get().OnEnd.Listen(shared.ended)
+		media.Get().OnUnplayable.Listen(shared.unplayable)
 		media.Get().OnNowPlaying.Listen(func(struct{}) { shared.pokeNowPlaying() })
 		media.Get().OnResumeRemote.Listen(func(struct{}) { safe.Go("resume music assistant", resumeMusicAssistant) })
 		media.Get().OnTakeOver.Listen(func(struct{}) { safe.Go("leave the group", leaveGroup) })

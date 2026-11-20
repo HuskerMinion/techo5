@@ -72,11 +72,13 @@ name and key and runs the routine again, for passing a device on a second time.
   network (offered by itself, joined, DHCP started, IPv4), and on a Dot 3rd gen with dot-v1.0.58 the same
   way (2026-11-08). Not yet tried on an Echo 2nd gen.
 - **The routine, on every device** (feature/firstrun holds the steps, where they are saved, and what
-  they do; each face draws them): Wi-Fi, time zone, name and room (the room as Home Assistant's
+  they do; each face draws them): the screen's language and clock (on a screen),
+  Wi-Fi, time zone, name and room (the room as Home Assistant's
   suggested area), Home Assistant (added with nothing typed, or the key with a QR code, or on its
   own), updates (automatic updates on; an update installs that night), a sound check and the done
   card. Faces: a Show's screen (tried on a Show 8 2nd gen), the Spot's round screen, a Panel's screen
-  (no Wi-Fi or Updates step), and the setup page, which is the Dot's and works on any device. In
+  (no Wi-Fi or Updates step), and the setup page, which is the Dot's and works on any device. Every
+  step after the first has Back, on every face (#589). In
   English only so far.
 - **One done flag for every device**, set by finishing first run anywhere. A device in use before
   first run (a Show whose welcome card was put away, or one Home Assistant has had) is done from the
@@ -86,7 +88,8 @@ name and key and runs the routine again, for passing a device on a second time.
   its own yet, so its steps are the setup page's.
 - **The gift install, device side**: the installers' `--for-someone-else` leaves a `firstrun` marker
   in the state directory, no network and no key. The device starts first run from the beginning,
-  whatever its settings say, on the Wi-Fi step when no network is saved, and any Home Assistant can
+  whatever its settings say, past the hello card when no network is saved (on the language step,
+  Wi-Fi next), and any Home Assistant can
   add it with nothing typed until one does. The marker goes when first run finishes.
 - **Reset for someone else**: the setup page, Settings → General on a screen, Home Assistant's
   `reset_for_someone_else` action, and holding action and volume down for 10 seconds on a Dot (back

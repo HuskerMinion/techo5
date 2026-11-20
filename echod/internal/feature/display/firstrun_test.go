@@ -13,6 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 )
 
 // firstRunDisplay is a Display on a fresh config with first run still to do, and first run's view of
@@ -90,6 +91,128 @@ func TestFirstRunGoesThroughItsStepsInOrder(t *testing.T) {
 	}
 }
 
+// The language step: a tap on a language makes it the screen's and picks its clock, the clock button
+// turns it, and Next goes on with both as they are. An unset language shows English chosen.
+func TestFirstRunLanguageStep(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	setClockFormat(nil, false, false)
+	setStep(t, frLanguage)
+	if v := d.firstRunView(time.Now()); v.lang != "en" {
+		t.Fatalf("an unset language shows %q chosen", v.lang)
+	}
+	de := -1
+	for i, l := range frLangs {
+		if l.Code == "de" {
+			de = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[de])
+	if c := config.Get().Screen; c.Language != "de" || !c.Clock24 || !clock24.Load() {
+		t.Fatalf("a tap on Deutsch: language %q, 24 hours %v, drawn %v", c.Language, c.Clock24, clock24.Load())
+	}
+	if v := d.firstRunView(time.Now()); v.lang != "de" {
+		t.Fatalf("Deutsch tapped, %q shown chosen", v.lang)
+	}
+	tapButton(t, d, "clock")
+	if config.Get().Screen.Clock24 || clock24.Load() {
+		t.Fatal("the clock button left 24 hours")
+	}
+	tapButton(t, d, "next")
+	if got, want := firstRunStep(), stepAfter(frLanguage); got != want {
+		t.Fatalf("Next went to %q, want %q", got, want)
+	}
+	if c := config.Get().Screen; c.Language != "de" || c.Clock24 {
+		t.Fatalf("Next changed the language step's choices: %q, %v", c.Language, c.Clock24)
+	}
+}
+
+// A tap on the language already lit changes nothing: on Match all, English is lit, and tapping it to
+// confirm keeps Match all and the clock chosen, rather than making the screen English-only at 12 hours.
+func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was := clock24.Load()
+	t.Cleanup(func() { clock24.Store(was) })
+	if err := config.Set().Screen().Clock24(true); err != nil {
+		t.Fatal(err)
+	}
+	setClockFormat(nil, true, false)
+	setStep(t, frLanguage)
+	v := d.firstRunView(time.Now())
+	if v.lang != "en" || config.Get().Screen.Language != "" {
+		t.Fatalf("want Match all shown as English, got %q (saved %q)", v.lang, config.Get().Screen.Language)
+	}
+	en := -1
+	for i, l := range frLangs {
+		if l.Code == "en" {
+			en = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[en])
+	if c := config.Get().Screen; c.Language != "" || !c.Clock24 || !clock24.Load() {
+		t.Fatalf("a tap on the lit English: language %q, 24 hours %v, drawn %v", c.Language, c.Clock24, clock24.Load())
+	}
+}
+
+// A 12-hour clock set to go without its AM/PM keeps that through the language step: a language
+// picking its clock, and the clock button, change only 12 or 24 hours.
+func TestFirstRunKeepsNoAMPM(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was24, wasBare := clock24.Load(), noAMPM.Load()
+	t.Cleanup(func() { clock24.Store(was24); noAMPM.Store(wasBare) })
+	if err := config.Set().Screen().ClockFormat(false, true); err != nil {
+		t.Fatal(err)
+	}
+	setClockFormat(nil, false, true)
+	setStep(t, frLanguage)
+	kept := func(what string, want24 bool) {
+		t.Helper()
+		if c := config.Get().Screen; c.Clock24 != want24 || !c.NoAMPM || clock24.Load() != want24 || !noAMPM.Load() {
+			t.Fatalf("%s: 24 hours %v, no AM/PM %v (drawn %v, %v); want 24 hours %v and no AM/PM kept",
+				what, c.Clock24, c.NoAMPM, clock24.Load(), noAMPM.Load(), want24)
+		}
+	}
+	de := -1
+	for i, l := range frLangs {
+		if l.Code == "de" {
+			de = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[de])
+	kept("a tap on Deutsch", true)
+	tapButton(t, d, "clock")
+	kept("the clock button", false)
+}
+
+// Japanese is named in its own script once a font here draws it, and romanized until then, rather
+// than as boxes: its font is fetched only once Japanese is chosen, and maybe not before the Wi-Fi.
+func TestFirstRunNamesJapaneseItCanDraw(t *testing.T) {
+	want := "日本語"
+	if !fonts.OwnDraws('日', "") {
+		want = "Nihongo"
+	}
+	labels := frLangLabels()
+	for i, l := range frLangs {
+		switch {
+		case l.Code == "ja" && labels[i] != want:
+			t.Errorf("Japanese is labeled %q, want %q", labels[i], want)
+		case l.Code != "ja" && labels[i] != l.Name:
+			t.Errorf("%s is labeled %q", l.Code, labels[i])
+		}
+	}
+}
+
+// Next on the language step saves nothing: a screen matching every language's words keeps doing so.
+func TestFirstRunLanguageNextKeepsMatchAll(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	setStep(t, frLanguage)
+	tapButton(t, d, "next")
+	if c := config.Get().Screen; c.Language != "" {
+		t.Fatalf("Next set the language to %q", c.Language)
+	}
+}
+
 // The step is saved as it is done, so a restart picks up there; an unknown one starts again.
 func TestFirstRunResumesWhereItStopped(t *testing.T) {
 	firstRunDisplay(t, true, true)
@@ -110,6 +233,7 @@ func TestFirstRunStepsThatAreDoneOfferNext(t *testing.T) {
 		joined, home bool
 		want         []string
 	}{
+		{frLanguage, true, true, []string{"clock", "next"}},
 		{frWifi, true, true, []string{"wifi", "next"}},
 		{frWifi, false, false, []string{"next", "wifi"}}, // "Not now", then Choose Wi-Fi
 		{frZone, true, true, []string{"zone", "next"}},
@@ -175,6 +299,61 @@ func TestFirstRunGoesOnOnceHomeAssistantConnects(t *testing.T) {
 	d.firstRunView(now.Add(time.Second + frHomeLinger))
 	if got := firstRunStep(); got != stepAfter(frHome) {
 		t.Fatalf("after it connected: %q, want %q", got, stepAfter(frHome))
+	}
+}
+
+// Back walks the steps the other way, down to the first counted one, which has none; it is not there
+// while the keyboard is up.
+func TestFirstRunBack(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	steps := firstrun.Steps()
+	setStep(t, frSound)
+	for i := len(steps) - 3; i >= 1; i-- {
+		frTapIn(d, d.r.frBackRect())
+		if got := firstRunStep(); got != steps[i] {
+			t.Fatalf("after Back: %q, want %q", got, steps[i])
+		}
+	}
+	if frShowsBack(d.firstRunView(time.Now())) {
+		t.Fatalf("the first step %q offers Back", firstRunStep())
+	}
+	frTapIn(d, d.r.frBackRect())
+	if got := firstRunStep(); got != steps[1] {
+		t.Fatalf("a tap where Back would be on the first step went to %q", got)
+	}
+	setStep(t, frName)
+	d.firstRun.typing = "name"
+	if frShowsBack(d.firstRunView(time.Now())) {
+		t.Fatal("Back shows over the keyboard")
+	}
+	d.firstRun.typing = ""
+	key := firstRunView{step: frHome, showKey: true, key: "a key", wifi: d.firstRun.wifi}
+	if !frKeyView(key) || frShowsBack(key) {
+		t.Fatalf("Back over the key: key view %v, Back %v", frKeyView(key), frShowsBack(key))
+	}
+	if key.showKey = false; !frShowsBack(key) {
+		t.Fatal("no Back on the Home Assistant step with the key put away")
+	}
+}
+
+// Back to the Home Assistant step after it went on by itself shows it connected, with Next, and does
+// not go on again at once.
+func TestFirstRunBackToHomeAssistantStays(t *testing.T) {
+	d, f := firstRunDisplay(t, true, false)
+	setStep(t, frHome)
+	now := time.Now()
+	d.firstRunView(now)
+	f.get(func() { f.home = true })
+	d.firstRunView(now.Add(time.Second))
+	d.firstRunView(now.Add(time.Second + frHomeLinger))
+	if got := firstRunStep(); got != stepAfter(frHome) {
+		t.Fatalf("after it connected: %q", got)
+	}
+	d.firstRunView(now.Add(2*time.Second + frHomeLinger))
+	frTapIn(d, d.r.frBackRect())
+	v := d.firstRunView(now.Add(time.Minute))
+	if got := firstRunStep(); got != frHome || v.homeJust {
+		t.Fatalf("back on Home Assistant: step %q, just connected %v", got, v.homeJust)
 	}
 }
 
@@ -316,6 +495,7 @@ func TestFirstRunDrawsAtEverySize(t *testing.T) {
 			set          func(d *Display, f *frFake)
 		}{
 			{"hello", frHello, true, false, nil},
+			{"language", frLanguage, true, false, nil},
 			{"wifi-none", frWifi, false, false, nil},
 			{"wifi", frWifi, true, false, nil},
 			{"zone", frZone, true, false, nil},

@@ -37,13 +37,28 @@ func tailscaleSection(w http.ResponseWriter, token string) {
 	case st.On:
 		where = "Starting."
 	}
-	tailscaleForm(w, token, where)
+	tailscaleForm(w, token, where, tailscaleSummary(st)...)
 }
 
-// tailscaleForm is the section's form, with where the device stands said above it (as HTML). Joining
-// holds the request until the tailnet has answered, so the form says it is at work (script.go).
-func tailscaleForm(w http.ResponseWriter, token, where string) {
-	fieldsetOpen(w, "tailscale", "Tailscale")
+// tailscaleSummary is the line on the shut card: where the device stands on the tailnet, in a word or
+// two and its name there. No key is kept to say.
+func tailscaleSummary(st tailscale.Status) []string {
+	switch {
+	case st.State == "Running" && st.Name != "":
+		return []string{"On as " + st.Name}
+	case st.On && st.Problem != "":
+		return []string{"On", "not connected"}
+	case st.On:
+		return []string{"Starting"}
+	}
+	return []string{"Off"}
+}
+
+// tailscaleForm is the section's form, with where the device stands said above it (as HTML) and on its
+// shut card (summary). Joining holds the request until the tailnet has answered, so the form says it is
+// at work (script.go).
+func tailscaleForm(w http.ResponseWriter, token, where string, summary ...string) {
+	sectionOpen(w, "tailscale", "Tailscale", summary...)
 	fmt.Fprintf(w, `<form method="post" action="/setup/save"%s>`, busy(busyTailscale))
 	hidden(w, token, "tailscale")
 	fmt.Fprintf(w, `<p class="note">%s</p>
@@ -56,8 +71,9 @@ func tailscaleForm(w http.ResponseWriter, token, where string) {
 	  setup page while Remote setup is on.</p>
 	 <p class="note">With your own Headscale, give its address and a pre-auth key from it
 	  (<code>headscale preauthkeys create</code>); leave the server empty for Tailscale's.</p>
-	 <p><button type="submit">Join</button></p></form></fieldset>`, where,
+	 <p><button type="submit">Join</button></p></form>`, where,
 		onceField("tskey", "Auth key", "key", `required placeholder="tskey-auth-..."`))
+	sectionClose(w)
 }
 
 // saveTailscale joins the tailnet with the key typed, at the Headscale typed if one is.

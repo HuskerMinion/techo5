@@ -44,6 +44,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/deck"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firmware"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -172,6 +173,8 @@ type Display struct {
 	clockTap   *esphome.Select // what a tap on the clock does (clock_tap.go)
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
+	// saverBtn is the Show screensaver button (screensaver_show.go).
+	saverBtn *esphome.Button
 	// callScreenSel is how a call is drawn: its page, or Hang up over the page (callscreen.go).
 	callScreenSel *esphome.Select
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
@@ -555,6 +558,8 @@ func build() *Display {
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
+	// First run's language step sets the clock too, on the screen or the setup page.
+	firstrun.OnClock(func(on bool) { setClockFormat(d.clock, on, config.Get().Screen.NoAMPM); d.wake() })
 	d.clockStyleSel = clockStyleSelect(d)
 	d.idleScreenSel = idleScreenSelect(d)
 	d.fontSel = fontSelect(d)
@@ -575,6 +580,7 @@ func build() *Display {
 	d.skinSl = skinSelect(d.wake)
 	d.clockTap = clockTapSelect()
 	d.callBtn = callButtonSwitch(d.wake)
+	d.saverBtn = screensaverButton(d)
 	d.callScreenSel = callScreenSelect(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
 	d.volumeSwipeSw = volumeSwipeSwitch()
@@ -694,7 +700,7 @@ func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 func (d *Display) clockTapSel() *esphome.Select { return d.clockTap }
 
 func (d *Display) Entities() []esphome.Entity {
-	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel, d.dimBtn, d.dimSensor,
+	ents := append([]esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.dateCol, d.weatherPos, d.glanceSz, d.glanceMus, d.camTime, cameraFitSel, cameraBandsSel, cameraShadeSel, d.answerTime, d.turnStyle, d.timerStyle, d.skinSl, d.callBtn, d.saverBtn, d.callScreenSel, d.weatherFx, d.warmthSw, d.lang, d.strip, d.themeSel, d.lightThemeSel, d.themeModeSel, d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.dimmestNum, d.idleDimSel, d.dimBtn, d.dimSensor,
 		d.pop.on, d.pop.lead, d.pop.chime, d.pop.allDay, d.pop.shown, d.pop.popping, d.clockTap, d.styleSwipeSw, d.volumeSwipeSw, d.nightTapSw, d.nightInfoSw, d.fontSel, d.textSizeSel}, d.lookEnts...)
 	if !screen.CanTint {
 		// Night warmth tints the frame on its way to the panel, which a tablet's screen does not take.
@@ -715,7 +721,7 @@ func (d *Display) Entities() []esphome.Entity {
 // Restore lights the panel the way it was left. Before the framebuffer is opened: the backlight is
 // its own device.
 func (d *Display) Restore(c config.Config) {
-	setClock24(d.clock, c.Screen.Clock24)
+	setClockFormat(d.clock, c.Screen.Clock24, c.Screen.NoAMPM)
 	d.roomSw.Set(c.Screen.IgnoreRoomLights)
 	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)
@@ -1187,12 +1193,15 @@ func (d *Display) gesture(g touch.Gesture) {
 	askedAtNight := glowing && d.askedUp(time.Now()) && (g.Kind == touch.Tap || calUp)
 	d.mu.Unlock()
 	if glowing && !dashAtNight && !askedAtNight {
-		if g.Kind == touch.Tap && d.ringing(time.Now()).any() {
-			// An alarm or a timer rings over the night clock; a tap anywhere stops it, as the ringing
-			// page's own button would.
-			d.stopRing()
-			d.wake()
-			return
+		if g.Kind == touch.Tap {
+			if st := d.ringing(time.Now()); st.any() {
+				// An alarm or a timer rings over the night light, and the ringing page is drawn there with
+				// its buttons (nightRingingPage): a tap is what it is by day, Snooze on the Snooze button
+				// and Stop anywhere else (#646).
+				d.ringTap(g.X, g.Y, st)
+				d.wake()
+				return
+			}
 		}
 		if held {
 			// Only released, by a tap or a long press alike: the night light stays, with the notification

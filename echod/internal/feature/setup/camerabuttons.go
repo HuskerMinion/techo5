@@ -28,7 +28,7 @@ func cameraButtonsSection(w http.ResponseWriter, token string) {
 	for _, c := range cams {
 		names = append(names, html.EscapeString(c.Name)+" <code>"+html.EscapeString(c.Entity)+"</code>")
 	}
-	fieldsetOpen(w, "camerabuttons", "Camera buttons")
+	sectionOpen(w, "camerabuttons", "Camera buttons", cameraButtonsSummary(config.Get().Home.CameraButtons)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "camerabuttons")
 	fmt.Fprintf(w, `<label for="cambuttons">Buttons</label>
@@ -44,7 +44,23 @@ func cameraButtonsSection(w http.ResponseWriter, token string) {
 	if len(names) > 0 {
 		fmt.Fprintf(w, `<p class="note">The cameras: %s.</p>`, strings.Join(names, ", "))
 	}
-	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form></fieldset>`)
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
+}
+
+// cameraButtonsSummary is the line on the shut card: how many buttons there are, on how many cameras.
+func cameraButtonsSummary(all map[string][]config.CameraButton) []string {
+	buttons, cams := 0, 0
+	for _, b := range all {
+		if len(b) > 0 {
+			buttons += len(b)
+			cams++
+		}
+	}
+	if buttons == 0 {
+		return []string{"None"}
+	}
+	return []string{count(buttons, "button", "buttons") + " on " + count(cams, "camera", "cameras")}
 }
 
 // cameraButtonsText is every camera's buttons as the box shows them: the cameras in the list's order,

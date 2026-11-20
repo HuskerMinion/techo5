@@ -107,6 +107,10 @@ type paint struct {
 
 	// press is the finger the frame in hand shows a press under (press_draw.go). Only the Show sets it.
 	press pressView
+
+	// oneTint is drawing the night clock, whose text is all in the one color it is drawn in: an emoji
+	// too, in shades of it rather than its own colors (lib/fonts, DrawStringTinted).
+	oneTint bool
 }
 
 // s scales a fixed size to this screen. Every size written as a literal in this package is in the
@@ -133,22 +137,91 @@ func (p *paint) headerH() int     { return p.grownForText(p.s(headerHBase)) }
 func (p *paint) rowH() int        { return p.grownForText(p.s(rowHBase)) }
 func (p *paint) rowIn() int       { return p.s(rowInBase) }
 
-// rowHeight is how tall row is drawn: a heading is shorter than a row with something on it.
-func (p *paint) rowHeight(row settingRow) int {
+// rowHeight is how tall row is drawn on card: a heading is shorter than a row with something on it,
+// and a Show row whose words take more lines, or whose button stands over its chip, is taller. It is
+// measured on the card the row is drawn on, the settings card's or the drawer's narrower panel.
+func (p *paint) rowHeight(card image.Rectangle, row settingRow) int {
 	if row.kind == ctlHeading {
 		return p.s(headHBase)
 	}
 	if p.planned() {
 		return p.planRow(p.rowCard, row).h
 	}
-	return p.rowH()
+	h := p.rowH()
+	if p.stacked(card, row) {
+		h += p.s(stackStep)
+	}
+	labels, subs := p.wordLines(card, row)
+	return h + p.extraLines(row, labels, subs)
 }
 
-// rowsHeight is how tall rows are, one under another.
-func (p *paint) rowsHeight(rows []settingRow) int {
+// extraLines is how much taller a Show row is for the lines its words take past one each.
+func (p *paint) extraLines(row settingRow, labels, subs []string) int {
+	fc := p.faces()
+	h := 0
+	if n := len(labels); n > 1 {
+		h += (n - 1) * p.labelFace(row).Metrics().Height.Ceil()
+	}
+	if n := len(subs); n > 1 {
+		h += (n - 1) * fc.sub.Metrics().Height.Ceil()
+	}
+	return h
+}
+
+// labelFace is the face a row's name is drawn in.
+func (p *paint) labelFace(row settingRow) font.Face {
+	if row.bold {
+		return p.faces().labelBold
+	}
+	return p.faces().label
+}
+
+// wordLines is a Show row's name on up to two lines and the line under it on up to three, in the room
+// beside its control, for words in a longer language than the row was drawn for; each is nil when it
+// fits on one line, and both on a planned row, which lays its own out.
+func (p *paint) wordLines(card image.Rectangle, row settingRow) (labels, subs []string) {
+	if p.planned() || row.kind == ctlHeading || row.kind == ctlSwatches || row.kind == ctlDays {
+		return nil, nil
+	}
+	fc := p.faces()
+	room := card.Max.X - p.s(26) - p.controlWidth(card, row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	if row.locked {
+		room -= p.s(lockGap + lockW)
+	}
+	if face := p.labelFace(row); p.width(face, row.label) > room {
+		labels = p.wrapClip(face, row.label, room, 2)
+	}
+	if row.sub != "" && p.width(fc.sub, row.sub) > room {
+		subs = p.wrapClip(fc.sub, row.sub, room, 3)
+	}
+	return labels, subs
+}
+
+// stackStep is how much taller a row is when its button stands over its value's chip.
+const stackStep = 48
+
+// stacked says whether a Show row's button stands over its value's chip instead of beside it: only a
+// choice with a button, and only when its words would not fit beside the two.
+func (p *paint) stacked(card image.Rectangle, row settingRow) bool {
+	if p.planned() || row.kind != ctlChoice || row.button == "" {
+		return false
+	}
+	fc := p.faces()
+	room := card.Max.X - p.s(26) - p.sideBySideWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	return max(p.width(fc.label, row.label), p.width(fc.sub, row.sub)) > room
+}
+
+// sideBySideWidth is a choice row's chip and button beside each other.
+func (p *paint) sideBySideWidth(row settingRow) int {
+	fc := p.faces()
+	return p.width(fc.value, row.value) + p.s(58) + p.width(fc.button, row.button) + p.s(44+12)
+}
+
+// rowsHeight is how tall rows are on card, one under another.
+func (p *paint) rowsHeight(card image.Rectangle, rows []settingRow) int {
 	h := 0
 	for _, row := range rows {
-		h += p.rowHeight(row)
+		h += p.rowHeight(card, row)
 	}
 	return h
 }
@@ -184,6 +257,10 @@ func (r *paint) text(face font.Face, s string, x, baseline int, c color.Color) {
 		if _, chosen := c.(chosenColor); !chosen && face.Metrics().Height.Ceil() <= r.atTextSize(r.s(scrimTallest)) {
 			c = overPhotoColor(c)
 		}
+	}
+	if r.oneTint {
+		fonts.DrawStringTinted(r.dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
+		return
 	}
 	fonts.DrawString(r.dst, image.NewUniform(c), face, fixed.P(x, baseline), s)
 }
@@ -445,12 +522,12 @@ func (r *paint) scrollLimits() (card, pick int) {
 // is put back from under (the frame as it was before the rows), which clips them without clipping
 // every primitive; bg is the card's color at the list's edges, for the fades.
 func (r *paint) rowList(card, list image.Rectangle, rows []settingRow, scroll int, bg color.RGBA, under []uint8) int {
-	maxScroll := max(r.rowsHeight(rows)-list.Dy(), 0)
+	maxScroll := max(r.rowsHeight(card, rows)-list.Dy(), 0)
 	scroll = min(max(scroll, 0), maxScroll)
 	mark := len(r.pending)
 	top := list.Min.Y - scroll
 	for i, row := range rows {
-		h := r.rowHeight(row)
+		h := r.rowHeight(card, row)
 		if top+h > list.Min.Y && top < list.Max.Y {
 			r.settingRow(card, top, row)
 			// A rule between rows, but none to set a heading off from the rows it names.
@@ -666,10 +743,11 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 	if row.bold {
 		face = fc.labelBold
 	}
-	rh := r.rowHeight(row)
+	rh := r.rowHeight(card, row)
 	right, cy := card.Max.X-r.s(26), top+rh/2
 	var labelEnd int
 	var plan rowPlan
+	var labels, subs []string
 	planned := r.planned()
 	fullLabel := row.label
 	if planned {
@@ -680,17 +758,11 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			row.sub = plan.sub[0]
 		}
 	} else {
+		labels, subs = r.wordLines(card, row)
 		row.label, row.sub, labelEnd = r.rowWords(card, row, face)
 	}
-	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
-	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
-	// A row grown for large text keeps them in its middle.
-	mid := top + (r.rowH()-r.s(rowHBase))/2
-	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
-	base := line(40, 30)
-	lastLabel := row.label
-	switch {
-	case planned && plan.baseL != nil:
+	base, lastLabel := 0, row.label
+	if planned && plan.baseL != nil {
 		// More than one line of words: laid out from the top of a row grown to hold them.
 		for i, l := range plan.label {
 			r.text(face, l, card.Min.X+r.rowIn(), top+plan.baseL[i], cream)
@@ -699,12 +771,12 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			r.text(fc.sub, l, card.Min.X+r.rowIn(), top+plan.baseS[i], dim)
 		}
 		base, lastLabel = top+plan.baseL[len(plan.baseL)-1], plan.label[len(plan.label)-1]
-	case row.sub == "":
-		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
-	default:
-		base = line(30, 40)
-		r.text(face, row.label, card.Min.X+r.rowIn(), base, cream)
-		r.text(fc.sub, row.sub, card.Min.X+r.rowIn(), line(53, 40), dim)
+	} else {
+		var lines []rowLine
+		lines, base, lastLabel = r.rowLines(top, rh, row, face, labels, subs)
+		for _, l := range lines {
+			r.text(l.face, l.text, card.Min.X+r.rowIn(), l.y, l.col)
+		}
 	}
 	if row.locked {
 		x := card.Min.X + r.rowIn() + r.width(face, lastLabel) + r.s(lockGap)
@@ -736,7 +808,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		}
 		if row.rowTap {
 			add(whole, partRow)
-			add(image.Rect(x-r.s(14), top, card.Max.X-r.s(8), top+r.rowH()), partMain)
+			add(image.Rect(x-r.s(14), top, card.Max.X-r.s(8), top+rh), partMain)
 			break
 		}
 		add(whole, partMain) // the whole row flips the switch: a small target otherwise
@@ -758,7 +830,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 			}
 			r.text(fc.button, name, b.Min.X+(chipW-r.width(fc.button, name))/2, cy+r.s(8), ink)
 			if row.id != "" {
-				r.addZone(zone{r: image.Rect(b.Min.X-chipGap/2, top, b.Max.X+chipGap/2, top+r.rowH()), kind: zoneRow, id: row.id, part: partDay, opt: i, label: row.label})
+				r.addZone(zone{r: image.Rect(b.Min.X-chipGap/2, top, b.Max.X+chipGap/2, top+rh), kind: zoneRow, id: row.id, part: partDay, opt: i, label: row.label})
 			}
 		}
 	case ctlStepper:
@@ -766,6 +838,14 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		add(minus.Inset(-r.s(6)), partMinus)
 		add(plus.Inset(-r.s(6)), partPlus)
 	case ctlChoice:
+		if r.stacked(card, row) {
+			half := r.s(stackStep) / 2
+			bx := r.pillButton(right, cy-half, row.button, btnSecondary)
+			r.choice(right, cy+half, fit(row.value, right-r.s(58)))
+			add(whole, partMain)
+			add(image.Rect(bx-r.s(6), top, card.Max.X-r.s(8), cy), partExtra)
+			break
+		}
 		extra := 0
 		if row.button != "" {
 			extra = r.width(fc.button, row.button) + r.s(44+12)
@@ -774,7 +854,7 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		if row.button != "" {
 			bx := r.pillButton(x-r.s(12), cy, row.button, btnSecondary)
 			add(whole, partMain)
-			add(image.Rect(bx-r.s(6), top, x-r.s(6), top+r.rowH()), partExtra)
+			add(image.Rect(bx-r.s(6), top, x-r.s(6), top+rh), partExtra)
 			break
 		}
 		add(whole, partMain)
@@ -790,8 +870,56 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		if row.rowTap {
 			add(whole, partMain) // the whole row does what its button does
 		}
-		add(image.Rect(x-r.s(8), top+r.s(4), card.Max.X-r.s(12), top+r.rowH()-r.s(4)), partMain)
+		add(image.Rect(x-r.s(8), top+r.s(4), card.Max.X-r.s(12), top+rh-r.s(4)), partMain)
 	}
+}
+
+// rowLine is one line of a row's words as drawn: its face, its text, its baseline and its color.
+type rowLine struct {
+	face font.Face
+	text string
+	y    int
+	col  color.RGBA
+}
+
+// rowLines lays out a row's name and the line under it in a row top..top+rh tall: labels and subs are
+// their lines when they take more than one (wordLines), else row.label and row.sub are drawn on one
+// each. It returns the lines, the last name line's baseline and its text, for the padlock after it.
+func (r *paint) rowLines(top, rh int, row settingRow, face font.Face, labels, subs []string) (lines []rowLine, base int, lastLabel string) {
+	fc := r.faces()
+	// The lines' baselines, in the Show 5's pixels at 100%, move apart or together around a middle as
+	// the text size grows or shrinks them, so two lines neither run into each other nor out of the row.
+	// A row grown for large text, or for words on more than one line, keeps them in its middle.
+	mid := top + (rh-r.s(rowHBase))/2
+	line := func(at, middle int) int { return mid + r.s(middle) + r.atTextSize(r.s(at)-r.s(middle)) }
+	switch {
+	case len(labels) > 1 || len(subs) > 1:
+		// Words on more than one line, with or without a line under the name: the row grew for them.
+		if labels == nil {
+			labels = []string{row.label}
+		}
+		if subs == nil && row.sub != "" {
+			subs = []string{row.sub}
+		}
+		lhL, lhS := face.Metrics().Height.Ceil(), fc.sub.Metrics().Height.Ceil()
+		up := r.extraLines(row, labels, subs) / 2
+		base = line(30, 40) - up
+		if len(subs) == 0 {
+			base = line(40, 30) - up
+		}
+		for i, l := range labels {
+			lines = append(lines, rowLine{face, l, base + i*lhL, cream})
+		}
+		for i, l := range subs {
+			lines = append(lines, rowLine{fc.sub, l, line(53, 40) - up + (len(labels)-1)*lhL + i*lhS, dim})
+		}
+		return lines, base + (len(labels)-1)*lhL, labels[len(labels)-1]
+	case row.sub == "":
+		base = line(40, 30)
+		return []rowLine{{face, row.label, base, cream}}, base, row.label
+	}
+	base = line(30, 40)
+	return []rowLine{{face, row.label, base, cream}, {fc.sub, row.sub, line(53, 40), dim}}, base, row.label
 }
 
 // rowGap is the space a row keeps between its words and its value or control.
@@ -820,7 +948,7 @@ func (r *paint) padlock(cx, cy int, col color.RGBA) {
 func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (label, sub string, end int) {
 	fc := r.faces()
 	right := card.Max.X - r.s(26)
-	room := right - r.controlWidth(row) - r.s(rowGap) - (card.Min.X + r.rowIn())
+	room := right - r.controlWidth(card, row) - r.s(rowGap) - (card.Min.X + r.rowIn())
 	if row.locked {
 		room -= r.s(lockGap + lockW) // the label gives way to its padlock, which follows it
 	}
@@ -847,7 +975,7 @@ func (r *paint) dayChip() (w, gap int) {
 }
 
 // controlWidth is how much of a row its control takes, from the right, before any value beside it.
-func (r *paint) controlWidth(row settingRow) int {
+func (r *paint) controlWidth(card image.Rectangle, row settingRow) int {
 	fc := r.faces()
 	switch row.kind {
 	case ctlToggle:
@@ -856,6 +984,9 @@ func (r *paint) controlWidth(row settingRow) int {
 		return r.s(44) + max(r.width(fc.value, row.value), r.s(80)) + r.s(24+44)
 	case ctlChoice:
 		w := r.width(fc.value, row.value) + r.s(58)
+		if r.stacked(card, row) {
+			return max(w, r.width(fc.button, row.button)+r.s(44))
+		}
 		if row.button != "" {
 			w += r.width(fc.button, row.button) + r.s(44+12)
 		}

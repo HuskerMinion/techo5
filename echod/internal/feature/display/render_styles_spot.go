@@ -512,7 +512,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 	x := center - (r.width(h, hm)+aw)/2
 	r.text(h, hm, x, 138, colText)
 	if ampm != "" {
-		r.text(r.label, ampm, x+r.width(h, hm)+6, 138, colAccent)
+		r.text(r.label, ampm, x+r.width(h, hm)+6, 138, colText)
 	}
 	r.centered(r.styleFace(false, 20), locale.LongDate(s.now, screenLang()), 172, colDim)
 	r.line(90, 196, 390, 196, 2, colTrack)

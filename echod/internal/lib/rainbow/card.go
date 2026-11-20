@@ -20,6 +20,10 @@ import (
 // while it thinks; once it answers, what was heard is its title and the answer is under it, the one
 // going up and out as the other comes up in. It goes away shrinking a little, upward. The glass is the
 // page under it blurred, brightened and tinted, lit a little along its top, with a fine rim.
+//
+// An answer longer than the card's cardLines is laid out whole and seen through a window of that many
+// lines, which moves down it as the voice says it, the line being said kept near the top, and rests on
+// the last lines once it is all said. The window's edges fade a little where there is more past them.
 
 // The card's size and timing, in design units and seconds.
 const (
@@ -29,7 +33,9 @@ const (
 	cardPad    = 20.0 // the words' margin each side
 	cardDots   = 56.0 // room kept at the right for the thinking dots
 	cardMin    = 64.0 // the height of a card of one line
-	cardLines  = 4    // the most lines an answer takes
+	cardLines  = 4    // the most lines an answer takes on the card: a longer one scrolls
+	scrollLead = 1.0  // the lines kept over the one being said, while there are lines to scroll
+	fadeDepth  = 0.7  // how far the window's edge fades where there is more past it
 	cardHeard  = 3    // and what was heard, over it or alone: the whole question, not one line of it
 	frostSigma = 14.0
 	cardIn     = 0.55
@@ -46,11 +52,56 @@ var (
 
 // cardWords is one set of words on the card, drawn once at full size: what it says (to tell when it
 // changes), whether it is an answer, and how tall the card wants to be for it, in design units.
+//
+// An answer longer than cardLines is all in img, and the card shows a window of it: where the window is
+// in img and how tall, in pixels, how much of the answer is below it before it scrolls, a line's height,
+// and each line's length in characters, the way the voice gets through them. scroll is how many lines
+// down the window is, and scrollTo where it is going.
 type cardWords struct {
 	key    string
 	reply  bool
 	img    *image.RGBA
 	height float64
+
+	winTop, winH, more, lineH float64
+	chars                     []int
+	scroll, scrollTo          float64
+}
+
+// scrolls is whether the words are more than the card shows at once.
+func (w *cardWords) scrolls() bool { return w != nil && w.more > 0 }
+
+// offset is how far the window is scrolled, in whole pixels.
+func (w *cardWords) offset() int {
+	if !w.scrolls() {
+		return 0
+	}
+	return int(w.scroll*w.lineH + 0.5)
+}
+
+// scrollFor is how many lines down a window n lines tall is on an answer whose lines are chars long,
+// once said of it has been said: the line being said kept scrollLead lines under the window's top,
+// from the first lines before it starts to the last once it is all said. It goes by characters, as
+// the Classic pages do (replyPage), within a line as well as from one to the next, so it moves on
+// smoothly.
+func scrollFor(chars []int, n int, said float64) float64 {
+	if len(chars) <= n {
+		return 0
+	}
+	total := 0
+	for _, c := range chars {
+		total += c
+	}
+	at := clamp01(said) * float64(total)
+	pos := float64(len(chars))
+	for i, c := range chars {
+		if c > 0 && at < float64(c) {
+			pos = float64(i) + at/float64(c)
+			break
+		}
+		at -= float64(c)
+	}
+	return min(max(pos-scrollLead, 0), float64(len(chars)-n))
 }
 
 // card is the card's state between frames.
@@ -73,8 +124,17 @@ type card struct {
 
 	glass []uint32 // the frost spread to the screen's pixels, as the glass is, over frostAt
 
-	look cardLook // what img was painted for
-	img  []uint32 // the card's picture, premultiplied, a word to a pixel, the size of at on the screen
+	look   cardLook // what img was painted for
+	img    []uint32 // the card's picture, premultiplied, a word to a pixel, the size of at on the screen
+	offset int      // the answer's scroll img was painted at, in pixels
+	said   float64  // how much of the answer has been said, for the frame in hand
+
+	// The rows of an answer's window as img has them without the words, the glass and its light, so
+	// a scroll lays the words on them again and nothing else: kept by the last whole painting when the
+	// card was still, whole, and its answer scrolled; rows lo to hi of img.
+	under            []uint32
+	underLo, underHi int
+	underOK          bool
 }
 
 // up is whether the card is on the screen, coming or going.
@@ -87,6 +147,10 @@ func (c *card) moving() bool {
 	}
 	if c.cur != nil && (math.Abs(c.cur.height-c.h) > 0.3 || math.Abs(c.vh) > 1) {
 		return true
+	}
+	if w := c.cur; w.scrolls() && (w.scroll != w.scrollTo ||
+		c.said > 0 && c.said < 1 && w.scrollTo < float64(len(w.chars)-cardLines)) {
+		return true // an answer scrolling, or the voice still on its way to the end of it
 	}
 	return !c.shown || c.alpha < 1 || c.scale != 1 || c.prev != nil || c.thinking
 }
@@ -105,6 +169,7 @@ func (c *card) update(g *geometry, now time.Time, dt float64, t Turn, want bool,
 		key = t.Heard + "\x00" + t.Reply
 	}
 	c.thinking = t.Phase == "thinking" && !reply
+	was := c.cur
 
 	switch {
 	case wanted && !c.shown:
@@ -122,6 +187,21 @@ func (c *card) update(g *geometry, now time.Time, dt float64, t Turn, want bool,
 	if c.cur == nil {
 		c.at = image.Rectangle{}
 		return image.Rectangle{}
+	}
+	c.said = t.Said
+	if w := c.cur; w.scrolls() {
+		// The window follows the voice, a little behind it so a jump in the reckoning is no jump on the
+		// screen, and only ever down: the reckoning can go back a little as the audio comes in. New
+		// words start where the voice already is.
+		to := scrollFor(w.chars, cardLines, t.Said)
+		if w != was {
+			w.scroll, w.scrollTo = to, to
+		}
+		w.scrollTo = max(w.scrollTo, to)
+		w.scroll += (w.scrollTo - w.scroll) * rate(0.2, dt)
+		if math.Abs(w.scrollTo-w.scroll) < 0.002 {
+			w.scroll = w.scrollTo
+		}
 	}
 
 	// The height on a spring, in steps short enough for it to hold at any frame rate.
@@ -159,8 +239,9 @@ func (c *card) box(g *geometry) (x0, y0, x1, y1 float64) {
 	return cx - w/2*c.scale, cy - h/2*c.scale, cx + w/2*c.scale, cy + h/2*c.scale
 }
 
-// newCardWords lays out the words for the card: what was heard, up to two lines; or for an answer,
-// what was heard on one line as the title and the answer under it.
+// newCardWords lays out the words for the card: what was heard, up to cardHeard lines; or for an
+// answer, what was heard as the title and the answer under it, all of it, the card as tall as
+// cardLines of it.
 func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key string) *cardWords {
 	k := g.k
 	w := int(cardW * k)
@@ -185,7 +266,7 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 			}
 			title = len(lines)
 		}
-		for _, l := range wrapLines(f.Reply, reply, int(float64(w)-2*pad), cardLines) {
+		for _, l := range wrapLines(f.Reply, reply, int(float64(w)-2*pad), 0) {
 			lines = append(lines, line{f.Reply, l, replyInk})
 		}
 	}
@@ -193,6 +274,12 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 	for _, l := range lines {
 		text += lineOf(l.face)
 	}
+	// Past cardLines the answer is below the card's window, and the card no taller for it.
+	over := max(0, len(lines)-title-cardLines)
+	if !isReply {
+		over = 0
+	}
+	hidden := float64(over) * lineOf(f.Reply)
 	// One line sits in the middle of a card cardMin tall; more take more.
 	edge := max(14*k, (cardMin*k-lineOf(f.Heard))/2)
 	gap := 0.0
@@ -201,8 +288,15 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 	}
 	hgt := max(cardMin*k, 2*edge+text+gap)
 	img := image.NewRGBA(image.Rect(0, 0, w, int(math.Ceil(hgt))))
+	cw := &cardWords{key: key, reply: isReply, img: img, height: max(cardMin*k, 2*edge+text+gap-hidden) / k}
 	y := edge
 	for i, l := range lines {
+		if over > 0 && i >= title {
+			if i == title {
+				cw.winTop = y
+			}
+			cw.chars = append(cw.chars, len([]rune(l.text)))
+		}
 		y += float64(l.face.Metrics().Ascent.Ceil())
 		fonts.DrawString(img, image.NewUniform(l.ink), l.face, fixed.P(int(pad), int(y)), l.text)
 		y += lineOf(l.face) - float64(l.face.Metrics().Ascent.Ceil())
@@ -210,7 +304,11 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 			y += gap
 		}
 	}
-	return &cardWords{key: key, reply: isReply, img: img, height: hgt / k}
+	if over > 0 {
+		cw.lineH = lineOf(f.Reply)
+		cw.winH, cw.more = cardLines*cw.lineH, hidden
+	}
+	return cw
 }
 
 // capital is s with its first letter a capital, accented or not.
@@ -227,7 +325,7 @@ func capital(s string) string {
 }
 
 // wrapLines breaks text into at most n lines no wider than w, on spaces, the last cut short with an
-// ellipsis when there is more.
+// ellipsis when there is more; with n 0, into as many as it takes.
 func wrapLines(face font.Face, text string, w, n int) []string {
 	var out []string
 	line := ""
@@ -376,10 +474,20 @@ func (c *card) draw(dst *image.RGBA, g *geometry, now time.Time) {
 	area := c.at.Intersect(dst.Rect)
 	ccx, ccy := float32(x0+x1)/2, float32(y0+y1)/2
 	look := cardLook{c.at, int(c.alpha*255 + 0.5), int(c.scale*1000 + 0.5), c.cur, c.prev}
-	if look != c.look || !c.frostSame || c.prev != nil {
+	off := c.cur.offset()
+	switch {
+	case look != c.look || !c.frostSame || c.prev != nil || off != c.offset && c.scale != 1:
 		c.look = look
-		c.paint(area, g, now, x0, y0, x1, y1)
+		c.paint(area, 0, area.Dy(), g, now, x0, y0, x1, y1)
+	case off != c.offset && c.underOK:
+		// Only the answer has scrolled: its words are laid again on its window's rows as they were
+		// without them, the glass, the title and the rim being as they were.
+		c.scroll(area, g, x0, y0, x1, y1)
+	case off != c.offset:
+		lo, hi := c.window(area, y0)
+		c.paint(area, lo, hi, g, now, x0, y0, x1, y1)
 	}
+	c.offset = off
 	// The card over the page: its picture is premultiplied, and most of it covers the page outright.
 	img, pix, stride := c.img, words(dst), dst.Stride/4
 	par(area.Dy(), func(lo, hi int) {
@@ -413,9 +521,94 @@ func (c *card) draw(dst *image.RGBA, g *geometry, now time.Time) {
 	}
 }
 
+// window is the rows of area the answer's window covers on a card whose top is at y0, whole size, and a
+// row more each side.
+func (c *card) window(area image.Rectangle, y0 float64) (lo, hi int) {
+	lo = int(math.Floor(y0+c.cur.winTop)) - 1 - area.Min.Y
+	hi = int(math.Ceil(y0+c.cur.winTop+c.cur.winH)) + 1 - area.Min.Y
+	return max(lo, 0), max(min(hi, area.Dy()), 0)
+}
+
+// wordsLayer is one set of words as the card lays them: their picture, how strong, how far moved up or
+// down, in pixels, and for an answer that scrolls its window: where it is and how tall, how much is
+// below it, how far it is scrolled, and how much its top and bottom edges fade, by how much there is
+// past each, up to half a line.
+type wordsLayer struct {
+	img   []uint32
+	w, h  int
+	alpha uint32 // of 256
+	dy    float32
+
+	winTop, winH, more, off float32
+	fade, fadeTop, fadeBot  float32
+}
+
+func newWordsLayer(cw *cardWords, a, dy float32) wordsLayer {
+	l := wordsLayer{img: words(cw.img), w: cw.img.Rect.Dx(), h: cw.img.Rect.Dy(), alpha: uint32(a*256 + 0.5), dy: dy}
+	if cw.scrolls() {
+		off := float32(cw.offset())
+		l.winTop, l.winH, l.more, l.off = float32(cw.winTop), float32(cw.winH), float32(cw.more), off
+		l.fade = float32(cw.lineH) / 2
+		l.fadeTop, l.fadeBot = fadeDepth*clampf(off/l.fade), fadeDepth*clampf((l.more-off)/l.fade)
+	}
+	return l
+}
+
+// row is where the card's row ry is in the words, in 256ths of a pixel, and how strong the words are
+// on it: in an answer's window, that far down the answer, less at the window's edges, and under the
+// window the answer's end.
+func (l *wordsLayer) row(ry float32) (int32, uint32) {
+	a := l.alpha
+	if l.more > 0 && ry >= l.winTop {
+		if in := ry - l.winTop; in < l.winH {
+			ry += l.off
+			f := (1 - l.fadeTop*(1-clampf(in/l.fade))) * (1 - l.fadeBot*(1-clampf((l.winH-in)/l.fade)))
+			a = uint32(float32(l.alpha) * f)
+		} else {
+			ry += l.more
+		}
+	}
+	return int32(ry * 256), a
+}
+
+// scroll paints the answer's window again for a new scroll, from the rows kept without its words:
+// only the words' columns, well inside the card, where the picture is the glass and the words alone.
+// It gives what paint does, at a fraction of the cost, on every frame of a long answer being said.
+func (c *card) scroll(area image.Rectangle, g *geometry, x0, y0, x1, y1 float64) {
+	k := g.k
+	ccx, ccy := float32(x0+x1)/2, float32(y0+y1)/2
+	l := newWordsLayer(c.cur, 1, 0)
+	hk := float32(c.h * k)
+	m := int32(cardPad * k / 2 * 256) // half the words' margin: clear of the rim and the rounded corners
+	w := area.Dx()
+	par(c.underHi-c.underLo, func(a, b int) {
+		for r := c.underLo + a; r < c.underLo+b; r++ {
+			// As paint has it, at the card's whole size and with nothing moving it.
+			Y, la := l.row(float32(area.Min.Y+r) + 0.5 - ccy + hk/2 - 0.5)
+			in := Y >= 0 && int(Y>>8) < l.h
+			under, row := c.under[(r-c.underLo)*w:(r-c.underLo+1)*w], c.img[r*w:(r+1)*w]
+			for x := area.Min.X; x < area.Max.X; x++ {
+				X := int32((float32(x) + 0.5 - ccx + float32(l.w)/2 - 0.5) * 256)
+				if X < m || X >= int32(l.w)<<8-m {
+					continue
+				}
+				p := under[x-area.Min.X]
+				if in {
+					if v := l.img[int(Y>>8)*l.w+int(X>>8)]; v != 0 {
+						v = scale4(v, la)
+						p = addSat(v, scale4(p, 256-v>>24))
+					}
+				}
+				row[x-area.Min.X] = p | 0xff000000
+			}
+		}
+	})
+}
+
 // paint draws the card's picture for area, premultiplied: the glass, the words, the rim, at the card's
-// strength. Only the pixels near its rounded edge need the edge worked out.
-func (c *card) paint(area image.Rectangle, g *geometry, now time.Time, x0, y0, x1, y1 float64) {
+// strength. Only the pixels near its rounded edge need the edge worked out. Only area's rows lo to hi
+// are painted: the rest are kept from the picture before, which is the size of area.
+func (c *card) paint(area image.Rectangle, lo, hi int, g *geometry, now time.Time, x0, y0, x1, y1 float64) {
 	k := g.k
 	if n := area.Dx() * area.Dy(); cap(c.img) < n {
 		c.img = make([]uint32, n)
@@ -431,15 +624,9 @@ func (c *card) paint(area image.Rectangle, g *geometry, now time.Time, x0, y0, x
 	top, half := float32(y0), float32(y1-y0)/2
 
 	// The words: the old going up and out, the new coming up in after it.
-	type layer struct {
-		img   []uint32
-		w, h  int
-		alpha uint32  // of 256
-		dy    float32 // in pixels
-	}
-	var layers []layer
+	var layers []wordsLayer
 	add := func(cw *cardWords, a float32, dy float32) {
-		layers = append(layers, layer{words(cw.img), cw.img.Rect.Dx(), cw.img.Rect.Dy(), uint32(a*256 + 0.5), dy})
+		layers = append(layers, newWordsLayer(cw, a, dy))
 	}
 	if c.prev != nil {
 		so := float32(smooth(0, 1, clamp01(now.Sub(c.swapAt).Seconds()/0.18)))
@@ -456,18 +643,39 @@ func (c *card) paint(area image.Rectangle, g *geometry, now time.Time, x0, y0, x
 	inv := 1 / scale
 	fa, gw := c.frostAt, c.frostAt.Dx()
 
-	par(area.Dy(), func(lo, hi int) {
-		for y := area.Min.Y + lo; y < area.Min.Y+hi; y++ {
+	// A whole painting of a still card whose answer scrolls keeps its window's rows without the words,
+	// for scroll; any other leaves nothing kept.
+	if lo == 0 && hi == area.Dy() {
+		c.underOK = c.prev == nil && c.cur.scrolls() && exact && alpha == 256
+		if c.underOK {
+			c.underLo, c.underHi = c.window(area, y0)
+			if n := (c.underHi - c.underLo) * area.Dx(); cap(c.under) < n {
+				c.under = make([]uint32, n)
+			} else {
+				c.under = c.under[:n]
+			}
+		}
+	}
+	keep := c.underOK && lo == 0 && hi == area.Dy()
+
+	par(hi-lo, func(a, b int) {
+		for y := area.Min.Y + lo + a; y < area.Min.Y+lo+b; y++ {
 			py := float32(y) + 0.5
 			ay := abs32(py-ccy) - (hh - rad)
 			// The light along the top: white at a tenth, gone by the middle.
 			shine := uint32(max(0, 0.10*(1-(py-top)/half)) * 256)
 			row := c.img[(y-area.Min.Y)*area.Dx() : (y-area.Min.Y+1)*area.Dx()]
 			glass := c.glass[min(max(y-fa.Min.Y, 0), fa.Dy()-1)*gw:]
-			// Where the row is in each layer of words, and whether it is in it at all.
+			// Where the row is in each layer of words, and whether it is in it at all, and how strong
+			// the layer is on it.
 			var ly [2]int32
-			for n, l := range layers {
-				ly[n] = int32(((py-ccy)*inv + float32(c.h*k)/2 - l.dy - 0.5) * 256)
+			var la [2]uint32
+			for n := range layers {
+				ly[n], la[n] = layers[n].row((py-ccy)*inv + float32(c.h*k)/2 - layers[n].dy - 0.5)
+			}
+			var under []uint32
+			if r := y - area.Min.Y; keep && r >= c.underLo && r < c.underHi {
+				under = c.under[(r-c.underLo)*area.Dx() : (r-c.underLo+1)*area.Dx()]
 			}
 			for x := area.Min.X; x < area.Max.X; x++ {
 				px := float32(x) + 0.5
@@ -489,6 +697,9 @@ func (c *card) paint(area image.Rectangle, g *geometry, now time.Time, x0, y0, x
 				if shine > 0 {
 					p = blend(p, 0xffffffff, shine)
 				}
+				if under != nil {
+					under[x-area.Min.X] = p
+				}
 				for n, l := range layers {
 					lx := ((px-ccx)*inv + float32(l.w)/2 - 0.5) * 256
 					X, Y := int32(lx), ly[n]
@@ -504,7 +715,7 @@ func (c *card) paint(area image.Rectangle, g *geometry, now time.Time, x0, y0, x
 					if v == 0 {
 						continue
 					}
-					v = scale4(v, l.alpha)
+					v = scale4(v, la[n])
 					p = addSat(v, scale4(p, 256-v>>24))
 				}
 				a := alpha

@@ -48,6 +48,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -169,6 +170,8 @@ type Display struct {
 	skinSl     *esphome.Select // Screen skin
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
+	// saverBtn is the Show screensaver button (screensaver_show.go).
+	saverBtn *esphome.Button
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
 	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
@@ -401,6 +404,8 @@ func build() *Display {
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
+	// First run's language step sets the clock too, on the screen or the setup page.
+	firstrun.OnClock(func(on bool) { setClockFormat(d.clock, on, config.Get().Screen.NoAMPM); d.wake() })
 	d.clockStyleSel = clockStyleSelect(d)
 	d.clockPos = clockPositionSelect(d.wake)
 	d.fontSel = fontSelect(d)
@@ -415,6 +420,7 @@ func build() *Display {
 	d.turnStyle = turnStyleSelect(d.wake)
 	d.skinSl = skinSelect(d.wake)
 	d.callBtn = callButtonSwitch(d.wake)
+	d.saverBtn = screensaverButton(d)
 	d.styleSwipeSw = styleSwipeSwitch()
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.weatherFx = weatherAnimationSwitch(d.wake)
@@ -495,13 +501,13 @@ func (d *Display) timerStyleSel() *esphome.Select { return nil }
 func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
+	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.saverBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
 		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
 }
 
 // Restore lights the panel the way it was left.
 func (d *Display) Restore(c config.Config) {
-	setClock24(d.clock, c.Screen.Clock24)
+	setClockFormat(d.clock, c.Screen.Clock24, c.Screen.NoAMPM)
 	d.roomSw.Set(c.Screen.IgnoreRoomLights)
 	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)

@@ -172,6 +172,11 @@ hand with the unit's address and port 6053.
 Updates come from Home Assistant, as on the Echos: the update card installs the next release into
 TECHO5's other system slot and goes back to the one before if the new one doesn't come up.
 
+A problem that shows up only after the new release has settled is undone with **Roll back** in Home
+Assistant (the unit's diagnostic entities), or `slotctl rollback` over SSH: the unit restarts into the
+release in its other slot, which **Other slot** shows. It refuses unless that slot is one that had
+settled (`good`).
+
 A release can bring a new kernel too. Once the new system has run for a few minutes with Wi-Fi, the
 screen and the sound card working, the kernel goes into `recovery`, on trial for three starts. If it
 never settles, the kernel before it goes back by itself, and so does one that starts but can't hand

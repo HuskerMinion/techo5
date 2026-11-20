@@ -21,7 +21,7 @@ import (
 // an action by hand. The key once saved is never shown again, only whether there is one.
 func dashboardSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fieldsetOpen(w, "dashboard", "Dashboard server")
+	sectionOpen(w, "dashboard", "Dashboard server", dashboardServerSummary(d, lastCheck.Load())...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashboard")
 	fmt.Fprintf(w, `<label for="dashaddr">Address</label>
@@ -30,8 +30,29 @@ func dashboardSection(w http.ResponseWriter, token string) {
 	 <p class="note">Only for a <strong>streamed</strong> dashboard, which a dashcast server draws: set
 	  <strong>Dashboard</strong> to <strong>Streamed</strong> above, or in Home Assistant.
 	  A dashboard drawn on the device needs no server.</p>
-	 <p><button type="submit">Save</button></p></form></fieldset>`,
+	 <p><button type="submit">Save</button></p></form>`,
 		html.EscapeString(d.Server), secretField("dashkey", "Key", "key", d.Key != "", ""), checkNote(d.Server))
+	sectionClose(w)
+}
+
+// dashboardServerSummary is the line on the shut card: whether a server is set, whether it has a key,
+// and what the last save's check found of it. The key is never said.
+func dashboardServerSummary(d config.Dashboard, c *serverCheck) []string {
+	if d.Server == "" {
+		return []string{"Not set up"}
+	}
+	out := []string{"Set up"}
+	if d.Key == "" {
+		out = append(out, "no key")
+	}
+	if c != nil && strings.Contains(c.said, d.Server) {
+		if c.ok {
+			out = append(out, "working")
+		} else {
+			out = append(out, "not working")
+		}
+	}
+	return out
 }
 
 // serverCheck is the dashboard server as the last save found it (dashboard.Check).
@@ -65,7 +86,7 @@ func checkNote(server string) string {
 // which dashboard to show is there too, where the list of them is.
 func dashboardPanelSection(w http.ResponseWriter, token string) {
 	d := config.Get().Dashboard
-	fieldsetOpen(w, "dashpanel", "Dashboard")
+	sectionOpen(w, "dashpanel", "Dashboard", dashboardPanelSummary(dashboard.Get().Mode(), d.Idle)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "dashpanel")
 	fmt.Fprint(w, `<label for="dashmode">Dashboard</label><select id="dashmode" name="mode">`)
@@ -114,8 +135,10 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 	  device's Home Assistant token. <strong>Streamed</strong> needs a
 	  dashcast server, set below.%s <strong>Back to the clock after</strong> is for a dashboard
 	  opened by hand; one Home Assistant shows stays until it is hidden.</p>
-	 %s
-	 <p><button type="submit">Save</button></p></form></fieldset>`, idle, handle, tesseraNote, tokenNote())
+	 %s`, idle, handle, tesseraNote, tokenNote())
+	alsoOnRow(w, token, "dashpanel")
+	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	sectionClose(w)
 }
 
 // tokenNote says whether the device has the Home Assistant access a drawn dashboard is read with, and
@@ -124,12 +147,12 @@ func dashboardPanelSection(w http.ResponseWriter, token string) {
 func tokenNote() string {
 	if hass.Get().Ready() {
 		return `<p class="note">This device has access to Home Assistant. It is on the
-	  <a href="/setup?tab=network#sec-haaccess">Network</a> tab.</p>`
+	  <a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Network</a> tab.</p>`
 	}
 	return `<p class="bad"><strong>This device has no access to Home Assistant yet</strong>, so a drawn
 	  dashboard can't be shown.</p>
 	 <p class="note">Choose <strong>Connect to Home Assistant</strong> on the
-	  <a href="/setup?tab=network#sec-haaccess">Network</a> tab and sign in.</p>`
+	  <a href="/setup?tab=network&amp;open=haaccess#sec-haaccess">Network</a> tab and sign in.</p>`
 }
 
 // saveDashboardPanel keeps what dashboardPanelSection asked, refusing a choice the page did not offer.
@@ -210,4 +233,17 @@ func saveDashboard(r *http.Request) string {
 		return "Saved, but " + strings.ToLower(said[:1]) + said[1:]
 	}
 	return ""
+}
+
+// dashboardPanelSummary is the line on the shut card: how the dashboard is shown, or Off, and whether
+// it stands in for the clock.
+func dashboardPanelSummary(mode config.DashboardMode, idle bool) []string {
+	if mode == config.DashboardOff {
+		return []string{"Off"}
+	}
+	out := []string{mode.Label()}
+	if idle {
+		out = append(out, "in place of the clock")
+	}
+	return out
 }

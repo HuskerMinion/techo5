@@ -375,19 +375,26 @@ func (sh *shaped) each(dot fixed.Point26_6, fn func(mask *image.Alpha, r image.R
 }
 
 // DrawString draws s in face at dot with src, as font.Drawer's DrawString does, shaping the runs of
-// a complex script a font of one's own draws. It returns the dot after s.
+// a complex script a font of one's own draws, and drawing a color emoji in its colors (color.go). It
+// returns the dot after s.
 func DrawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point26_6, s string) fixed.Point26_6 {
+	return drawString(dst, src, face, dot, s, true)
+}
+
+// DrawStringTinted is DrawString all in src, a color emoji too, drawn in shades of it: for text whose
+// one color is the point, as the night clock's red is.
+func DrawStringTinted(dst draw.Image, src image.Image, face font.Face, dot fixed.Point26_6, s string) fixed.Point26_6 {
+	return drawString(dst, src, face, dot, s, false)
+}
+
+func drawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point26_6, s string, inColor bool) fixed.Point26_6 {
 	rs := runs(face, s)
 	if rs == nil {
-		d := font.Drawer{Dst: dst, Src: src, Face: face, Dot: dot}
-		d.DrawString(s)
-		return d.Dot
+		return drawRun(dst, src, face, dot, s, inColor)
 	}
 	for _, r := range rs {
 		if r.shape == nil {
-			d := font.Drawer{Dst: dst, Src: src, Face: face, Dot: dot}
-			d.DrawString(r.text)
-			dot = d.Dot
+			dot = drawRun(dst, src, face, dot, r.text, inColor)
 			continue
 		}
 		r.shape.each(dot, func(m *image.Alpha, at image.Rectangle) {

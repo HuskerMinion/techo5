@@ -305,6 +305,9 @@ the rescue environment (USB serial and RNDIS at 172.16.42.1).
   anything else is refused before the other slot is emptied.
 - `slotctl status`, `slotctl rollback` (mark the running slot bad, boot the other next) and
   `slotctl switch a|b` work as on the other Shows.
+- Without SSH, **Roll back** in Home Assistant (the device's diagnostic entities) does what
+  `slotctl rollback` does, and **Other slot** beside it shows the release it goes back to. It refuses
+  unless that slot is `good`.
 
 ### Kernel updates
 

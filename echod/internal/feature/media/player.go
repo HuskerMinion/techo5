@@ -230,6 +230,11 @@ type Player struct {
 	// that ends by itself has been dropped and one that was stopped was stopped by somebody.
 	OnEnd hook.Hook[string]
 
+	// OnUnplayable fires with the URL of a stream Play started that the device cannot decode, when
+	// there is no music library set up to hand it to and nothing else was asked for since. Such a
+	// stream does not fire OnEnd, so without this the radio would go quiet with nothing said (#649).
+	OnUnplayable hook.Hook[string]
+
 	// OnNowPlaying fires whenever what the room is playing, or the name of it, may have changed: a track
 	// starting, pausing or ending, a receiver's or a remote's song, a held track let go. It says only
 	// that something may have, not what, and fires for much that changes nothing - an announcement too
@@ -545,7 +550,7 @@ func build() *Player {
 	}
 	p.stream = NewStream(speaker.Sound(), speaker.Get(), p.refresh, p.OnEnd.Emit)
 	p.stream.senderPlays = p.senderPlaysAgain
-	p.stream.handOff = handOff
+	p.stream.handOff = p.handOff
 
 	// Volume acts on every tap and on every repeat, so a held button ramps.
 	buttons.Get().Events.Listen(func(e buttons.Event) {
@@ -1299,7 +1304,7 @@ func (p *Player) External() uint64 {
 	p.remoteLast.Store(true)
 	p.nextTitle.Store(nil)
 	n := p.remote.take()
-	p.stream.Stop()
+	p.stream.stopLoaded()
 	p.refresh()
 	return n
 }

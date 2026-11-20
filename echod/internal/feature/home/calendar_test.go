@@ -49,7 +49,7 @@ func fakeCalendars(t *testing.T) *atomic.Int32 {
 		t.Fatal(err)
 	}
 	calendar.Lock()
-	calendar.list, calendar.listAt, calendar.months = nil, time.Time{}, nil
+	calendar.list, calendar.listAt, calendar.months, calendar.colors = nil, time.Time{}, nil, nil
 	calendar.Unlock()
 	return &reads
 }

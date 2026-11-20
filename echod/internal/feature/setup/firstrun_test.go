@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,7 +69,7 @@ func TestTheSetupPageWalksFirstRun(t *testing.T) {
 		t.Fatalf("the page sent first run to %q", to)
 	}
 	titles := map[string]string{
-		firstrun.Hello: "Hello", firstrun.Wifi: "Wi-Fi", firstrun.Zone: "Time zone", firstrun.Name: "Name and room",
+		firstrun.Hello: "Hello", firstrun.Language: "Language and clock", firstrun.Wifi: "Wi-Fi", firstrun.Zone: "Time zone", firstrun.Name: "Name and room",
 		firstrun.Home: "Home Assistant", firstrun.Updates: "Updates", firstrun.Sound: "Sound check",
 	}
 	for _, s := range firstrun.Steps()[:len(firstrun.Steps())-1] {
@@ -218,5 +219,66 @@ func TestTheHomeAssistantStepWithNoKey(t *testing.T) {
 	firstrun.HomeConnected = func() bool { return true }
 	if body := get(f, firstRunPath, c).Body.String(); !strings.Contains(body, "Home Assistant has added it.") {
 		t.Fatalf("once added: %s", body)
+	}
+}
+
+// The language step's form shows the language and clock as they are, and Next saves what was chosen
+// and goes on; an unchanged language is left as it was, so a screen matching every language's words
+// keeps doing so.
+func TestTheSetupPagesLanguageStep(t *testing.T) {
+	if !slices.Contains(firstrun.Steps(), firstrun.Language) {
+		t.Skip("no screen: no language step")
+	}
+	f, c, _ := firstRunIn(t)
+	if err := config.Set().FirstRun().Step(firstrun.Language); err != nil {
+		t.Fatal(err)
+	}
+	body := get(f, firstRunPath, c).Body.String()
+	for _, want := range []string{`<option value="en" selected>English</option>`, `id="clock12" value="12" checked`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the form has no %q: %s", want, body)
+		}
+	}
+	firstRunPost(t, f, c, url.Values{"what": {"language"}, "language": {"en"}, "clock": {"12"}})
+	if s := config.Get().Screen; s.Language != "" || s.Clock24 || firstrun.Step() != firstrun.After(firstrun.Language) {
+		t.Fatalf("Next unchanged: language %q, 24 hours %v, step %q", s.Language, s.Clock24, firstrun.Step())
+	}
+	if err := config.Set().FirstRun().Step(firstrun.Language); err != nil {
+		t.Fatal(err)
+	}
+	firstRunPost(t, f, c, url.Values{"what": {"language"}, "language": {"de"}, "clock": {"24"}})
+	if s := config.Get().Screen; s.Language != "de" || !s.Clock24 || firstrun.Step() != firstrun.After(firstrun.Language) {
+		t.Fatalf("Deutsch, 24 hours: language %q, 24 hours %v, step %q", s.Language, s.Clock24, firstrun.Step())
+	}
+	if err := config.Set().FirstRun().Step(firstrun.Language); err != nil {
+		t.Fatal(err)
+	}
+	if to := firstRunPost(t, f, c, url.Values{"what": {"language"}, "language": {"xx"}, "clock": {"24"}}); !strings.Contains(to, "problem=") || firstrun.Step() != firstrun.Language {
+		t.Fatalf("an unknown language went to %q, step %q", to, firstrun.Step())
+	}
+}
+
+// Back is on every counted step but the first, walks the steps the other way, and does nothing where
+// it is not offered.
+func TestTheSetupPageGoesBack(t *testing.T) {
+	f, c, _ := firstRunIn(t)
+	steps := firstrun.Steps()
+	backForm := `name="what" value="back"`
+	for i, s := range steps {
+		if err := config.Set().FirstRun().Step(s); err != nil {
+			t.Fatal(err)
+		}
+		body := get(f, firstRunPath, c).Body.String()
+		if want := firstrun.HasBack(s); strings.Contains(body, backForm) != want {
+			t.Errorf("step %q: Back on the page %v, want %v", s, !want, want)
+		}
+		firstRunPost(t, f, c, url.Values{"what": {"back"}})
+		want := s
+		if firstrun.HasBack(s) {
+			want = steps[i-1]
+		}
+		if got := firstrun.Step(); got != want {
+			t.Errorf("Back on %q went to %q, want %q", s, got, want)
+		}
 	}
 }

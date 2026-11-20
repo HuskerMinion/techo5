@@ -1,55 +1,13 @@
 package display
 
 import (
-	"log/slog"
 	"sync/atomic"
 	"time"
-
-	esphome "github.com/ygelfand/go-esphome-device"
-
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// clock24 is the screen showing 15:04 rather than 3:04 PM. It lives here so every page drawn reads it
-// without taking the config's lock each frame.
-var clock24 atomic.Bool
-
-const (
-	clock12Label = "12-hour"
-	clock24Label = "24-hour"
-)
-
-// clockSelect is the Home Assistant setting between the two; wake redraws the screen once it changes.
-func clockSelect(wake func()) *esphome.Select {
-	s := &esphome.Select{
-		Base: esphome.Base{
-			ObjectID: "screen_clock_format",
-			Name:     "Clock format",
-			Icon:     "mdi:clock-digital",
-			Category: esphome.CategoryConfig,
-		},
-		Options: []string{clock12Label, clock24Label},
-	}
-	s.OnCommand = func(v string) {
-		on := v == clock24Label
-		if err := config.Set().Screen().Clock24(on); err != nil {
-			slog.Error("saving the clock format failed", "err", err)
-			return
-		}
-		setClock24(s, on)
-		wake()
-	}
-	return s
-}
-
-func setClock24(s *esphome.Select, on bool) {
-	clock24.Store(on)
-	if on {
-		s.Set(clock24Label)
-	} else {
-		s.Set(clock12Label)
-	}
-}
+// clock24 is the screen showing 15:04 rather than 3:04 PM, and noAMPM a 12-hour clock face without
+// its AM/PM. They live here so every page drawn reads them without taking the config's lock each frame.
+var clock24, noAMPM atomic.Bool
 
 // clockHM is the time as a clock face shows it, with its AM/PM set apart: 3:04, or 15:04.
 func clockHM(t time.Time) string {
@@ -59,9 +17,10 @@ func clockHM(t time.Time) string {
 	return t.Format("3:04")
 }
 
-// clockSuffix is what goes beside or under clockHM: PM, or nothing on a 24-hour clock.
+// clockSuffix is what goes beside or under clockHM: PM, or nothing on a 24-hour clock or a 12-hour one
+// set to go without.
 func clockSuffix(t time.Time) string {
-	if clock24.Load() {
+	if clock24.Load() || noAMPM.Load() {
 		return ""
 	}
 	return t.Format("PM")

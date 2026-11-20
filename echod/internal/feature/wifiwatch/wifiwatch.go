@@ -85,6 +85,11 @@ type Watch struct {
 	say          func(msg string, args ...any)
 	network      func(context.Context) (ssid string, joined bool)
 	renew        func()
+	hasAddress   func() bool
+	restartDHCP  func()
+
+	noAddressAt  time.Time // when the Wi-Fi was first seen joined with no address; zero while it has one (lease.go)
+	leaseNotTill time.Time // no restart of the DHCP client before this
 
 	sign    string     // signHA once Home Assistant has connected this boot, else signGroup once group traffic was heard
 	heardAt time.Time  // when traffic sent to everyone was last heard
@@ -125,9 +130,11 @@ func New() *Watch {
 			st := wifi.Current(ctx)
 			return st.SSID, st.Connected
 		},
-		renew: wifi.RenewLease,
-		wait:  firstWait,
-		mc:    newMulticast(),
+		renew:       wifi.RenewLease,
+		hasAddress:  wifi.HasAddress,
+		restartDHCP: wifi.RestartDHCP,
+		wait:        firstWait,
+		mc:          newMulticast(),
 	}
 	if watchBroadcasts {
 		w.bc = newBroadcast()
@@ -162,6 +169,7 @@ func (w *Watch) Run(ctx context.Context) error {
 			return nil
 		case <-t.C:
 			w.moved(ctx)
+			w.lease(ctx)
 			w.look(ctx)
 			if w.mc != nil {
 				w.mc.look(ctx)

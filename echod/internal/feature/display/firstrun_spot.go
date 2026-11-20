@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
@@ -25,6 +26,8 @@ func (d *Display) firstRunActive() bool { return firstrun.Pending() }
 // spotFirstRunButtons are a step's buttons, top to bottom, the one to press last.
 func spotFirstRunButtons(v firstRunView) []frButton {
 	switch v.step {
+	case frLanguage:
+		return []frButton{{frLangName(v.lang), "lang"}, frClockButton(v.clock24), {tr("firstrun_next"), "next"}}
 	case frWifi:
 		return []frButton{{tr("firstrun_next"), "next"}}
 	case frZone:
@@ -86,6 +89,10 @@ func (d *Display) firstRunTapSpot(x, y int) {
 		d.firstRunFinish()
 		return
 	}
+	if spotShowsBack(v) && image.Pt(x, y).In(spotBackRect) {
+		d.firstRunBack(v.step)
+		return
+	}
 	if v.step == frHome && v.showKey && v.key != "" {
 		d.mu.Lock()
 		d.firstRun.showKey = false
@@ -106,12 +113,31 @@ func (d *Display) firstRunTapSpot(x, y int) {
 func (d *Display) firstRunDoSpot(v firstRunView, act string) {
 	switch act {
 	case "next":
+		if v.step == frLanguage {
+			d.firstRunSavePick()
+		}
 		d.firstRunGo(stepAfter(v.step))
 	case "phone":
 		// The setup page, opened as Privacy opens it: the phone asks, and this face asks for the press.
 		setup.Get().Open()
 		d.mu.Lock()
 		d.firstRun.phone = true // the face says where to go
+		d.mu.Unlock()
+	case "lang":
+		d.mu.Lock()
+		fr := &d.firstRun
+		fr.picking, fr.pickLang = true, nextLang(v.lang)
+		if fr.pickedClock {
+			fr.pickClock24 = v.clock24
+		} else {
+			fr.pickClock24 = firstrun.Clock24For(fr.pickLang)
+		}
+		d.mu.Unlock()
+	case "clock":
+		d.mu.Lock()
+		fr := &d.firstRun
+		fr.picking, fr.pickedClock = true, true
+		fr.pickLang, fr.pickClock24 = v.lang, !v.clock24
 		d.mu.Unlock()
 	case "room":
 		if err := firstrun.SetArea(nextRoom(v.room)); err != nil {
@@ -133,6 +159,23 @@ func (d *Display) firstRunDoSpot(v firstRunView, act string) {
 	d.wake()
 }
 
+// firstRunSavePick saves the language and clock picked on the language step, if any were, and lets
+// the pick go.
+func (d *Display) firstRunSavePick() {
+	d.mu.Lock()
+	fr := &d.firstRun
+	picking, lang, on := fr.picking, fr.pickLang, fr.pickClock24
+	fr.picking, fr.pickedClock = false, false
+	d.mu.Unlock()
+	if !picking {
+		return
+	}
+	if err := firstrun.SaveLanguage(lang, on); err != nil {
+		slog.Warn("saving the screen language failed", "err", err)
+	}
+	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
+}
+
 // nextRoom is the listed room after room, round again after the last; Other is the setup page's.
 func nextRoom(room string) string {
 	listed := frRooms[:len(frRooms)-1]
@@ -144,8 +187,41 @@ func nextRoom(room string) string {
 	return listed[0]
 }
 
+// nextLang is the language after lang, round again after the last.
+func nextLang(lang string) string {
+	for i, l := range frLangs {
+		if l.Code == lang {
+			return frLangs[(i+1)%len(frLangs)].Code
+		}
+	}
+	return frLangs[0].Code
+}
+
+// frLangName is lang in its own words.
+func frLangName(lang string) string {
+	for _, l := range frLangs {
+		if l.Code == lang {
+			return frLangLabel(l)
+		}
+	}
+	return lang
+}
+
+// spotBackRect is where Back is tapped: over the step's count, at the top of the circle, apart from
+// the buttons stacked at its foot, which have no room for a fourth.
+var spotBackRect = image.Rect(center-100, 14, center+100, 58)
+
+// spotShowsBack is whether the step shows Back: on the steps that have one (firstrun.HasBack), and
+// not while a rename restarts the daemon or the key is up (a tap anywhere puts it away).
+func spotShowsBack(v firstRunView) bool {
+	return firstrun.HasBack(v.step) && !v.renaming && !(v.step == frHome && v.showKey && v.key != "")
+}
+
 // firstRunFaceSpot draws the step.
 func (r *roundRenderer) firstRunFaceSpot(v firstRunView, now time.Time) {
+	if spotShowsBack(v) {
+		r.centered(r.tiny, "‹ "+tr("back"), 44, colDim)
+	}
 	if n, of := v.number, v.of; n > 0 {
 		r.centered(r.tiny, fmt.Sprintf(tr("firstrun_step_d_of_d"), n, of), 74, colDim)
 	}
@@ -208,6 +284,8 @@ func spotFirstRunText(v firstRunView, now time.Time) (string, []string) {
 		return tr("firstrun_title_done"), []string{
 			fmt.Sprintf(tr("firstrun_spot_done"), v.name), tr("firstrun_spot_menu"), tr("firstrun_spot_tap_to_finish"),
 		}
+	case frLanguage:
+		return tr("firstrun_title_language"), []string{tr("firstrun_spot_language"), frClockLine(now, v.clock24)}
 	case frWifi:
 		if v.wifi.Connected {
 			return tr("firstrun_title_wifi"), []string{

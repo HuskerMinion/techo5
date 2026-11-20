@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -63,6 +64,14 @@ func (f *Feature) firstRunSave(w http.ResponseWriter, r *http.Request, token str
 	switch r.PostFormValue("what") {
 	case "next":
 		firstrun.Go(firstrun.After(step))
+	case "back":
+		if firstrun.HasBack(step) {
+			firstrun.Go(firstrun.Before(step))
+		}
+	case "language":
+		if problem = saveLanguage(r.PostFormValue("language"), r.PostFormValue("clock") == "24"); problem == "" {
+			firstrun.Go(firstrun.After(step))
+		}
 	case "finish":
 		firstrun.Finish()
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
@@ -151,12 +160,22 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 		 <button type="submit"%s>%s</button></form>`, firstRunPath, html.EscapeString(token), what, fields, class, html.EscapeString(label))
 	}
 	next := func(label string) { form("next", label, true, "") }
+	if firstrun.HasBack(step) {
+		// Last, under the step's own forms; the browser's back button only shows the step the device is on.
+		defer form("back", "Back", false, "")
+	}
 
 	switch step {
 	case firstrun.Hello:
-		fmt.Fprintf(w, `<h2>Hello</h2><p>This is %s. A few steps set it up: its Wi-Fi, the time zone, its
-		 name and room, Home Assistant, updates, and a sound to check the speaker.</p>`, html.EscapeString(deviceName()))
+		lang := ""
+		if slices.Contains(firstrun.Steps(), firstrun.Language) {
+			lang = "the screen's language and clock, "
+		}
+		fmt.Fprintf(w, `<h2>Hello</h2><p>This is %s. A few steps set it up: %sits Wi-Fi, the time zone, its
+		 name and room, Home Assistant, updates, and a sound to check the speaker.</p>`, html.EscapeString(deviceName()), lang)
 		next("Begin")
+	case firstrun.Language:
+		firstRunLanguage(w, form)
 	case firstrun.Wifi:
 		st := firstrun.WifiStatus()
 		fmt.Fprint(w, `<h2>Wi-Fi</h2>`)
@@ -245,6 +264,47 @@ func firstRunForm(w http.ResponseWriter, token, problem string, showKey bool) {
 	}
 }
 
+// firstRunLanguage is the language step: the screen's language and its clock, as they are now, saved
+// and on to the next step with one press. Choosing a language picks its usual clock, which can be
+// changed before the press.
+func firstRunLanguage(w http.ResponseWriter, form func(what, label string, primary bool, fields string)) {
+	fmt.Fprint(w, `<h2>Language and clock</h2><p>The language the screen is in, and its clock.</p>`)
+	now := firstrun.LanguageNow()
+	var b strings.Builder
+	b.WriteString(`<label for="language">Screen language</label><select id="language" name="language" onchange="frLang(this)">`)
+	for _, l := range firstrun.Languages {
+		fmt.Fprintf(&b, `<option value="%s"%s>%s</option>`, l.Code, selected(l.Code == now), html.EscapeString(l.Name))
+	}
+	b.WriteString(`</select>`)
+	on := config.Get().Screen.Clock24
+	for _, c := range []struct {
+		value, label string
+		h24          bool
+	}{{"12", "12 hours (3:04 PM)", false}, {"24", "24 hours (15:04)", true}} {
+		fmt.Fprintf(&b, `<p><label><input type="radio" name="clock" id="clock%s" value="%s"%s style="width:auto"> %s</label></p>`,
+			c.value, c.value, checked(c.h24 == on), c.label)
+	}
+	// Choosing a language picks the clock it usually goes with, as the screen's step does.
+	b.WriteString(`<script>function frLang(s){document.getElementById(s.value==='en'?'clock12':'clock24').checked=true}</script>`)
+	form("language", "Next", true, b.String())
+}
+
+// saveLanguage saves the language step's form: the language only when it was changed, so a screen
+// still matching every language's words keeps doing so, and the clock as it was chosen.
+func saveLanguage(lang string, clock24 bool) string {
+	known := false
+	for _, l := range firstrun.Languages {
+		known = known || l.Code == lang
+	}
+	if !known {
+		return "choose one of the languages"
+	}
+	if err := firstrun.SaveLanguage(lang, clock24); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 // firstRunHome is the Home Assistant step: added with nothing typed (the setup page's window, api's
 // adopt.go), or its key typed, with a QR code of it to scan; or the device on its own.
 func firstRunHome(w http.ResponseWriter, form func(what, label string, primary bool, fields string), next func(string), showKey bool) {
@@ -331,7 +391,7 @@ func isRoom(room string) bool {
 
 // resetSection clears the device for somebody else and starts first run (firstrun.Reset).
 func resetSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "giftreset", "Reset for someone else")
+	sectionOpen(w, "giftreset", "Reset for someone else")
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "giftreset")
 	fmt.Fprint(w, `<p style="margin:0">Clears this device for whoever has it next, and starts first run:
@@ -349,5 +409,6 @@ func resetSection(w http.ResponseWriter, token string) {
 	fmt.Fprint(w, `
 	 <p><label><input type="checkbox" name="understood" value="yes" style="width:auto">
 	  I know everything on the device is cleared</label></p>
-	 <p><button type="submit">Reset and restart</button></p></form></fieldset>`)
+	 <p><button type="submit">Reset and restart</button></p></form>`)
+	sectionClose(w)
 }

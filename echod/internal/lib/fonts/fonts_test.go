@@ -30,6 +30,16 @@ func TestEveryFamilyReadsAndHasTheScreensCharacters(t *testing.T) {
 	}
 }
 
+// goAlone is whether f is Go's own face, watched for emoji only (emoji.go).
+func goAlone(f font.Face) bool {
+	w, ok := f.(watched)
+	if !ok {
+		return false
+	}
+	_, ok = w.Face.(*opentype.Face)
+	return ok
+}
+
 // Go is Go's face alone, as the screen drew before there was a choice; a name not on offer is Go.
 func TestGoIsGoAlone(t *testing.T) {
 	for _, v := range []string{Go, "no such font"} {
@@ -37,7 +47,7 @@ func TestGoIsGoAlone(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := f.(*opentype.Face); !ok {
+		if !goAlone(f) {
 			t.Errorf("%q made a %T, not Go's own face", v, f)
 		}
 	}

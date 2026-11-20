@@ -8,6 +8,11 @@ type Security struct {
 	Camera bool `json:"camera_web"`
 	Screen bool `json:"screen_web"`
 
+	// ScreenKey is the secret /screen.png asks for (feature/camera): made when Screen web access is first
+	// turned on, or at start on a device that had it on before there was a key, kept while it is off, and
+	// replaced from the setup page. Like BabyKey, a secret a settings file neither carries nor changes.
+	ScreenKey string `json:"screen_key,omitempty"`
+
 	// TalkBack lets the camera page send the microphones to a camera's speaker (config.TalkBack).
 	TalkBack bool `json:"talk_back,omitempty"`
 
@@ -89,6 +94,10 @@ const (
 
 func (w SecurityWriter) BabyLight(v string) error {
 	return w.st.Update(func(c *Config) { c.Security.BabyLight = v })
+}
+
+func (w SecurityWriter) ScreenKey(v string) error {
+	return w.st.Update(func(c *Config) { c.Security.ScreenKey = v })
 }
 
 func (w SecurityWriter) BabyKey(v string) error {

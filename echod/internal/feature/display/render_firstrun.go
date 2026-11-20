@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"golang.org/x/image/font"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 )
 
 // firstRun draws first run's step (firstrun.go): the welcome card at either end, and between them a
@@ -40,7 +42,7 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 	r.bevel(image.Rect(r.margin, r.s(40), r.w-r.margin, r.h-r.s(40)), shift(walnut, 10), true)
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
-	keyView := v.step == frHome && !v.home && v.adopt.IsZero() && v.showKey && v.key != "" && v.wifi.Address != ""
+	keyView := frKeyView(v)
 	var code image.Rectangle
 	if keyView {
 		// The QR code holds the key and nothing else: a phone reads it and pastes it into Home
@@ -50,7 +52,12 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 		room = code.Min.X - left - r.s(24)
 	}
 	title, lines, note := firstRunText(v, s.now)
-	r.text(r.title, title, left, r.s(118), amber)
+	if frShowsBack(v) {
+		b := r.frBackRect()
+		r.bevel(b, shift(walnut, 30), true)
+		r.text(r.title, frBackMark, b.Min.X+(b.Dx()-r.width(r.title, frBackMark))/2, r.s(118), cream)
+	}
+	r.text(r.title, title, left+r.frTitleIndent(v), r.s(118), amber)
 	count := fmt.Sprintf(tr("firstrun_step_d_of_d"), v.number, v.of)
 	r.text(r.small, count, r.w-r.margin-r.s(40)-r.width(r.small, count), r.s(110), dim)
 	buttons := firstRunButtons(v)
@@ -67,6 +74,9 @@ func (r *renderer) firstRun(s scene, v firstRunView) {
 			y += step
 		}
 		r.qrCode(v.key, code)
+	}
+	if v.step == frLanguage {
+		r.keyRow(r.frLangRects(), frLangLabels(), func(i int) bool { return frLangs[i].Code == v.lang })
 	}
 	if v.step == frName && !v.home && !v.renaming {
 		r.keyRow(r.frRoomRects(), frRoomLabels(), func(i int) bool {
@@ -134,10 +144,12 @@ func (r *renderer) frKeyLines(key string, room int) (font.Face, int, []string) {
 	return face, step, parts
 }
 
-// frFloor is the top of what is under a step's lines: the rooms on the name step, else the buttons,
-// else the card's foot.
+// frFloor is the top of what is under a step's lines: the languages or the rooms on their steps, else
+// the buttons, else the card's foot.
 func (r *renderer) frFloor(v firstRunView, buttons []frButton) int {
 	switch {
+	case v.step == frLanguage:
+		return r.frLangRects()[0].Min.Y
 	case v.step == frName && !v.home && !v.renaming:
 		return r.frRoomRects()[0].Min.Y
 	case len(buttons) > 0:
@@ -165,15 +177,56 @@ func isListedRoom(room string) bool {
 }
 
 // frRoomRects are where the name step's rooms go: two rows of four, over the buttons.
-func (r *renderer) frRoomRects() []image.Rectangle {
+func (r *renderer) frRoomRects() []image.Rectangle { return r.frKeyRects(len(frRooms)) }
+
+// frLangRects are where the language step's languages go: two rows over the buttons, six and five,
+// where the rooms' two rows go. Each key is as wide as its name needs, with what the row has left
+// shared out among them: a few names are longer than an even share of the row.
+func (r *renderer) frLangRects() []image.Rectangle {
+	r.useFont()
+	labels := frLangLabels()
+	keys := r.frKeyRects(len(labels))
+	left := r.margin + r.s(40)
+	room := r.w - 2*r.margin - r.s(80)
+	gap := r.s(14)
+	per := (len(labels) + 1) / 2
+	out := make([]image.Rectangle, len(labels))
+	for start := 0; start < len(labels); start += per {
+		row := labels[start:min(len(labels), start+per)]
+		need := 0
+		for _, l := range row {
+			need += r.width(r.tiny, l)
+		}
+		extra := (room - (len(row)-1)*gap - need) / len(row)
+		x := left
+		for i, l := range row {
+			w := r.width(r.tiny, l) + extra
+			out[start+i] = image.Rect(x, keys[start+i].Min.Y, x+w, keys[start+i].Max.Y)
+			x += w + gap
+		}
+	}
+	return out
+}
+
+// frLangLabels are the languages' keys, each in its own words.
+func frLangLabels() []string {
+	out := make([]string, len(frLangs))
+	for i, l := range frLangs {
+		out[i] = frLangLabel(l)
+	}
+	return out
+}
+
+// frKeyRects are where n keys go in two rows over the buttons, the first row the fuller.
+func (r *renderer) frKeyRects(n int) []image.Rectangle {
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
 	gap, h := r.s(14), r.s(50)
-	per := (len(frRooms) + 1) / 2
+	per := (n + 1) / 2
 	w := (room - (per-1)*gap) / per
 	top := r.h - r.s(64) - r.s(72) - r.s(16) - 2*h - gap
-	out := make([]image.Rectangle, len(frRooms))
-	for i := range frRooms {
+	out := make([]image.Rectangle, n)
+	for i := range n {
 		x, y := left+(i%per)*(w+gap), top+(i/per)*(h+gap)
 		out[i] = image.Rect(x, y, x+w, y+h)
 	}
@@ -197,10 +250,44 @@ func (r *renderer) frButtonRects(buttons []frButton) []image.Rectangle {
 	return out
 }
 
+// frKeyView is whether the Home Assistant step shows the key and its QR code.
+func frKeyView(v firstRunView) bool {
+	return v.step == frHome && !v.home && v.adopt.IsZero() && v.showKey && v.key != "" && v.wifi.Address != ""
+}
+
+// frShowsBack is whether the step shows Back: on the steps that have one (firstrun.HasBack), and not
+// while the keyboard is up (it has Cancel), a rename restarts the daemon, or the key is up (as on the
+// Spot: the key is read off the screen, and Back would take it away).
+func frShowsBack(v firstRunView) bool {
+	return firstrun.HasBack(v.step) && v.typing == "" && !v.renaming && !frKeyView(v)
+}
+
+// frBackMark is Back's face: a chevron, which needs no words in any language. The buttons' row along
+// the foot has no room for one more on the Home Assistant step of a Show 5.
+const frBackMark = "‹"
+
+// frBackRect is where Back goes: a square key at the left of the title, the way a page's back arrow
+// sits, apart from the step's own buttons along the foot.
+func (r *renderer) frBackRect() image.Rectangle {
+	left := r.margin + r.s(40)
+	return image.Rect(left, r.s(76), left+r.s(60), r.s(136))
+}
+
+// frTitleIndent is how far the title moves right for Back beside it.
+func (r *renderer) frTitleIndent(v firstRunView) int {
+	if !frShowsBack(v) {
+		return 0
+	}
+	return r.s(76)
+}
+
 // firstRunText is a step's title, its lines, and a smaller note under them, in the screen's language.
 // Names, the network and addresses go into the words as they are.
 func firstRunText(v firstRunView, now time.Time) (string, []string, string) {
 	switch v.step {
+	case frLanguage:
+		// One line: the languages take the rest of the card.
+		return tr("firstrun_title_language"), []string{frClockLine(now, v.clock24)}, ""
 	case frWifi:
 		if !v.wifi.Connected {
 			return tr("firstrun_title_wifi"), []string{

@@ -42,7 +42,7 @@ var soundTitles = map[string][2]string{
 // soundsSection lists the sounds, whether each is the device's own or one sent here, and takes a file
 // for any of them.
 func soundsSection(w http.ResponseWriter, token string) {
-	fieldsetOpen(w, "sounds", "Sounds of your own")
+	sectionOpen(w, "sounds", "Sounds of your own", soundsSummary(speaker.OwnSounds(), speaker.OwnState)...)
 	fmt.Fprint(w, `<p class="note" style="margin-top:0">A recording of your own plays in place of the device's sound. Play
 	  tries what plays now, quietly. To change one, choose a file beside it and press Upload.</p>`)
 	for _, name := range speaker.OwnSounds() {
@@ -83,7 +83,31 @@ func soundsSection(w http.ResponseWriter, token string) {
 	  (2 seconds for the volume, button, Bluetooth, listening-ended and Drop In sounds).
 	  Other formats are not converted here; ffmpeg makes one from anything:
 	  <code>ffmpeg -i chime.mp3 -ac 1 -ar 48000 -c:a pcm_s16le chime.wav</code>. Keep the wake sound short: the
-	  device listens for the request only once it has played.</p></fieldset>`)
+	  device listens for the request only once it has played.</p>`)
+	sectionClose(w)
+}
+
+// soundsSummary is the line on the shut card: how many of the sounds are the owner's own, and how many
+// of those do not play.
+func soundsSummary(names []string, state func(string) (bool, string)) []string {
+	own, bad := 0, 0
+	for _, name := range names {
+		has, problem := state(name)
+		if has {
+			own++
+			if problem != "" {
+				bad++
+			}
+		}
+	}
+	if own == 0 {
+		return []string{"All the device's own"}
+	}
+	out := []string{fmt.Sprintf("%d of your own", own)}
+	if bad > 0 {
+		out = append(out, fmt.Sprintf("%d do not play", bad))
+	}
+	return out
 }
 
 // sound takes one recording from a row's form: the token, then which sound it is for, then the file.

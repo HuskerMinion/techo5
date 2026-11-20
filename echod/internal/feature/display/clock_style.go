@@ -337,7 +337,9 @@ func placeDay(now time.Time, loc *time.Location) string {
 // hours, minutes and seconds, tens then ones.
 func binaryDigits(now time.Time) [6]int {
 	h := now.Hour()
-	if clockSuffix(now) != "" {
+	// A 12-hour clock counts 1 to 12 whether or not it shows its AM/PM, so this asks the clock format
+	// rather than whether there is an AM/PM to draw.
+	if !clock24.Load() {
 		h = (h+11)%12 + 1
 	}
 	m, s := now.Minute(), now.Second()

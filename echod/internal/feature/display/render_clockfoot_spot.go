@@ -58,7 +58,7 @@ func (r *roundRenderer) footTime(s roundScene, baseline int) {
 	hm := clockHM(s.now)
 	r.centered(f, hm, baseline, colText)
 	if ampm := clockSuffix(s.now); ampm != "" {
-		r.text(r.label, ampm, center+r.width(f, hm)/2+ampmGap, baseline, colAccent)
+		r.text(r.label, ampm, center+r.width(f, hm)/2+ampmGap, baseline, colText)
 	}
 }
 
