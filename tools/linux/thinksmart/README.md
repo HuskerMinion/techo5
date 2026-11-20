@@ -6,7 +6,7 @@ speaker, a camera with a sliding cover, a microphone switch and a light sensor. 
 with the 64-bit msm8953-mainline kernel postmarketOS packages and the Show's 32-bit userland, as on
 the 2nd gen Show 8 and the Skylight.
 
-Status: tried on one unit with the Himax panel. Not in the releases, and there is no installer yet:
+Status: tried on two units, one with each of the panels Lenovo fitted. Not in the releases, and there is no installer yet:
 the steps below are by hand, from a unit that already runs Linux.
 
 ## What works
@@ -15,14 +15,14 @@ the steps below are by hand, from a unit that already runs Linux.
 | --- | --- |
 | Display | msm DRM's fbdev emulation, 800x1280, drawn rotated as the Show 8's is. The device stands the other way up, so the kernel turns the picture half a turn on the display plane (`video=DSI-1:800x1280,rotate=180`) |
 | Backlight | the device tree's `backlight` node, 0 to 4095 |
-| Touch | Himax HX83100A ("Himax Touchscreen"), or FocalTech FT8201 on the other panel Lenovo fitted (edt-ft5x06, "generic ft5x06 (09)"); readings turned over with the picture. The FT8201 has not been tried |
+| Touch | Himax HX83100A ("Himax Touchscreen"), or FocalTech FT8201 on the other panel Lenovo fitted (edt-ft5x06, "generic ft5x06 (09)"); readings turned over with the picture. Both tried with a finger |
 | Speaker | TAS5782M behind the audio DSP: `hw:0,0` once the `QUAT_MI2S_RX Audio Mixer MultiMedia1` route is on; periods in multiples of 480 frames (q6asm-dai) |
 | Microphones | two digital microphones on `hw:0,1`, 48 kHz S16_LE, with the software echo reference |
 | Mute | the slide switch, `SW_MICROPHONE_INSERT` in gpio-keys; software cannot move it |
 | Buttons | volume up (gpio-keys) and down (pm8941_resin) |
 | Camera | Samsung S5KC505A through qcom-camss, its binned 1304x980 mode (echod/internal/hardware/camera/camera_camss.go); the lens cover is `SW_CAMERA_LENS_COVER` |
 | Light sensor | VCNL4200 through the vcnl4000 IIO driver, declared from device.conf |
-| Wi-Fi | QCA9379 on SDIO, ath10k |
+| Wi-Fi | QCA9379 on SDIO, ath10k, with power save off: with it on a unit stopped answering the network for hours while it went on running |
 | Bluetooth | the QCA9379's controller, hci_uart |
 | Firewall | techo5-firewall as on every Show, with `xt_owner` and `xt_recent` built for this kernel |
 
@@ -59,6 +59,9 @@ modules in the store are the ones for it. What goes with it:
   describes (driver/tas5782m/README.md there): `snd-soc-tas5782m.ko` (rickx's driver; without it
   there is no sound card), `vcnl4000.ko`, `s5kc505a.ko`, and from `kernel/netfilter` here `xt_owner.ko`
   and `xt_recent.ko`. `depmod` is run over the tree afterwards.
+- Three of the package's own modules rebuilt with that project's patches, in place of the package's:
+  `q6asm.ko` and `q6asm-dai.ko` (driver/q6asm there: without them playback stalls when a stream is
+  stopped and started again, which the daemon does all the time) and `venus-core.ko` (driver/venus).
 - The device tree with the camera in it, `apq8053-lenovo-cd-18781y-camera.dtb`, from the same
   project (driver/s5kc505a): `mkimage.sh -d`.
 

@@ -9,12 +9,12 @@ There is no installer for it yet, and no release carries its image. This page is
 you build the image yourself, from files taken off your own unit, and write it over the SoC's
 emergency download mode (EDL).
 
-> **Read this first.** This has been tried on one unit, with the Himax panel. It erases Android and
+> **Read this first.** This has been tried on two units, one with each panel. It erases Android and
 > everything on the unit, and it rewrites the eMMC's partition table twice. The full backup in step 1
 > is the only way back to Lenovo's firmware. Do it on a unit you can afford to lose, and keep it on
 > its power adapter the whole time. This is a hobby project, not a product.
 >
-> That unit ran the Debian project's image between steps 4 and 5, so two things here are written
+> Both units ran the Debian project's image between steps 4 and 5, so two things here are written
 > from how they should go and not from having been done: step 6 run from the bootstrap (it was run
 > from Debian), and the rescue screen (no slot has failed to start yet).
 
@@ -32,8 +32,7 @@ Placeholders: `<unit>` is the unit's address on your network, `<uuid>` a UUID yo
 - updates into the spare of two slots.
 
 What doesn't: nothing updates the kernel or its modules, the screen has no portrait layout, and
-the rescue environment is reached over Wi-Fi only (the kernel has no USB gadget). Lenovo fitted two
-panels; the one with the FocalTech FT8201 touch controller has not been tried.
+the rescue environment is reached over Wi-Fi only (the kernel has no USB gadget).
 
 The hardware notes, and how the unit boots, are in
 [tools/linux/thinksmart/README.md](../tools/linux/thinksmart/README.md).
@@ -126,7 +125,7 @@ ssh root@<unit> 'tar -C /lib --exclude=msm-firmware-loader -cf - firmware' > fir
 
 ## 4. The modules the package does not have
 
-Five modules are built against the kernel's source (msm8953-mainline `v7.1.3-r0`) and the unit's
+Eight modules are built against the kernel's source (msm8953-mainline `v7.1.3-r0`) and the unit's
 own `/boot/config`, with clang 22, as the Debian project's
 [driver/tas5782m/README.md](https://github.com/m0s4ik/thinksmart-view-debian/blob/main/driver/tas5782m/README.md)
 describes: built with GCC they load and then fail.
@@ -137,8 +136,12 @@ describes: built with GCC they load and then fail.
 | `vcnl4000.ko` | its `driver/vcnl4000` | no light sensor |
 | `s5kc505a.ko`, and `apq8053-lenovo-cd-18781y-camera.dtb` | its `driver/s5kc505a` | no camera |
 | `xt_owner.ko`, `xt_recent.ko` | [tools/linux/thinksmart/kernel/netfilter](../tools/linux/thinksmart/kernel/netfilter) here | the firewall leaves the video decoder unfenced and AirPlay 2 off |
+| `q6asm.ko`, `q6asm-dai.ko` | its `driver/q6asm`, in place of the package's own | playback stalls when a stream stops and starts again |
+| `venus-core.ko` | its `driver/venus`, in place of the package's own | no hardware video decoder |
 
-They go into the modules' `extra/`, and `depmod` makes the index again:
+The first five go into the modules' `extra/`, the last three over the package's own files
+(`kernel/sound/soc/qcom/qdsp6/` and `kernel/drivers/media/platform/qcom/venus/`), and `depmod` makes
+the index again:
 
 ```
 mkdir tree && tar -xf modules.tar -C tree
