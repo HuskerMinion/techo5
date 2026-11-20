@@ -155,6 +155,36 @@ func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
 	}
 }
 
+// A 12-hour clock set to go without its AM/PM keeps that through the language step: a language
+// picking its clock, and the clock button, change only 12 or 24 hours.
+func TestFirstRunKeepsNoAMPM(t *testing.T) {
+	d, _ := firstRunDisplay(t, true, true)
+	was24, wasBare := clock24.Load(), noAMPM.Load()
+	t.Cleanup(func() { clock24.Store(was24); noAMPM.Store(wasBare) })
+	if err := config.Set().Screen().ClockFormat(false, true); err != nil {
+		t.Fatal(err)
+	}
+	setClockFormat(nil, false, true)
+	setStep(t, frLanguage)
+	kept := func(what string, want24 bool) {
+		t.Helper()
+		if c := config.Get().Screen; c.Clock24 != want24 || !c.NoAMPM || clock24.Load() != want24 || !noAMPM.Load() {
+			t.Fatalf("%s: 24 hours %v, no AM/PM %v (drawn %v, %v); want 24 hours %v and no AM/PM kept",
+				what, c.Clock24, c.NoAMPM, clock24.Load(), noAMPM.Load(), want24)
+		}
+	}
+	de := -1
+	for i, l := range frLangs {
+		if l.Code == "de" {
+			de = i
+		}
+	}
+	frTapIn(d, d.r.frLangRects()[de])
+	kept("a tap on Deutsch", true)
+	tapButton(t, d, "clock")
+	kept("the clock button", false)
+}
+
 // Japanese is named in its own script once a font here draws it, and romanized until then, rather
 // than as boxes: its font is fetched only once Japanese is chosen, and maybe not before the Wi-Fi.
 func TestFirstRunNamesJapaneseItCanDraw(t *testing.T) {
