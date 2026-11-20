@@ -26,7 +26,7 @@
 # nqptp and shairport-sync talk through shared memory whose layout each names by a version (smi11 here),
 # so the two are only ever moved on together.
 #
-# Two changes are made to shairport-sync, both beside this script and applied in this order:
+# Three changes are made to shairport-sync, all beside this script and applied in this order:
 #
 # shairport-sync-stdout-delay.patch gives its stdout backend a delay(), which it has none of. The daemon says in
 # a file (SPS_STDOUT_DELAY_FILE) how much of what it read is still to be heard; with that and what waits unread
@@ -36,7 +36,13 @@
 # shairport-sync-ssrc0-fallback.patch (iVolt1's, from issue #468) plays Music Assistant's buffered AirPlay 2
 # stream, whose sender sends SSRC 0 on every packet and 16-bit sequence numbers: while a session has sent no
 # real SSRC, the format comes from SETUP's audioFormat and flushes are compared in 16 bits. The first real SSRC
-# turns that off, so Apple senders are handled as before. It goes once Music Assistant's sender is fixed.
+# turns that off, so Apple senders are handled as before. It goes once Music Assistant releases older than
+# its fixed sender (airplay-cli 0.5.11) have had time to go.
+#
+# shairport-sync-ma-format.patch is upstream's fix for that fixed sender, backported from the development
+# branch (commit deb83848, upstream issue 2319; TECHO5 issue #664): it sends ALAC 44.1 kHz/16-bit, its
+# default, as SSRC 0x12000000, which 5.6.3 drops as unknown, so it played as silence. It goes when 5.6.4
+# is tagged and this script moves to it.
 #
 # One change is made to nqptp: nqptp-run-as-user.patch, beside this script, adds -u <user>. nqptp needs
 # root only to bind PTP's ports (319 and 320); with -u it then becomes that user, with its groups, before it
@@ -136,7 +142,7 @@ unpack nqptp-$NQPTP_VERSION.tar.gz nqptp
 
 echo "== shairport-sync $SPS_VERSION with AirPlay 2"
 unpack shairport-sync-$SPS_VERSION.tar.gz shairport-sync
-for p in shairport-sync-stdout-delay shairport-sync-ssrc0-fallback; do
+for p in shairport-sync-stdout-delay shairport-sync-ssrc0-fallback shairport-sync-ma-format; do
 	(cd "$WORK/shairport-sync" && patch -p1 --forward --no-backup-if-mismatch < "$ROOT/tools/linux/$p.patch")
 done
 # The small FFmpeg is found before anything in the Alpine root, which has none.

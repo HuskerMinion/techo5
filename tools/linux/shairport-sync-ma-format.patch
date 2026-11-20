@@ -1,0 +1,24 @@
+shairport-sync-ma-format.patch: let shairport-sync play Music Assistant's fixed buffered AirPlay 2 stream.
+
+Music Assistant's AirPlay 2 sender (airplay-cli 0.5.11 and later) names each buffered packet's format in
+its SSRC as Apple senders do: the audio format's bit index in the top byte. Its default format, ALAC
+44.1 kHz/16-bit, then arrives as 0x12000000, which shairport-sync 5.6.3 doesn't know (its code for that
+format, 0x0000FACE, was made up) and drops as an unknown SSRC, so the stream plays as silence. This is
+upstream's own fix, commit deb8384858b72bb7e4a707c973187298ffcdbabf on the development branch
+(https://github.com/mikebrady/shairport-sync/issues/2319), which Music Assistant's developers tested with
+their sender. TECHO5 issue #664.
+
+Applied last, after shairport-sync-stdout-delay.patch and shairport-sync-ssrc0-fallback.patch, against
+shairport-sync 5.6.3. Drop it when shairport-sync 5.6.4 is tagged and build-shairport-sync.sh moves to it.
+
+--- a/player.h
++++ b/player.h
+@@ -151,7 +151,7 @@
+ // Dolby Atmos seems to be 7P1
+ typedef enum {
+   SSRC_NONE = 0,
+-  ALAC_44100_S16_2 = 0x0000FACE, // this is made up
++  ALAC_44100_S16_2 = 0x12000000,
+   ALAC_48000_S24_2 = 0x15000000,
+   ALAC_44100_S24_2 = 0x0000FAC4, // made up: buffered ALAC 44.1k/24 from SSRC-0 senders
+   AAC_44100_F24_2 = 0x16000000,
