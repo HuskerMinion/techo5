@@ -57,6 +57,8 @@ func slideshowRows(demo bool) []settingRow {
 	}
 	// The day each photo was taken, from any source (#502): Immich says where too.
 	rows = append(rows, settingRow{id: "photocaption", label: tr("ui_date_and_place"), sub: tr("ui_on_the_screensaver_under_each_photo"), kind: ctlToggle, on: home.Get().SlideshowCaption()})
+	// Each photo's time going, along the foot or round the edge (#656).
+	rows = append(rows, settingRow{id: "photocountdown", label: tr("ui_photo_countdown"), sub: tr("ui_photo_countdown_sub"), kind: ctlToggle, on: home.Get().SlideshowCountdown()})
 	if home.IsImmich(source) {
 		// Immich's own: its favorites. A person and the days to show are set on the setup page or in Home
 		// Assistant, which have a keyboard.

@@ -3159,6 +3159,7 @@ func (d *Display) frame() (next time.Duration) {
 		s.saverWeather = home.Get().SlideshowWeather()
 		if s.slideshowScreensaver != nil && !home.Get().SlideshowArt() {
 			s.slideshowCaptions = home.Get().SlideshowCaptions()
+			s.saverDone, s.saverCountdown = home.Get().SlideshowProgress(now)
 		}
 	}
 	// Under the screensaver the clock is not up, and a swipe is for its photos (#502). clockUp used to be

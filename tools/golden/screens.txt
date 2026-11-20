@@ -211,3 +211,5 @@ show/library-artists-playing-1280x800.png
 show/nowplaying-seek-show8.png
 show/nowplaying-modern-seek-show8.png
 spot/record-word-take.png
+show/saver-countdown-show8.png
+spot/saver-spot-countdown.png

@@ -243,6 +243,8 @@ type Feature struct {
 	slideshowCaptionSw *esphome.Switch
 	// slideshowWeatherSw puts the weather beside the screensaver's clock (#502).
 	slideshowWeatherSw *esphome.Switch
+	// slideshowCountdownSw draws each photo's time going over the screensaver (#656).
+	slideshowCountdownSw *esphome.Switch
 	// immichFavoritesSw, immichPersonTxt, immichFromTxt and immichToTxt narrow an Immich source.
 	immichFavoritesSw *esphome.Switch
 	immichPersonTxt   *esphome.Text
@@ -253,6 +255,9 @@ type Feature struct {
 	// slideshowGen counts the slideshow's changes of source (changeSlideshow, ResetImmich), so a list
 	// gathered for the source before is not kept for the one after.
 	slideshowGen uint64
+	// slideshowTicks is when slideshowLoop started, its looks every slideshowTick from then; zero
+	// while it is not running.
+	slideshowTicks time.Time
 }
 
 // forecastEvery is how often the forecast is refreshed while there is a weather entity.
@@ -492,6 +497,7 @@ func (f *Feature) Restore(c config.Config) {
 		f.slideshowPairsSw.Set(c.Home.Slideshow.Pairs && PairsHere())
 		f.slideshowCaptionSw.Set(c.Home.Slideshow.Caption)
 		f.slideshowWeatherSw.Set(c.Home.Slideshow.Weather)
+		f.slideshowCountdownSw.Set(c.Home.Slideshow.Countdown)
 		f.immichFavoritesSw.Set(c.Home.Slideshow.ImmichFavorites)
 		f.immichPersonTxt.Set(c.Home.Slideshow.ImmichPerson)
 		f.immichFromTxt.Set(c.Home.Slideshow.ImmichFrom)

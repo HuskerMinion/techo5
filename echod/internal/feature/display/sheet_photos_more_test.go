@@ -39,3 +39,32 @@ func TestImmichPhotoRows(t *testing.T) {
 		t.Errorf("no Immich rows for an Immich source: %v", got)
 	}
 }
+
+// Photo countdown is a row with the photos' own, off at first, and a tap turns it on and off (#656).
+func TestThePhotoCountdownRow(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Home().Slideshow(config.Slideshow{Mode: config.SlideshowScreensaver, Source: home.LocalPhotos}); err != nil {
+		t.Fatal(err)
+	}
+	row := func() (settingRow, bool) {
+		for _, r := range slideshowRows(false) {
+			if r.id == "photocountdown" {
+				return r, true
+			}
+		}
+		return settingRow{}, false
+	}
+	r, ok := row()
+	if !ok || r.kind != ctlToggle || r.on {
+		t.Fatalf("the row is %+v (there: %v), want a switch, off", r, ok)
+	}
+	d := &Display{}
+	d.rowTap("photocountdown", partMain, 0)
+	if r, _ := row(); !r.on || !config.Get().Home.Slideshow.Countdown {
+		t.Error("a tap did not turn it on")
+	}
+	d.rowTap("photocountdown", partMain, 0)
+	if r, _ := row(); r.on || config.Get().Home.Slideshow.Countdown {
+		t.Error("a second tap did not turn it off")
+	}
+}

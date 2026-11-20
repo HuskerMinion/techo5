@@ -188,6 +188,11 @@ type Slideshow struct {
 	// the clock off: a photo alone stays a photo alone.
 	Weather bool `json:"weather,omitempty"`
 
+	// Countdown draws how much of a photo's time has gone over the Screensaver's photo (#656): a thin
+	// line along the foot of the Show's screen, a thin ring round the Spot's, filling until the next
+	// photo. Off is the photo with nothing of the kind.
+	Countdown bool `json:"countdown,omitempty"`
+
 	// IdleMinutes is how long Screensaver mode waits for, zero for the default
 	// (SlideshowIdleDefault). Unused in Background mode.
 	IdleMinutes int `json:"idle_minutes,omitempty"`

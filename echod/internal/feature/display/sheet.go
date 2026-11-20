@@ -1449,6 +1449,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowPairs(!home.Get().SlideshowPairs())
 	case "photocaption":
 		home.Get().SetSlideshowCaption(!home.Get().SlideshowCaption())
+	case "photocountdown":
+		home.Get().SetSlideshowCountdown(!home.Get().SlideshowCountdown())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
 	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",

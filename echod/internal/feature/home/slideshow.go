@@ -298,6 +298,15 @@ func (f *Feature) buildSlideshowSelect() {
 		},
 		OnCommand: func(on bool) { f.SetSlideshowWeather(on) },
 	}
+	f.slideshowCountdownSw = &esphome.Switch{
+		Base: esphome.Base{
+			ObjectID: "slideshow_countdown",
+			Name:     "Photo countdown",
+			Icon:     "mdi:timer-sand",
+			Category: esphome.CategoryConfig,
+		},
+		OnCommand: func(on bool) { f.SetSlideshowCountdown(on) },
+	}
 	f.immichFavoritesSw = &esphome.Switch{
 		Base: esphome.Base{
 			ObjectID: "immich_favorites",
@@ -750,6 +759,67 @@ func (f *Feature) SetSlideshowWeather(on bool) {
 // SlideshowWeather is whether the screensaver's clock has the weather with it.
 func (f *Feature) SlideshowWeather() bool { return config.Get().Home.Slideshow.Weather }
 
+// SetSlideshowCountdown draws each photo's time going over the screensaver, or not (#656). As with the
+// weather, only how the screensaver is drawn changes.
+func (f *Feature) SetSlideshowCountdown(on bool) {
+	f.slideshowCountdownSw.Set(on)
+	s := config.Get().Home.Slideshow
+	if s.Countdown == on {
+		return
+	}
+	s.Countdown = on
+	if err := config.Set().Home().Slideshow(s); err != nil {
+		slog.Warn("home: saving the photo countdown failed", "err", err)
+		return
+	}
+	f.Changed.Emit(struct{}{})
+}
+
+// SlideshowCountdown is whether the screensaver draws each photo's time going.
+func (f *Feature) SlideshowCountdown() bool { return config.Get().Home.Slideshow.Countdown }
+
+// SlideshowProgress is how much of the screensaver photo's time has gone at now, 0 as it comes up to 1
+// as the next one is due, for the countdown to draw; false when there is none to draw: the countdown
+// off, the slideshow not in Screensaver mode, the weather art up, or no photo yet. A new photo starts it
+// again from 0, one a swipe turned to too, whose time is the swipe's hold.
+func (f *Feature) SlideshowProgress(now time.Time) (float64, bool) {
+	h := config.Get().Home.Slideshow
+	if !h.Countdown || h.Mode != config.SlideshowScreensaver || h.Art {
+		return 0, false
+	}
+	f.mu.Lock()
+	up, at, hold, ticks := f.slideshow.image != nil, f.slideshow.at, f.slideshow.holdUntil, f.slideshowTicks
+	f.mu.Unlock()
+	if !up {
+		return 0, false
+	}
+	return photoDone(now, at, photoEnd(at, slideshowInterval(h), hold, ticks)), true
+}
+
+// photoEnd is when the slideshow moves on from a photo put up at at: once it has had its time every,
+// and a swipe's hold is over, at the first of slideshowLoop's looks from then on (one every
+// slideshowTick from ticks). With no loop running (ticks zero), the moment it is due.
+func photoEnd(at time.Time, every time.Duration, hold, ticks time.Time) time.Time {
+	due := at.Add(every)
+	if hold.After(due) {
+		due = hold
+	}
+	if ticks.IsZero() || !due.After(ticks) {
+		return due
+	}
+	looks := (due.Sub(ticks) + slideshowTick - 1) / slideshowTick
+	return ticks.Add(looks * slideshowTick)
+}
+
+// photoDone is how much of the time from from to to has gone at now, 0 to 1. A photo already due (a
+// re-read brought the next one forward) is all gone.
+func photoDone(now, from, to time.Time) float64 {
+	if !to.After(from) {
+		return 1
+	}
+	return min(max(float64(now.Sub(from))/float64(to.Sub(from)), 0), 1)
+}
+
 // SetImmichFavorites shows only Immich's favorites, or every photo the source has.
 func (f *Feature) SetImmichFavorites(on bool) {
 	f.changeSlideshow(func(s *config.Slideshow) { s.ImmichFavorites = on })
@@ -901,9 +971,16 @@ func photoSources(top hass.Media) []hass.Media {
 	return out
 }
 
+// slideshowTick is how often slideshowLoop looks whether a photo has had its time: the next photo comes
+// at the first look after that, not at the moment it is due.
+const slideshowTick = 30 * time.Second
+
 // slideshowLoop advances the slideshow while Background mode is on. Run from Feature.Run.
 func (f *Feature) slideshowLoop(ctx context.Context) {
-	t := time.NewTicker(30 * time.Second)
+	f.mu.Lock()
+	f.slideshowTicks = time.Now() // the countdown works out the looks from it (photoEnd)
+	f.mu.Unlock()
+	t := time.NewTicker(slideshowTick)
 	defer t.Stop()
 	for {
 		f.advanceSlideshow()

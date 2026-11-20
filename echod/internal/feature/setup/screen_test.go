@@ -242,3 +242,41 @@ func TestTheSwipeNoteOnlyWithATapOnTheClock(t *testing.T) {
 		}
 	}
 }
+
+// Photo countdown on the setup page (#656): in with the screensaver's own choices, unticked on a new
+// device, saved ticked and saved unticked again; a form from before it had the screensaver's rows leaves
+// it as it is.
+func TestThePhotoCountdownOnTheSetupPage(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	SetScreen(&ScreenChoices{Styles: []string{"Classic"}, Current: func() int { return 0 }, Choose: func(int) {}})
+	t.Cleanup(func() { SetScreen(nil) })
+	shown := func() string {
+		w := httptest.NewRecorder()
+		screenSection(w, "tok")
+		s := w.Body.String()
+		saver := s[strings.Index(s, `<div class="saveronly">`):]
+		return saver[:strings.Index(saver, `</div>`)]
+	}
+	if !strings.Contains(shown(), `name="savercountdown" value="yes" style="width:auto">`) {
+		t.Error("not offered unticked with the screensaver's choices on a new device")
+	}
+	ticked := screenForm("0", config.SlideshowScreensaver, false)
+	ticked.Set("saverclock", "")
+	ticked.Set("savercountdown", "yes")
+	if p := saveScreen(form(ticked)); p != "" {
+		t.Fatal(p)
+	}
+	if !home.Get().SlideshowCountdown() {
+		t.Fatal("ticking it did not turn it on")
+	}
+	if !strings.Contains(shown(), `name="savercountdown" value="yes" style="width:auto" checked`) {
+		t.Error("not ticked once it is on")
+	}
+	if p := saveScreen(form(screenForm("0", config.SlideshowScreensaver, false))); p != "" || !home.Get().SlideshowCountdown() {
+		t.Errorf("a form without the screensaver's rows turned it off (%s)", p)
+	}
+	ticked.Del("savercountdown")
+	if p := saveScreen(form(ticked)); p != "" || home.Get().SlideshowCountdown() {
+		t.Errorf("unticking it left it on (%s)", p)
+	}
+}

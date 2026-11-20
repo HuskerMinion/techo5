@@ -265,6 +265,7 @@ var registered = []string{
 	"slideshow_weather_art",
 	"slideshow_whole_photo",
 	"slideshow_caption",
+	"slideshow_countdown",
 	"slideshow_pairs",
 	"immich_favorites",
 	"immich_from",

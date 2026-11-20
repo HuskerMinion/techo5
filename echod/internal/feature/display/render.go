@@ -247,6 +247,9 @@ type scene struct {
 	slideshowCaptions []home.PhotoCaption
 	// saverWeather puts the weather with the screensaver's clock (#502).
 	saverWeather bool
+	// saverCountdown draws how much of the photo's time has gone, saverDone of it (#656).
+	saverCountdown bool
+	saverDone      float64
 
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking; it sits in
 	// the footer so a folder that went away is visible rather than silently retried.

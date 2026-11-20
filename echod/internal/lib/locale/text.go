@@ -673,6 +673,8 @@ var uiEnglish = map[string]string{
 	"ui_on_a_call":                                    "On a call",
 	"ui_on_but_no_key_yet_so_nothing_listens":         "On, but no key yet, so nothing listens",
 	"ui_on_the_screensaver_under_each_photo":          "On the screensaver, under each photo",
+	"ui_photo_countdown":                              "Photo countdown",
+	"ui_photo_countdown_sub":                          "On the screensaver, fills while each photo is up",
 	"ui_on_this_device":                               "On this device",
 	"ui_on_turn_off_to_remove_the_pin":                "On: turn off to remove the PIN",
 	"ui_open_the_dashboard_or_the_deck_or_nothing":    "Open the dashboard or the deck, or nothing",
@@ -2428,6 +2430,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_a_call":                                    "Pendant un appel",
 		"ui_on_but_no_key_yet_so_nothing_listens":         "Activé, mais aucune clé n'est encore définie : rien n'écoute",
 		"ui_on_the_screensaver_under_each_photo":          "Sur l'écran de veille, sous chaque photo",
+		"ui_photo_countdown":                              "Compte à rebours des photos",
+		"ui_photo_countdown_sub":                          "Sur l'écran de veille, se remplit pendant chaque photo",
 		"ui_on_this_device":                               "Sur cet appareil",
 		"ui_on_turn_off_to_remove_the_pin":                "Activé : désactivez cette option pour supprimer le code PIN",
 		"ui_open_the_dashboard_or_the_deck_or_nothing":    "Ouvrir le tableau de bord, le panneau ou ne rien faire",
@@ -3482,6 +3486,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_a_call":                                    "Nunha chamada",
 		"ui_on_but_no_key_yet_so_nothing_listens":         "Activado, pero aínda sen clave, así que nada escoita",
 		"ui_on_the_screensaver_under_each_photo":          "No protector de pantalla, debaixo de cada foto",
+		"ui_photo_countdown":                              "Conta atrás das fotos",
+		"ui_photo_countdown_sub":                          "No protector de pantalla, énchese mentres se ve cada foto",
 		"ui_on_this_device":                               "Neste dispositivo",
 		"ui_on_turn_off_to_remove_the_pin":                "Activado: desactívao para quitar o PIN",
 		"ui_open_the_dashboard_or_the_deck_or_nothing":    "Abrir o panel ou o deck, ou nada",
@@ -4537,6 +4543,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_a_call":                                    "Durante una chiamata",
 		"ui_on_but_no_key_yet_so_nothing_listens":         "Attivo, ma senza una chiave SSH non può accettare connessioni",
 		"ui_on_the_screensaver_under_each_photo":          "Nel salvaschermo, sotto ogni foto",
+		"ui_photo_countdown":                              "Conto alla rovescia delle foto",
+		"ui_photo_countdown_sub":                          "Nel salvaschermo, si riempie durante ogni foto",
 		"ui_on_this_device":                               "Su questo dispositivo",
 		"ui_on_turn_off_to_remove_the_pin":                "Attivato: disattivalo per rimuovere il PIN",
 		"ui_open_the_dashboard_or_the_deck_or_nothing":    "Il tocco apre Dashboard o Deck oppure non fa nulla",
@@ -6317,6 +6325,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_but_no_key_yet_so_nothing_listens": "Aan, maar nog geen sleutel, dus er luistert niets",
 		// On the screensaver, under each photo
 		"ui_on_the_screensaver_under_each_photo": "Op de schermbeveiliging, onder elke foto",
+		"ui_photo_countdown":                     "Fotoaftelling",
+		"ui_photo_countdown_sub":                 "Op de schermbeveiliging, loopt vol zolang elke foto te zien is",
 		// On this device
 		"ui_on_this_device": "Op dit apparaat",
 		// On: turn off to remove the PIN
@@ -7413,6 +7423,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_a_call":                                    "通話中",
 		"ui_on_but_no_key_yet_so_nothing_listens":         "有効ですが、SSHキーがないため接続できません",
 		"ui_on_the_screensaver_under_each_photo":          "スクリーンセーバーの写真の下に表示",
+		"ui_photo_countdown":                              "写真のカウントダウン",
+		"ui_photo_countdown_sub":                          "スクリーンセーバーで、写真ごとの表示時間を示します",
 		"ui_on_this_device":                               "この端末",
 		"ui_on_turn_off_to_remove_the_pin":                "有効：オフにするとPINを削除",
 		"ui_open_the_dashboard_or_the_deck_or_nothing":    "ダッシュボード・デッキを開く、または何もしない",
@@ -8968,6 +8980,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_but_no_key_yet_so_nothing_listens": "An, aber noch kein Schlüssel, also hört nichts zu",
 		// On the screensaver, under each photo
 		"ui_on_the_screensaver_under_each_photo": "Im Bildschirmschoner, unter jedem Foto",
+		"ui_photo_countdown":                     "Foto-Countdown",
+		"ui_photo_countdown_sub":                 "Im Bildschirmschoner, füllt sich, solange ein Foto zu sehen ist",
 		// On this device
 		"ui_on_this_device": "Auf diesem Gerät",
 		// On: turn off to remove the PIN
@@ -10164,6 +10178,8 @@ var uiTranslations = map[string]map[string]string{
 		"ui_on_a_call":                                    "Aramada",
 		"ui_on_but_no_key_yet_so_nothing_listens":         "Açık ama henüz anahtar yok, hiçbir şey dinlemiyor",
 		"ui_on_the_screensaver_under_each_photo":          "Ekran koruyucuda, her fotoğrafın altında",
+		"ui_photo_countdown":                              "Fotoğraf geri sayımı",
+		"ui_photo_countdown_sub":                          "Ekran koruyucuda, her fotoğraf gösterilirken dolar",
 		"ui_on_this_device":                               "Bu cihazda",
 		"ui_on_turn_off_to_remove_the_pin":                "Açık: PIN'i kaldırmak için kapatın",
 		"ui_open_the_dashboard_or_the_deck_or_nothing":    "Dashboard'u veya deck'i aç ya da hiçbir şey",

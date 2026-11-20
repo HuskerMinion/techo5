@@ -33,6 +33,7 @@ func (r *renderer) artWeather(s scene) {
 // off — the wash plus a clock, small (cornerClock) or normal size (the same layout bigClock uses,
 // without its weather and timers, which belong to the ordinary idle page).
 func (r *renderer) slideshowScreensaverPage(s scene) {
+	defer r.photoCountdown(s)
 	if s.slideshowOverlay == config.SlideshowOverlayOff {
 		draw.Draw(r.dst, r.dst.Rect, s.slideshowScreensaver, s.slideshowScreensaver.Bounds().Min, draw.Src)
 		r.artWeather(s)
@@ -103,6 +104,29 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 		}
 	})
 }
+
+// photoCountdown is how much of the screensaver photo's time has gone (#656): a thin line along the
+// very foot of the screen, filling from the left until the next photo, over a fainter one the whole
+// way across that says where it ends. Both are the words' color, see-through, as faint as a line can
+// be and still be seen: the photo shows through, and they dim with the screen as the clock does.
+func (r *renderer) photoCountdown(s scene) {
+	if !s.saverCountdown {
+		return
+	}
+	top := r.h - max(r.s(countdownThick), 2)
+	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(washOf(cream, countdownTrack)), image.Point{}, draw.Over)
+	if done := int(float64(r.w)*min(max(s.saverDone, 0), 1) + 0.5); done > 0 {
+		draw.Draw(r.dst, image.Rect(0, top, done, r.h), image.NewUniform(washOf(cream, countdownFill)), image.Point{}, draw.Over)
+	}
+}
+
+// countdownThick is how thick the countdown's line is, in the Show 5's pixels; countdownTrack and
+// countdownFill how opaque its two parts are, out of 255.
+const (
+	countdownThick = 3
+	countdownTrack = 40
+	countdownFill  = 110
+)
 
 // saverWeather is the weather with the screensaver's clock (#502): the sky's icon and the temperature,
 // nothing more, the words' baseline at base. align lines it up on x: -1 starting there, 0 centered on

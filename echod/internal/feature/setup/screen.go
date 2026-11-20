@@ -230,8 +230,10 @@ func screenSection(w http.ResponseWriter, token string) {
 	  the top, at the top for a clock at the bottom.</p>
 	 <p><label><input type="checkbox" name="saverweather" value="yes" style="width:auto"%s> Weather with the
 	  screensaver clock</label></p>
+	 <p><label><input type="checkbox" name="savercountdown" value="yes" style="width:auto"%s> Photo countdown: a
+	  thin line along the foot of the screen, a ring round a round one, fills while each photo is up</label></p>
 	 <p class="note">On the screensaver, a swipe left or right goes to the next photo or the one before, and that
-	  photo stays up for five minutes.</p></div>`, checked(home.Get().SlideshowWeather()))
+	  photo stays up for five minutes.</p></div>`, checked(home.Get().SlideshowWeather()), checked(home.Get().SlideshowCountdown()))
 	alsoOnRow(w, token, "screen")
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
 	sectionClose(w)
@@ -356,6 +358,7 @@ func saveScreen(r *http.Request) string {
 			h.ChooseSlideshowClockAt(at[0])
 		}
 		h.SetSlideshowWeather(r.PostFormValue("saverweather") == "yes")
+		h.SetSlideshowCountdown(r.PostFormValue("savercountdown") == "yes")
 	}
 	slog.Info("setup page: screen set", "clock style", strings.ToLower(s.Styles[i]), "slideshow", mode, "art", h.SlideshowArt())
 	return ""
