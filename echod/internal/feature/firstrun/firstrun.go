@@ -25,18 +25,20 @@ import (
 
 // The steps, in order. Hello and Done are the cards at either end; the rest are counted.
 const (
-	Hello   = ""
-	Wifi    = "wifi"
-	Zone    = "zone"
-	Name    = "name"
-	Home    = "home"
-	Updates = "updates"
-	Sound   = "sound"
-	Done    = "done"
+	Hello    = ""
+	Language = "language"
+	Wifi     = "wifi"
+	Zone     = "zone"
+	Name     = "name"
+	Home     = "home"
+	Updates  = "updates"
+	Sound    = "sound"
+	Done     = "done"
 )
 
-// steps are the same on every device: each face draws them its own way.
-var steps = []string{Hello, Wifi, Zone, Name, Home, Updates, Sound, Done}
+// steps are the same on every device with a screen: each face draws them its own way. The screen's
+// language and clock come first, so the rest of first run is in the words it was set to.
+var steps = []string{Hello, Language, Wifi, Zone, Name, Home, Updates, Sound, Done}
 
 // Steps is first run's steps, in order.
 func Steps() []string { return steps }
@@ -72,7 +74,7 @@ func After(s string) string {
 	return Done
 }
 
-// Number is a step's place among the counted ones, 1 for Wi-Fi, and how many there are; 0 for the
+// Number is a step's place among the counted ones, 1 for the first after Hello, and how many there are; 0 for the
 // cards at either end.
 func Number(s string) (n, of int) {
 	counted := steps[1 : len(steps)-1]
@@ -111,11 +113,12 @@ func Finish() {
 // Assistant has already had (it has been told a version, config.Update.LastVersion). Either is done, so
 // a device already in use never sees first run. Anything else, a device just installed, has it.
 //
-// First run still to do on a screen with no Wi-Fi network saved starts on the Wi-Fi step. A Dot with
+// First run still to do on a screen with no Wi-Fi network saved starts past the hello card, on the
+// language step, with Wi-Fi next. A Dot with
 // none gets one over Bluetooth: it offers Improv by itself 45 seconds after starting (feature/improv),
 // and its ring breathes orange (led.Splash) while first run waits.
 func Settle() {
-	defer startOnWifi()
+	defer startPastHello()
 	_, err := os.Stat(resetPath())
 	reset := err == nil
 	if reset {
@@ -255,13 +258,14 @@ func ResetForTests() {
 // puts back what the look calls.
 var background sync.WaitGroup
 
-// startOnWifi moves a first run at its start to the Wi-Fi step when no network is saved, on a device
-// whose first run has one (not a Panel's, whose tablet has the Wi-Fi).
-func startOnWifi() {
+// startPastHello moves a first run at its start past the hello card when no network is saved, on a
+// device whose first run has a Wi-Fi step (not a Panel's, whose tablet has the Wi-Fi): to the step
+// after Hello, the screen's language where there is one, else Wi-Fi.
+func startPastHello() {
 	if !Pending() || Step() != Hello || !hasStep(Wifi) || !wifi.Available() || len(wifi.Saved()) > 0 {
 		return
 	}
-	Go(Wifi)
+	Go(After(Hello))
 }
 
 func hasStep(s string) bool {

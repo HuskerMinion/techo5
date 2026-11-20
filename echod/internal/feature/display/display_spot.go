@@ -48,6 +48,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
@@ -403,6 +404,8 @@ func build() *Display {
 	d.auto.OnCommand = func(on bool) { d.setAuto(on, true) }
 	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
+	// First run's language step sets the clock too, on the screen or the setup page.
+	firstrun.OnClock(func(on bool) { setClockFormat(d.clock, on, config.Get().Screen.NoAMPM); d.wake() })
 	d.clockStyleSel = clockStyleSelect(d)
 	d.clockPos = clockPositionSelect(d.wake)
 	d.fontSel = fontSelect(d)

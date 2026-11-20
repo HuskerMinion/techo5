@@ -94,6 +94,15 @@ func TestFirstRunFitsInEveryLanguage(t *testing.T) {
 				t.Errorf("%s: the room %q is wider than its key", lang, room)
 			}
 		}
+		langs := r.frLangRects()
+		for i, l := range frLangLabels() {
+			if r.width(r.tiny, l) > langs[i].Dx()-r.s(10) {
+				t.Errorf("%s: the language %q is wider than its key", lang, l)
+			}
+			if langs[i].Max.X > right {
+				t.Errorf("%s: the language %q runs past the card", lang, l)
+			}
+		}
 		for _, title := range []string{tr("firstrun_name_this_device"), tr("firstrun_the_room_it_is_in"), tr("firstrun_type_a_room")} {
 			if r.width(r.small, title) > r.w-2*r.margin {
 				t.Errorf("%s: the keyboard's %q is wider than the screen", lang, title)
