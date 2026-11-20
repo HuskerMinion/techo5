@@ -431,7 +431,7 @@ func prefsFromPage(r *http.Request) string {
 		return "that is not one of the choices for how an alarm gets louder"
 	}
 	// The one write that can fail goes first: a failure then has changed nothing, as the page says.
-	if err := config.Set().Alarms().SunriseMinutes(sunrise); err != nil {
+	if err := alarm.Get().SetSunriseDefault(sunrise); err != nil {
 		return err.Error()
 	}
 	alarm.Get().SetSnooze(snooze)
