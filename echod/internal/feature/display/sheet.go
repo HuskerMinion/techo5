@@ -689,6 +689,19 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 			p.cur = alarmSunriseIndex(sv.draft.alarm)
 		}
 		return p, true
+	case "e.wake":
+		var cur config.WakeWith
+		if sv.draft != nil {
+			cur = sv.draft.alarm.Wake
+		}
+		p := pickerView{title: tr("wake_with"), cur: 0}
+		for i, w := range wakeOptions(cur) {
+			p.opts = append(p.opts, wakeLabel(w))
+			if w == cur {
+				p.cur = i
+			}
+		}
+		return p, true
 	case "atnight":
 		return pickerView{title: tr("at_night"), opts: atNightOptions, cur: atNightIndex()}, true
 	case "nightstyle":
@@ -1050,6 +1063,16 @@ func (d *Display) choose(id string, i int) {
 	case "e.sunrise":
 		if _, values := alarmSunrise(); i < len(values) {
 			d.editDraft(func(dr *alarmDraft) { dr.alarm.Sunrise = values[i] })
+		}
+	case "e.wake":
+		d.mu.Lock()
+		dr := d.draft
+		d.mu.Unlock()
+		if dr == nil {
+			break
+		}
+		if opts := wakeOptions(dr.alarm.Wake); i >= 0 && i < len(opts) {
+			d.editDraft(func(dr *alarmDraft) { dr.alarm.Wake = opts[i] })
 		}
 	case "slideshow":
 		if i < len(slideshowModes) {

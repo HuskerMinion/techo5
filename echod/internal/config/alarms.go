@@ -111,6 +111,49 @@ type Alarm struct {
 	// alarm, and at its time there is no sound and nothing to stop; the night ends instead, so the
 	// screen is back as by day until the night's next start. It always has a light (SunriseFor).
 	LightOnly bool `json:"light_only,omitempty"`
+
+	// Wake is music it wakes somebody with in place of the alarm sound (#651): a radio station or a
+	// Music Assistant favorite. None is the alarm sound, which is what every alarm had before. Only an
+	// alarm that rings uses it (Waking).
+	Wake WakeWith `json:"wake_with,omitzero"`
+}
+
+// WakeWith is music an alarm wakes somebody with.
+type WakeWith struct {
+	// Kind is WakeRadio or WakeMusic; empty is the alarm sound.
+	Kind string `json:"kind,omitempty"`
+	// Name is the station's or the favorite's name, as the lists show it.
+	Name string `json:"name,omitempty"`
+	// URI is a station's stream when the device plays it itself, or a favorite's Music Assistant URI.
+	// A Radio favorite Home Assistant plays has none: it is asked for by name.
+	URI string `json:"uri,omitempty"`
+}
+
+// The kinds of music an alarm wakes with.
+const (
+	WakeRadio = "radio"
+	WakeMusic = "music_assistant"
+)
+
+// Music is whether w is music rather than the alarm sound.
+func (w WakeWith) Music() bool { return (w.Kind == WakeRadio || w.Kind == WakeMusic) && w.Name != "" }
+
+// String is w as Home Assistant reads and writes it: "alarm_sound", "radio: <name>" or
+// "music_assistant: <name>".
+func (w WakeWith) String() string {
+	if !w.Music() {
+		return "alarm_sound"
+	}
+	return w.Kind + ": " + w.Name
+}
+
+// Waking is what an alarm wakes somebody with: its Wake, or nothing (the alarm sound) for one that
+// does not ring at all, a reminder, a silent alarm or a light-only one.
+func (a Alarm) Waking() WakeWith {
+	if a.Remind || a.Silent || a.LightOnly || !a.Wake.Music() {
+		return WakeWith{}
+	}
+	return a.Wake
 }
 
 // DateLayout is how an alarm's date is written.

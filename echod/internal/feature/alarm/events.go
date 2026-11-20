@@ -21,19 +21,26 @@ import (
 //     its course
 //
 // with the alarm's id and label, the time it was due, and the device it went off on: every device's
-// events arrive on the one bus under one name. Reminders are not alarms and fire nothing here.
+// events arrive on the one bus under one name. A ring's (ringing, snoozed, stopped) also says what it
+// wakes with (wake_with: config.WakeWith's String). Reminders are not alarms and fire nothing here.
 const Event = "esphome.techo5_alarm"
 
 // fireEvent puts one step of an alarm on the bus. key is the alarm's, with a snooze's prefix taken off
 // so that an alarm and its snoozes share an id.
 func fireEvent(event, key, label string, due time.Time) {
-	component.Fire.Emit(component.Event{Name: Event, Data: map[string]string{
+	data := map[string]string{
 		"event":  event,
 		"id":     strings.TrimPrefix(key, "snooze:"),
 		"label":  label,
 		"due":    due.Format(time.RFC3339),
 		"device": config.Get().Device.Name,
-	}})
+	}
+	// What a ring wakes with, as chosen (#651): it says so whether or not the music came, for an
+	// automation that starts the day with it.
+	if event == "ringing" || event == "snoozed" || event == "stopped" {
+		data["wake_with"] = wakeOf(key).String()
+	}
+	component.Fire.Emit(component.Event{Name: Event, Data: data})
 }
 
 // setFromHA is SetOn with the alarm made the kind the action asking for it says: setting the same

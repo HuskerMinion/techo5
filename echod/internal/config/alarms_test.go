@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -131,5 +132,41 @@ func TestASkippedOccurrenceIsSavedAndGoesWithItsAlarm(t *testing.T) {
 	}
 	if got := st.Get().Alarms.Skipped; len(got) != 0 {
 		t.Errorf("deleting an alarm left its skipped occurrence: %+v", got)
+	}
+}
+
+// What an alarm wakes with is kept with it (#651), and an alarm saved before there was a choice reads
+// as the alarm sound. Only an alarm that rings wakes with music.
+func TestAnAlarmKeepsWhatItWakesWith(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(path, []byte(`{"alarms":{"list":[{"id":"old","hour":6,"minute":30,"on":true}]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := st.Get().Alarms.List[0]
+	if old.Wake != (WakeWith{}) || old.Waking().Music() || old.Waking().String() != "alarm_sound" {
+		t.Fatalf("an older alarm wakes with %+v", old.Wake)
+	}
+
+	radio := WakeWith{Kind: WakeRadio, Name: "WXYZ", URI: "http://radio.invalid/wxyz.mp3"}
+	old.Wake = radio
+	if err := st.Set().Alarms().Put(old); err != nil {
+		t.Fatal(err)
+	}
+	again, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Get().Alarms.List[0]; got.Wake != radio || got.Waking().String() != "radio: WXYZ" {
+		t.Errorf("read back %+v", got.Wake)
+	}
+
+	for _, al := range []Alarm{{Wake: radio, Remind: true}, {Wake: radio, Silent: true}, {Wake: radio, LightOnly: true}} {
+		if al.Waking().Music() {
+			t.Errorf("%+v wakes with music", al)
+		}
 	}
 }

@@ -22,6 +22,7 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 			{ID: "a3", Hour: 9, Minute: 0, Days: config.DaysWeekends, On: false},
 			{ID: "a4", Hour: 6, Minute: 0, Days: config.DaysWeekdays, On: true, Silent: true},
 			{ID: "a5", Hour: 6, Minute: 15, Days: config.DaysWeekdays, On: true, LightOnly: true},
+			{ID: "a6", Hour: 7, Minute: 0, Days: config.DaysWeekdays, On: true, Wake: config.WakeWith{Kind: config.WakeRadio, Name: "WXYZ"}},
 		},
 		Followed: []Followed{{Entity: "input_datetime.school", Label: "School run", Armed: true}},
 	}
@@ -33,12 +34,13 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 		t.Errorf("nothing is ringing, got %+v", l.Ringing)
 	}
 	want := []ListedAlarm{
-		{ID: "a1", Time: "06:45", Days: "weekdays", Label: "Wake up", On: true, Next: "2026-09-24T06:45:00-05:00", RingOn: []string{}},
+		{ID: "a1", Time: "06:45", Days: "weekdays", Label: "Wake up", On: true, Next: "2026-09-24T06:45:00-05:00", RingOn: []string{}, WakeWith: "alarm_sound"},
 		{ID: "a2", Time: "14:30", Days: "once", Label: "Take the medication", On: true, Next: "2026-09-23T14:30:00-05:00",
-			Reminder: true, RingOn: []string{"Kitchen"}},
-		{ID: "a3", Time: "09:00", Days: "weekends", On: false, Next: "", RingOn: []string{}},
-		{ID: "a4", Time: "06:00", Days: "weekdays", On: true, Next: "2026-09-24T06:00:00-05:00", RingOn: []string{}, Silent: true},
-		{ID: "a5", Time: "06:15", Days: "weekdays", On: true, Next: "2026-09-24T06:15:00-05:00", RingOn: []string{}, LightOnly: true},
+			Reminder: true, RingOn: []string{"Kitchen"}, WakeWith: "alarm_sound"},
+		{ID: "a3", Time: "09:00", Days: "weekends", On: false, Next: "", RingOn: []string{}, WakeWith: "alarm_sound"},
+		{ID: "a4", Time: "06:00", Days: "weekdays", On: true, Next: "2026-09-24T06:00:00-05:00", RingOn: []string{}, Silent: true, WakeWith: "alarm_sound"},
+		{ID: "a5", Time: "06:15", Days: "weekdays", On: true, Next: "2026-09-24T06:15:00-05:00", RingOn: []string{}, LightOnly: true, WakeWith: "alarm_sound"},
+		{ID: "a6", Time: "07:00", Days: "weekdays", On: true, Next: "2026-09-24T07:00:00-05:00", RingOn: []string{}, WakeWith: "radio: WXYZ"},
 	}
 	for i, w := range want {
 		if !reflect.DeepEqual(l.Alarms[i], w) {

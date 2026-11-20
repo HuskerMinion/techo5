@@ -2212,6 +2212,20 @@ light-only alarm always has a light: its own, the default, or 30 minutes when bo
 editor's **Wake with light** row shows the minutes it gets. On a Dot, which has no screen, it is the
 light ring's sunrise and nothing else: no sound, and no night to end.
 
+**Wake with** in an alarm's editor (and on the setup page) wakes with music in place of the alarm
+sound: a station from the radio's list, as the radio page shows it, or one of Music Assistant's
+favorite playlists, albums or radio stations (with a music library set up on the device). On a Dot,
+set it on the setup page or with the [alarm_wake_with action](actions.md#wake-with-music). The music
+plays on the device's own speaker, at the music volume, and the alarm is a ring as any other: it shows,
+**Gets louder** brings the music up from quiet, a press that quiets the ring quiets the music, Stop
+stops it, and Snooze stops it and starts it again when the snooze ends. If the music isn't heard
+within 8 seconds, stops for 8 seconds while the alarm rings, or can't play at all (no network, Music
+Assistant not set up or not answering, the station gone from the list, the music muted or at 0), the
+alarm sound rings instead, so nobody oversleeps. The wake light works as with any alarm. A light-only or silent alarm has no **Wake with**.
+
+A dashboard card can open the alarms on a Show or a Spot: see
+[docs/dashboards.md](dashboards.md#alarms).
+
 ### How loud the room is
 
 **Ambient noise sensor** (a switch of the device's in Home Assistant, under its configuration; off

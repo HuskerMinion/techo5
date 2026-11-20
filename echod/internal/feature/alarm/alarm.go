@@ -653,7 +653,15 @@ func (a *Alarms) fire(s source, now time.Time) {
 	// Started under the lock, so there is no moment where an alarm is ringing and Stop finds
 	// nothing to stop. The bell calls rang from its own goroutine, never from here.
 	rise := config.Get().Alarms.Rise.Duration()
-	a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
+	if w := wakeOf(key); w.Music() {
+		// Music in place of the alarm sound (wake.go): a ring with no sound of its own, and the
+		// alarm sound after all if the music is not heard.
+		stop, sound := startQuiet("alarm", s.label, a.rang)
+		a.silence = stop
+		goWake(func() { a.playWake(r, w, rise, sound) })
+	} else {
+		a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
+	}
 	a.mu.Unlock()
 
 	if spent {
@@ -1209,6 +1217,21 @@ func (a *Alarms) Actions() []*esphome.Action {
 				}
 				slog.Info("light-only alarm set from home assistant", "time", fmt.Sprintf("%d:%02d", al.Hour, al.Minute), "days", config.DaysLabel(al.Days), "label", al.Label)
 				return nil, nil
+			},
+		},
+		{
+			// What an alarm wakes with (#651), by its id from alarms_list: "alarm_sound", "radio: <station>"
+			// or "music_assistant: <favorite>". Its own action, as switching by id is: Home Assistant asks
+			// for every field an action has, and alarm_set with one more would break every automation
+			// that calls it.
+			Name: "alarm_wake_with",
+			Args: []esphome.Arg{{Name: "id", Type: esphome.ArgString}, {Name: "wake_with", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				w, err := a.ParseWake(c.String("wake_with"))
+				if err != nil {
+					return nil, err
+				}
+				return nil, a.SetWake(c.String("id"), w)
 			},
 		},
 		{
