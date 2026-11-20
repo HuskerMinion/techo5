@@ -195,6 +195,21 @@ func TestMusicAssistantIsNowPlayingWhileItCarries(t *testing.T) {
 	}
 }
 
+// Radio from Music Assistant comes with no artist and the station as its album: the page shows the
+// station under the title. A song with an artist keeps it.
+func TestTheStationIsUnderARadioTitle(t *testing.T) {
+	for _, c := range []struct{ artist, album, want string }{
+		{"", "SWR3", "SWR3"},
+		{"Toto", "Toto IV", "Toto"},
+		{"Toto", "", "Toto"},
+		{"", "", ""},
+	} {
+		if got := byline(c.artist, c.album); got != c.want {
+			t.Errorf("artist %q, album %q: %q, want %q", c.artist, c.album, got, c.want)
+		}
+	}
+}
+
 // Music Assistant lets go of a track paused from here, and the page keeps it with play on it; so do
 // the sensors, which say it is paused.
 func TestATrackPausedFromHereStaysNowPlaying(t *testing.T) {
