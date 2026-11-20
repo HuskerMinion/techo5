@@ -761,7 +761,8 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		labels, subs = r.wordLines(card, row)
 		row.label, row.sub, labelEnd = r.rowWords(card, row, face)
 	}
-	base, lastLabel := 0, row.label
+	var base int
+	var lastLabel string
 	if planned && plan.baseL != nil {
 		// More than one line of words: laid out from the top of a row grown to hold them.
 		for i, l := range plan.label {

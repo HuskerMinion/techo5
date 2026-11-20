@@ -4,7 +4,6 @@ package display
 
 import (
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -215,25 +214,6 @@ func (d *Display) firstRunBack(step string) {
 	d.firstRun.showKey = false
 	d.mu.Unlock()
 	d.firstRunGo(firstrun.Before(step))
-}
-
-// firstRunLanguage makes lang the screen's language, and its usual clock; the rest of first run is in
-// its words from the next frame.
-func (d *Display) firstRunLanguage(lang string) {
-	if err := firstrun.SetLanguage(lang); err != nil {
-		slog.Warn("saving the screen language failed", "err", err)
-	}
-	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
-	d.wake()
-}
-
-// firstRunClock turns the clock between 12 and 24 hours.
-func (d *Display) firstRunClock() {
-	if err := firstrun.SetClock24(!config.Get().Screen.Clock24); err != nil {
-		slog.Warn("saving the clock format failed", "err", err)
-	}
-	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
-	d.wake()
 }
 
 // frLangLabel is a language's name on its key, in its own words: Japanese in its own script once a
