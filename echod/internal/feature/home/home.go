@@ -765,7 +765,8 @@ func (f *Feature) Radio() Radio {
 //
 // Receiving() is not the name of it. That names a phone over Bluetooth, which is a stream of this
 // player's own rather than a remote's; the only thing that takes the speaker this way is Sendspin, and
-// what runs the server it talks to here is Music Assistant, so that is what the page calls it.
+// what runs the server it talks to here is Music Assistant, so that is what the page calls it - or the
+// service Music Assistant plays from, once Home Assistant has said which (ma_source.go).
 //
 // Whose song it is comes from whosePlaying, the order the now-playing sensors go by too.
 func carried(r Radio) Radio {
@@ -808,7 +809,7 @@ func carried(r Radio) Radio {
 	case playingHeld:
 		// A remote's track paused from here is still the page's, with play on it, after the remote
 		// has let it go.
-		r.Playing, r.Now = false, "Music Assistant"
+		r.Playing, r.Now = false, maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.heldTitle, s.heldArtist, s.heldAlbum
 		r.Art, r.Thumb = remoteArt()
 		r.Logo = false
@@ -818,7 +819,7 @@ func carried(r Radio) Radio {
 		// just before Music Assistant took the speaker never plays - the remote ends it - and the list
 		// went on reading "Starting…" for it for as long as the remote carried on.
 		r.Chosen = ""
-		r.Playing, r.Now = true, "Music Assistant"
+		r.Playing, r.Now = true, maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.extTitle, s.extArtist, s.extAlbum
 		// Music Assistant's own picture for the track when it sent one. Without one the page draws a
 		// stand-in of its own, so the last station's cover and logo must not be left behind somebody
