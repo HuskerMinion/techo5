@@ -10,18 +10,29 @@
 # its /sbin/init. So the store is found in the device mapper and not by a GPT name. The data partition is the
 # eMMC's own, as on the Skylight (repartition.sh makes it).
 #
-#   system1       /boot   ext2, lk2nd's: vmlinuz, the device tree, extlinux/extlinux.conf
+#   system1       /boot   ext2, lk2nd's: extlinux/extlinux.conf, the kernel and device tree it names
+#                         (k-<sum>/), and the A/B record (techo5-ab); mounted here and left mounted,
+#                         so a slot reaches it at /store/boot
 #   system2       store   ext4, label techo5-store: this root, with the slots
 #   techo5-data   data    ext4, a GPT partition after system: TECHO5's state, its techo5 directory
 #                         bound to /data
 #
-# The kernel's drivers are modules, and their firmware is partly the unit's own (the audio DSP's is in
-# the modem partition), so before a slot starts this loads them: the firmware first, where the
-# kernel will look, then every driver a device on the board asks for. Both trees belong to the kernel,
-# not to a slot, so they live in the store and are bound into the slot that boots.
+# The kernel's drivers are built in, and probed before this root was mounted, so those that want
+# firmware found none. Their firmware is partly the unit's own (the audio DSP's and the video
+# decoder's are in the modem partition), so before a slot starts this links it where the kernel will
+# look, then starts those drivers again. The firmware tree belongs to the units, not to a slot, so it
+# lives in the store and is bound into the slot that boots.
 #
-# Then, as on the Skylight: pick a slot with slotctl and pivot into it, or stay here as the rescue
-# environment (USB serial where the kernel has the gadget, Wi-Fi, SSH with a bench key).
+# Every slot carries its own kernel, and the boot layer (lk2nd-ab, beside this script) starts the slot
+# with it: first thing here, lk2nd-ab reads the A/B record, and either names the slot this kernel is
+# for, or puts another kernel where lk2nd starts it and restarts (a good slot's on system1, a slot on
+# trial once from the recovery partition). A kernel on trial (techo5.kernel=trial) that cannot hand
+# over to its slot restarts, which is back on system1's kernel and takes a try, instead of staying as
+# the rescue environment. Without a record (an image from before the boot layer) slotctl picks the
+# slot, as on the Skylight.
+#
+# Then pivot into the slot, or stay here as the rescue environment (USB serial where the kernel has
+# the gadget, Wi-Fi, SSH with a bench key).
 BB=/bin/busybox.static
 export T5_PRODUCT="ThinkSmart View Linux"
 
@@ -72,6 +83,32 @@ crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes"
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 . /lib/techo5-lib.sh
+# The boot text the way the unit stands, portrait or landscape (the accelerometer's driver is built
+# in and has probed by now).
+sh /usr/local/sbin/thinksmart-console 2>&1 | while read -r l; do crumb "console: $l"; done
+
+# --- The boot layer (lk2nd-ab). Before anything slower: a boot that ends in a restart into another
+# kernel should take as little time as it can.
+AB=none
+AB_SLOT=
+if [ -e /.techo5-store ] && [ -n "$BOOT_DEV" ]; then
+	if mount -t ext2 -o rw,sync,noatime,nodev,noexec,nosuid "$BOOT_DEV" /boot 2>/tmp/boot.err; then
+		if [ -e /rescue ]; then
+			AB=rescue
+		else
+			AB_SLOT=$(sh /usr/local/sbin/lk2nd-ab boot 2>/tmp/lk2nd-ab.err)
+			case $? in
+			0) AB=slot;;
+			3) AB=none;;
+			*) AB=noslot;;
+			esac
+			while read -r l; do crumb "$l"; done < /tmp/lk2nd-ab.err
+			crumb "boot layer: $AB${AB_SLOT:+, slot $AB_SLOT}"
+		fi
+	else
+		crumb "system1 did not mount: $(cat /tmp/boot.err)"
+	fi
+fi
 
 store_rw() { mount -o remount,rw / 2>/dev/null || { crumb "store: remount rw failed"; return 1; }; }
 store_ro() { sync; mount -o remount,ro / 2>/dev/null || crumb "store: remount ro failed"; }
@@ -135,29 +172,14 @@ else
 	crumb "firmware: no modem partition or no $FWDIR; the audio DSP has no firmware"
 fi
 
-# --- Drivers. Every device the kernel has found says which module it wants (its modalias); loading
-# those brings up buses with more devices on them, so it goes round until a pass loads nothing new.
-# After that mdev loads what turns up later (etc/mdev.conf). Two are not asked for by any device: the
-# speaker amplifier's driver, which the sound card waits for, and the light sensor's, whose chip the
-# device tree does not name (it is declared by etc/techo5/device.conf in the slot).
-if [ -d "/lib/modules/$(uname -r)" ]; then
-	echo /sbin/mdev > /proc/sys/kernel/hotplug
-	pass=0; before=-1
-	while [ $pass -lt 6 ]; do
-		now=$(wc -l < /proc/modules)
-		[ "$now" = "$before" ] && break
-		before=$now
-		find /sys/devices -name modalias -type f -exec cat {} + 2>/dev/null | sort -u |
-			xargs -n 32 modprobe -abq 2>/dev/null
-		pass=$((pass+1))
-		sleep 1
-	done
-	modprobe -q snd_soc_tas5782m || crumb "drivers: no snd_soc_tas5782m; the sound card will not come up"
-	modprobe -q vcnl4000 2>/dev/null
-	crumb "drivers: $(wc -l < /proc/modules) modules after $pass passes"
-else
-	crumb "drivers: no /lib/modules/$(uname -r) in the store; nothing loaded"
-fi
+# --- Drivers. The built-in ones whose firmware was not there at their probe, started again now that
+# it is (/usr/local/sbin/thinksmart-drivers, which the slot runs too).
+sh /usr/local/sbin/thinksmart-drivers 2>&1 | while read -r l; do crumb "drivers: $l"; done
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+crumb "drivers: remote processors $(cat /sys/class/remoteproc/remoteproc*/state 2>/dev/null | tr '\n' ' ')"
+
+TRIAL=
+grep -qw techo5.kernel=trial /proc/cmdline && TRIAL=1 && crumb "this is a kernel on trial, started once from recovery"
 
 MODE=none
 [ -e /.techo5-store ] && MODE=store
@@ -194,14 +216,12 @@ boot_slot() {
 	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { crumb "slot $slot has no /sbin/init"; return 1; }
 	[ -d $root/store ] || { crumb "slot $slot has no /store to put the old root on"; return 1; }
 	mount --bind $root /newroot || { crumb "bind mount of slot $slot failed"; return 1; }
-	# The kernel's modules and firmware, with the modem partition's under it: the store's, in every slot.
-	for d in lib/modules lib/firmware; do
-		if [ -d /newroot/$d ]; then
-			mount --rbind /$d /newroot/$d || crumb "binding /$d into slot $slot failed"
-		else
-			crumb "slot $slot has no /$d; it runs without the store's"
-		fi
-	done
+	# The firmware, with the modem partition's under it: the store's, in every slot.
+	if [ -d /newroot/lib/firmware ]; then
+		mount --rbind /lib/firmware /newroot/lib/firmware || crumb "binding /lib/firmware into slot $slot failed"
+	else
+		crumb "slot $slot has no /lib/firmware; it runs without the store's"
+	fi
 	mkdir -p /run/techo5
 	echo $slot > /run/techo5/slot
 	crumb "pivoting into slot $slot ($(cat $root/etc/techo5-release 2>/dev/null))"
@@ -224,7 +244,7 @@ boot_slot() {
 	umount /newroot/store 2>/dev/null
 	cd /
 	move_back
-	umount -l /newroot/lib/firmware /newroot/lib/modules 2>/dev/null
+	umount -l /newroot/lib/firmware 2>/dev/null
 	umount /newroot 2>/dev/null
 	rm -f /run/techo5/slot
 	CRUMBS=$LOGDIR/init.log
@@ -236,6 +256,12 @@ if [ $MODE = store ]; then
 		store_rw && rm -f /rescue; store_ro
 		crumb "rescue marker found: staying on the store root this boot"
 		: > /tmp/rescue-asked
+	elif [ $AB = slot ]; then
+		crumb "the boot layer starts slot $AB_SLOT: no slotctl next"
+		boot_slot "$AB_SLOT"
+		crumb "slot $AB_SLOT did not start"
+	elif [ $AB = noslot ]; then
+		crumb "the boot layer has no bootable slot"
 	else
 		store_rw
 		if slot=$(STORE=/ slotctl next 2>/tmp/slotctl.err); then
@@ -247,6 +273,14 @@ if [ $MODE = store ]; then
 			crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
 		fi
 	fi
+fi
+
+# A kernel on trial goes no further: the restart is system1's kernel, which counts the try.
+if [ -n "$TRIAL" ] && [ ! -e /tmp/rescue-asked ]; then
+	crumb "the kernel on trial could not start a slot; restarting into system1's"
+	snapshot 2>/dev/null
+	sync
+	reboot -f
 fi
 
 # --- Rescue: no slot to boot, or one was asked for. USB serial where the kernel has the gadget,

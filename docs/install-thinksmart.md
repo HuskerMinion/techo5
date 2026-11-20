@@ -28,9 +28,9 @@ emergency download mode (EDL).
 - the volume buttons;
 - the light sensor, for the screen's brightness;
 - Wi-Fi and Bluetooth;
-- updates into the spare of two slots.
+- updates into the spare of two slots, with the kernel the update carries.
 
-What doesn't: nothing updates the kernel or its modules, the screen has no portrait layout, and
+What doesn't: the screen has no portrait layout, and
 the rescue environment is reached over Wi-Fi only (the kernel has no USB gadget).
 
 The hardware notes, and how the unit boots, are in
@@ -124,20 +124,23 @@ the aarch64 and armhf cross compilers:
 tools/linux/thinksmart/kernel/build.sh
 ```
 
-It leaves `vmlinuz`, the device tree and `modules.tar` in `~/techo5-thinksmart-kbuild/out`.
+It leaves `boot-thinksmart.img`, `vmlinuz` and the device tree in `~/techo5-thinksmart-kbuild/out`.
+Every driver is built in; there are no modules.
 
 ## 5. The image
 
 ```
 K=~/techo5-thinksmart-kbuild/out
-DEVICE_OVERLAY=tools/linux/thinksmart/overlay tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
+DEVICE_OVERLAY=tools/linux/thinksmart/overlay KERNEL_IMAGE=$K/boot-thinksmart.img \
+	tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
 tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k ~/.ssh/id_ed25519.pub -W wpa_supplicant.conf \
-	-M $K/modules.tar -F firmware.tar -S 2048 -o store.img
+	-F firmware.tar -S 2048 -o store.img
 tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
 ```
 
 `deploy-rootfs.sh` is the build every Show's root filesystem comes from
-([building.md](building.md)); it needs the helper programs it names in `bin/` first.
+([building.md](building.md)); it needs the helper programs it names in `bin/` first. With
+`KERNEL_IMAGE` the root filesystem carries the kernel, which is how a later one reaches the unit.
 
 `-k` and `-W` make an image for your own unit: SSH with that key from every boot, and your Wi-Fi
 network (`wpa_supplicant.conf` holds `ctrl_interface=/run/wpa`, `update_config=0` and a
@@ -203,7 +206,13 @@ ssh root@<unit> 'PATH=/usr/local/sbin:$PATH; slotctl install /data/techo5-linux/
 ```
 
 It is committed after five minutes of a running daemon, and the other slot is kept to fall back to.
-The kernel, its modules and its firmware are outside the slots and stay as the image left them.
+
+Each root filesystem carries its own kernel, and the slot on trial is the kernel's trial too: the
+unit restarts once into the new slot's kernel from the `recovery` partition. If the trial settles (the
+daemon up five minutes, with a network), the kernel moves to the boot partition lk2nd starts every
+time, which takes one more restart; if it does not, the next restart is back on the old slot with its
+own kernel, which tries the new one twice more and then gives up on it. `lk2nd-ab status` on the
+unit says where it stands. The firmware is outside the slots and stays as the image left it.
 
 ## If it does not start
 
@@ -212,6 +221,8 @@ The kernel, its modules and its firmware are outside the slots and stay as the i
   check that the partition table from `repartition.sh` is on the unit.
 - **The screen says RESCUE**: no slot could be started. The unit is on your Wi-Fi with SSH, if the
   image was built with `-k` and `-W`; `cat /data/techo5-linux/init.log` says what the boot did.
+- **A new slot that stops**: pull the plug and put it back. The restart is the slot and kernel the
+  unit had before, which counts the failed try.
 - **Nothing at all**: enter EDL and write the image again, or go back.
 
 ## The way back

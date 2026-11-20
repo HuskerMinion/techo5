@@ -1,10 +1,9 @@
 #!/bin/bash
 # mkstore.sh — the techo5-store image for the Lenovo ThinkSmart View (APQ8053): a slot store whose
 # root is also the boot environment: the kernel mounts it as the root and runs its /sbin/init.
-# Made from tools/linux/skylight/mkstore.sh; the board, its init and the kernel's
-# modules and firmware differ.
+# Made from tools/linux/skylight/mkstore.sh; the board, its init and the firmware differ.
 #
-#   mkstore.sh -r <rootfs.tar.gz> -k <authorized_keys>|none -M <modules.tar> -F <firmware.tar>
+#   mkstore.sh -r <rootfs.tar.gz> -k <authorized_keys>|none -F <firmware.tar>
 #              -o <store.img> [-U <uuid>] [-S <MiB>] [-W <wpa_supplicant.conf>] [-i <inputs>]
 #              [-w <workdir>] [-f <fbprobe>] [-s <slot a state>] [-L <label>]
 #
@@ -17,11 +16,11 @@
 #   /bin, /lib, /usr ...  Alpine armv7 + dropbear, wpa_supplicant 2.9, iw, e2fsprogs, udhcpd:
 #                         the rescue environment, which never changes with an update
 #   /bin/busybox.static   PID 1's interpreter
-#   /lib/modules, /lib/firmware   -M and -F: tar files of modules/<version> (kernel/build.sh's
-#                         modules.tar) and firmware/ (from a unit running Linux). They go with the
-#                         kernel in lk2nd's boot partition, not with a slot, and are bound into the
-#                         slot that boots. The audio DSP's firmware is the unit's own, read from its modem
-#                         partition at boot, and is not in the image.
+#   /lib/firmware         -F: a tar file of firmware/ (from a unit running Linux): the unit's, not a
+#                         slot's, bound into the slot that boots. The audio DSP's firmware is the
+#                         unit's own, read from its modem partition at boot, and is not in the image.
+#                         The kernel has no modules (kernel/build.sh): it comes with the rootfs
+#                         (deploy-rootfs.sh KERNEL_IMAGE), and its first copy is mkimage.sh's.
 #   /root/.ssh/authorized_keys   <authorized_keys>: the rescue's SSH keys, and the slot's bench keys
 #                         (BENCH_SSH_KEYS in device.conf); `-k none` leaves it empty, as an image
 #                         meant for anyone must. A key here opens SSH on every interface, Wi-Fi
@@ -42,7 +41,7 @@ umask 022
 HERE=$(cd "$(dirname "$0")" && pwd)
 LINUX=$(cd "$HERE/.." && pwd)
 INPUTS=$(cd "$HERE/../../.." && pwd)/inputs
-ROOTFS=; KEYS=; OUT=; WORK=$HOME/techo5-thinksmart-store; FBPROBE=; STATE=good; LABEL=techo5-store; MODULES=; FIRMWARE=; UUID=; SIZE=; WIFI=
+ROOTFS=; KEYS=; OUT=; WORK=$HOME/techo5-thinksmart-store; FBPROBE=; STATE=good; LABEL=techo5-store; FIRMWARE=; UUID=; SIZE=; WIFI=
 APK=${APK:-$HOME/apk/apk.static}
 INNER=
 while [ $# -gt 0 ]; do
@@ -55,7 +54,6 @@ while [ $# -gt 0 ]; do
 	-f) FBPROBE=$2; shift 2;;
 	-s) STATE=$2; shift 2;;
 	-L) LABEL=$2; shift 2;;
-	-M) MODULES=$2; shift 2;;
 	-F) FIRMWARE=$2; shift 2;;
 	-U) UUID=$2; shift 2;;
 	-S) SIZE=$2; shift 2;;
@@ -64,8 +62,8 @@ while [ $# -gt 0 ]; do
 	*) echo "mkstore: unknown argument $1" >&2; exit 1;;
 	esac
 done
-[ -n "$ROOTFS" ] && [ -n "$KEYS" ] && [ -n "$OUT" ] && [ -n "$MODULES" ] && [ -n "$FIRMWARE" ] || {
-	echo "usage: mkstore.sh -r rootfs.tar.gz -k authorized_keys|none -M modules.tar -F firmware.tar -o store.img [-U uuid] [-S MiB] [-i inputs] [-w workdir] [-f fbprobe] [-s 'good'|'trial 3']" >&2; exit 1; }
+[ -n "$ROOTFS" ] && [ -n "$KEYS" ] && [ -n "$OUT" ] && [ -n "$FIRMWARE" ] || {
+	echo "usage: mkstore.sh -r rootfs.tar.gz -k authorized_keys|none -F firmware.tar -o store.img [-U uuid] [-S MiB] [-i inputs] [-w workdir] [-f fbprobe] [-s 'good'|'trial 3']" >&2; exit 1; }
 case "$STATE" in good|"trial "[0-9]) ;; *) echo "mkstore: slot state must be good or 'trial N'" >&2; exit 1;; esac
 say() { echo "mkstore: $*"; }
 
@@ -81,7 +79,7 @@ if [ -z "$INNER" ]; then
 	map=--map-auto; command -v newuidmap >/dev/null || map=
 	# Files owned by root (and by the slot's service users) without sudo.
 	exec unshare -Ur $map bash "$0" --inner -r "$ROOTFS" -k "$KEYS" -o "$OUT" -i "$INPUTS" -w "$WORK" \
-		${FBPROBE:+-f "$FBPROBE"} -s "$STATE" -L "$LABEL" -M "$MODULES" -F "$FIRMWARE" ${UUID:+-U "$UUID"} ${SIZE:+-S "$SIZE"} ${WIFI:+-W "$WIFI"}
+		${FBPROBE:+-f "$FBPROBE"} -s "$STATE" -L "$LABEL" -F "$FIRMWARE" ${UUID:+-U "$UUID"} ${SIZE:+-S "$SIZE"} ${WIFI:+-W "$WIFI"}
 fi
 
 R=$WORK/root
@@ -107,13 +105,17 @@ install -m 755 "$INPUTS/busybox.static" "$R/bin/busybox.static"
 lf() { sed 's/\r$//' "$1" > "$2"; chmod "$3" "$2"; }
 rm -f "$R/sbin/init"
 lf "$HERE/init" "$R/sbin/init" 755
-# What turns up after the first pass of drivers asks mdev for its own (the store's /sbin/init).
-printf '$MODALIAS=.*\troot:root\t0660\t@modprobe -qb "$MODALIAS"\n' > "$R/etc/mdev.conf"
 install -d "$R/usr/local/sbin" "$R/usr/local/bin" "$R/etc/profile.d"
 lf "$LINUX/slotctl" "$R/usr/local/sbin/slotctl" 755
 lf "$LINUX/bootctl" "$R/usr/local/sbin/bootctl" 755
+lf "$HERE/lk2nd-ab" "$R/usr/local/sbin/lk2nd-ab" 755
+# The A/B record is a file on system1 (lk2nd-ab), mounted at /boot here and /store/boot in a slot.
+install -d "$R/boot"
+printf '%s\n' "# The A/B record: a file on system1 (tools/linux/thinksmart/lk2nd-ab)." "BOOTCTL_MISC=/boot/techo5-ab" > "$R/etc/bootctl.conf"
 lf "$LINUX/techo5-lib.sh" "$R/lib/techo5-lib.sh" 644
 lf "$HERE/rescue-profile.sh" "$R/etc/profile.d/techo5-rescue.sh" 644
+lf "$HERE/overlay/usr/local/sbin/thinksmart-drivers" "$R/usr/local/sbin/thinksmart-drivers" 755
+lf "$HERE/overlay/usr/local/sbin/thinksmart-console" "$R/usr/local/sbin/thinksmart-console" 755
 [ -n "$FBPROBE" ] && install -m 755 "$FBPROBE" "$R/usr/local/bin/fbprobe"
 echo techo5-rescue > "$R/etc/hostname"
 # Read-only root: what the rescue writes goes to /run.
@@ -147,21 +149,21 @@ for f in sbin/init usr/local/bin/techo5 etc/techo5/boot.sh etc/inittab store; do
 done
 grep -qx 'T5_BOARD=thinksmart' "$R/slots/a/etc/techo5/device.conf" 2>/dev/null ||
 	{ echo "mkstore: the rootfs has no ThinkSmart View device.conf (DEVICE_OVERLAY=tools/linux/thinksmart/overlay)" >&2; exit 1; }
-for d in lib/modules lib/firmware; do
-	[ -d "$R/slots/a/$d" ] || { echo "mkstore: the rootfs has no /$d to bind the store's onto" >&2; exit 1; }
-done
-# The kernel's modules and firmware (tools/linux/thinksmart/README.md says where they come from):
-# the store's, bound into whichever slot boots. The modem partition's firmware is linked in under
-# msm-firmware-loader at boot.
-say "modules from $(basename "$MODULES"), firmware from $(basename "$FIRMWARE")"
+[ -d "$R/slots/a/lib/firmware" ] || { echo "mkstore: the rootfs has no /lib/firmware to bind the store's onto" >&2; exit 1; }
+[ -s "$R/slots/a/usr/share/techo5/kernel/boot-thinksmart.img" ] ||
+	{ echo "mkstore: the rootfs carries no kernel (deploy-rootfs.sh KERNEL_IMAGE=boot-thinksmart.img): the boot layer starts each slot with its own" >&2; exit 1; }
+# The slot's kernel where the boot layer looks for it, linked as slotctl links it on an install.
+install -d "$R/slots/a/boot"
+ln -f "$R/slots/a/usr/share/techo5/kernel/boot-thinksmart.img" "$R/slots/a/boot/boot.img"
+# The boot layer restarts into recovery mode with the slot's rebootto, which the store keeps a copy of.
+[ -x "$R/slots/a/usr/local/bin/rebootto" ] || { echo "mkstore: the rootfs has no usr/local/bin/rebootto" >&2; exit 1; }
+install -m 755 "$R/slots/a/usr/local/bin/rebootto" "$R/usr/local/bin/rebootto"
+# The firmware (tools/linux/thinksmart/README.md says where it comes from): the store's, bound into
+# whichever slot boots. The modem partition's firmware is linked in under msm-firmware-loader at boot.
+say "firmware from $(basename "$FIRMWARE")"
 rm -rf "$R/lib/modules" "$R/lib/firmware"
-tar -xf "$MODULES" -C "$R/lib" --no-same-owner
 tar -xf "$FIRMWARE" -C "$R/lib" --no-same-owner
-kver=$(ls "$R/lib/modules" | head -1)
-[ -s "$R/lib/modules/$kver/modules.dep" ] || { echo "mkstore: $MODULES holds no modules/<version>/modules.dep" >&2; exit 1; }
-[ -n "$(find "$R/lib/modules/$kver" -name 'snd-soc-tas5782m.ko*')" ] || echo "mkstore: warning: no snd-soc-tas5782m.ko in the modules: the unit will have no sound" >&2
 install -d "$R/lib/firmware/msm-firmware-loader"
-say "kernel modules: $kver, $(find "$R/lib/modules" -name '*.ko*' | wc -l) of them"
 # techo5-data is made at the first boot (the store's /sbin/init).
 : > "$R/format-data"
 printf '%s\n' "$STATE" > "$R/slots/a.state"

@@ -2,7 +2,7 @@
 
 The kernel TECHO5 boots on the ThinkSmart View (Qualcomm APQ8053): msm8953-mainline `v7.1.3-r0`, the
 tree postmarketOS packages for this SoC, with the drivers and patches in this directory and the
-configuration in `thinksmart_defconfig`. `build.sh` builds it. `uname -r` says
+configuration in `thinksmart_defconfig`, every driver built in. `build.sh` builds it. `uname -r` says
 `7.1.3-techo5-thinksmart`.
 
 ## Upstream base
@@ -25,9 +25,9 @@ Output in `$WORK/out` (default `~/techo5-thinksmart-kbuild/out`):
 
 | File | |
 | --- | --- |
-| `vmlinuz` | Image.gz |
+| `boot-thinksmart.img` | the kernel as a root filesystem carries it (`deploy-rootfs.sh KERNEL_IMAGE`): an Android boot image, header version 0, Image.gz with the device tree after it, an empty ramdisk and the command line (`pack.py`) |
+| `vmlinuz` | Image.gz, for an image's boot partition (`mkimage.sh -K`) |
 | `apq8053-lenovo-cd-18781y.dtb` | the board's device tree, with the front camera |
-| `modules.tar` | `modules/7.1.3-techo5-thinksmart`, for the store (`mkstore.sh -M`) |
 | `kernel.config` | the full configuration used |
 | `linux-7.1.3-techo5-thinksmart-source.tar.xz` | the whole prepared source tree, with the configuration in it as `techo5-thinksmart.config`, for the GPL |
 | `SHA256SUMS` | |
@@ -41,14 +41,22 @@ the kernel changes.
 ## How it boots
 
 lk2nd reads `extlinux/extlinux.conf`, `vmlinuz` and the device tree from the first partition of the
-MBR inside the `system` partition (`mkimage.sh -K`). There is no initramfs. The command line has the
+MBR inside the `system` partition (`mkimage.sh -K`), with the command line `build.sh` puts in the
+boot image's header (less its last word, `techo5.kernel=trial`). There is no initramfs. The command line has the
 kernel's device mapper make that MBR's two partitions at boot (`dm-mod.create`, by the GPT name
 `system`, so one image fits every unit) as `system1` and `system2`, the names `init` looks for. The kernel then mounts `system2`, the store, read-only as `/` and runs its
-`/sbin/init` (`../init`). So what has to be built in is only what that needs: the eMMC, the GPT, ext4,
-`DM_INIT`, and devtmpfs mounted on `/dev`.
+`/sbin/init` (`../init`). For that the eMMC, the GPT, ext4, `DM_INIT` and devtmpfs mounted on `/dev`
+are built in, and so is everything else: there are no modules, so the kernel is the one file an
+update moves (`../README.md`, "Updates").
 
-Everything else is a module in the store. The audio DSP's firmware is the unit's own, in the modem
-partition, and `init` links it where the kernel looks before it loads the drivers.
+Built-in drivers probe before `/` is mounted, when no firmware can be read. The audio DSP's and the
+video decoder's are the unit's own, in the modem partition, and Wi-Fi's is the store's. `init` links
+the modem partition's where the kernel looks, then starts the remote processors that stayed offline,
+probes again the devices left without a driver, and binds Wi-Fi again. Bluetooth and the GPU ask for
+theirs later, when they are first used.
+
+`pack.py` writes the boot image as mkbootimg would, byte for byte (header version 0, base
+0x80000000, kernel at +0x8000, ramdisk at +0x01000000, tags at +0x100, page size 2048), and checks one.
 
 ## The configuration
 
@@ -56,13 +64,17 @@ partition, and `init` links it where the kernel looks before it loads the driver
 7.1.3, with these changes:
 
 - `DM_INIT` on, so there is no initramfs.
-- `SND_SOC_TAS5782M` (the speaker amplifier) and `VIDEO_S5KC505A` (the front camera) added as modules.
+- `MODULES` off: every driver below is built in.
+- `SND_SOC_TAS5782M` (the speaker amplifier) and `VIDEO_S5KC505A` (the front camera) added.
 - Drivers for hardware other msm8953 devices have and this one does not are left out: other panels,
   touch controllers, cameras, sensors, NFC, the modem and WCNSS Wi-Fi, other audio codecs. That was
   done with `localmodconfig` over the modules a running unit loads, then putting back everything
   generic it dropped: networking and netfilter, file systems, crypto, HID, USB classes and gadget
-  functions, Bluetooth, the device mapper. 465 modules where the package has 670.
-- `xt_owner` and `xt_recent`, which techo5-firewall needs and the package leaves out, are modules.
+  functions, Bluetooth, the device mapper. That was 465 modules where the package has 670, all built
+  in, then trimmed: file systems, network and USB drivers, Wi-Fi chips and HID drivers no ThinkSmart View
+  uses, tracing and KVM left out. The kernel is 11 MB compressed and takes 28 MiB in memory, under
+  the 32 MiB lk2nd 20.0 starts from extlinux (`pack.py` checks it).
+- `xt_owner` and `xt_recent`, which techo5-firewall needs and the package leaves out.
 
 ## Drivers and patches
 

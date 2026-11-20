@@ -27,7 +27,7 @@ the steps below are by hand, from a unit that already runs Linux.
 | Firewall | techo5-firewall as on every Show, with `xt_owner` and `xt_recent` built for this kernel |
 
 Not there: a USB gadget (the rescue environment is reached over Wi-Fi and SSH only), the GPU for
-the screen, the hardware video decoder for the camera stream, kernel updates.
+the screen, the hardware video decoder for the camera stream.
 
 ## How it boots
 
@@ -39,18 +39,19 @@ kernel mounts `system2` read-only as `/` and runs its `/sbin/init`.
 
 So `system2` is the slot store and its `/sbin/init` is `init` here: the Skylight's, with this boot
 chain under it. It mounts `techo5-data`, a GPT partition after `system` that `repartition.sh` makes,
-links the audio DSP's firmware from the unit's modem partition where the kernel looks first, loads
-the kernel's modules, binds the store's `/lib/modules` and `/lib/firmware` into the slot and pivots
-into it, or stays as the rescue environment.
+links the audio DSP's firmware from the unit's modem partition where the kernel looks first, starts
+the built-in drivers that found no firmware when they probed (the audio DSP, the video decoder,
+Wi-Fi), binds the store's `/lib/firmware` into the slot and pivots into it, or stays as the rescue
+environment.
 
 ## The kernel
 
 `kernel/build.sh` builds it from msm8953-mainline `v7.1.3-r0`, the tree postmarketOS packages for
 this SoC, with the speaker amplifier and camera drivers, the audio and video decoder patches, the
-camera in the device tree, and a configuration trimmed to this board ([kernel/README.md](kernel/README.md)).
-`uname -r` is `7.1.3-techo5-thinksmart`. It gives `vmlinuz` and the device tree for `mkimage.sh -K`
-and `modules.tar` for `mkstore.sh -M`. Nothing updates it over the air yet: the kernel, its modules
-and firmware are outside the slots.
+camera in the device tree, and a configuration trimmed to this board, every driver built in
+([kernel/README.md](kernel/README.md)). `uname -r` is `7.1.3-techo5-thinksmart`. It gives
+`boot-thinksmart.img`, which a root filesystem carries (`deploy-rootfs.sh KERNEL_IMAGE`), and
+`vmlinuz` and the device tree for `mkimage.sh -K`.
 
 The firmware (`mkstore.sh -F`) is `/lib/firmware` of a unit running postmarketOS or the Debian
 project's image: Wi-Fi, Bluetooth and the GPU. The audio DSP's is the unit's own.
@@ -58,11 +59,11 @@ project's image: Wi-Fi, Bluetooth and the GPU. The audio DSP's is the unit's own
 ## Building an image
 
 ```
-DEVICE_OVERLAY=tools/linux/thinksmart/overlay tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
 tools/linux/thinksmart/kernel/build.sh
 K=~/techo5-thinksmart-kbuild/out
-tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -M $K/modules.tar -F firmware.tar \
-	-S 2048 -o store.img
+DEVICE_OVERLAY=tools/linux/thinksmart/overlay KERNEL_IMAGE=$K/boot-thinksmart.img \
+	tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
+tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -F firmware.tar -S 2048 -o store.img
 tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
 ```
 
@@ -88,8 +89,35 @@ over EDL.
 
 A ThinkSmart View takes a rootfs keyed `arm-thinksmart` into its other slot, on trial, as the Shows
 take theirs; no release carries one yet. `slotctl install <rootfs.tar.gz>` does the same by hand,
-and was tried on the unit both ways round. The kernel, its modules and firmware are outside the
-slots and are not updated.
+and was tried on the unit both ways round.
+
+Each slot carries its own kernel (`usr/share/techo5/kernel/boot-thinksmart.img`, which `slotctl`
+links to `slots/<x>/boot/boot.img`), and a slot always starts with it, as on athena with the boot
+layer (`tools/linux/README.md`, "The boot layer"). The A/B record is `bootctl`'s, kept in a file on
+`system1` (`techo5-ab`), since this board has no misc partition; `slotctl` and `boot.sh` keep it as
+they do on athena. lk2nd reads none of it: it starts the one entry of `extlinux.conf` on `system1`,
+or, in recovery mode, the Android boot image in `recovery`, once. So the boot layer's work is done by
+`lk2nd-ab`, the first thing the store's `init` runs:
+
+- A good slot boots from `system1`, with its own kernel and device tree there (`k-<sum>/`) and
+  `ab.slot=<x>` on the command line. When `system1` holds another kernel (the slot was just
+  committed, or a switch or fallback changed the slot), `lk2nd-ab` puts the slot's there and restarts.
+- A slot on trial is started once from `recovery`: `lk2nd-ab` takes a try from the record, writes the
+  slot's image there with `ab.slot=<x>` added, and restarts into recovery mode. Any restart after
+  that, `boot.sh`'s at the trial's timeout, a panic (`panic=10`), the plug pulled on a hang, is back on
+  `system1`, which takes the next try; after three the record falls back to the other slot, and
+  `slotctl follow` makes it the store's active slot. A trial that settles (five minutes of a running
+  daemon, with a default route: `TRIAL_NEEDS_NETWORK=1`, since the kernel is on trial too) is
+  committed, and the next start moves its kernel to `system1`.
+- lk2nd 20.0 (on the units, January 2025) starts a kernel taking at most 32 MiB in memory from
+  extlinux, so a slot whose kernel is bigger is marked bad before its trial (and `pack.py` refuses to
+  build one).
+
+`lk2nd-ab status` says what the record and `system1` hold. `python3 tools/test_lk2nd_ab.py` runs it
+under busybox with a made-up unit. An image from before the boot layer has no record: `init` then
+starts the slot `slotctl` picks, on whatever kernel `system1` has.
+
+The firmware is outside the slots and is not updated.
 
 ## Files
 
@@ -97,5 +125,5 @@ slots and are not updated.
 - `mkstore.sh`, `mkimage.sh`: the store and the image for `system`.
 - `repartition.sh`: run on the unit, makes `techo5-data`.
 - `rescue-profile.sh`: the rescue environment's login text.
-- `overlay/`: the board's `device.conf`, `mdev.conf`, and `/lib/modules` for the store's to be bound on.
-- `kernel/`: the kernel's build, its drivers, patches and configuration.
+- `overlay/`: the board's `device.conf`.
+- `kernel/`: the kernel's build, its drivers, patches and configuration, and `pack.py`, its boot image.
