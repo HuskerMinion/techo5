@@ -297,3 +297,5 @@ instructions and notes before you install it.
 - [techo5-sound-ai](https://github.com/calin2k/techo5-sound-ai) by calin2k: an on-device room sound classifier
   (Google's YAMNet) with an activity alarm, run from `/data` through `rc.local` and this interface, so it
   outlasts updates. Its sound classes are for information only; it is not a life-safety device.
+- [techo5-netbird](https://github.com/tioan/techo5-netbird) by tioan: NetBird's own client, run from `/data`
+  through `rc.local`, so it outlasts updates.
