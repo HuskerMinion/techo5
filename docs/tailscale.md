@@ -7,7 +7,7 @@ anybody's router.
 
 Every Echo Show, Echo Spot and Skylight image carries Tailscale, off until you give it a key. If you run
 your own [Headscale](https://headscale.net) server, the device can join that instead: see
-[Your own Headscale](#your-own-headscale). If you use NetBird, see [NetBird](netbird.md). It needs
+[Your own Headscale](#your-own-headscale). If you use NetBird, see [NetBird](netbird.md): it is an add-on now. It needs
 the device's 64-bit kernel: an Echo Show 8 2nd gen still on Amazon's kernel doesn't offer it. The Echo
 Dots don't carry it: they stay in the house.
 

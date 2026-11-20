@@ -35,7 +35,7 @@ These are left as they are on purpose, so they aren't missing translations:
 
 - **Names**: clock styles, themes, skins and fonts, like a font's name
   ([#324](https://github.com/HuskerMinion/techo5/issues/324)), and product names: Home Assistant,
-  Music Assistant, Tailscale, NetBird, AirPlay, Sendspin, Spotify.
+  Music Assistant, Tailscale, AirPlay, Sendspin, Spotify.
 - **The camera test page**: a diagnostic page, kept in English
   ([#324](https://github.com/HuskerMinion/techo5/issues/324)).
 - **The Wi-Fi password keyboard**: its keys type the password, so they're the same everywhere.

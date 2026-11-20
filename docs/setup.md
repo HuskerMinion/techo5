@@ -91,7 +91,7 @@ goes down. The device then restarts into first run. A reset clears:
   and automatic updates (off)
 - the SIP account and the phone book
 - the slideshow's photos, sounds and fonts of its own, wake word recordings and clips
-- SSH keys, Tailscale's and NetBird's logins, Spotify's login
+- SSH keys, Tailscale's login and what the built-in NetBird left, Spotify's login
 - the Tessera dashboard's layout, the time server, and the time zone chosen on the device
 - crash reports and logs, which can hold names and addresses
 
@@ -2580,8 +2580,8 @@ except that a public IPv6 address is counted with the rest of its /64.
 An Echo Show, Echo Spot or Skylight can join your Tailscale network, so a device in another house
 stays in your own Home Assistant, and its setup page can be opened from afar with **Remote setup**.
 Off until you give it a key: see [Tailscale: reaching a device from away](tailscale.md). It can also
-join your own Headscale server instead of Tailscale's. Or use NetBird, NetBird's own service or one you
-run: see [NetBird: reaching a device from away](netbird.md).
+join your own Headscale server instead of Tailscale's. NetBird is no longer built in: it runs as an
+add-on, [techo5-netbird](https://github.com/tioan/techo5-netbird), made and kept by its author (see [NetBird](netbird.md)).
 
 ## 13. An Echo Wall Clock
 
