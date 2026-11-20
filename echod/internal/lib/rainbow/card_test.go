@@ -109,6 +109,30 @@ func TestAVeryLongAnswerIsCutAtTheMostLines(t *testing.T) {
 	}
 }
 
+// Cutting an answer at cardMost costs the same however long it is: the last line is cut from the word
+// that did not fit on it, not from all the rest. Cut from all the rest, an answer of 9000 characters took
+// most of a second on a fast computer, many on the Show, and this one of 180,000 would run past the
+// test's time limit.
+func TestTheCutCostsTheSameForAnyLength(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	w := int(cardW*g.k - 2*cardPad*g.k)
+	a := wrapLines(f.Reply, strings.Repeat(longReply+" ", 20), w, cardMost)
+	b := wrapLines(f.Reply, strings.Repeat(longReply+" ", 400), w, cardMost)
+	if !slices.Equal(a, b) || len(b) != cardMost || !strings.HasSuffix(b[cardMost-1], "…") {
+		t.Fatalf("cut differently for a longer answer:\n%q\n%q", a[len(a)-1], b[len(b)-1])
+	}
+	// The cut line is what the whole of the rest gave: as much of the line and the next word as fits.
+	whole := wrapLines(f.Reply, strings.Repeat(longReply+" ", 20), w, 0)
+	if !slices.Equal(a[:cardMost-1], whole[:cardMost-1]) {
+		t.Error("the lines over the cut are not the answer's")
+	}
+	rest := strings.Join(whole[cardMost-1:cardMost+3], " ") // three lines past the cut stand for the rest
+	if want := clipLine(f.Reply, rest, w); a[cardMost-1] != want {
+		t.Errorf("the last line is %q, want %q", a[cardMost-1], want)
+	}
+}
+
 // A long answer is laid out whole, the card as tall as four lines of it, and the window scrolls down it
 // with the voice to rest on its end; the edges fade where there is more. On the Show 8's screen and the
 // Show 5's.
