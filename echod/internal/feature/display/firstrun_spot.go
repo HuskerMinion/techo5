@@ -173,7 +173,7 @@ func (d *Display) firstRunSavePick() {
 	if err := firstrun.SaveLanguage(lang, on); err != nil {
 		slog.Warn("saving the screen language failed", "err", err)
 	}
-	setClock24(d.clock, config.Get().Screen.Clock24)
+	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
 }
 
 // nextRoom is the listed room after room, round again after the last; Other is the setup page's.

@@ -97,7 +97,7 @@ func TestFirstRunLanguageStep(t *testing.T) {
 	d, _ := firstRunDisplay(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
-	setClock24(nil, false)
+	setClockFormat(nil, false, false)
 	setStep(t, frLanguage)
 	if v := d.firstRunView(time.Now()); v.lang != "en" {
 		t.Fatalf("an unset language shows %q chosen", v.lang)
@@ -137,7 +137,7 @@ func TestFirstRunTapOnTheLitLanguageKeepsMatchAll(t *testing.T) {
 	if err := config.Set().Screen().Clock24(true); err != nil {
 		t.Fatal(err)
 	}
-	setClock24(nil, true)
+	setClockFormat(nil, true, false)
 	setStep(t, frLanguage)
 	v := d.firstRunView(time.Now())
 	if v.lang != "en" || config.Get().Screen.Language != "" {

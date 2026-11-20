@@ -140,6 +140,23 @@ func TestBrokenColorTablesAreRefused(t *testing.T) {
 	if _, err := parseColor(good, cpalTable(red)[:10]); err == nil {
 		t.Error("a short palette was read")
 	}
+	// An offset past 2 GB is refused by the check itself, also where an int is 32 bits and the offset
+	// would be negative as one (GOARCH=arm).
+	far := slices.Clone(good)
+	binary.BigEndian.PutUint32(far[4:], 0xFFFFFFF0)
+	if _, err := parseColor(far, nil); err == nil {
+		t.Error("a base offset past 2 GB was read")
+	}
+	far = slices.Clone(good)
+	binary.BigEndian.PutUint32(far[8:], 0x80000000)
+	if _, err := parseColor(far, nil); err == nil {
+		t.Error("a layer offset past 2 GB was read")
+	}
+	pal := cpalTable(red)
+	binary.BigEndian.PutUint32(pal[8:], 0xFFFFFFFC)
+	if _, err := parsePalette(pal); err == nil {
+		t.Error("a palette offset past 2 GB was read")
+	}
 	if c, err := readColor(bytes.NewReader(bundled(t, "opensans"))); c != nil || err != nil {
 		t.Errorf("a font with no color tables: %v, %v", c, err)
 	}
@@ -342,4 +359,67 @@ func TestTheColorEmojiFont(t *testing.T) {
 	if n := count(heart, color.RGBA{0xB0, 0xB0, 0xB0, 255}); n < 20 {
 		t.Errorf("the black heart's edge is %d pixels", n)
 	}
+}
+
+// A color glyph whose layers cover far more than a few squares of its size (a broken font's, its
+// layers far apart) is drawn as its plain glyph, as text and as one tint, rather than having tone
+// ask for a buffer of the layers' whole span. Here Open Sans is told its em is 128 units rather than
+// 2048, so its O, a layer of the dotless j, is sixteen times too big.
+func TestAColorGlyphTooBigIsItsPlainGlyph(t *testing.T) {
+	ttf := bundled(t, "opensans")
+	f, err := sfnt.Parse(ttf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf sfnt.Buffer
+	gid := func(r rune) sfnt.GlyphIndex {
+		g, err := f.GlyphIndex(&buf, r)
+		if err != nil || g == 0 {
+			t.Fatalf("no glyph for %q", r)
+		}
+		return g
+	}
+	head := findTable(t, ttf, "head")
+	binary.BigEndian.PutUint16(head[18:], 128) // unitsPerEm
+	colr := colrTable([]colorBase{{glyph: gid(dotlessJ), first: 0, n: 2}},
+		[]colorLayer{{gid('O'), 0}, {gid('.'), textColor}})
+	write(t, ownDir(t), "color.ttf", withTables(t, ttf, map[string][]byte{"head": head, "COLR": colr, "CPAL": cpalTable(red)}))
+	Rescan()
+	face, err := Face(Go, false, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := face.(*Stack)
+	if !ok || !s.colored {
+		t.Fatalf("the face is %T, not a stack with color", face)
+	}
+	if cg, ok := s.colorOf(dotlessJ); ok {
+		t.Fatalf("a glyph covering %v at 40 pixels is a color glyph", cg.bounds())
+	}
+	// Still drawn, as its plain glyph: no red, and something in the text's color.
+	img := image.NewRGBA(image.Rect(0, 0, 600, 600))
+	blue := image.NewUniform(color.RGBA{0, 0, 255, 255})
+	DrawString(img, blue, face, fixed.P(10, 500), string(dotlessJ))
+	if n := count(img, color.RGBA{255, 0, 0, 255}); n != 0 {
+		t.Errorf("%d red pixels: drawn in color", n)
+	}
+	if n := count(img, color.RGBA{0, 0, 255, 255}); n == 0 {
+		t.Error("nothing drawn")
+	}
+	(&font.Drawer{Dst: img, Src: blue, Face: face, Dot: fixed.P(10, 500)}).DrawString(string(dotlessJ))
+}
+
+// findTable is a copy of the table tag of the font file ttf.
+func findTable(t *testing.T, ttf []byte, tag string) []byte {
+	t.Helper()
+	be := binary.BigEndian
+	for i := 0; i < int(be.Uint16(ttf[4:])); i++ {
+		rec := ttf[12+16*i:]
+		if string(rec[:4]) == tag {
+			off, length := be.Uint32(rec[8:]), be.Uint32(rec[12:])
+			return slices.Clone(ttf[off : off+length])
+		}
+	}
+	t.Fatalf("no %s table", tag)
+	return nil
 }

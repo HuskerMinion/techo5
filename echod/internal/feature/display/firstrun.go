@@ -223,7 +223,7 @@ func (d *Display) firstRunLanguage(lang string) {
 	if err := firstrun.SetLanguage(lang); err != nil {
 		slog.Warn("saving the screen language failed", "err", err)
 	}
-	setClock24(d.clock, config.Get().Screen.Clock24)
+	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
 	d.wake()
 }
 
@@ -232,7 +232,7 @@ func (d *Display) firstRunClock() {
 	if err := firstrun.SetClock24(!config.Get().Screen.Clock24); err != nil {
 		slog.Warn("saving the clock format failed", "err", err)
 	}
-	setClock24(d.clock, config.Get().Screen.Clock24)
+	setClockFormat(d.clock, config.Get().Screen.Clock24, config.Get().Screen.NoAMPM)
 	d.wake()
 }
 

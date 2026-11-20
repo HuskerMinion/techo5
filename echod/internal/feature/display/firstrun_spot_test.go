@@ -61,7 +61,7 @@ func TestSpotFirstRunLanguage(t *testing.T) {
 	d, _ := spotFirstRun(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
-	setClock24(nil, false)
+	setClockFormat(nil, false, false)
 	spotSetStep(t, frLanguage)
 	before := config.Get().Screen
 	unsaved := func(what string) {
@@ -160,7 +160,7 @@ func TestSpotFirstRunBackShowsNoStalePick(t *testing.T) {
 	d, _ := spotFirstRun(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
-	setClock24(nil, false)
+	setClockFormat(nil, false, false)
 	spotSetStep(t, frLanguage)
 	if !spotFRTap(d, "lang") {
 		t.Fatal("no language button")
@@ -271,7 +271,7 @@ func TestSpotFirstRunPickGoesWhenTheStepIsLeft(t *testing.T) {
 	d, _ := spotFirstRun(t, true, true)
 	was := clock24.Load()
 	t.Cleanup(func() { clock24.Store(was) })
-	setClock24(nil, false)
+	setClockFormat(nil, false, false)
 	spotSetStep(t, frLanguage)
 	if !spotFRTap(d, "lang") {
 		t.Fatal("no language button")

@@ -9,9 +9,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
@@ -171,5 +173,18 @@ func TestTheFontsAreLookedAt(t *testing.T) {
 	got := all()
 	if len(got) != 3 || got[0].file != fontName || got[1].file != "zz-noto-emoji.ttf" || got[2].file != "zz-fluent-emoji.ttf" {
 		t.Errorf("the fonts are %+v", got)
+	}
+}
+
+// Each font fetched here is one lib/fonts knows is not the owner's, so none counts toward the owner's
+// limit on fonts of their own.
+func TestTheFetchedFontsAreNotCountedAsTheOwners(t *testing.T) {
+	for _, ft := range all() {
+		if !slices.Contains(fonts.Fetched, ft.file) {
+			t.Errorf("%s is not in fonts.Fetched", ft.file)
+		}
+	}
+	if len(fonts.Fetched) != len(all()) {
+		t.Errorf("fonts.Fetched is %v", fonts.Fetched)
 	}
 }

@@ -147,7 +147,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			fontRow(),
 			textSizeRow(),
 			clockStyleRow(),
-			settingRow{id: "clock", label: tr("clock_format"), kind: ctlChoice, value: clockOptions[clockIndex()]},
+			settingRow{id: "clock", label: tr("clock_format"), kind: ctlChoice, value: clockLabels[clockIndex()]},
 		)
 		rows = append(rows, clockLayoutRows()...)
 		rows = append(rows,
@@ -567,17 +567,9 @@ func catByName(name string) (category, bool) {
 }
 
 var (
-	clockOptions     = []string{clock12Label, clock24Label}
 	slideshowOptions = []string{"Off", "Background", "Screensaver"}
 	slideshowModes   = []string{"", config.SlideshowBackground, config.SlideshowScreensaver}
 )
-
-func clockIndex() int {
-	if clock24.Load() {
-		return 1
-	}
-	return 0
-}
 
 func slideshowIndex() int {
 	mode := home.Get().SlideshowMode()
@@ -789,7 +781,7 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 	case "folder":
 		return folderPicker(sv.st.folder, sv.st.demo), true
 	case "clock":
-		return pickerView{title: tr("clock_format"), opts: clockOptions, cur: clockIndex()}, true
+		return pickerView{title: tr("clock_format"), opts: clockLabels, cur: clockIndex()}, true
 	case "clockstyle":
 		return clockStylePicker()
 	case "font":
@@ -956,12 +948,15 @@ func (d *Display) choose(id string, i int) {
 	case "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic":
 		d.chooseClockLayout(id, i)
 	case "clock":
-		on := i == 1
-		if err := config.Set().Screen().Clock24(on); err != nil {
+		if i < 0 || i >= len(clockLabels) {
+			return
+		}
+		h24, bare := clockFormatOf(clockLabels[i])
+		if err := config.Set().Screen().ClockFormat(h24, bare); err != nil {
 			slog.Warn("saving the clock format failed", "err", err)
 			return
 		}
-		setClock24(d.clock, on)
+		setClockFormat(d.clock, h24, bare)
 	case "camtime":
 		setCameraTime(d.camTime, i)
 	case "camfit":

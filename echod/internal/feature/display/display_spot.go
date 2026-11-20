@@ -405,7 +405,7 @@ func build() *Display {
 	d.buildRoomLights()
 	d.clock = clockSelect(d.wake)
 	// First run's language step sets the clock too, on the screen or the setup page.
-	firstrun.OnClock(func(on bool) { setClock24(d.clock, on); d.wake() })
+	firstrun.OnClock(func(on bool) { setClockFormat(d.clock, on, config.Get().Screen.NoAMPM); d.wake() })
 	d.clockStyleSel = clockStyleSelect(d)
 	d.clockPos = clockPositionSelect(d.wake)
 	d.fontSel = fontSelect(d)
@@ -507,7 +507,7 @@ func (d *Display) Entities() []esphome.Entity {
 
 // Restore lights the panel the way it was left.
 func (d *Display) Restore(c config.Config) {
-	setClock24(d.clock, c.Screen.Clock24)
+	setClockFormat(d.clock, c.Screen.Clock24, c.Screen.NoAMPM)
 	d.roomSw.Set(c.Screen.IgnoreRoomLights)
 	d.describeScreen()
 	d.clockStyleSel.Set(clockStyles[clockStyleIndex()].label)

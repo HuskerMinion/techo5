@@ -271,3 +271,42 @@ func TestAnUndecodableStationHasNotEndedByItself(t *testing.T) {
 		t.Errorf("an undecodable station was reported ended by itself: %v", ended)
 	}
 }
+
+// A station the device cannot decode, with no music library to hand it to, is said to be unplayable,
+// since the radio does not put it back on and would otherwise go quiet with nothing said. With a library
+// set up the hand-off goes as before (#649), and nothing is said here: here the library refuses an
+// address that is not a public one.
+func TestAnUndecodableStationWithNoLibraryIsSaidToBeUnplayable(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	d := speaker.NewDriver(speaker.New())
+	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
+	p.stream.handOff = p.handOff
+	said := make(chan string, 4)
+	p.OnUnplayable.Listen(func(url string) { said <- url })
+
+	url := aacStation(t)
+	p.stream.Play(url)
+	select {
+	case got := <-said:
+		if got != url {
+			t.Errorf("said %q is unplayable, want %q", got, url)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a station that cannot be decoded, with no music library, was not said to be unplayable")
+	}
+
+	token := "a-token"
+	if err := config.Set().MusicAssistant().Server("http://music.example:8095", &token); err != nil {
+		t.Fatal(err)
+	}
+	p.stream.Play(aacStation(t))
+	waitUntil(t, "the second station that could not be decoded was cleared", func() bool {
+		playing, paused := p.stream.Playing()
+		return !playing && !paused
+	})
+	select {
+	case got := <-said:
+		t.Errorf("with a music library set up, %q was said to be unplayable", got)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
