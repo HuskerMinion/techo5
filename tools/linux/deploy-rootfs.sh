@@ -41,6 +41,8 @@ DEVICE_OVERLAY=${DEVICE_OVERLAY:-}
 # goes to the kernel's partition (echod/internal/update/kernel). athena's is tools/linux/athena/kernel/build.sh's
 # boot-athena.img, its amp tuning slot empty, and goes to the boot partition with the unit's own tuning; the
 # Skylight's is tools/linux/skylight/kernel/build.sh's boot-skylight.img, and goes to recovery as it is.
+# The ThinkSmart View's is tools/linux/thinksmart/kernel/build.sh's boot-thinksmart.img, and goes with
+# the slot: the store's boot layer (tools/linux/thinksmart/lk2nd-ab) starts each slot with its own.
 # Without it the rootfs leaves the unit's kernel as it is.
 KERNEL_IMAGE=${KERNEL_IMAGE:-}
 INSTALL=; REBOOT=; ONDEVICE=; KEEP=
@@ -134,7 +136,7 @@ echo "== tailscaled: sha256 $(sha256sum "$TS" | cut -d' ' -f1)"
 # No overlay (the Show's and the Spot's builds) is no board: sed's failure must not end the script (pipefail).
 board=$( (sed -n 's/^T5_BOARD=//p' "${DEVICE_OVERLAY:-/nonexistent}/etc/techo5/device.conf" 2>/dev/null || true) | tail -1)
 case "$board" in
-athena|skylight)
+athena|skylight|thinksmart)
 	F64=$ROOT/bin/techo5-ffmpeg-arm64
 	[ -e "$F64" ] || { echo "bin/techo5-ffmpeg-arm64 is missing: build it with tools/linux/build-ffmpeg-arm64.sh (in WSL); the $board image carries it" >&2; exit 1; }
 	# An ELF64 for AArch64 (e_machine 183) with no interpreter: nothing of the 32-bit userspace can be linked.
@@ -208,11 +210,13 @@ fi
 if [ -n "$KERNEL_IMAGE" ]; then
 	kboard=$( (sed -n 's/^T5_BOARD=//p' "$STAGE/overlay/etc/techo5/device.conf" 2>/dev/null || true) | tail -1)
 	case "$kboard" in
-	athena|skylight) ;;
-	*) echo "KERNEL_IMAGE is for athena or the Skylight: DEVICE_OVERLAY=tools/linux/athena/overlay or tools/linux/skylight/overlay" >&2; exit 1;;
+	athena|skylight|thinksmart) ;;
+	*) echo "KERNEL_IMAGE is for athena, the Skylight or the ThinkSmart View: DEVICE_OVERLAY=tools/linux/<board>/overlay" >&2; exit 1;;
 	esac
 	PY=$(command -v python3 || command -v python) || { echo "KERNEL_IMAGE needs python to check the image" >&2; exit 1; }
-	"$PY" "$ROOT/tools/linux/$kboard/kernel/check-boot.py" "$KERNEL_IMAGE" || { echo "KERNEL_IMAGE is not a released $kboard boot image" >&2; exit 1; }
+	check=$ROOT/tools/linux/$kboard/kernel/check-boot.py how=
+	[ "$kboard" = thinksmart ] && check=$ROOT/tools/linux/thinksmart/kernel/pack.py how=check
+	"$PY" "$check" $how "$KERNEL_IMAGE" || { echo "KERNEL_IMAGE is not a released $kboard boot image" >&2; exit 1; }
 	mkdir -p "$STAGE/overlay/usr/share/techo5/kernel"
 	cp "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-$kboard.img"
 	cmp -s "$KERNEL_IMAGE" "$STAGE/overlay/usr/share/techo5/kernel/boot-$kboard.img" || { echo "kernel copy differs" >&2; exit 1; }

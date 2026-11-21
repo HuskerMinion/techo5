@@ -295,6 +295,31 @@ Linux kernel for the Skylight Calendar 15, tools/linux/skylight/kernel
   The Wi-Fi and Bluetooth firmware is not shipped: each unit's own goes into its store at install,
   from its vendor partition.
 
+Linux kernel for the Lenovo ThinkSmart View, tools/linux/thinksmart/kernel
+  Built from msm8953-mainline (https://github.com/msm8953-mainline/linux, tag v7.1.3-r0), GPL-2.0;
+  build.sh writes the prepared source tree with its configuration (techo5-thinksmart.config) as
+  linux-7.1.3-techo5-thinksmart-source.tar.xz, the complete source of boot-thinksmart.img, which a
+  root filesystem built with it carries as usr/share/techo5/kernel/boot-thinksmart.img. No release
+  carries it yet.
+  The TAS5782M amplifier driver in src/ (tas5782m*) is rickx's
+  (https://github.com/rickx/ubuntu-thinksmart), as changed in
+  https://github.com/m0s4ik/thinksmart-view-debian (commit 02821bc), GPL-2.0, with its debug build
+  layer removed here (src/LICENSE.tas5782m). The S5KC505A sensor driver, src/s5kc505a.c, is Jetha
+  Chan's (https://github.com/jethac/lenovo-thinksmart-view) with flip controls from that project,
+  GPL-2.0. patches/0001-0003 (q6asm-dai, by Vladyslav Tymoshchuk) and patches/0004 (the venus HFI
+  parser) come from the same project, GPL-2.0. patches/0005, the front camera in the board device
+  tree, is TECHO5's own, GPL-2.0-only OR BSD-3-Clause like the file it changes; patches/0006, the
+  video decoder's interrupt, is TECHO5's own, GPL-2.0-only like the file it changes.
+
+lk2nd for the Lenovo ThinkSmart View, tools/linux/thinksmart/lk2nd
+  lk2nd (https://github.com/msm8916-mainline/lk2nd, tag 23.1, commit e9c8b21), built unchanged by
+  build.sh with its own options SIGN_BOOTIMG=1 and LK2ND_QCDTBS="" as its notes for this board say;
+  little kernel's MIT License and lk2nd's BSD-3-Clause, as its source files say. The signature is
+  made with the AOSP test key in lk2nd's own tree (lk2nd/certs), which the board's stock bootloader
+  accepts; it vouches for nothing. A release that publishes the image
+  (techo5-lk2nd-thinksmart-<version>.img) publishes it as built from that tag, whose source is
+  lk2nd's repository.
+
 Light sensor, echod/internal/hardware/ambient/em3071x.go
   The Everlight EM3071X's register addresses and the value that switches it on are the ones Rockchip's
   GPL-2.0 driver uses (drivers/input/sensors/lsensor/ls_em3071x.c in Rockchip's kernel). They are

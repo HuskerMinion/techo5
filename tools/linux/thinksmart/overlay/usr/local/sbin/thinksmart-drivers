@@ -1,0 +1,36 @@
+#!/bin/sh
+# thinksmart-drivers: start again the ThinkSmart View's built-in drivers that wanted firmware before
+# any could be read. The kernel probes them before it mounts /, so they found none: the audio DSP's
+# and the video decoder's are the unit's own, linked from its modem partition by the store's
+# /sbin/init, and the speaker amplifier's DSP configuration and Wi-Fi's are files in /lib/firmware.
+#
+# Run by the store's /sbin/init (tools/linux/thinksmart/init) once the firmware is linked, and again
+# by etc/techo5/device.conf in the slot, so a store whose /sbin/init predates the built-in kernel
+# still gets them; a second run finds nothing to do. Prints what it did, one line each.
+#
+# The remote processors that stayed offline are started. Devices left without a driver are probed
+# again (the amplifier on I2C, the video decoder); the sound card, waiting for the amplifier and the
+# DSP's services, then comes up by itself. Wi-Fi's SDIO function stays bound with no interface, so it
+# is bound again.
+for r in /sys/class/remoteproc/remoteproc*; do
+	[ "$(cat "$r/state" 2>/dev/null)" = offline ] || continue
+	if echo start > "$r/state" 2>/dev/null; then
+		echo "started $(cat "$r/name" 2>/dev/null)"
+	else
+		echo "$(cat "$r/name" 2>/dev/null) did not start"
+	fi
+done
+for bus in i2c spi platform; do
+	for d in /sys/bus/$bus/devices/*; do
+		[ -e "$d" ] && [ ! -e "$d/driver" ] && echo "${d##*/}" > /sys/bus/$bus/drivers_probe 2>/dev/null
+	done
+done
+if [ ! -e /sys/class/net/wlan0 ]; then
+	for f in /sys/bus/sdio/drivers/ath10k_sdio/mmc*; do
+		[ -e "$f" ] || continue
+		echo "${f##*/}" > /sys/bus/sdio/drivers/ath10k_sdio/unbind
+		echo "${f##*/}" > /sys/bus/sdio/drivers/ath10k_sdio/bind
+		echo "Wi-Fi bound again"
+	done
+fi
+exit 0

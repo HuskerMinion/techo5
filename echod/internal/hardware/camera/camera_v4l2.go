@@ -108,6 +108,10 @@ func findChain() (v4l2Chain, error) {
 
 // v4l2Available is whether the whole chain is there.
 func v4l2Available() bool {
+	if camssBoard() {
+		_, err := findCAMSS()
+		return err == nil
+	}
 	_, err := findChain()
 	return err == nil
 }
@@ -119,6 +123,15 @@ type v4l2Cam struct {
 	lay                          bufLayout
 	buf                          *[88]byte // one v4l2_buffer, reused; the larger layout fits both
 	plane                        *[64]byte
+
+	// What another board's chain differs in (camera_camss.go); zero on athena. more are the rest of its
+	// nodes, closed with the others. gain turns the Show 5's 1/64 gain steps into the sensor's own,
+	// where that is not the OV13855's. rawBytes is the size of a frame as the driver hands it over, and
+	// repack what makes the packed frame everything downstream reads out of it, where the two differ.
+	more     []int
+	gain     func(int) int32
+	rawBytes int
+	repack   func(raw []byte) []byte
 }
 
 func subdevFormat(fd int, pad, w, h, code uint32) error {
@@ -146,6 +159,9 @@ func setCtrl(fd int, id uint32, v int32) error {
 }
 
 func openV4L2() (*v4l2Cam, error) {
+	if camssBoard() {
+		return openCAMSS()
+	}
 	chain, err := findChain()
 	if err != nil {
 		return nil, err
@@ -190,6 +206,15 @@ func openV4L2() (*v4l2Cam, error) {
 			"(the kernel needs mtk_camsv.out_mode=1)", pix, bpl, bytesPerLine)
 	}
 
+	if err := v.buffers(); err != nil {
+		v.close()
+		return nil, err
+	}
+	return v, nil
+}
+
+// buffers asks the video node for its buffers, maps them and queues them all.
+func (v *v4l2Cam) buffers() error {
 	var req [20]byte
 	put32(req[:], 0, v4l2Bufs)
 	put32(req[:], 4, v4l2BufCaptureMplane)
@@ -199,29 +224,25 @@ func openV4L2() (*v4l2Cam, error) {
 	// A kernel without the hint for this queue ignores the flag and maps it uncached as before.
 	req[16] = v4l2MemoryFlagNonCoherent
 	if err := ioctl(v.video, vioc(3, 8, 20), unsafe.Pointer(&req[0])); err != nil {
-		v.close()
-		return nil, fmt.Errorf("camera buffers: %w", err)
+		return fmt.Errorf("camera buffers: %w", err)
 	}
 	v.maps = make([][]byte, le32(req[:], 0))
 	for i := range v.maps {
 		v.setBuf(uint32(i))
 		if err := ioctl(v.video, vioc(3, 9, v.lay.size), unsafe.Pointer(&v.buf[0])); err != nil {
-			v.close()
-			return nil, fmt.Errorf("camera buffer %d: %w", i, err)
+			return fmt.Errorf("camera buffer %d: %w", i, err)
 		}
 		length, offset := le32(v.plane[:], 4), le32(v.plane[:], 8)
 		m, err := unix.Mmap(v.video, int64(offset), int(length), unix.PROT_READ, unix.MAP_SHARED)
 		if err != nil {
-			v.close()
-			return nil, fmt.Errorf("camera buffer %d map: %w", i, err)
+			return fmt.Errorf("camera buffer %d map: %w", i, err)
 		}
 		v.maps[i] = m
 		if err := v.queue(); err != nil {
-			v.close()
-			return nil, fmt.Errorf("camera buffer %d queue: %w", i, err)
+			return fmt.Errorf("camera buffer %d queue: %w", i, err)
 		}
 	}
-	return v, nil
+	return nil
 }
 
 // setBuf readies v.buf for buffer i, its one plane at v.plane.
@@ -248,7 +269,11 @@ func (v *v4l2Cam) exposure(shutter, gain int) {
 	if err := setCtrl(v.sensor, cidExposure, int32(shutter)); err != nil {
 		slog.Warn("camera: exposure", "lines", shutter, "err", err)
 	}
-	if err := setCtrl(v.sensor, cidAnalogGain, int32(gain*2)); err != nil {
+	g := int32(gain * 2)
+	if v.gain != nil {
+		g = v.gain(gain)
+	}
+	if err := setCtrl(v.sensor, cidAnalogGain, g); err != nil {
 		slog.Warn("camera: gain", "gain", gain, "err", err)
 	}
 }
@@ -319,7 +344,11 @@ func (v *v4l2Cam) stream(stop chan struct{}, frame func(bayer []byte)) {
 		}
 		quiet = time.Now()
 		i, used := le32(v.buf[:], 0), le32(v.plane[:], 0)
-		if int(i) < len(v.maps) && int(used) >= frameBytes && len(v.maps[i]) >= frameBytes {
+		if v.repack != nil {
+			if int(i) < len(v.maps) && int(used) >= v.rawBytes && len(v.maps[i]) >= v.rawBytes {
+				frame(v.repack(v.maps[i][:v.rawBytes]))
+			}
+		} else if int(i) < len(v.maps) && int(used) >= frameBytes && len(v.maps[i]) >= frameBytes {
 			frame(v.maps[i][:frameBytes])
 		}
 		if err := v.queue(); err != nil {
@@ -348,4 +377,8 @@ func (v *v4l2Cam) close() {
 			*fd = -1
 		}
 	}
+	for _, fd := range v.more {
+		syscall.Close(fd)
+	}
+	v.more = nil
 }

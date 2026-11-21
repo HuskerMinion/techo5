@@ -87,7 +87,7 @@ func onShow8[T any](show5, show8 T) T {
 // converter is another part with controls of its own (athenaControls).
 var adcs = func() []string {
 	switch {
-	case layout.Athena(), layout.Skylight():
+	case layout.Athena(), layout.Skylight(), layout.ThinkSmart():
 		return nil
 	case layout.Crown():
 		return []string{"A", "B"}

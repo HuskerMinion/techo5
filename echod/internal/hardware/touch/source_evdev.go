@@ -24,6 +24,12 @@ func (s *Screen) Start(context.Context) error {
 		// The driver names module ids it knows by the panel instead: 0x43 is "EP0430M09"
 		dev, err = input.Find("EP0430M09")
 	}
+	if layout.ThinkSmart() {
+		// The Himax panel's controller, or the FT8201 panel's, which edt-ft5x06 names by its module id.
+		if dev, err = input.Find("Himax Touchscreen"); err != nil {
+			dev, err = input.FindPrefix("generic ft5x06")
+		}
+	}
 	if err != nil && layout.Board == "cronos" {
 		// The 2nd gen Show 5 on TECHO5's mainline kernel: the Goodix driver's own name.
 		dev, err = input.Find("Goodix Capacitive TouchScreen")

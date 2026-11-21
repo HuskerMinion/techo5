@@ -75,6 +75,31 @@ param(
     # install-skylight.py takes its images from the latest release, so a stable Show release without
     # them leaves new Skylights with nothing to install: it takes this switch to make one on purpose.
     [switch]$NoSkylight,
+    # The Lenovo ThinkSmart View rootfs tarball: deploy-rootfs.sh --out with
+    # DEVICE_OVERLAY=tools/linux/thinksmart/overlay KERNEL_IMAGE=<-ThinkSmartBoot>. The Show's binary on a
+    # rootfs of its own, keyed arm-thinksmart in the manifest and published as
+    # techo5-rootfs-thinksmart-<version>.tar.gz. Optional: a release without it leaves ThinkSmart Views
+    # where they are.
+    [string]$ThinkSmartRootfs = '',
+    # The kernel that rootfs carries (tools/linux/thinksmart/kernel/build.sh's boot-thinksmart.img),
+    # published as techo5-boot-thinksmart-<version>.img, and its source for the GPL (build.sh's
+    # linux-<kver>-techo5-thinksmart-source.tar.xz, published as
+    # linux-<kver>-techo5-thinksmart-<version>-source.tar.xz). Both go with -ThinkSmartRootfs.
+    [string]$ThinkSmartBoot = '',
+    [string]$ThinkSmartKernelSource = '',
+    # The ThinkSmart View's system image for new units (tools/linux/thinksmart/mkimage.sh, from a store
+    # made with mkstore.sh -k none and no -F: the unit makes its Wi-Fi, Bluetooth and GPU firmware from its
+    # own partitions, and install-thinksmart.py brings the speaker's table from its own stock kernel, so
+    # nothing of the vendor's is in a release; gzipped), published as
+    # techo5-system-thinksmart-<version>.img.gz for install-thinksmart.py. Goes with -ThinkSmartRootfs.
+    [string]$ThinkSmartSystem = '',
+    # The lk2nd install-thinksmart.py writes into boot (tools/linux/thinksmart/lk2nd/build.sh: signed, no
+    # QCDT, which the board's stock bootloader needs and lk2nd's own release images are not), published as
+    # techo5-lk2nd-thinksmart-<version>.img and named in the signed manifest. Goes with -ThinkSmartSystem.
+    # Its source goes with it (build.sh's lk2nd-<tag>-source.tar.gz: the image carries GPL-2.0 parts),
+    # published as lk2nd-<tag>-techo5-thinksmart-<version>-source.tar.gz.
+    [string]$ThinkSmartLk2nd = '',
+    [string]$ThinkSmartLk2ndSource = '',
     # The release signing key (ed25519 seed, base64). Devices take a manifest only with its signature, so
     # a release cannot be published without it. Keep it off every repository and backed up: $env:TECHO5_SIGN_KEY.
     [string]$SignKey = $env:TECHO5_SIGN_KEY,
@@ -131,7 +156,7 @@ if (($AthenaImage -and -not $AthenaBoot) -or ($AthenaBoot -and -not $AthenaImage
 }
 # A root filesystem must not carry LineageOS's vendor tree: it is Amazon's and the chip makers', not ours to
 # publish. Each unit mounts its own (tools/linux/rootfs/etc/techo5/boot.sh).
-foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     if (& tar -tzf $t | Where-Object { $_ -match '^(\./)?vendor/.' } | Select-Object -First 1) { throw "$t carries a vendor tree; build it without VENDOR_TGZ" }
     # Nor a development kernel's modules and firmware (mkrootfs.sh's inputs/kernel.tar.gz): a released
     # rootfs has no lib/modules, and lib/firmware holds only wireless-regdb's regulatory database, which
@@ -143,23 +168,24 @@ foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ })
 # kernel update (usr/share/techo5/kernel/), would be offered to all of them.
 if ($Rootfs) {
     $board = @(& tar -xzOf $Rootfs ./etc/techo5/device.conf 2>$null) -match '^T5_BOARD=' | Select-Object -Last 1
-    if ($board) { throw "$Rootfs is a board's own rootfs (device.conf: '$board'), not the Shows': pass it as -AthenaRootfs or -SkylightRootfs" }
+    if ($board) { throw "$Rootfs is a board's own rootfs (device.conf: '$board'), not the Shows': pass it as -AthenaRootfs, -SkylightRootfs or -ThinkSmartRootfs" }
     if (& tar -tzf $Rootfs | Where-Object { $_ -match '^(\./)?usr/share/techo5/kernel/.' } | Select-Object -First 1) {
         throw "$Rootfs carries a kernel (usr/share/techo5/kernel/), which the Shows' rootfs never does: build it without KERNEL_IMAGE"
     }
 }
-# The Skylight runs the Shows' binary: its rootfs must carry the same one as the Shows' in this release.
-if ($Rootfs -and $SkylightRootfs) {
+# The Skylight and the ThinkSmart View run the Shows' binary: their rootfs must carry the same one as the
+# Shows' in this release.
+foreach ($own in @($SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ -and $Rootfs }) {
     $cmp = Join-Path ([System.IO.Path]::GetTempPath()) "techo5-release-$PID"
     try {
-        $sums = foreach ($t in @($Rootfs, $SkylightRootfs)) {
+        $sums = foreach ($t in @($Rootfs, $own)) {
             $d = Join-Path $cmp ([guid]::NewGuid().ToString('n'))
             New-Item -ItemType Directory -Force $d | Out-Null
             & tar -xzf $t -C $d ./usr/local/bin/techo5
             if ($LASTEXITCODE -ne 0) { throw "$t has no usr/local/bin/techo5" }
             (Get-FileHash -Algorithm SHA256 (Join-Path $d 'usr/local/bin/techo5')).Hash
         }
-        if ($sums[0] -ne $sums[1]) { throw "$Rootfs and $SkylightRootfs carry different usr/local/bin/techo5: build both from the same tree" }
+        if ($sums[0] -ne $sums[1]) { throw "$Rootfs and $own carry different usr/local/bin/techo5: build both from the same tree" }
     } finally { Remove-Item -Recurse -Force $cmp -ErrorAction SilentlyContinue }
 }
 # The video decoder. Every rootfs carries the same 32-bit ffmpeg as usr/local/bin/techo5-ffmpeg
@@ -171,6 +197,7 @@ $ffWants = @()
 if ($Rootfs) { $ffWants += , @($Rootfs, $false) }
 if ($AthenaRootfs) { $ffWants += , @($AthenaRootfs, $true) }
 if ($SkylightRootfs) { $ffWants += , @($SkylightRootfs, $true) }
+if ($ThinkSmartRootfs) { $ffWants += , @($ThinkSmartRootfs, $true) }
 if ($ffWants.Count) {
     $ffDir = Join-Path ([System.IO.Path]::GetTempPath()) "techo5-ffmpeg-$PID"
     try {
@@ -186,7 +213,7 @@ if ($ffWants.Count) {
             $ff32[$t] = (Get-FileHash -Algorithm SHA256 (Join-Path $d 'usr/local/bin/techo5-ffmpeg')).Hash
             $has64 = $names -contains 'usr/local/bin/techo5-ffmpeg64'
             if ($want64 -and -not $has64) { throw "$t has no usr/local/bin/techo5-ffmpeg64: build bin/techo5-ffmpeg-arm64 (tools/linux/build-ffmpeg-arm64.sh) before deploy-rootfs.sh" }
-            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only athena's and the Skylight's rootfs do" }
+            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only the rootfs of athena, the Skylight and the ThinkSmart View do" }
             if (-not $want64) { continue }
             & tar -xzf $t -C $d ./usr/local/bin/techo5-ffmpeg64
             if ($LASTEXITCODE -ne 0) { throw "${t}: usr/local/bin/techo5-ffmpeg64 could not be read" }
@@ -209,7 +236,7 @@ if ($ffWants.Count) {
             $ff64[$t] = (Get-FileHash -Algorithm SHA256 $f).Hash
         }
         if (@($ff32.Values | Sort-Object -Unique).Count -gt 1) { throw "the rootfs tarballs carry different usr/local/bin/techo5-ffmpeg: build them all with the same bin/techo5-ffmpeg-arm" }
-        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$AthenaRootfs and $SkylightRootfs carry different usr/local/bin/techo5-ffmpeg64: build both with the same bin/techo5-ffmpeg-arm64" }
+        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$(@($ff64.Keys) -join ', ') carry different usr/local/bin/techo5-ffmpeg64: build them all with the same bin/techo5-ffmpeg-arm64" }
         foreach ($t in $ff64.Keys) { Write-Host "== ${t}: ffmpeg64 sha256 $($ff64[$t].ToLower())" }
     } finally { Remove-Item -Recurse -Force $ffDir -ErrorAction SilentlyContinue }
 }
@@ -251,7 +278,7 @@ if ($AthenaRootfs) {
         throw "$AthenaRootfs carries the JPEG decoder without libjpeg-turbo's licenses (usr/share/licenses/libjpeg-turbo)"
     }
 }
-foreach ($t in @($Rootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
     if ($names -contains 'usr/local/bin/techo5-gpu') { throw "$t carries the GPU helper, which only athena's rootfs does" }
     if ($names -contains 'usr/local/bin/techo5-jpeg') { throw "$t carries the JPEG decoder, which only athena's rootfs does" }
@@ -315,7 +342,7 @@ if ($AthenaRootfs) { Test-Image $AthenaRootfs }
 # Every Show rootfs carries the echo canceller and Spotify Connect: deploy-rootfs.sh copies them only when
 # bin/ has them, so a worktree without the prebuilts copied in would ship without either. And Tailscale,
 # which deploy-rootfs.sh requires, checked here too with its license; and AirPlay 2 (its receiver and nqptp).
-foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
     foreach ($b in 'techo5-aec', 'techo5-librespot', 'techo5-shairport-sync', 'techo5-nqptp') {
         if ($names -notcontains "usr/local/bin/$b") { throw "$t has no usr/local/bin/${b}: copy bin/$b-arm into bin/ before building" }
@@ -326,7 +353,7 @@ foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ })
 }
 # And the same build of each of these in every image, as with ffmpeg64.
 foreach ($b in 'tailscaled', 'techo5-shairport-sync', 'techo5-nqptp') {
-    $sums = @(foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+    $sums = @(foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
         $d = Join-Path ([System.IO.Path]::GetTempPath()) ("techo5-bin-" + [guid]::NewGuid())
         New-Item -ItemType Directory $d | Out-Null
         try {
@@ -397,6 +424,65 @@ if ($skylightGiven) {
     if ($LASTEXITCODE -ne 0) { throw "$SkylightStore does not hold this release: build it (mkstore.sh -k none) from the Skylight rootfs made for $Version with KERNEL_IMAGE=$SkylightBoot" }
     Test-Image $SkylightStore -NoFile $unitFirmware
 }
+# The ThinkSmart View: its rootfs, the kernel it carries and that kernel's source go together. Every
+# slot starts with its own kernel (tools/linux/thinksmart/lk2nd-ab), so a rootfs without one is refused.
+$thinkSmartSourceName = $null
+$thinkSmartLk2ndSourceName = $null
+$thinkSmartSet = @($ThinkSmartRootfs, $ThinkSmartBoot, $ThinkSmartKernelSource)
+$thinkSmartGiven = @($thinkSmartSet | Where-Object { $_ }).Count
+if ($thinkSmartGiven -and $thinkSmartGiven -ne $thinkSmartSet.Count) {
+    throw "ThinkSmartRootfs, ThinkSmartBoot and ThinkSmartKernelSource go together: each slot starts with the kernel its rootfs carries, and the GPL wants that kernel's source"
+}
+if ($ThinkSmartRootfs) {
+    $board = (& tar -xzOf $ThinkSmartRootfs ./etc/techo5/device.conf) -match '^T5_BOARD=' | Select-Object -Last 1
+    if ($board -ne 'T5_BOARD=thinksmart') { throw "$ThinkSmartRootfs is not a ThinkSmart View rootfs (device.conf: '$board'); build it with DEVICE_OVERLAY=tools/linux/thinksmart/overlay" }
+    $kdir = Join-Path $PSScriptRoot 'linux/thinksmart/kernel'
+    python -I (Join-Path $kdir 'pack.py') check $ThinkSmartBoot
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartBoot is not a ThinkSmart View boot image lk2nd can start (pack.py check)" }
+    $kernelSum = & tar -xzOf $ThinkSmartRootfs ./usr/share/techo5/kernel/boot-thinksmart.img.sha256 2>$null
+    if (-not $kernelSum) { throw "$ThinkSmartRootfs carries no kernel: build it with KERNEL_IMAGE=$ThinkSmartBoot (deploy-rootfs.sh)" }
+    $want = (Get-FileHash -Algorithm SHA256 $ThinkSmartBoot).Hash.ToLower()
+    $got = ($kernelSum -split '\s+')[0].ToLower()
+    if ($got -ne $want) { throw "$ThinkSmartRootfs carries kernel $got, but -ThinkSmartBoot is ${want}: build the rootfs with KERNEL_IMAGE=$ThinkSmartBoot" }
+    # The source must be what built the kernel: check-source.py ties it to the boot image's own
+    # configuration, and to build.sh's kernel.config beside the image when it is there.
+    $chk = @((Join-Path $kdir 'check-source.py'))
+    $cfg = Join-Path (Split-Path -Parent (Resolve-Path $ThinkSmartBoot)) 'kernel.config'
+    if (Test-Path -LiteralPath $cfg -PathType Leaf) { $chk += @('--config', $cfg) }
+    $out = @(python -I @chk $ThinkSmartKernelSource $ThinkSmartBoot)
+    $out | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartKernelSource is not the source of $ThinkSmartBoot (check-source.py)" }
+    $kver = ($out | Where-Object { $_ -match '^kver (\d+\.\d+\.\d+)$' } | Select-Object -Last 1) -replace '^kver ', ''
+    if (-not $kver) { throw "check-source.py named no kernel version" }
+    $thinkSmartSourceName = "linux-$kver-techo5-thinksmart-$Version-source.tar.xz"
+    Test-Image $ThinkSmartRootfs -EmptyKeys
+}
+if ($ThinkSmartSystem -and -not $ThinkSmartRootfs) { throw "-ThinkSmartSystem needs -ThinkSmartRootfs: the image holds that rootfs, and installed units update from it" }
+if ($ThinkSmartSystem) {
+    # mkimage.sh's: 4694016 sectors, the MBR's two partitions (lk2nd's boot files at 2048, the store at
+    # 499712, ext4 labeled techo5-store), as install-thinksmart.py checks it; this release's rootfs and
+    # kernel in its store; none of the unit's firmware, and no SSH key.
+    python -I -c "import gzip,struct,sys`nf=gzip.open(sys.argv[1],'rb'); m=f.read(512)`nparts=[struct.unpack_from('<4xB3xII',m,446+16*i)[1:] for i in range(2)]`nf.seek(499712*512+1024); sb=f.read(1024)`nok=m[510:]==b'\x55\xaa' and parts==[(2048,497664),(499712,4194304)] and sb[56:58]==b'\x53\xef' and sb[120:136].rstrip(b'\0')==b'techo5-store'`nn=499712*512+2048`nwhile True:`n    b=f.read(1<<24)`n    if not b: break`n    n+=len(b)`nsys.exit(0 if ok and n==4694016*512 else 1)" $ThinkSmartSystem
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartSystem is not a gzipped ThinkSmart View system image (mkimage.sh)" }
+    $bootSum = (Get-FileHash -Algorithm SHA256 $ThinkSmartBoot).Hash.ToLower()
+    $holds = "import gzip,sys`nwant={w.encode():False for w in sys.argv[2:]}`nf=gzip.open(sys.argv[1],'rb'); tail=b''`nwhile not all(want.values()):`n    b=f.read(1<<20)`n    if not b: break`n    for w in want:`n        if w in tail+b: want[w]=True`n    tail=(tail+b)[-256:]`nmissing=[w.decode() for w,ok in want.items() if not ok]`nfor m in missing: print('missing: '+m)`nsys.exit(1 if missing else 0)"
+    python -I -c $holds $ThinkSmartSystem "$bootSum  boot-thinksmart.img`n" "techo5 rootfs $Version built "
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartSystem does not hold this release: build it (mkstore.sh -k none, mkimage.sh) from the ThinkSmart rootfs made for $Version" }
+    Test-Image $ThinkSmartSystem -NoFile @('firmware-sdio-6.bin', 'board-2.bin', 'rampatch_00150100.bin', 'nvm_00150100.bin', 'a506_zap.mdt', 'tas5728m_dsp_lenovo_cd-18781y.bin')
+    if (-not $ThinkSmartLk2nd) { throw "-ThinkSmartSystem needs -ThinkSmartLk2nd: install-thinksmart.py writes the release's lk2nd into boot" }
+}
+if ($ThinkSmartLk2nd -and -not $ThinkSmartSystem) { throw "-ThinkSmartLk2nd goes with -ThinkSmartSystem" }
+if ($ThinkSmartLk2nd) {
+    # The checks install-thinksmart.py makes (check_lk2nd): an lk2nd boot image for this board, no QCDT
+    # appended, an AVB1 signature right after the image.
+    python -I -c "import struct,sys`nd=open(sys.argv[1],'rb').read()`nk,_,r,_,s,_,_,pg,dt=struct.unpack_from('<9I',d,8)`np=lambda n:-(-n//pg)*pg`ne=pg+p(k)+p(r)+p(s)+p(dt) if pg in (2048,4096) else len(d)+1`nok=d[:8]==b'ANDROID!' and b'lk2nd' in d and b'lenovo,cd-18781y' in d and dt==0 and d[e:e+2]==b'\x30\x82'`nsys.exit(0 if ok else 1)" $ThinkSmartLk2nd
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartLk2nd is not an lk2nd this board's bootloader starts (signed, no QCDT, lenovo,cd-18781y): build it with tools/linux/thinksmart/lk2nd/build.sh" }
+    if (-not $ThinkSmartLk2ndSource) { throw "-ThinkSmartLk2nd needs -ThinkSmartLk2ndSource: the image carries GPL-2.0 parts, and the GPL wants their source" }
+    $lk2ndTag = python -I -c "import re,sys,tarfile`nt=tarfile.open(sys.argv[1]); top={n.split('/')[0] for n in t.getnames()}`nm=re.fullmatch(r'lk2nd-([0-9.]+)', top.pop()) if len(top)==1 else None`nif not m or m.group(0)+'/lk2nd/device/dts/msm8953/apq8053-lenovo-cd-18781y.dts' not in t.getnames(): sys.exit(1)`nprint(m.group(1))" $ThinkSmartLk2ndSource
+    if ($LASTEXITCODE -ne 0 -or -not $lk2ndTag) { throw "$ThinkSmartLk2ndSource is not lk2nd/build.sh's source tarball" }
+    $thinkSmartLk2ndSourceName = "lk2nd-$lk2ndTag-techo5-thinksmart-$Version-source.tar.gz"
+}
+if ($ThinkSmartLk2ndSource -and -not $ThinkSmartLk2nd) { throw "-ThinkSmartLk2ndSource goes with -ThinkSmartLk2nd" }
 if (-not $SignKey -or -not (Test-Path $SignKey)) { throw "no release signing key: set TECHO5_SIGN_KEY or pass -SignKey" }
 $repo = 'HuskerMinion/techo5'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -551,6 +637,24 @@ try {
         $skylightRootfsNamed = Join-Path $bin "techo5-rootfs-skylight-$Version.tar.gz"
         Copy-Item $SkylightRootfs $skylightRootfsNamed -Force
     }
+    $thinkSmartRootfsNamed = $null
+    if ($ThinkSmartRootfs) {
+        $thinkSmartRootfsNamed = Join-Path $bin "techo5-rootfs-thinksmart-$Version.tar.gz"
+        Copy-Item $ThinkSmartRootfs $thinkSmartRootfsNamed -Force
+        $named = Join-Path $bin "techo5-boot-thinksmart-$Version.img"
+        Copy-Item $ThinkSmartBoot $named -Force
+        $bootAssets += $named
+        if ($ThinkSmartSystem) {
+            $named = Join-Path $bin "techo5-system-thinksmart-$Version.img.gz"
+            Copy-Item $ThinkSmartSystem $named -Force
+            $bootAssets += $named
+            $named = Join-Path $bin "techo5-lk2nd-thinksmart-$Version.img"
+            Copy-Item $ThinkSmartLk2nd $named -Force
+            $bootAssets += $named
+        } else {
+            Write-Warning "no -ThinkSmartSystem: install-thinksmart.py has nothing to install from this release"
+        }
+    }
     $athenaRootfsNamed = $null
     if ($AthenaRootfs) {
         $athenaRootfsNamed = Join-Path $bin "techo5-rootfs-athena-$Version.tar.gz"
@@ -607,6 +711,7 @@ try {
     if ($DotRootfs) { $mk += @('-rootfs-arm-dot', $DotRootfs) }
     if ($athenaRootfsNamed) { $mk += @('-rootfs-arm-athena', $athenaRootfsNamed) }
     if ($skylightRootfsNamed) { $mk += @('-rootfs-arm-skylight', $skylightRootfsNamed) }
+    if ($thinkSmartRootfsNamed) { $mk += @('-rootfs', "arm-thinksmart=$thinkSmartRootfsNamed") }
     # Under the signature, not just in SHA256SUMS: install-show.py writes a boot image to a unit, and
     # nothing signs SHA256SUMS, so whatever could serve a substituted list could serve the image too.
     foreach ($a in $bootAssets + $agentAssets) { $mk += @('-asset', $a) }
@@ -622,6 +727,7 @@ if ($Rootfs) { $args += $Rootfs }
 if ($DotRootfs) { $args += $DotRootfs }
 if ($athenaRootfsNamed) { $args += $athenaRootfsNamed }
 if ($skylightRootfsNamed) { $args += $skylightRootfsNamed }
+if ($thinkSmartRootfsNamed) { $args += $thinkSmartRootfsNamed }
 $args += $bootAssets
 $args += $agentAssets
 $named = Join-Path $bin "techo5-third-party-sources-$Version.tar.gz"
@@ -637,6 +743,16 @@ if ($ubootSourceNamed) { $args += $ubootSourceNamed }
 if ($skylightSourceName) {
     $named = Join-Path $bin $skylightSourceName
     Copy-Item $SkylightKernelSource $named -Force
+    $args += $named
+}
+if ($thinkSmartSourceName) {
+    $named = Join-Path $bin $thinkSmartSourceName
+    Copy-Item $ThinkSmartKernelSource $named -Force
+    $args += $named
+}
+if ($ThinkSmartLk2ndSource) {
+    $named = Join-Path $bin $thinkSmartLk2ndSourceName
+    Copy-Item $ThinkSmartLk2ndSource $named -Force
     $args += $named
 }
 # SHA256SUMS: for checking a download by hand. No installer reads it — the signed manifest covers
