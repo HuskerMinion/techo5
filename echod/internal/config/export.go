@@ -506,6 +506,9 @@ func KeepOwn(c *Config, from Config) {
 	// to move it to another channel or have it install on its own.
 	c.Update.Channel = from.Update.Channel
 	c.Update.AutoInstall = from.Update.AutoInstall
+	// A release held back by Roll back is this device's too: a file from one that rolled back would
+	// keep another from updating, and an older file would undo the hold and reinstall that release.
+	c.Update.HeldBack = from.Update.HeldBack
 }
 
 // scheme finds an address in a setting.
