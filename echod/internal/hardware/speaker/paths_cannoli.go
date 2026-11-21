@@ -110,8 +110,13 @@ func DetectOutput() Output { return OutputSpeaker }
 // VolumeSteps is the number of volume steps; the range is config's.
 const VolumeSteps = config.VolumeSteps
 
-// volumeCurves is the Dot 3's speaker curve (paths_donut.go) until one is measured here: echo-dot-assist
-// plays this unit with a placeholder too.
+// volumeCurves is Fire OS's own speaker music curve on this unit (8349 system.img): VolumeCurves.xml's
+// <speaker><music> gives each of the 31 steps an index from 0 to 100 (0,5,8,15,20,26,32,40,45,51,56,60,
+// 65,68,70,73,78,82,87,89,90..100), and audio_policy's DEFAULT_DEVICE_CATEGORY_SPEAKER_VOLUME_CURVE
+// turns an index into dB between its points 1:-58, 20:-40, 60:-17 and 100:0, linearly. AFE.cfg has no
+// music_volTab here (lib/asp), and VolumeGainTuning's per-speaker-vendor offsets (at most about +-5 dB a
+// step) are left out. Listened to on one unit against the Dot 3's (2026-11-21): this one is
+// better.
 var volumeCurves = map[Output][VolumeSteps + 1]float64{
 	OutputSpeaker:   cannoliCurve,
 	OutputHeadphone: cannoliCurve,
@@ -119,9 +124,9 @@ var volumeCurves = map[Output][VolumeSteps + 1]float64{
 }
 
 var cannoliCurve = [VolumeSteps + 1]float64{
-	-90, -55, -51, -47, -43, -39, -35, -31, -27, -23,
-	-20, -17, -14, -12, -10, -9, -8, -7, -6, -5,
-	-4.5, -4, -3.5, -3, -2.5, -2, -1.5, -1, -0.5, -0.25, 0,
+	-90, -54.21, -51.37, -44.74, -40, -36.55, -33.1, -28.5, -25.63, -22.18,
+	-19.3, -17, -14.88, -13.6, -12.75, -11.48, -9.35, -7.65, -5.53, -4.68,
+	-4.25, -3.83, -3.4, -2.98, -2.55, -2.13, -1.7, -1.28, -0.85, -0.43, 0,
 }
 
 // mute is the attenuation the curves use for step 0.
