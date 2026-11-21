@@ -67,6 +67,11 @@ tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -F firmware.tar -S 20
 tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
 ```
 
+No `EXTRA_PACKAGES=busybox-extras`, which athena and the Skylight add for `udhcpd`: they offer a
+network over USB (`USB_RNDIS` in device.conf) and hand the computer an address. The ThinkSmart View's
+USB gadget is the serial console only, and the store, which the rescue environment runs from, has
+`busybox-extras` of its own.
+
 `-k <authorized_keys>` and `-W <wpa_supplicant.conf>` make a bench image: SSH with that key from
 every boot, and a network for a unit with nobody at its screen. Never for anyone else's unit.
 
@@ -109,6 +114,17 @@ or, in recovery mode, the Android boot image in `recovery`, once. So the boot la
   `slotctl follow` makes it the store's active slot. A trial that settles (five minutes of a running
   daemon, with a default route: `TRIAL_NEEDS_NETWORK=1`, since the kernel is on trial too) is
   committed, and the next start moves its kernel to `system1`.
+- A kernel in `recovery` starts its slot only while the record has that slot on trial. One left
+  there from an earlier trial and started again (lk2nd's menu has a Recovery entry) is stale: it
+  restarts, back on `system1`.
+- The kernel that moves to `system1` at a commit has only started from `recovery` before. If lk2nd's
+  extlinux path fails it, nothing on the unit can count the restarts (lk2nd counts nothing, and a
+  kernel that never reaches init runs no boot layer), so the move puts the kernel it replaces, the
+  slot that was good before, into `recovery`, marked `techo5.kernel=fallback`. Started from there by
+  hand, it marks the new slot bad, puts its own kernel back on `system1` and boots its own slot.
+  lk2nd's menu: power on with nothing held, then hold Volume Down once the logo shows (held from
+  power-on it is Lenovo's own locked fastboot instead); Volume Down moves, Volume Up picks
+  Recovery.
 - lk2nd 20.0 (on the units, January 2025) starts a kernel taking at most 32 MiB in memory from
   extlinux, so a slot whose kernel is bigger is marked bad before its trial (and `pack.py` refuses to
   build one).
