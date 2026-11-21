@@ -810,7 +810,7 @@ func carried(r Radio) Radio {
 		// A remote's track paused from here is still the page's, with play on it, after the remote
 		// has let it go.
 		r.Playing, r.Now = false, maScreenName(s.maService)
-		r.Title, r.Artist, r.Album = s.heldTitle, s.heldArtist, s.heldAlbum
+		r.Title, r.Artist, r.Album = s.heldTitle, byline(s.heldArtist, s.heldAlbum), s.heldAlbum
 		r.Art, r.Thumb = remoteArt()
 		r.Logo = false
 		r.Music = true
@@ -820,7 +820,7 @@ func carried(r Radio) Radio {
 		// went on reading "Starting…" for it for as long as the remote carried on.
 		r.Chosen = ""
 		r.Playing, r.Now = true, maScreenName(s.maService)
-		r.Title, r.Artist, r.Album = s.extTitle, s.extArtist, s.extAlbum
+		r.Title, r.Artist, r.Album = s.extTitle, byline(s.extArtist, s.extAlbum), s.extAlbum
 		// Music Assistant's own picture for the track when it sent one. Without one the page draws a
 		// stand-in of its own, so the last station's cover and logo must not be left behind somebody
 		// else's.
@@ -829,6 +829,16 @@ func carried(r Radio) Radio {
 		r.Music = true
 	}
 	return r
+}
+
+// byline is the line under a Music Assistant track's title: its artist, else its album. Radio over
+// Sendspin comes with no artist and the station's name as its album (a stream title "Song / Artist" is
+// split only at " - "), so the station is shown under the title, as when Home Assistant played it here.
+func byline(artist, album string) string {
+	if artist != "" {
+		return artist
+	}
+	return album
 }
 
 // favoriteNames is the stations in Home Assistant's lists, in order, each once.
