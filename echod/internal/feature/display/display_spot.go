@@ -1826,7 +1826,9 @@ func (d *Display) frame() (next time.Duration) {
 			s.saverStep = countdownStep(whole, countdownRing)
 		}
 	}
-	if s.saverCountdown {
+	// Only while the screensaver is what shows: under the red night clock or the light before an alarm
+	// the photo is still picked but never drawn, and the countdown would redraw the night for nothing.
+	if s.saverCountdown && !s.redClock && s.sunrise == 0 {
 		// The ring fills a step at a time; drawn only on the second it moved in jumps (#656).
 		defer func() { next = min(next, s.saverStep) }()
 	}

@@ -1459,9 +1459,13 @@ func (d *Display) gesture(g touch.Gesture) {
 	appsUp := d.appsPop && !d.sheet
 	d.mu.Unlock()
 	if appsUp {
-		d.appsPopGesture(g)
-		d.wake()
-		return
+		if d.r != nil && d.r.appsDrawn.Load() {
+			d.appsPopGesture(g)
+			d.wake()
+			return
+		}
+		// Up but not on the screen: something else is drawn there, and the finger is for it.
+		d.closeAppsPop()
 	}
 
 	// The dashboard: every finger is its, including the one that takes it away; unless the drawer has
@@ -2987,7 +2991,8 @@ func (d *Display) frame() (next time.Duration) {
 	s.showDrawer, s.drawerTab, s.drawerScroll, s.drawerPick, s.pickScroll = d.drawer && !s.showSheet && !s.showCamera, d.drawerTab, d.drawerScroll, d.drawerPick, d.pickScroll
 	// The apps list goes away for good, not only out of sight, once something covers it or nobody has
 	// touched it for a while: left up, it would wait behind the lock for whoever taps it next.
-	if d.appsPop && (s.showSheet || s.showCamera || now.Sub(d.appsPopAt) > appsPopFor) {
+	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying"
+	if d.appsPop && (s.showSheet || s.showCamera || turn || now.Sub(d.appsPopAt) > appsPopFor) {
 		d.appsPop, d.pickScroll = false, 0
 	}
 	s.appsPop = d.appsPop
@@ -3190,7 +3195,9 @@ func (d *Display) frame() (next time.Duration) {
 			s.saverStep = countdownStep(whole, d.r.w)
 		}
 	}
-	if s.saverCountdown {
+	// Only while the screensaver is what shows: under the red night clock or the light before an alarm
+	// the photo is still picked but never drawn, and the countdown would redraw the night for nothing.
+	if s.saverCountdown && !s.redClock && s.sunrise == 0 {
 		// The line fills a step at a time; drawn only on the second it moved in jumps (#656).
 		defer func() { next = min(next, s.saverStep) }()
 	}

@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/image/font"
@@ -341,6 +342,10 @@ type scene struct {
 // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
 // building a face at each size is not something to do per frame.
 type renderer struct {
+	// appsDrawn is whether the last frame drew a panel's apps list (apps_pop.go): only then do fingers go
+	// to it, since a page drawn instead of it (a camera, an alert, a turn) is what they are for.
+	appsDrawn atomic.Bool
+
 	nightBuf     *image.RGBA // the night layer kept between frames (nightLayerFor)
 	paint                    // the canvas, its size, and the settings screen's tap zones
 	climateParts             // the thermostat sheet's, where it was last drawn (climate_sheet.go)
@@ -616,6 +621,7 @@ func (r *renderer) useFont() {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
+	r.appsDrawn.Store(false)
 	r.useFont()
 	r.marked, r.footAt, r.lcarsDrawn = false, 0, false
 	r.press = s.press
