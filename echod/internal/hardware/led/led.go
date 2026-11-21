@@ -1,5 +1,6 @@
-// Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes, and the Echo
-// Input's single LED through the LP5562's LED class devices.
+// Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes, the Echo Dot
+// 5th gen's through the is31fl3246's twelve RGB LED class devices, and the Echo Input's single LED
+// through the LP5562's LED class devices.
 //
 // This deliberately bypasses Amazon's LedController service. A direct frame write works even
 // when that service has brightness set to 0, and keeps working once the Amazon stack is
@@ -24,6 +25,15 @@ const DefaultPath = "/sys/bus/i2c/devices/0-003f"
 // class devices of their own (R, G and B, each with brightness and max_brightness), as Amazon's
 // libled_hal.so drives it (echo-dot-assist, docs/re-cupcake.md).
 const SinglePath = "/sys/bus/i2c/devices/0-0030/leds"
+
+// ClassRingPrefix is the Echo Dot 5th gen's ring: an ISSI IS31FL3246 at 0-0031 whose twelve RGB modules
+// are LED class devices of their own, is31fl3246:ledmod_0 to _11, each taking its color as "R G B" in
+// its color attribute (Amazon's led-class-rgb, in the 6.5.5.5 GPL tree). The device tree maps the
+// labels onto the chip's modules (ledmod_0 is module 3, ..., ledmod_9 is module 0) and the R/G/B order
+// (rgb-map), so a label is a place on the ring and segment n is ledmod_n. Walked on one unit
+// (2026-11-21): ledmod_0 is at the back, over the power socket, and the numbers run clockwise seen from
+// above, as segments do on every ring here.
+const ClassRingPrefix = "/sys/class/leds/is31fl3246:ledmod_"
 
 // singleChannels are the Echo Input LED's class devices under SinglePath, in R, G, B order.
 var singleChannels = [3]string{"R", "G", "B"}
@@ -99,6 +109,12 @@ type Ring struct {
 	// class directory (SinglePath), and singleMax each channel's max_brightness.
 	single    bool
 	singleMax [3]int
+
+	// class is a ring of twelve RGB LED class devices, the Echo Dot 5th gen's: classDirs are their
+	// directories in segment order, and classLit says each one's brightness (the chip's per-module
+	// dimming, which the kernel zeroes whenever its trigger is taken off) has been put at full.
+	classDirs []string
+	classLit  bool
 }
 
 func New() *Ring {
@@ -106,12 +122,71 @@ func New() *Ring {
 	if _, err := os.Stat(r.path()); err == nil {
 		return r
 	}
+	if c, ok := newClassRing(ClassRingPrefix); ok {
+		return c
+	}
 	if s, ok := newSingle(SinglePath); ok {
 		return s
 	}
 	r.absent = true
 	return r
 }
+
+// newClassRing is the Echo Dot 5th gen's ring, when all twelve of its modules are there.
+func newClassRing(prefix string) (*Ring, bool) {
+	r := &Ring{Path: filepath.Dir(prefix)}
+	for n := range Segments {
+		dir := prefix + strconv.Itoa(n)
+		if _, err := os.Stat(dir + "/color"); err != nil {
+			return nil, false
+		}
+		r.classDirs = append(r.classDirs, dir)
+	}
+	return r, true
+}
+
+// lightClass puts every module's brightness at its max_brightness, once: the colors are scaled by it in
+// the chip, and with the kernel's boot animation taken off it is zero.
+func (r *Ring) lightClass() error {
+	if r.classLit {
+		return nil
+	}
+	for _, dir := range r.classDirs {
+		v := "255"
+		if b, err := os.ReadFile(dir + "/max_brightness"); err == nil {
+			v = strings.TrimSpace(string(b))
+		}
+		if err := os.WriteFile(dir+"/brightness", []byte(v), 0o644); err != nil {
+			return err
+		}
+	}
+	r.classLit = true
+	return nil
+}
+
+// setClass writes the segments that differ from what the ring shows: each module is an I2C write and
+// an update of its own, so an unchanged one is not sent again.
+func (r *Ring) setClass(vals []byte) error {
+	if err := r.lightClass(); err != nil {
+		return err
+	}
+	for n, dir := range r.classDirs {
+		at := 3 * n
+		if r.last != nil && bytes.Equal(vals[at:at+3], r.last[at:at+3]) {
+			continue
+		}
+		c := fmt.Sprintf("%d %d %d", vals[at], vals[at+1], vals[at+2])
+		if err := os.WriteFile(dir+"/color", []byte(c), 0o644); err != nil {
+			// What was written of this frame is not what last says: let the next frame write it all.
+			r.last = nil
+			return err
+		}
+	}
+	return nil
+}
+
+// Class reports whether the ring is the Echo Dot 5th gen's twelve LED class devices.
+func (r *Ring) Class() bool { return r.classDirs != nil }
 
 // newSingle is the Echo Input's one LED at dir, when its three channels are there.
 func newSingle(dir string) (*Ring, bool) {
@@ -176,6 +251,13 @@ func (r *Ring) SetFrame(vals []byte) error {
 		r.last = append(r.last[:0], vals...)
 		return nil
 	}
+	if r.classDirs != nil {
+		if err := r.setClass(vals); err != nil {
+			return err
+		}
+		r.last = append(r.last[:0], vals...)
+		return nil
+	}
 	if r.single {
 		mixed := mixSegments(vals)
 		for i, ch := range singleChannels {
@@ -206,7 +288,7 @@ func (r *Ring) Forget() {
 
 // Frame reads back the current frame.
 func (r *Ring) Frame() ([]byte, error) {
-	if r.absent || r.single {
+	if r.absent || r.single || r.classDirs != nil {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		return append(make([]byte, 0, Channels), r.last...), nil
@@ -254,7 +336,7 @@ func (r *Ring) SetCurrent(v int) error {
 // does; the is31fl32xx driver of the Echo 2nd gen's Linux 6.1 kernel writes frame at full current
 // already, so there is nothing to set.
 func (r *Ring) hasCurrent() bool {
-	if r.single {
+	if r.single || r.classDirs != nil {
 		return false
 	}
 	_, err := os.Stat(r.attr("led_current"))
@@ -273,6 +355,9 @@ func (r *Ring) SetBootAnimation(on bool) error {
 	if on {
 		v = "1"
 	}
+	if r.classDirs != nil {
+		return r.classBootAnimation(on)
+	}
 	if r.single {
 		attr := filepath.Join(filepath.Dir(r.path()), "bootanimation")
 		if _, err := os.Stat(attr); err != nil {
@@ -281,4 +366,31 @@ func (r *Ring) SetBootAnimation(on bool) error {
 		return os.WriteFile(attr, []byte(v), 0o644)
 	}
 	return os.WriteFile(r.attr("boot_animation"), []byte(v), 0o644)
+}
+
+// classBootAnimation is SetBootAnimation on the Echo Dot 5th gen: each module's trigger, the kernel's
+// "boot-anim" (as the device tree starts them) or none. Taking a trigger off zeroes the module's
+// brightness, so it is put back at full (lightClass) and the frame is written again whole. The lock is
+// held across the triggers too, so no frame is drawn between a trigger zeroing a module and its relight.
+func (r *Ring) classBootAnimation(on bool) error {
+	trigger := "none"
+	if on {
+		trigger = "boot-anim"
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, dir := range r.classDirs {
+		if _, err := os.Stat(dir + "/trigger"); err != nil {
+			continue
+		}
+		if err := os.WriteFile(dir+"/trigger", []byte(trigger), 0o644); err != nil {
+			return err
+		}
+	}
+	r.classLit = false
+	r.last = nil
+	if on {
+		return nil
+	}
+	return r.lightClass()
 }

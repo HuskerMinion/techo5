@@ -25,7 +25,14 @@ func newLEDCmd() *cobra.Command {
 	)
 	c.PersistentFlags().StringVar(&path, "path", led.DefaultPath, "is31fl3236 sysfs directory")
 
-	ring := func() *led.Ring { return &led.Ring{Path: path} }
+	// The default path is whatever ring this board has (led.New): the Echo Dot 5th gen's twelve LED
+	// class devices are not at the is31fl3236's directory, and `led walk` is how their order is mapped.
+	ring := func() *led.Ring {
+		if r := led.New(); path == led.DefaultPath && r.Present() {
+			return r
+		}
+		return &led.Ring{Path: path}
+	}
 
 	fill := &cobra.Command{
 		Use:   "fill <0-255>",
