@@ -133,3 +133,12 @@ How they're kept apart:
 | `LISTEN`       | `:9555`          | where devices connect                                   |
 | `CHROME`       | found for itself | the browser to run                                      |
 | `DASHCAST_PAGES` |                | web pages a device may be shown ([Web pages](#web-pages)) |
+| `DASHCAST_WARM_FOR` | `5m`        | how long a screen's dashboard is kept ready after the screen goes away, as a time like `30m` or `12h` |
+| `DASHCAST_WARM_COUNT` | `4`       | how many of those are kept at once, 1 to 16; the oldest is closed to make room |
+
+A screen that turns off, or a device that restarts, leaves its dashboard's tab parked: frozen, not
+closed. A screen that comes back within `DASHCAST_WARM_FOR` picks its dashboard up at once; after
+that, the dashboard loads again, Home Assistant's logo first. With screens that turn off for hours
+when nobody is near, set it to `12h` or so. Each parked tab keeps its memory, about 150 to 250 MB
+for a dashboard, so keep `DASHCAST_WARM_COUNT` to the number of screens. A value dashcast can't use
+is logged and the default kept.

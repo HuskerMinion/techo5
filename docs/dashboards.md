@@ -348,6 +348,11 @@ whether it works: connected, can't reach it, or it didn't take the key.
 The streamed page is your real dashboard, with everything on it. The device's demo mode for
 screenshots does not cover it.
 
+When the screen turns off, dashcast keeps the dashboard ready for 5 minutes, so it is back at once
+when the screen wakes; after that it loads again, Home Assistant's logo first. If your screens stay
+off for long, whoever runs dashcast can keep it ready longer with `DASHCAST_WARM_FOR`, and set how many
+are kept with `DASHCAST_WARM_COUNT` ([`dashcast/README.md`](../dashcast/README.md#settings)).
+
 ### Web pages
 
 dashcast can also show web pages that aren't Home Assistant's: a status page, a photo site, an art

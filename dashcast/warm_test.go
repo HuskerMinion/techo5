@@ -89,3 +89,32 @@ func TestAParkedTabShowsAgain(t *testing.T) {
 	showing("the tab parked and picked up again", again)
 	showing("the other screen's tab, after", other)
 }
+
+// Unset, the warm tab settings are what they always were; a usable value is taken, and one that is
+// not is passed over for the default rather than stopping dashcast (#668).
+func TestWarmSettings(t *testing.T) {
+	for _, c := range []struct {
+		forS, countS string
+		d            time.Duration
+		n            int
+	}{
+		{"", "", 5 * time.Minute, 4},
+		{"12h", "6", 12 * time.Hour, 6},
+		{" 90m ", " 1 ", 90 * time.Minute, 1},
+		{"16", "", 5 * time.Minute, 4}, // a number with no unit is not a time
+		{"soon", "many", 5 * time.Minute, 4},
+		{"0s", "0", 5 * time.Minute, 4},
+		{"-1h", "-2", 5 * time.Minute, 4},
+		{"", "16", 5 * time.Minute, 16},
+		{"", "17", 5 * time.Minute, 4}, // past warmCountMax
+		{"", "4.5", 5 * time.Minute, 4},
+	} {
+		d, n := warmSettings(c.forS, c.countS)
+		if d != c.d || n != c.n {
+			t.Errorf("warmSettings(%q, %q) = %s, %d; want %s, %d", c.forS, c.countS, d, n, c.d, c.n)
+		}
+	}
+	if warmFor != 5*time.Minute || warmCount != 4 {
+		t.Errorf("the defaults moved: %s, %d", warmFor, warmCount)
+	}
+}

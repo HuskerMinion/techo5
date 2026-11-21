@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,10 +22,49 @@ import (
 // restarting, a dashboard switched away from and back, the connection dropping for a moment: none
 // of them is a reload.
 
-const (
-	warmFor   = 5 * time.Minute
-	warmCount = 4 // tabs parked at once, the oldest closed to make room
+// warmFor and warmCount are set once at start, from DASHCAST_WARM_FOR and DASHCAST_WARM_COUNT
+// (warmSettings), before any screen connects, and only read after that.
+var (
+	warmFor   = warmForDefault
+	warmCount = warmCountDefault // tabs parked at once, the oldest closed to make room
 )
+
+const (
+	warmForDefault   = 5 * time.Minute
+	warmCountDefault = 4
+
+	// warmCountMax is the most tabs DASHCAST_WARM_COUNT may ask to keep. A frozen tab still holds
+	// its page's memory, a couple of hundred megabytes for a dashboard, and a count typed with one
+	// zero too many would let Chrome take all of a small machine's memory.
+	warmCountMax = 16
+)
+
+// warmSettings reads how long a parked tab is kept and how many are kept, from the values of
+// DASHCAST_WARM_FOR and DASHCAST_WARM_COUNT. Unset is the default; a value that cannot be used is
+// logged and the default kept, since a dashboard that loads more slowly is better than no dashcast
+// at all.
+func warmSettings(forS, countS string) (time.Duration, int) {
+	d, n := warmForDefault, warmCountDefault
+	if forS = strings.TrimSpace(forS); forS != "" {
+		v, err := time.ParseDuration(forS)
+		if err != nil || v <= 0 {
+			slog.Warn("DASHCAST_WARM_FOR is not a time like 30m or 12h; keeping the default",
+				"value", forS, "default", warmForDefault)
+		} else {
+			d = v
+		}
+	}
+	if countS = strings.TrimSpace(countS); countS != "" {
+		v, err := strconv.Atoi(countS)
+		if err != nil || v <= 0 || v > warmCountMax {
+			slog.Warn(fmt.Sprintf("DASHCAST_WARM_COUNT is a number from 1 to %d; keeping the default", warmCountMax),
+				"value", countS, "default", warmCountDefault)
+		} else {
+			n = v
+		}
+	}
+	return d, n
+}
 
 // warmTab is a tab and whoever is watching its frames: the session using it, or nobody while it is
 // parked. A tab's frames arrive through one listener for its whole life, since a listener cannot be

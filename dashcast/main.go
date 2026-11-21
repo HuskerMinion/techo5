@@ -12,6 +12,9 @@
 //	DASHCAST_KEY  what a device has to present before it is shown anything
 //	LISTEN        where devices connect (default :9555)
 //	CHROME        the browser to run (default: found on the PATH, or the headless-shell image's)
+//
+// and, optionally, DASHCAST_PAGES (pages.go), and DASHCAST_WARM_FOR and DASHCAST_WARM_COUNT, how long
+// a screen's parked tab is kept for it and how many are kept (warm.go).
 package main
 
 import (
@@ -47,6 +50,10 @@ func main() {
 		os.Exit(2)
 	}
 	cfg.pages = pages
+	warmFor, warmCount = warmSettings(os.Getenv("DASHCAST_WARM_FOR"), os.Getenv("DASHCAST_WARM_COUNT"))
+	if warmFor != warmForDefault || warmCount != warmCountDefault {
+		slog.Info("parked dashboards", "kept_for", warmFor, "kept", warmCount)
+	}
 	for _, p := range pages {
 		slog.Info("web page", "name", p.name, "address", logged(p.addr), "refresh", p.refresh)
 	}

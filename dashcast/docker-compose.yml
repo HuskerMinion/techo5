@@ -17,5 +17,9 @@ services:
       DASHCAST_KEY: ${DASHCAST_KEY}
       # Web pages a device may show besides the dashboards, by name (README.md, Web pages):
       # DASHCAST_PAGES: Status=https://status.example.lan/board, Art=https://art.example.com|refresh=30m
+      # How long a screen's dashboard stays ready after the screen turns off, and how many are kept
+      # (README.md, Settings). Each kept one holds about 150-250 MB.
+      # DASHCAST_WARM_FOR: 12h
+      # DASHCAST_WARM_COUNT: 4
     # Chrome wants more shared memory than Docker gives by default.
     shm_size: 256m
