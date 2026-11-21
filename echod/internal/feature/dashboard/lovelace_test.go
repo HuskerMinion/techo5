@@ -411,3 +411,44 @@ func TestTileGridOptions(t *testing.T) {
 		}
 	}
 }
+
+// A Mushroom template card is laid out as a tile card with the same YAML is: grid_options set its
+// width and height, and its icon_color shows even while its light is off, as Mushroom shows it.
+// With neither, it stays a plain half-width tile (#665).
+func TestATemplateCardTakesItsGridOptionsAndColor(t *testing.T) {
+	var cards []any
+	if err := json.Unmarshal([]byte(`[
+		{"type": "custom:mushroom-template-card", "entity": "weather.home", "primary": "Weather",
+		 "tap_action": {"action": "navigate", "navigation_path": "/kitchen/weather"}, "grid_options": {"columns": 12}},
+		{"type": "custom:mushroom-template-card", "entity": "light.porch", "primary": "Porch", "icon_color": "amber",
+		 "grid_options": {"columns": "full", "rows": 2}},
+		{"type": "custom:mushroom-template-card", "primary": "Note", "secondary": "No entity"}
+	]`), &cards); err != nil {
+		t.Fatal(err)
+	}
+	c := &compiler{seen: map[string]bool{}, need: needs{graphs: map[string]int{}}}
+	l := &lovelaceSource{sects: [][]node{c.cards(cards)}}
+	states := map[string]hass.LiveEntity{
+		"weather.home": {ID: "weather.home", State: "sunny", Attrs: map[string]any{}},
+		"light.porch":  {ID: "light.porch", State: "off", Attrs: map[string]any{}},
+	}
+	secs := l.sections(look{states: states})
+	var tiles []Tile
+	for _, s := range secs {
+		for _, b := range s.Blocks {
+			tiles = append(tiles, b.Tiles...)
+		}
+	}
+	if len(tiles) != 3 {
+		t.Fatalf("%d tiles, want 3: %+v", len(tiles), secs)
+	}
+	if w := tiles[0]; !w.Wide || w.High != 0 || w.Tap == nil || w.Tap.View == "" {
+		t.Errorf("columns 12: wide %v high %d tap %+v, want the whole width and its own tap", w.Wide, w.High, w.Tap)
+	}
+	if p := tiles[1]; !p.Wide || p.High != 2 || p.Color.A == 0 {
+		t.Errorf("full, 2 rows, amber: wide %v high %d color %v", p.Wide, p.High, p.Color)
+	}
+	if n := tiles[2]; n.Wide || n.High != 0 || n.Color.A != 0 {
+		t.Errorf("no grid_options or color: wide %v high %d color %v, want a plain tile", n.Wide, n.High, n.Color)
+	}
+}

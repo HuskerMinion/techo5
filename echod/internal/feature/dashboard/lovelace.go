@@ -750,6 +750,14 @@ func (t templateNode) blocks(l look) []Block {
 	if tile.Name == "" && tile.Value == "" {
 		return nil
 	}
+	// The card is laid out like any other tile from the same YAML: its grid_options set its width
+	// and height. Its icon_color is drawn whatever the entity's state, as Mushroom draws it, rather
+	// than only while a light or switch is on, as the tile card's color is; a templated color does
+	// not parse and leaves the tile its usual color.
+	tile.Wide, tile.High = t.item.wide, t.item.high
+	if t.item.color.A != 0 {
+		tile.Color = t.item.color
+	}
 	return []Block{{Tiles: []Tile{tile}}}
 }
 
