@@ -28,6 +28,7 @@ func newPlayCmd() *cobra.Command {
 	var (
 		card    int
 		device  int
+		rate    int
 		freq    float64
 		secs    float64
 		level   float64
@@ -59,7 +60,7 @@ func newPlayCmd() *cobra.Command {
 			}
 			p, err := alsa.OpenPlayback(card, device, alsa.Config{
 				Channels:   playChannels,
-				Rate:       playRate,
+				Rate:       rate,
 				Format:     alsa.FormatS16_LE,
 				Bits:       playBits,
 				PeriodSize: playPeriod,
@@ -78,13 +79,13 @@ func newPlayCmd() *cobra.Command {
 			fmt.Fprintf(out, "playing %s for %.1fs on card %d device %d, ring %d x %d frames\n",
 				what, secs, card, device, playPeriod, playPeriods)
 
-			frames := int(secs * playRate)
+			frames := int(secs * float64(rate))
 			buf := make([]byte, playPeriod*playChannels*playBits/8)
 			start := time.Now()
 
 			for done := 0; done < frames; {
 				n := min(playPeriod, frames-done)
-				fill(buf[:n*playChannels*playBits/8], done, freq, level, silence, channel)
+				fill(buf[:n*playChannels*playBits/8], done, rate, freq, level, silence, channel)
 
 				if _, err := p.Write(buf[:n*playChannels*playBits/8]); err != nil {
 					if err == alsa.ErrUnderrun {
@@ -105,7 +106,8 @@ func newPlayCmd() *cobra.Command {
 	}
 
 	c.Flags().IntVar(&card, "card", 0, "sound card index")
-	c.Flags().IntVar(&device, "device", 23, "playback PCM device")
+	c.Flags().IntVar(&device, "device", defaultPlaybackDevice, "playback PCM device")
+	c.Flags().IntVar(&rate, "rate", playRate, "sample rate in Hz (the Dot 5's speaker runs at 96000)")
 	c.Flags().Float64Var(&freq, "freq", 440, "tone frequency in Hz")
 	c.Flags().Float64Var(&secs, "seconds", 1, "how long to play")
 	c.Flags().Float64Var(&level, "level", 0.2, "amplitude, 0 to 1")
@@ -117,11 +119,11 @@ func newPlayCmd() *cobra.Command {
 
 // fill writes one period of interleaved stereo, continuing the tone from frame offset so
 // periods join without a click.
-func fill(buf []byte, offset int, freq, level float64, silence bool, channel string) {
+func fill(buf []byte, offset, rate int, freq, level float64, silence bool, channel string) {
 	for i := range len(buf) / (playChannels * playBits / 8) {
 		var s int16
 		if !silence {
-			t := float64(offset+i) / playRate
+			t := float64(offset+i) / float64(rate)
 			s = int16(level * math.MaxInt16 * math.Sin(2*math.Pi*freq*t))
 		}
 		for ch := range playChannels {
