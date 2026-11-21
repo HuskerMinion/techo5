@@ -321,6 +321,75 @@ class Lk2ndAb(unittest.TestCase):
         st, slot, out = self.boot()
         self.assertEqual((st, slot), (0, 'a'), out)
 
+    def committed_b(self):
+        """Slot b tried and committed, and its kernel moved to system1 at the next start."""
+        self.new_unit()
+        self.kernel('b', 'B')
+        self.bootctl('set-active', 'b')
+        self.run_ab('boot')
+        self.cmdline(pack.TRIAL + ' ab.slot=b')
+        self.assertEqual(self.bootctl('mark-good', 'b')[0], 0)
+        self.cmdline('ab.slot=a')
+        st, out = self.run_ab('boot')
+        self.assertEqual(self.restarts(), ['restart recovery', 'restart normal'], out)
+        return out
+
+    def test_a_commit_leaves_the_old_kernel_in_recovery_to_fall_back_to(self):
+        out = self.committed_b()
+        self.assertIn('ab.slot=b', self.extlinux())
+        img = get(self.u + '/store/slots/a/boot/boot.img')
+        rec = get(self.u + '/recovery')
+        self.assertEqual(rec[:64], img[:64])
+        self.assertEqual(rec[576:len(img)], img[576:])
+        cl = rec[64:576].rstrip(b'\0').decode()
+        self.assertEqual(cl, CMDLINE + ' ab.slot=a techo5.kernel=fallback')
+        self.assertNotIn(pack.TRIAL, cl)
+        self.assertIn("recovery: slot a's kernel", out)
+
+    def test_the_fallback_kernel_undoes_the_commit(self):
+        self.committed_b()
+        # slot b's kernel fails from system1; started from recovery by hand, slot a's.
+        self.cmdline('ab.slot=a techo5.kernel=fallback')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (0, 'a'), out)
+        self.assertEqual(len(self.restarts()), 2)
+        rec = self.record()
+        self.assertIn('slot b: priority 0, tries 0, successful 0', rec)
+        self.assertIn('slot a: priority 14, tries 3, successful 1', rec)
+        self.assertIn('ab.slot=a', self.extlinux())
+        # And system1 then boots slot a with no restart.
+        self.cmdline('ab.slot=a')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (0, 'a'), out)
+        self.assertEqual(len(self.restarts()), 2)
+
+    def test_a_fallback_kernel_for_a_slot_no_longer_good_boots_nothing(self):
+        self.committed_b()
+        self.bootctl('mark-bad', 'a')
+        self.cmdline('ab.slot=a techo5.kernel=fallback')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (1, ''), out)
+        self.assertEqual(self.restarts()[-1], 'restart normal')
+        self.assertIn('slot b: priority 15, tries 2, successful 1', self.record())
+
+    def test_a_stale_trial_kernel_boots_nothing(self):
+        # Recovery still holds slot b's trial image after b was committed; started again by hand.
+        self.committed_b()
+        self.cmdline(pack.TRIAL + ' ab.slot=b')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (1, ''), out)
+        self.assertIn('stale', out)
+        self.assertEqual(self.restarts()[-1], 'restart normal')
+        # Nor for a slot marked bad.
+        self.new_unit()
+        self.kernel('b', 'B')
+        self.bootctl('mark-bad', 'b')
+        self.cmdline(pack.TRIAL + ' ab.slot=b')
+        n = len(self.restarts())
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (1, ''), out)
+        self.assertEqual(self.restarts()[n:], ['restart normal'])
+
     def test_no_bootable_slot_is_rescue(self):
         self.new_unit()
         self.bootctl('mark-bad', 'a')

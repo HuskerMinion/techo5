@@ -21,6 +21,16 @@
 #     back on system1, where the next try is taken, until there are none and the record falls back
 #     to the other slot. A trial that settles is committed by boot.sh (slotctl commit: bootctl
 #     mark-good), and the next start from system1 moves that slot's kernel there.
+#   - A kernel in recovery starts a slot only while the record has that slot on trial (bootable, not
+#     yet good). One left there from an earlier trial, started later from lk2nd's menu, is stale: it
+#     restarts, back on system1, and boots nothing.
+#   - The kernel that moves to system1 at a commit has only ever started from recovery. If lk2nd's
+#     extlinux path fails it, every start is that failing kernel again, and nothing on the unit can
+#     count those starts: the bootloader counts nothing, and a kernel that never reaches its init
+#     runs none of this. So when it moves, the kernel it replaces (the slot that was good before,
+#     still in the store) goes into recovery, marked techo5.kernel=fallback. Started from there (lk2nd's
+#     menu, "Recovery"), it marks the committed slot bad, puts its own slot's kernel back on system1
+#     and boots its own slot: the update undone, the unit as it was before it.
 #
 # The slot's kernel is slots/<x>/boot/boot.img (slotctl links the rootfs's
 # usr/share/techo5/kernel/boot-thinksmart.img there): kernel/build.sh's boot image, header version 0,
@@ -45,6 +55,7 @@ RECORD=${RECORD:-$BOOT/techo5-ab}
 CMDLINE=${CMDLINE:-/proc/cmdline}
 REBOOT=${REBOOT:-/usr/local/bin/rebootto}
 TRIAL_WORD=techo5.kernel=trial
+FALLBACK_WORD=techo5.kernel=fallback
 KERNEL_MAX=33554432	# 32 MiB
 DTB=apq8053-lenovo-cd-18781y.dtb
 HERE=$(dirname "$0")
@@ -153,6 +164,7 @@ booted() {
 	return 1
 }
 on_trial_kernel() { grep -qw $TRIAL_WORD "$CMDLINE" 2>/dev/null; }
+on_fallback_kernel() { grep -qw $FALLBACK_WORD "$CMDLINE" 2>/dev/null; }
 
 # The entry lk2nd starts: extlinux.conf's kernel directory (k-<sum>, the image it came from) and slot
 entry_dir() { sed -n 's|^[[:space:]]*kernel /\(k-[0-9a-f]*\)/vmlinuz$|\1|p' "$BOOT/extlinux/extlinux.conf" 2>/dev/null | head -1; }
@@ -197,14 +209,13 @@ EOF
 	say "system1: slot $1's kernel ($k)"
 }
 
-# trial <slot>: take a try, and the slot's image to recovery with ab.slot=<slot> on its command line
-trial() {
+# to_recovery <slot> <command line>: the slot's image into recovery with that command line in its
+# header, read back
+to_recovery() {
 	img=$STORE/slots/$1/boot/boot.img
 	dev=$(recovery_dev) || { say "no recovery partition"; return 1; }
-	eval "t=\$T_$1"
-	cl="$(hdr_cmdline "$img") ab.slot=$1"
+	cl=$2
 	[ ${#cl} -lt 512 ] || { say "slot $1: the command line would be too long"; return 1; }
-	bootctl -q set "$1" tries=$((t - 1)) >/dev/null || { say "taking a try for slot $1 failed"; return 1; }
 	isz=$(wc -c < "$img")
 	if ! { head -c 64 "$img"; printf '%s' "$cl" | head -c 512; dd if=/dev/zero bs=1 count=$((512 - ${#cl})) 2>/dev/null; tail -c +577 "$img"; } > /tmp/lk2nd-ab.img ||
 		! dd if=/tmp/lk2nd-ab.img of="$dev" bs=1M conv=fsync 2>/dev/null ||
@@ -214,7 +225,27 @@ trial() {
 		return 1
 	fi
 	rm -f /tmp/lk2nd-ab.img
+}
+
+# trial <slot>: take a try, and the slot's image to recovery with ab.slot=<slot> on its command line
+trial() {
+	img=$STORE/slots/$1/boot/boot.img
+	eval "t=\$T_$1"
+	cl="$(hdr_cmdline "$img") ab.slot=$1"
+	[ ${#cl} -lt 512 ] || { say "slot $1: the command line would be too long"; return 1; }
+	recovery_dev >/dev/null || { say "no recovery partition"; return 1; }
+	bootctl -q set "$1" tries=$((t - 1)) >/dev/null || { say "taking a try for slot $1 failed"; return 1; }
+	to_recovery "$1" "$cl" || return 1
 	say "slot $1 on trial: its kernel in recovery, $((t - 1)) tries left after this one"
+}
+
+# fallback <slot>: the slot's image to recovery as the way back from the kernel replacing it on
+# system1. No try is taken, and nothing changes if it cannot be written.
+fallback() {
+	img=$STORE/slots/$1/boot/boot.img
+	[ -f "$img" ] && fits "$img" 2>/dev/null || { say "slot $1 has no kernel to fall back to"; return 1; }
+	to_recovery "$1" "$(without_trial "$(hdr_cmdline "$img")") ab.slot=$1 $FALLBACK_WORD" || return 1
+	say "recovery: slot $1's kernel, to fall back to"
 }
 
 restart() {
@@ -228,11 +259,34 @@ cmd_boot() {
 	read_record
 	case $? in 0) ;; 3) return 3;; *) say "the record could not be read"; return 1;; esac
 	b=$(booted)
-	# A kernel on trial: the try was taken before the restart into it.
+	# A kernel on trial: the try was taken before the restart into it. Only while the record still has
+	# that slot on trial: a kernel left in recovery and started again later is stale.
 	if on_trial_kernel; then
-		[ -n "$b" ] && { echo "$b"; return 0; }
-		say "a kernel on trial without ab.slot="
-		return 1
+		[ -n "$b" ] || { say "a kernel on trial without ab.slot="; return 1; }
+		eval "p=\$P_$b s=\$S_$b"
+		if [ "$p" -gt 0 ] && [ "$s" = 0 ]; then
+			echo "$b"
+			return 0
+		fi
+		say "a stale kernel in recovery: slot $b is not on trial (priority $p, successful $s); back to system1"
+		restart
+	fi
+	# The kernel that was good before the last commit, started from recovery by hand because the one
+	# on system1 fails: undo the commit.
+	if on_fallback_kernel; then
+		[ -n "$b" ] || { say "a fallback kernel without ab.slot="; return 1; }
+		o=$( [ "$b" = a ] && echo b || echo a )
+		img=$STORE/slots/$b/boot/boot.img
+		eval "p=\$P_$b s=\$S_$b"
+		if [ "$p" -gt 0 ] && [ "$s" = 1 ] && [ -f "$img" ]; then
+			say "falling back to slot $b: slot $o's kernel fails from system1; slot $o marked bad"
+			bootctl -q mark-bad "$o" >/dev/null || { say "marking slot $o bad failed"; return 1; }
+			install "$b" || say "slot $b's kernel could not go back to system1"
+			echo "$b"
+			return 0
+		fi
+		say "a fallback kernel for slot $b, which is not good in the record (priority $p, successful $s); back to system1"
+		restart
 	fi
 	n=0
 	while [ $n -lt 3 ]; do
@@ -253,8 +307,15 @@ cmd_boot() {
 			continue
 		fi
 		if [ "$s" = 1 ]; then
-			# Good, but system1 holds another kernel: its own goes there.
+			# Good, but system1 holds another kernel: its own goes there. When that replaces the
+			# other slot's kernel (a commit, or a switch back), the other slot's goes to recovery, the
+			# way back if this one fails from system1.
+			was=$(entry_slot)
 			install "$p" || { say "slot $p's kernel could not go to system1"; [ "$b" = "$p" ] && { echo "$p"; return 0; }; return 1; }
+			if [ -n "$was" ] && [ "$was" != "$p" ]; then
+				eval "wp=\$P_$was ws=\$S_$was"
+				[ "$wp" -gt 0 ] && [ "$ws" = 1 ] && fallback "$was"
+			fi
 			restart
 		fi
 		trial "$p" && restart recovery
