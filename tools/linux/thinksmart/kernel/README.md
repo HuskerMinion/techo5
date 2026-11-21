@@ -85,3 +85,4 @@ theirs later, when they are first used.
 | `patches/0001`-`0003` | Vladyslav Tymoshchuk, from m0s4ik/thinksmart-view-debian 02821bc (`driver/q6asm`) | q6asm-dai positions: without them playback stalls when a stream is stopped and started again, which the daemon does all the time |
 | `patches/0004` | m0s4ik/thinksmart-view-debian 02821bc (`driver/venus`); GPL-2.0-only per that project's README | the video decoder's capability parser |
 | `patches/0005` | written for TECHO5 from the stock Lenovo device tree's camera node; GPL-2.0-only OR BSD-3-Clause (the file it changes is BSD-3-Clause) | the front camera, its rails and CSI link in the board's device tree |
+| `patches/0006` | written for TECHO5; GPL-2.0-only, as the file it changes | the video decoder's interrupt on only while its core is powered: a late one after the core powered down made its handler read unclocked registers and panic the kernel, now and then, at boot |

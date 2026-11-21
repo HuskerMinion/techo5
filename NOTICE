@@ -308,7 +308,8 @@ Linux kernel for the Lenovo ThinkSmart View, tools/linux/thinksmart/kernel
   Chan's (https://github.com/jethac/lenovo-thinksmart-view) with flip controls from that project,
   GPL-2.0. patches/0001-0003 (q6asm-dai, by Vladyslav Tymoshchuk) and patches/0004 (the venus HFI
   parser) come from the same project, GPL-2.0. patches/0005, the front camera in the board device
-  tree, is TECHO5's own, GPL-2.0-only OR BSD-3-Clause like the file it changes.
+  tree, is TECHO5's own, GPL-2.0-only OR BSD-3-Clause like the file it changes; patches/0006, the
+  video decoder's interrupt, is TECHO5's own, GPL-2.0-only like the file it changes.
 
 Light sensor, echod/internal/hardware/ambient/em3071x.go
   The Everlight EM3071X's register addresses and the value that switches it on are the ones Rockchip's

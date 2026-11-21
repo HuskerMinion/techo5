@@ -44,8 +44,9 @@ export CROSS_COMPILE_COMPAT=${CROSS_COMPILE_COMPAT:-arm-linux-gnueabihf-}
 export KBUILD_BUILD_USER=techo5 KBUILD_BUILD_HOST=thinksmart-build
 # Fixed, so a build is reproducible, but it is what `uname -v` says: bump it whenever the kernel
 # changes (a patch, the config, the base tree), or a unit cannot tell the new kernel from the one
-# before. 2026-11-20 12:00 was the first; 19:00 the first with every driver built in.
-export KBUILD_BUILD_TIMESTAMP="2026-11-20 19:00:00 UTC" KBUILD_BUILD_VERSION=1
+# before. 2026-11-20 12:00 was the first; 19:00 the first with every driver built in; 23:00 the
+# first with the video decoder's interrupt fix (patches/0006).
+export KBUILD_BUILD_TIMESTAMP="2026-11-20 23:00:00 UTC" KBUILD_BUILD_VERSION=1
 export LC_ALL=C TZ=UTC
 # The release string is the configuration's CONFIG_LOCALVERSION alone, never a git suffix.
 MAKE="make -s LOCALVERSION="
@@ -56,9 +57,11 @@ MAKE="make -s LOCALVERSION="
 # store, which is mounted read-only as / with its /sbin/init. The device stands the other way up from
 # the panel's own top, so the display plane turns the picture half a turn (echod turns the touch
 # readings: hardware/touch/thinksmart.go). The camera wants 128 MiB of contiguous memory. A panic
-# restarts, which is how a kernel on trial that panics gives way to system1's.
+# restarts, which is how a kernel on trial that panics gives way to system1's; and the wait for the
+# root device ends, in a panic, after 30 s: a plain rootwait waits forever, and a kernel on trial
+# that cannot find its root would hang there instead of giving way.
 MAP="system1,,,rw,0 497664 linear PARTLABEL=system 2048;system2,,,rw,0 4194304 linear PARTLABEL=system 499712"
-CMDLINE="consoleblank=0 vt.global_cursor_default=0 video=DSI-1:800x1280,rotate=180 cma=128M panic=10 dm-mod.waitfor=PARTLABEL=system dm-mod.create=\"$MAP\" root=/dev/dm-1 rootfstype=ext4 ro rootwait init=/sbin/init"
+CMDLINE="consoleblank=0 vt.global_cursor_default=0 video=DSI-1:800x1280,rotate=180 cma=128M panic=10 dm-mod.waitfor=PARTLABEL=system dm-mod.create=\"$MAP\" root=/dev/dm-1 rootfstype=ext4 ro rootwait=30 init=/sbin/init"
 
 mkdir -p "$WORK" "$OUT"
 WORK=$(cd "$WORK" && pwd) OUT=$(cd "$OUT" && pwd)

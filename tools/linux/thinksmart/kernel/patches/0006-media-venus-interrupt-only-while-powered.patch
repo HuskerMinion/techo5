@@ -1,0 +1,66 @@
+The video decoder's interrupt on only while the core is powered.
+
+venus_runtime_suspend turns the core's clocks off but left its interrupt on, so an interrupt that
+came after (seen 3.6 s into a boot of a unit, while the sound card probed) ran venus_isr, whose
+read of the wrapper's interrupt status then aborted: "synchronous external abort: Fatal exception
+in interrupt" and a panic, now and then, on a boot. The interrupt is now requested off
+(IRQF_NO_AUTOEN), turned on by venus_runtime_resume once the core is powered (probe's first
+pm_runtime_get_sync is one) and off by venus_runtime_suspend before the core is powered down.
+
+diff --git a/drivers/media/platform/qcom/venus/core.c b/drivers/media/platform/qcom/venus/core.c
+--- a/drivers/media/platform/qcom/venus/core.c
++++ b/drivers/media/platform/qcom/venus/core.c
+@@ -433,8 +433,13 @@
+ 	if (ret)
+ 		goto err_core_put;
+ 
++	/*
++	 * The interrupt is on only while the core is powered (venus_runtime_resume and
++	 * venus_runtime_suspend): its handler reads the wrapper's registers, which abort the
++	 * read when the core's clocks are off.
++	 */
+ 	ret = devm_request_threaded_irq(dev, core->irq, hfi_isr, venus_isr_thread,
+-					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
++					IRQF_TRIGGER_HIGH | IRQF_ONESHOT | IRQF_NO_AUTOEN,
+ 					"venus", core);
+ 	if (ret)
+ 		goto err_core_put;
+@@ -584,10 +589,14 @@
+ 	if (ret)
+ 		return ret;
+ 
++	disable_irq(core->irq);
++
+ 	if (pm_ops->core_power) {
+ 		ret = pm_ops->core_power(core, POWER_OFF);
+-		if (ret)
++		if (ret) {
++			enable_irq(core->irq);
+ 			return ret;
++		}
+ 	}
+ 
+ 	ret = icc_set_bw(core->cpucfg_path, 0, 0);
+@@ -605,6 +614,7 @@
+ err_cpucfg_path:
+ 	if (pm_ops->core_power)
+ 		pm_ops->core_power(core, POWER_ON);
++	enable_irq(core->irq);
+ 
+ 	return ret;
+ }
+@@ -649,7 +659,13 @@
+ 			return ret;
+ 	}
+ 
+-	return hfi_core_resume(core, false);
++	enable_irq(core->irq);
++
++	ret = hfi_core_resume(core, false);
++	if (ret)
++		disable_irq(core->irq);
++
++	return ret;
+ }
+ 
+ static const struct dev_pm_ops venus_pm_ops = {
