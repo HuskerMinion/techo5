@@ -22,7 +22,7 @@ func TestAnAlarmCanBeLightOnlyFromThePage(t *testing.T) {
 		t.Fatalf("added %+v", list)
 	}
 	w := httptest.NewRecorder()
-	alarmDrawer(w, "tok", list[0])
+	alarmDrawer(w, "tok", list[0], nil)
 	if !strings.Contains(w.Body.String(), `name="light_only" value="yes" style="width:auto" checked`) ||
 		!strings.Contains(w.Body.String(), "light only") {
 		t.Error("the alarm's drawer does not show it as light only")
@@ -42,7 +42,7 @@ func TestAnAlarmCanBeLightOnlyFromThePage(t *testing.T) {
 func TestAReminderIsNeverLightOnly(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	w := httptest.NewRecorder()
-	addDrawer(w, "tok")
+	addDrawer(w, "tok", nil)
 	body := w.Body.String()
 	box := strings.Index(body, `name="light_only"`)
 	wrap := strings.LastIndex(body[:max(box, 0)], `<div class="alarmonly">`)

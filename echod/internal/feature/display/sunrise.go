@@ -48,8 +48,8 @@ func tapLetsGoOfLight(now time.Time) bool {
 	return true
 }
 
-// The Wake with light row's choices.
-var sunriseChoices = []int{0, 5, 10, 15, 20, 30}
+// The Wake with light row's choices, the alarm feature's (Home Assistant's Wake light minutes too).
+var sunriseChoices = alarm.SunriseChoices
 
 func sunriseLabels() []string {
 	out := make([]string, len(sunriseChoices))
@@ -159,7 +159,7 @@ func chooseSunrise(i int) {
 	if i < 0 || i >= len(sunriseChoices) {
 		return
 	}
-	if err := config.Set().Alarms().SunriseMinutes(sunriseChoices[i]); err != nil {
+	if err := alarm.Get().SetSunriseDefault(sunriseChoices[i]); err != nil {
 		slog.Warn("saving the wake light failed", "err", err)
 	}
 }

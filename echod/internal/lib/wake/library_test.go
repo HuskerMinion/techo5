@@ -149,3 +149,31 @@ func TestReloadSaysTheLibraryChanged(t *testing.T) {
 		t.Errorf("heard %d changes, want 1", heard)
 	}
 }
+
+// A library read while its directory was empty catches up when it is read again, and says so only
+// when something changed (#657).
+func TestRereadCatchesUpWithTheDisk(t *testing.T) {
+	dir := t.TempDir()
+	l := NewLibrary(dir)
+	heard := 0
+	l.Changed.Listen(func(struct{}) { heard++ })
+	if words, _ := l.Advertise(); len(words) != 0 {
+		t.Fatalf("an empty directory advertised %+v", words)
+	}
+
+	body := `{"type":"openwakeword","wake_word":"Alexa","model":"alexa.tflite"}`
+	if err := os.WriteFile(filepath.Join(dir, "alexa.tflite"), []byte("not a model"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "alexa.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	l.Reread()
+	if words, _ := l.Advertise(); len(words) != 1 || words[0].ID != "alexa" {
+		t.Errorf("after the reread: %+v, want alexa", words)
+	}
+	l.Reread()
+	if heard != 1 {
+		t.Errorf("heard %d changes over two rereads, want 1", heard)
+	}
+}

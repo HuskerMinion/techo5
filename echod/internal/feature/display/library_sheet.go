@@ -1544,11 +1544,16 @@ func (d *Display) libraryKey(k string) {
 	d.wake()
 }
 
-// tileAction does what a tile's card says. A card that navigates to dashboard.LibraryPath opens the
-// music library, to play on the card's media player when it names one; while this device is playing
-// and the card is for its own player, it opens Now Playing instead, which has the library's button.
+// tileAction does what a tile's card says. A card that navigates to dashboard.AlarmsPath opens the
+// alarms (#651). One that navigates to dashboard.LibraryPath opens the music library, to play on the
+// card's media player when it names one; while this device is playing and the card is for its own
+// player, it opens Now Playing instead, which has the library's button.
 func (d *Display) tileAction(t *dashTile) {
 	a := *t.action
+	if a.View == dashboard.AlarmsPath {
+		d.OpenSheet("alarms")
+		return
+	}
 	if a.View == dashboard.LibraryPath {
 		entity := a.Entity
 		if entity == "" {

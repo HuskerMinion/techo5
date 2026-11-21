@@ -5,6 +5,7 @@ package display
 import (
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -196,6 +197,11 @@ func alarmEditorCard(sv sheetView, d alarmDraft) cardView {
 			v.rows = append(v.rows, settingRow{id: "e.lightonly", label: tr("ui_light_only"),
 				sub: tr("ui_no_sound_the_light_then_the_night_ends"), kind: ctlToggle, on: a.LightOnly})
 		}
+		// Music in place of the alarm sound (#651), for an alarm that rings. Under Light only, so the
+		// toggle does not move under the finger as this row comes and goes with it.
+		if !a.Silent && !a.LightOnly {
+			v.rows = append(v.rows, settingRow{id: "e.wake", label: tr("wake_with"), sub: tr("wake_with_sub"), kind: ctlChoice, value: wakeValue(a.Wake)})
+		}
 	}
 	if !d.isNew {
 		del := settingRow{id: "e.delete", label: tr("ui_delete_alarm"), sub: tr("asks_twice"), kind: ctlDanger, button: tr("ui_delete")}
@@ -303,8 +309,8 @@ func (d *Display) actionTap(id string) {
 		var err error
 		if dr.isNew {
 			var al config.Alarm
-			if al, err = alarm.Get().Set(a.Hour, a.Minute, a.Days, a.Label); err == nil && (al.Sunrise != a.Sunrise || al.LightOnly != a.LightOnly) {
-				al.Sunrise, al.LightOnly = a.Sunrise, a.LightOnly
+			if al, err = alarm.Get().Set(a.Hour, a.Minute, a.Days, a.Label); err == nil && (al.Sunrise != a.Sunrise || al.LightOnly != a.LightOnly || al.Wake != a.Wake) {
+				al.Sunrise, al.LightOnly, al.Wake = a.Sunrise, a.LightOnly, a.Wake
 				err = alarm.Get().Put(al)
 			}
 		} else {
@@ -380,7 +386,7 @@ func (d *Display) alarmRowTap(id string, p part, opt int) bool {
 		case partPlus:
 			alarm.Get().SetRingVolume(n+1, true)
 		}
-	case "alarmsound", "alarmwords", "alarmrise", "e.repeat", "e.sunrise":
+	case "alarmsound", "alarmwords", "alarmrise", "e.repeat", "e.sunrise", "e.wake":
 		d.openPicker(id)
 	case "e.hour":
 		d.editDraft(func(dr *alarmDraft) {
@@ -425,4 +431,34 @@ func (d *Display) alarmRowTap(id string, p part, opt int) bool {
 		return false
 	}
 	return true
+}
+
+// wakeOptions are the Wake with list's choices for an alarm that wakes with cur: the alarm sound, the
+// music on offer (alarm.WakeChoices, which may still be on its way), and cur where it is not on offer
+// now, so the list still shows it.
+func wakeOptions(cur config.WakeWith) []config.WakeWith {
+	out := append([]config.WakeWith{{}}, alarm.Get().WakeChoices(0)...)
+	if cur.Music() && !slices.Contains(out, cur) {
+		out = append(out, cur)
+	}
+	return out
+}
+
+// wakeLabel is a Wake with choice as the list says it.
+func wakeLabel(w config.WakeWith) string {
+	switch {
+	case !w.Music():
+		return tr("alarm_sound")
+	case w.Kind == config.WakeMusic:
+		return fmt.Sprintf(tr("wake_music_s"), w.Name)
+	}
+	return fmt.Sprintf(tr("wake_radio_s"), w.Name)
+}
+
+// wakeValue is what the editor's Wake with row says: the alarm sound, or the music's name.
+func wakeValue(w config.WakeWith) string {
+	if !w.Music() {
+		return tr("alarm_sound")
+	}
+	return w.Name
 }

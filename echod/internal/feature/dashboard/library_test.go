@@ -20,6 +20,7 @@ func TestALibraryCardKeepsItsPlayer(t *testing.T) {
 		{`{"tap_action": {"action": "navigate", "navigation_path": "#techo5-library"}}`, "media_player.kitchen", LibraryPath, "media_player.kitchen"},
 		{`{"tap_action": {"action": "navigate", "navigation_path": "#techo5-library"}}`, "", LibraryPath, ""},
 		{`{"tap_action": {"action": "navigate", "navigation_path": "/home/music"}}`, "media_player.kitchen", "home/music", ""},
+		{`{"tap_action": {"action": "navigate", "navigation_path": "#techo5-alarms"}}`, "", AlarmsPath, ""},
 	} {
 		var card raw
 		if err := json.Unmarshal([]byte(c.card), &card); err != nil {
@@ -35,6 +36,10 @@ func TestALibraryCardKeepsItsPlayer(t *testing.T) {
 	f.Tap(Action{View: LibraryPath, Entity: "media_player.kitchen"})
 	if p := config.Get().Dashboard.Path; p != "home/room" {
 		t.Errorf("the library's hash went to %q", p)
+	}
+	f.Tap(Action{View: AlarmsPath})
+	if p := config.Get().Dashboard.Path; p != "home/room" {
+		t.Errorf("the alarms' hash went to %q", p)
 	}
 }
 

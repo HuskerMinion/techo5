@@ -695,8 +695,14 @@ HTTP.
   **Now playing album** and **Now playing state** (playing, paused or idle). The names are as the app
   or the station's service sent them. A phone over Bluetooth sends none the device reads, so only the
   source is filled in for it; Radio is whatever the **Radio station** sensor names, with its title and
-  artist. While the device holds a track the state says whether it is playing or paused; once it lets
-  the track go the others are empty and the state reads idle. When an app is paused on the phone, the
+  artist. A Music Assistant track is named by the service it plays from when Home Assistant says which
+  (Spotify, Plex, YouTube Music, Tidal, Qobuz, Deezer, Apple Music, SoundCloud, Jellyfin, Radio for
+  Radio Browser and TuneIn, Library for its own files), on the sensor and on the Now Playing page alike.
+  This needs the device's Home Assistant token
+  ([home_assistant action](actions.md#connect-the-device-to-home-assistant)); without it, or for another
+  provider, it stays Music Assistant. While the device holds a track the state says whether it is
+  playing or paused; once it lets the track go the others are empty and the state reads idle. When an
+  app is paused on the phone, the
   device keeps the track paused or lets it go a few seconds after the phone stops sending, depending
   on the app, so an automation should go by the state rather than by how long a pause takes. A Music
   Assistant track paused or stopped while it played here stays named, with the state paused, for up to
@@ -2171,8 +2177,9 @@ while they are said. Home Assistant speaks them, in its assistant's voice and la
 Assistant out of reach the alarm rings without them.
 
 **Wake with light** lights the room for a while before an alarm: the screen on a Show or a Spot, the
-light ring on a Dot. Set the default on the Alarms card or the setup page, and give an alarm its own
-in its editor (5 to 30 minutes, or off). Once an alarm with a wake light rings, the light stays at
+light ring on a Dot. Set the default on the Alarms card, the setup page, or **Wake light minutes** in
+Home Assistant, and give an alarm its own in its editor (5 to 30 minutes, or off).
+Once an alarm with a wake light rings, the light stays at
 full while it rings and while it is snoozed. When you stop it, the light stays at full until the
 next alarm if that alarm's own wake light has already started; otherwise it goes off. So with half
 an hour of light, alarms at 8:00 and 8:30 are one light from 7:30 until the second is stopped, and
@@ -2204,6 +2211,26 @@ it turns the light off. A
 light-only alarm always has a light: its own, the default, or 30 minutes when both are off; its
 editor's **Wake with light** row shows the minutes it gets. On a Dot, which has no screen, it is the
 light ring's sunrise and nothing else: no sound, and no night to end.
+
+**Wake with** in an alarm's editor (and on the setup page) wakes with music in place of the alarm
+sound: a station from the radio's list, as the radio page shows it, or one of Music Assistant's
+favorite playlists, albums or radio stations (with a music library set up on the device). On a Dot,
+set it on the setup page or with the [alarm_wake_with action](actions.md#wake-with-music). The music
+plays on the device's own speaker at the **Ring volume**, not the music volume, for as long as the
+alarm rings, so a volume turned down (or muted) the night before doesn't make it quiet; the music
+volume is back as it was when the alarm ends. The alarm is a ring as any other: it shows, **Gets
+louder** brings the music up from quiet to the ring volume, a press that quiets the ring quiets the
+music, and Stop stops it. Snooze pauses a Music Assistant favorite and resumes it where it was when
+the snooze ends; if that doesn't work within 4 seconds (the queue is gone, say), the favorite starts
+again from the top. A radio station is live, so there is nowhere to resume from: Snooze stops it and
+it starts again when the snooze ends. If the music isn't heard within 8 seconds, stops for 8 seconds
+while the alarm rings, or can't play at all (no network, Music Assistant not set up or not answering,
+the station gone from the list), the alarm sound rings instead, so nobody oversleeps. With the ring
+volume at 0 the alarm sound rings, silent, as it would for any alarm. The wake light works as with
+any alarm. A light-only or silent alarm has no **Wake with**.
+
+A dashboard card can open the alarms on a Show or a Spot: see
+[docs/dashboards.md](dashboards.md#alarms).
 
 ### How loud the room is
 

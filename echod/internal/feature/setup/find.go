@@ -10,6 +10,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 )
 
 // Find a setting: a box at the top of every tab (tabHead), a plain form that asks for /setup?find=words.
@@ -273,7 +275,7 @@ func (f *Feature) findPage(ctx context.Context, w http.ResponseWriter, token, sh
 			// What is coming up is found by "alarm", "timer" and "reminder", which people mostly look
 			// for to add one: the drawer that adds them, which is not a card, comes with it.
 			if h.card.name == "alarm_edit" {
-				addDrawer(w, token)
+				addDrawer(w, token, alarm.Get().WakeChoices(0))
 			}
 			fmt.Fprint(w, `</div>`)
 		}

@@ -128,6 +128,10 @@ type Nearest struct {
 	enabled bool
 	others  []arrived
 	mine    *pending
+	// lost is the word this device last stood down for, and when (#661): the same word again within
+	// kept is the detector firing more than once on what one person said, not a new wake word.
+	lost   string
+	lostAt time.Time
 }
 
 var (
@@ -319,6 +323,10 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 		now()
 		return
 	}
+	if n.lostJustNow(word) {
+		slog.Debug("nearest device: the same word again, already stood down for", "word", word)
+		return
+	}
 	peers := hearing(n.peers())
 	if len(peers) == 0 {
 		now()
@@ -370,6 +378,9 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		best, beaten = n.bestSince(mine.at.Add(-mine.window), mine.claim)
 		elsewhere = mine.elsewhere
 		mine.answered = !beaten && !elsewhere && able
+		if beaten || elsewhere {
+			n.lost, n.lostAt = word, n.now()
+		}
 	}()
 	if !current {
 		return
@@ -440,7 +451,12 @@ func (n *Nearest) answeredElsewhere(mine *pending, by string) {
 // took is a claim that arrived from another device. It answers whether this device has already
 // answered the same wake word: a claim that comes after that, however much better, is too late, and the
 // device that sent it stands down.
+//
+// A detector can fire again on the same words a second or two later (#661), so the turn this device
+// opened keeps being claimed for as long as it lasts, up to kept: past the window alone, another device's
+// repeat found nobody to tell it the word was taken, and opened a second turn.
 func (n *Nearest) took(c claim) (answeredHere bool) {
+	busy := n.busy()
 	now := n.now()
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -452,7 +468,18 @@ func (n *Nearest) took(c claim) (answeredHere bool) {
 	}
 	n.others = append(fresh, arrived{claim: c, at: now})
 	mine := n.mine
-	return mine != nil && mine.answered && mine.Word == c.Word && now.Sub(mine.at) <= 2*mine.window
+	if mine == nil || !mine.answered || mine.Word != c.Word {
+		return false
+	}
+	since := now.Sub(mine.at)
+	return since <= 2*mine.window || busy && since < kept
+}
+
+// lostJustNow is whether this device stood down for word less than kept ago.
+func (n *Nearest) lostJustNow(word string) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.lost == word && n.now().Sub(n.lostAt) < kept
 }
 
 func round(v float64) float64 { return float64(int(v*10+0.5)) / 10 }

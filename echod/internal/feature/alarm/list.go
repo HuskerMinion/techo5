@@ -38,6 +38,10 @@ type ListedAlarm struct {
 	// Silent goes off as an event only, and LightOnly as the wake light only (#164).
 	Silent    bool `json:"silent"`
 	LightOnly bool `json:"light_only"`
+
+	// WakeWith is what it wakes with (#651), as alarm_wake_with takes it: "alarm_sound", "radio: <name>"
+	// or "music_assistant: <name>".
+	WakeWith string `json:"wake_with"`
 }
 
 type ListedSnooze struct {
@@ -85,6 +89,7 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 			ID: al.ID, Time: fmt.Sprintf("%02d:%02d", al.Hour, al.Minute), Days: al.When(), Date: al.Date,
 			Label: al.Label, On: al.On, Next: next, Reminder: al.Remind, RingOn: append([]string{}, al.RingOn...),
 			Silent: al.Silent && !al.Remind, LightOnly: al.LightOnly && !al.Remind && !al.Silent,
+			WakeWith: al.Waking().String(),
 		})
 	}
 	for _, s := range v.Snoozed {

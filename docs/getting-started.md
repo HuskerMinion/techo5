@@ -35,7 +35,7 @@ unit. The 1st gen also has a 1 MP camera where the 2nd gen has 13 MP, and the bo
 is `crown`. On boot images before v1.0.1, a quick tap of the mute button to unmute leaves the camera
 off until the unit is rebooted; the v1.0.1 boot image fixes that, and a unit installed earlier gets it
 by [updating its boot image](install.md#updating-the-boot-image). The Echo Dot 3rd gen from 2018
-(`donut`, model D9N29T) runs TECHO5 Dot, see [below](#the-echo-dot-3rd-gen-donut), and so, experimentally,
+(`donut`, model D9N29T) runs TECHO5 Dot, see [below](#the-echo-dot-3rd-gen-donut), and so
 does the Echo Input (`cupcake`, model C1125P), see [below](#the-echo-input-cupcake). Other Echos (the
 2019 Dot 3rd gen, the Dot with a clock, later Dots, and so on) are **not** supported.
 
@@ -260,7 +260,10 @@ TWRP is the same `to-twrp --yes`; from TWRP,
 The 2018 Echo Input (model C1125P, `cupcake`) is the Echo Dot 3rd gen's board without a speaker: sound
 comes from its 3.5 mm line out or a Bluetooth speaker, it has one LED in place of the ring, and only the
 action and mute buttons. It runs the Echo Dot 3rd gen's release, installer and daemon build as they
-are. **Experimental: not yet tried on a unit**, so keep the installer's backups and report what you find.
+are. **Working on one unit** so far, so keep the installer's backups and report what you find.
+**Update Fire OS to 6.5.7.5** (`NS6575/8338`) before installing, by sideloading it in TWRP if the unit
+came on something older: on 6.5.3 the Wi-Fi firmware crashes about two minutes after boot and the Echo
+Input drops off the network.
 
 It's unlocked with the kamakiri-cupcake kit over its micro-USB socket, with no soldering, by hand as
 [its XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-input-2018-cupcake.4797603/)

@@ -269,6 +269,39 @@ data:
   days: weekdays
 ```
 
+## Wake with music
+
+In YAML, refer to this action as `esphome.<node>_alarm_wake_with`.
+
+Sets what an alarm wakes with: its alarm sound, a radio station, or a Music Assistant favorite. The
+music plays on the device's own speaker in place of the alarm sound, and the alarm otherwise rings as
+any other; if the music isn't heard within 8 seconds, the alarm sound rings instead. See **Wake with**
+in [docs/setup.md](setup.md). The same choice is **Wake with** in an alarm's editor on the device and
+on the setup page. Fails if no alarm has that id, if the station or favorite isn't found, or if the
+alarm is light only or silent.
+
+### id
+
+*string*
+
+An alarm's `id` from `alarms_list`.
+
+### wake_with
+
+*string*
+
+`alarm_sound`, `radio: <station>` with a station as the radio page lists it, or
+`music_assistant: <favorite>` with one of Music Assistant's favorite playlists, albums or radio
+stations (a Music Assistant URI like `library://playlist/12` works too). `alarms_list` says what each
+alarm wakes with in the same words.
+
+```yaml
+action: esphome.office_alarm_wake_with
+data:
+  id: "{{ listing.alarms[0].id }}"
+  wake_with: "music_assistant: Morning Mix"
+```
+
 ## Alarm events
 
 Each step of an alarm fires `esphome.techo5_alarm` on Home Assistant's bus, with:
@@ -280,6 +313,7 @@ Each step of an alarm fires `esphome.techo5_alarm` on Home Assistant's bus, with
 | `label` | The alarm's label |
 | `due` | When it was due, like `2026-10-01T06:45:00-06:00` |
 | `device` | The device's name |
+| `wake_with` | What it wakes with, on `ringing`, `snoozed` and `stopped`: `alarm_sound`, `radio: <station>` or `music_assistant: <favorite>`, as chosen (also when the music didn't start and the alarm sound rang) |
 
 A snoozed alarm fires `ringing` again when it comes back. Reminders fire nothing here. The device
 needs **Allow the device to perform Home Assistant actions** turned on in its ESPHome integration
@@ -1054,6 +1088,7 @@ alarms:
     ring_on: []          # the other devices a reminder goes off on
     silent: false        # true for one set with alarm_set_silent
     light_only: false    # true for a wake light alone (alarm_set_light_only)
+    wake_with: alarm_sound   # or "radio: <station>", "music_assistant: <favorite>" (alarm_wake_with)
 snoozed: []              # each {label, at}
 followed: []             # each {entity, label, armed, next}
 timers:

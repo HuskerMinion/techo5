@@ -54,6 +54,10 @@ var (
 	// (square ones, say, which would otherwise read as portrait): toFrame only scales it. False on
 	// every Show; a board of this build sets it.
 	reportsLandscape = false
+
+	// turnedOver is a screen shown half a turn from the way the controller reports it: toFrame turns
+	// the reading over too. False on every Show; a board of this build sets it.
+	turnedOver = false
 )
 
 const (
@@ -80,9 +84,12 @@ func toFrame(rawW, rawH, rx, ry int) (x, y int) {
 	if rawW > rawH || reportsLandscape {
 		x = rx * Width / max(rawW, 1)
 		y = ry * Height / max(rawH, 1)
-		return x, y
+	} else {
+		x = ry * Width / max(rawH, 1)
+		y = (rawW - 1 - rx) * Height / max(rawW, 1)
 	}
-	x = ry * Width / max(rawH, 1)
-	y = (rawW - 1 - rx) * Height / max(rawW, 1)
+	if turnedOver {
+		x, y = Width-1-x, Height-1-y
+	}
 	return x, y
 }

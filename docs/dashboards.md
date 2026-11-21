@@ -154,6 +154,23 @@ it away. A password shows as stars, and in a text area Done doesn't add a new li
 server from this release or newer; an older one shows no keyboard. The keyboard has English letters
 and symbols only, and a field in a frame from another site on the page doesn't bring it up.
 
+## Alarms
+
+On the Echo Show and the Echo Spot, a card can open the device's alarms: give it a tap action that
+navigates to `#techo5-alarms`. The settings open on Alarms & Timers, to add an alarm or open one in
+its editor; **Done** goes back to the dashboard.
+
+```yaml
+type: button
+name: Alarms
+icon: mdi:alarm
+tap_action:
+  action: navigate
+  navigation_path: "#techo5-alarms"
+```
+
+Home Assistant itself has no view of that name, so the same card does nothing in a browser.
+
 ## Music library
 
 On the Echo Show (and the Skylight and Panel builds), a drawn dashboard can open Music Assistant's

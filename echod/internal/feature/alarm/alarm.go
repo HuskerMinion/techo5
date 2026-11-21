@@ -73,6 +73,10 @@ type Ring struct {
 	// lit is a ring with a wake light, its own or a folded alarm's: the light stays at full while it
 	// rings and through its snooze (sunrise.go).
 	lit bool
+
+	// playing is a ring whose music is playing (wake.go): a snooze of it pauses the music, and its
+	// snooze resumes it. Under Alarms.mu.
+	playing bool
 }
 
 // folded is an alarm that joined a ring already sounding.
@@ -153,6 +157,8 @@ type Alarms struct {
 	sound     *esphome.Select
 	snoozeFor *esphome.Number
 	ringVol   *esphome.Number
+	// lightFor is the default Wake with light, in minutes before an alarm (Alarms.SunriseMinutes).
+	lightFor *esphome.Number
 
 	wake chan struct{}
 
@@ -239,6 +245,16 @@ func build() *Alarms {
 		Mode: esphome.NumberBox,
 	}
 	a.snoozeFor.OnCommand = func(v float32) { a.SetSnooze(int(v)) }
+	a.lightFor = &esphome.Number{
+		Base: esphome.Base{ObjectID: "wake_light_minutes", Name: "Wake light minutes", Icon: "mdi:weather-sunset-up", Category: esphome.CategoryConfig},
+		Min:  0, Max: float64(SunriseChoices[len(SunriseChoices)-1]), Step: 5, Unit: "min",
+		Mode: esphome.NumberBox,
+	}
+	a.lightFor.OnCommand = func(v float32) {
+		if err := a.SetSunriseDefault(int(v)); err != nil {
+			slog.Error("saving the wake light failed", "err", err)
+		}
+	}
 	a.ringVol = &esphome.Number{
 		Base: esphome.Base{ObjectID: "ring_volume", Name: "Ring volume", Icon: "mdi:bell-ring", Category: esphome.CategoryConfig},
 		Min:  0, Max: config.VolumeSteps, Step: 1,
@@ -252,7 +268,7 @@ func build() *Alarms {
 func (a *Alarms) Name() string { return "alarms" }
 
 func (a *Alarms) Entities() []esphome.Entity {
-	return []esphome.Entity{a.next, a.scheduled, a.allOn, a.stop, a.snooze, a.sound, a.words, a.rise, a.snoozeFor, a.ringVol, a.lightLevel, a.lightColor}
+	return []esphome.Entity{a.next, a.scheduled, a.allOn, a.stop, a.snooze, a.sound, a.words, a.rise, a.snoozeFor, a.ringVol, a.lightFor, a.lightLevel, a.lightColor}
 }
 
 func (a *Alarms) Restore(c config.Config) {
@@ -261,6 +277,7 @@ func (a *Alarms) Restore(c config.Config) {
 	a.words.Set(c.Alarms.Say.Label())
 	a.rise.Set(c.Alarms.Rise.Label())
 	a.snoozeFor.Set(float32(c.Alarms.Snooze()))
+	a.lightFor.Set(float32(max(c.Alarms.SunriseMinutes, 0)))
 	a.followHelpers(c.Alarms.Follow)
 
 	// The first start with a ring volume writes down the one it started from, so it stops following
@@ -356,6 +373,37 @@ func (a *Alarms) SetSnooze(minutes int) {
 	}
 	a.snoozeFor.Set(float32(minutes))
 	slog.Info("snooze length", "minutes", minutes)
+}
+
+// SunriseChoices are the default Wake with light's minutes, 0 for none, as the screen and the setup page
+// offer them.
+var SunriseChoices = []int{0, 5, 10, 15, 20, 30}
+
+// SetSunriseDefault sets the default Wake with light, in minutes before an alarm: the nearest of
+// SunriseChoices, the longer of two as near. The screen, the setup page and Home Assistant set it here.
+func (a *Alarms) SetSunriseDefault(minutes int) error {
+	near := SunriseChoices[0]
+	for _, m := range SunriseChoices {
+		if d, best := abs(m-minutes), abs(near-minutes); d < best || d == best && m > near {
+			near = m
+		}
+	}
+	if err := config.Set().Alarms().SunriseMinutes(near); err != nil {
+		a.lightFor.Set(float32(max(config.Get().Alarms.SunriseMinutes, 0)))
+		return err
+	}
+	a.lightFor.Set(float32(near))
+	slog.Info("wake light by default", "minutes", near)
+	a.poke()
+	a.Changed.Emit(struct{}{})
+	return nil
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 // SetRingVolume sets how loud alarms and timers ring, and plays one round of the alarm sound at it
@@ -609,7 +657,15 @@ func (a *Alarms) fire(s source, now time.Time) {
 	// Started under the lock, so there is no moment where an alarm is ringing and Stop finds
 	// nothing to stop. The bell calls rang from its own goroutine, never from here.
 	rise := config.Get().Alarms.Rise.Duration()
-	a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
+	if w := wakeOf(key); w.Music() {
+		// Music in place of the alarm sound (wake.go): a ring with no sound of its own, and the
+		// alarm sound after all if the music is not heard.
+		stop, sound := startQuiet("alarm", s.label, a.rang)
+		a.silence = stop
+		goWake(func() { a.playWake(r, w, rise, s.resume, sound) })
+	} else {
+		a.silence = ring.StartRising("alarm", s.label, speaker.AlarmSound(a.Sound()), rise, a.rang)
+	}
 	a.mu.Unlock()
 
 	if spent {
@@ -837,7 +893,7 @@ func (a *Alarms) SnoozeFor(minutes int) bool {
 	r.snoozed = true
 	now := time.Now()
 	at := now.Add(time.Duration(minutes) * time.Minute).Truncate(time.Second)
-	a.snoozed = append(a.snoozed, source{key: "snooze:" + r.Key, label: r.Label, once: at, lit: r.lit})
+	a.snoozed = append(a.snoozed, source{key: "snooze:" + r.Key, label: r.Label, once: at, lit: r.lit, resume: r.playing})
 	a.lastSnooze = snoozeMade{made: now, until: at, minutes: minutes}
 	a.mu.Unlock()
 
@@ -1165,6 +1221,21 @@ func (a *Alarms) Actions() []*esphome.Action {
 				}
 				slog.Info("light-only alarm set from home assistant", "time", fmt.Sprintf("%d:%02d", al.Hour, al.Minute), "days", config.DaysLabel(al.Days), "label", al.Label)
 				return nil, nil
+			},
+		},
+		{
+			// What an alarm wakes with (#651), by its id from alarms_list: "alarm_sound", "radio: <station>"
+			// or "music_assistant: <favorite>". Its own action, as switching by id is: Home Assistant asks
+			// for every field an action has, and alarm_set with one more would break every automation
+			// that calls it.
+			Name: "alarm_wake_with",
+			Args: []esphome.Arg{{Name: "id", Type: esphome.ArgString}, {Name: "wake_with", Type: esphome.ArgString}},
+			Run: func(c esphome.Call) (any, error) {
+				w, err := a.ParseWake(c.String("wake_with"))
+				if err != nil {
+					return nil, err
+				}
+				return nil, a.SetWake(c.String("id"), w)
 			},
 		},
 		{

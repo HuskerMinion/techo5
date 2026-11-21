@@ -360,8 +360,10 @@ func newDetect() *Detect {
 	// the user changes one, so an engine that came back empty would leave the device deaf while it went
 	// on advertising wake words it was not listening for.
 	e.Load = func() error {
+		// The saved selection, not what was said last: a start that loaded nothing would otherwise be
+		// what every later start loads too (#657).
 		turn := voice.Get()
-		turn.SetActiveWakeWords(d.load(turn.ActiveWakeWords()))
+		turn.SetActiveWakeWords(d.load(voice.SavedWakeWords(d.library().Ours())))
 		d.loadStop()
 		// A call already up when the engine starts has its hang-up word, as one that starts later does.
 		d.hangup.follow(hangupListens(phone.Get().State()))
@@ -379,6 +381,7 @@ func newDetect() *Detect {
 
 	voice.Get().OnWakeWord(d.load, d.selected)
 	wakeword.Refresh = d.refresh
+	wakeword.Restore = d.restore
 	wakeword.ReadScores = d.Scores
 
 	ours := wake.Lib().Ours()
@@ -431,6 +434,20 @@ func (d *Detect) load(ids []string) []string {
 	d.loading.Lock()
 	defer d.loading.Unlock()
 	return d.loadLocked(ids)
+}
+
+// restore loads the saved selection when what runs is not it (#657). Home Assistant asks what runs
+// once per connection and believes the answer, so a slot that came up empty after an update read as "No
+// wake word" there, and choosing it again was the only way back. Only models on disk are in the saved
+// selection here, so nothing is downloaded while Home Assistant waits.
+func (d *Detect) restore() {
+	turn := voice.Get()
+	want := voice.SavedWakeWords(d.library().Ours())
+	if slices.Equal(want, turn.ActiveWakeWords()) {
+		return
+	}
+	slog.Warn("wake words running are not the ones chosen, loading them again", "running", turn.ActiveWakeWords(), "chosen", want)
+	turn.SetActiveWakeWords(d.load(want))
 }
 
 // refresh swaps in the models Home Assistant replaced under the ids that are running. The new file is

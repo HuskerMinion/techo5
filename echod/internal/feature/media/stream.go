@@ -111,6 +111,9 @@ type Stream struct {
 	// alongside the samples they scale. Moving rather than jumping: a step change of 15 dB is a click,
 	// and a ramp over a few tens of milliseconds is what makes it sound deliberate.
 	gain, target float32
+	// duckDB and lowerDB are what target is made of, under write: a turn's duck and the level an
+	// alarm's music is held at as it comes up (Lower), in dB under full.
+	duckDB, lowerDB int
 }
 
 // track is one thing being played. Identity is the point: a track that has been replaced knows not
@@ -189,9 +192,9 @@ func (m *Stream) Duck(db int) {
 			return
 		}
 
-		level := float32(math.Pow(10, float64(db)/20))
 		m.write.Lock()
-		m.target = level
+		m.duckDB = db
+		m.target = dbGain(m.duckDB + m.lowerDB)
 		m.write.Unlock()
 
 		return
@@ -201,7 +204,8 @@ func (m *Stream) Duck(db int) {
 	// middle of one. Resuming is conditional on this having been what suspended: holds is shared with
 	// the claims, and releasing one of theirs would put music back underneath a reply.
 	m.write.Lock()
-	m.target = 1
+	m.duckDB = 0
+	m.target = dbGain(m.lowerDB)
 	m.write.Unlock()
 
 	m.mu.Lock()
@@ -212,6 +216,28 @@ func (m *Stream) Duck(db int) {
 	if held {
 		m.Resume()
 	}
+}
+
+// Lower implements speaker.Lowerer: the track is held db under full, apart from any duck and never
+// paused for it (#651).
+func (m *Stream) Lower(db int) {
+	if m == nil {
+		return
+	}
+	m.write.Lock()
+	m.lowerDB = min(db, 0)
+	m.target = dbGain(m.duckDB + m.lowerDB)
+	m.write.Unlock()
+}
+
+var _ speaker.Lowerer = (*Stream)(nil)
+
+// dbGain is db under full as a gain, 1 for none.
+func dbGain(db int) float32 {
+	if db >= 0 {
+		return 1
+	}
+	return float32(math.Pow(10, float64(db)/20))
 }
 
 // Play starts a url, replacing whatever was playing.
