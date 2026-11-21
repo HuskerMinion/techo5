@@ -165,6 +165,10 @@ type athenaKernel struct {
 	refName string
 	// refControls are written before the reference is opened; one that fails means no reference.
 	refControls []athenaControl
+	// streamRef are the channels of the microphone stream that carry the playback, where the card loops
+	// it into the same capture (the Dot 5's UL9): read with the microphones, on their clock and at their
+	// rate, so the two cannot drift apart. refControls route it there. Nil: no reference in the stream.
+	streamRef   []int
 	controls    []athenaControl
 	gainControl string
 	// softRef: without the card's reference, it is lib/echoref's, made from what the speaker sent.
@@ -346,6 +350,9 @@ type pairedCapture struct {
 	boost          float32
 	meter          athenaMeter
 
+	// inStream: the reference is the microphone stream's own streamRef channels, routed at open.
+	inStream bool
+
 	// The software reference (athenaKernel.softRef): clock stamps the microphones' frames, got
 	// counts them since the stream started, and soft holds what Fill gave for the current read.
 	clock        echoref.Clock
@@ -358,9 +365,15 @@ func openAthena() (capture, error) {
 	k := athenaRunning()
 	athenaInit(k)
 
-	ref := openAthenaRef(k)
+	// A reference in the microphone stream takes the place of a reference device; where its routes
+	// cannot be set, the stream's channels carry nothing and the software reference stands in.
+	inStream := len(k.streamRef) > 0 && athenaRefRoutes(k)
+	var ref *alsa.Capture
+	if !inStream {
+		ref = openAthenaRef(k)
+	}
 	rates := k.micRates
-	soft := ref == nil && k.softRef
+	soft := ref == nil && !inStream && k.softRef
 	echoref.Use(soft)
 	echoref.Rejoin()
 
@@ -394,6 +407,7 @@ func openAthena() (capture, error) {
 	}
 
 	c := newPairedCapture(mics, ref, micRate)
+	c.inStream = inStream
 	if err := c.start(); err != nil {
 		_ = c.Close()
 		return nil, err
@@ -405,7 +419,7 @@ func openAthena() (capture, error) {
 		athenaADCBiasOn()
 	}
 	slog.Info("athena: capture open", "mics", fmt.Sprintf("hw:%d,%d", Card, k.micDevice),
-		"channels", k.micChannels, "microphones", k.mics(), "rate", micRate, "reference", ref != nil, "ref_device", k.refDevice,
+		"channels", k.micChannels, "microphones", k.mics(), "rate", micRate, "reference", ref != nil || inStream, "ref_device", k.refDevice, "ref_in_stream", inStream,
 		"software_reference", soft)
 	return c, nil
 }
@@ -419,21 +433,8 @@ func openAthenaRef(k *athenaKernel) *alsa.Capture {
 		slog.Info("athena: no reference device on this kernel", "device", k.refDevice, "want", k.refName)
 		return nil
 	}
-	if len(k.refControls) > 0 {
-		m, err := alsa.OpenMixer(Card)
-		if err != nil {
-			slog.Warn("athena: no playback reference", "err", err)
-			return nil
-		}
-		ok := true
-		for _, c := range k.refControls {
-			ok = athenaWrite(m, c.name, c.value) && ok
-		}
-		_ = m.Close()
-		if !ok {
-			slog.Warn("athena: no playback reference, its routes could not be set")
-			return nil
-		}
+	if !athenaRefRoutes(k) {
+		return nil
 	}
 	ref, err := alsa.OpenPrepared(Card, k.refDevice, alsa.Config{
 		Channels:   athenaRefChannels,
@@ -448,6 +449,27 @@ func openAthenaRef(k *athenaKernel) *alsa.Capture {
 		return nil
 	}
 	return ref
+}
+
+// athenaRefRoutes writes the reference's routes (refControls), and is whether every one took.
+func athenaRefRoutes(k *athenaKernel) bool {
+	if len(k.refControls) == 0 {
+		return true
+	}
+	m, err := alsa.OpenMixer(Card)
+	if err != nil {
+		slog.Warn("athena: no playback reference", "err", err)
+		return false
+	}
+	ok := true
+	for _, c := range k.refControls {
+		ok = athenaWrite(m, c.name, c.value) && ok
+	}
+	_ = m.Close()
+	if !ok {
+		slog.Warn("athena: no playback reference, its routes could not be set")
+	}
+	return ok
 }
 
 // bits is the microphones' sample width.
@@ -486,8 +508,14 @@ func athenaInfoNames(info, name string) bool {
 }
 
 func newPairedCapture(mics, ref *alsa.Capture, micRate int) *pairedCapture {
-	k := athenaRunning()
-	c := &pairedCapture{mics: mics, ref: ref, k: k, micRate: micRate,
+	c := newPairedCaptureFor(athenaRunning(), micRate)
+	c.mics, c.ref = mics, ref
+	return c
+}
+
+// newPairedCaptureFor is a capture of kernel k's streams at micRate, its filters made, its devices not set.
+func newPairedCaptureFor(k *athenaKernel, micRate int) *pairedCapture {
+	c := &pairedCapture{k: k, micRate: micRate,
 		boost: float32(math.Pow(10, k.boostDB/20)), clock: echoref.NewClock(Rate)}
 	if micRate != Rate { // at Rate the converter has decimated already
 		c.micDec = make([]*audio.Decimator, k.mics())
@@ -495,9 +523,13 @@ func newPairedCapture(mics, ref *alsa.Capture, micRate int) *pairedCapture {
 			c.micDec[i] = audio.NewDecimator(micRate/Rate, athenaMicTaps)
 		}
 	}
-	if k.refRate != Rate { // at Rate the reference is used as it comes
+	refRate := k.refRate
+	if len(k.streamRef) > 0 { // a reference in the microphone stream comes at the microphones' rate
+		refRate = micRate
+	}
+	if refRate != Rate { // at Rate the reference is used as it comes
 		for i := range c.refDec {
-			c.refDec[i] = audio.NewDecimator(k.refRate/Rate, athenaRefTaps)
+			c.refDec[i] = audio.NewDecimator(refRate/Rate, athenaRefTaps)
 		}
 	}
 	return c
@@ -620,7 +652,7 @@ func (c *pairedCapture) readWithNative(buf []byte, policy func() bool, visit fun
 			visit(native)
 		}
 	}
-	if ref == nil && c.k.softRef {
+	if ref == nil && !c.inStream && c.k.softRef {
 		fill(frames)
 	}
 	c.convert(buf[:frames*frameBytes], mics, ref)
@@ -716,6 +748,10 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 		}
 	}
 
+	if c.inStream {
+		c.convertStreamRef(out, mics)
+		return
+	}
 	if ref == nil && c.softOK {
 		for f := range min(frames, len(c.softL)) {
 			putRef(out[f*frameBytes:], c.softL[f], c.softR[f], &c.meter.ref)
@@ -739,6 +775,41 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 				continue
 			}
 			ys[ch], ready = d.Push(x)
+		}
+		if ready {
+			putRef(out[f*frameBytes:], ys[0], ys[1], &c.meter.ref)
+			f++
+		}
+	}
+}
+
+// convertStreamRef takes the reference out of the microphone stream's streamRef channels, through the
+// same decimation as the microphones (athenaRefTaps is athenaMicTaps), so a sample of the reference and
+// a sample of the microphones out of it were recorded together. The channels are read at the
+// microphones' full scale and without their boost: the loopback is the digital stream, not a microphone.
+func (c *pairedCapture) convertStreamRef(out, mics []byte) {
+	frameBytes := Channels * Bits / 8
+	frames := len(out) / frameBytes
+	width := c.k.bits() / 8
+	step := c.k.micChannels * width
+	sample := func(b []byte) float32 {
+		if width == 2 {
+			return float32(int16(binary.LittleEndian.Uint16(b))) / c.k.micFull
+		}
+		return float32(int32(binary.LittleEndian.Uint32(b))) / c.k.micFull
+	}
+	f := 0
+	for at := 0; at+step <= len(mics) && f < frames; at += step {
+		var ys [athenaRefChannels]float32
+		var ready bool
+		for i := range athenaRefChannels {
+			ch := c.k.streamRef[min(i, len(c.k.streamRef)-1)]
+			x := sample(mics[at+width*ch:])
+			if d := c.refDec[i]; d != nil {
+				ys[i], ready = d.Push(x)
+			} else {
+				ys[i], ready = x, true
+			}
 		}
 		if ready {
 			putRef(out[f*frameBytes:], ys[0], ys[1], &c.meter.ref)
