@@ -105,9 +105,11 @@ python3 tools/install-thinksmart.py --system system.img \
 
 It asks for the Wi-Fi passphrase, and once before it writes. Each step is checked before the next:
 
-1. It finds the unit and reads its partition table, both copies.
+1. It finds the unit, reads its partition table (both copies) and its serial, the one on its label.
 2. It checks the system image and lk2nd, and works out the new partition table from the unit's own.
-3. It reads the whole eMMC into `backups/thinksmart-<disk id>/` and checks it against the unit.
+3. It reads the whole eMMC into `backups/thinksmart-<serial>/` and checks it against the unit. Every
+   unit has the same partition table from Lenovo's factory, so the serial is what tells two units'
+   backups apart.
    This takes several minutes, and edl shows no progress while it runs. Without a verified backup
    nothing is written.
 4. It takes the speaker's tuning out of the stock kernel in the backup.

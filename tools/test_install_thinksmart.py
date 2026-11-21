@@ -36,7 +36,8 @@ DISK = uuid.UUID('98101b32-bbe2-4bf2-a06e-2bb33d000c20')
 
 # Lenovo's partitions the install looks at, at their stock entries, packed small; the rest of the 52
 # entries are filler, entry 51 free.
-NAMED = {0: 'modem', 20: 'boot', 21: 'recovery', 23: 'system', 24: 'vendor', 26: 'persist', 50: 'userdata'}
+NAMED = {0: 'modem', 20: 'boot', 21: 'recovery', 22: 'devinfo', 23: 'system', 24: 'vendor', 26: 'persist',
+         50: 'userdata'}
 SIZES = {'modem': 2048, 'boot': 8192, 'recovery': 8192, 'system': 4096, 'vendor': 4096, 'persist': 2048}
 USERDATA = it.SYSTEM_SECTORS + it.DATA_MIN_SECTORS + 4096
 
@@ -89,6 +90,19 @@ def lk2nd_image(signed=True, qcdt=0):
     if signed:
         img += b'\x30\x82\x01\x00' + b'\x5a' * 256
     return img + b'SEANDROIDENFORCE'
+
+
+def devinfo(serial):
+    """devinfo's first sector as aboot writes it: the magic, the serial at 228, the model after it."""
+    d = bytearray(512)
+    d[:13] = b'ANDROID-BOOT!'
+    struct.pack_into('<I', d, 224, 1)
+    d[228:228 + len(serial)] = serial.encode()
+    d[237:247] = b'ZA690000US'
+    return bytes(d)
+
+
+SERIAL = 'TEST0001'
 
 
 def dsp_table():
@@ -248,6 +262,8 @@ class Install(unittest.TestCase):
             self.table, regs = dsp_table()
             f.seek(self.gpt.named('boot').first * S)
             f.write(boot_image(stock_kernel(self.table)))
+            f.seek(self.gpt.named('devinfo').first * S)
+            f.write(devinfo(SERIAL))
         self.regs = regs
         self.edl = os.path.join(self.d, 'edl.py')
         with open(self.edl, 'w') as f:
@@ -325,7 +341,7 @@ class Install(unittest.TestCase):
         self.assertEqual(m['firmware/' + it.DSP_NAME], self.table)
         self.assertIn(b'network={', m['settings/wpa_supplicant.conf'])
         self.assertNotIn(b'secret passphrase', m['settings/wpa_supplicant.conf'])
-        key = os.path.join(self.d, 'backups', 'thinksmart-98101b32', 'home-assistant.key')
+        key = os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL, 'home-assistant.key')
         with open(key) as f:
             self.assertEqual(m['settings/psk'].decode().strip(), f.read().strip())
         self.assertIn(m['settings/psk'].decode().strip(), out)
@@ -335,8 +351,8 @@ class Install(unittest.TestCase):
         with open(self.log) as f:
             self.assertEqual(f.read().split('\n')[-2], 'reset')
         # The backup: verified, the unit as it was, the way back.
-        b = os.path.join(self.d, 'backups', 'thinksmart-98101b32')
-        self.assertEqual(it.backup_verified(b, self.gpt), '')
+        b = os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL)
+        self.assertEqual(it.backup_verified(b, self.gpt, SERIAL), '')
         with open(os.path.join(b, 'emmc.img'), 'rb') as f:
             self.assertEqual(f.read(34 * S), self.first)
         with open(os.path.join(b, 'firmware', it.DSP_NAME), 'rb') as f:
@@ -361,7 +377,7 @@ class Install(unittest.TestCase):
         self.assertIn('Nothing was written', out)
         self.assertEqual(self.writes(), [])
         self.assertEqual(self.read(0, 34) + self.read(self.gpt.named('boot').first, 16), before)
-        self.assertFalse(os.path.exists(os.path.join(self.d, 'backups', 'thinksmart-98101b32', 'emmc.img')))
+        self.assertFalse(os.path.exists(os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL, 'emmc.img')))
 
     def test_again_on_its_own_install(self):
         self.install('--name', 'Office')
@@ -446,6 +462,52 @@ class Install(unittest.TestCase):
         out = self.install('--name', 'Office', env=dict(self.env, FAKE_RESET_USBERROR='1'))
         self.assertEqual(len(self.writes()), 5)
         self.assertNotIn('failed', out)
+
+
+    def test_units_are_told_apart_by_serial_not_by_the_factory_disk_id(self):
+        # Every unit has the same disk id and partition table from Lenovo's factory image: a second
+        # unit must get a backup and speaker table of its own, not the first unit's.
+        self.install('--name', 'Office')
+        first = os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL)
+        self.assertEqual(it.backup_verified(first, self.gpt, SERIAL), '')
+        self.assertIn('another unit', it.backup_verified(first, self.gpt, 'TEST0002'))
+        # The second unit: stock again, the same table and disk id, another serial and speaker table.
+        with open(self.disk, 'r+b') as f:
+            f.write(self.first)
+            f.seek((self.total - 33) * S)
+            f.write(self.last)
+            f.seek(self.gpt.named('devinfo').first * S)
+            f.write(devinfo('TEST0002'))
+        os.remove(self.log)
+        out = self.install('--name', 'Kitchen')
+        second = os.path.join(self.d, 'backups', 'thinksmart-TEST0002')
+        self.assertIn('unit: serial TEST0002', out)
+        self.assertNotIn('there already', out)
+        self.assertEqual(it.backup_verified(second, self.gpt, 'TEST0002'), '')
+        with open(self.log) as f:
+            self.assertTrue(any(l.split()[0] == 'rf' for l in f))
+
+    def test_backup_of_another_unit_is_refused(self):
+        self.install('--name', 'Office')
+        first = os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL)
+        with open(self.disk, 'r+b') as f:
+            f.write(self.first)
+            f.seek((self.total - 33) * S)
+            f.write(self.last)
+            f.seek(self.gpt.named('devinfo').first * S)
+            f.write(devinfo('TEST0002'))
+        os.remove(self.log)
+        with self.assertRaisesRegex(Fail, 'another unit'):
+            self.install('--name', 'Kitchen', '--backup', first)
+        self.assertEqual(self.writes(), [])
+
+    def test_no_serial_writes_nothing(self):
+        with open(self.disk, 'r+b') as f:
+            f.seek(self.gpt.named('devinfo').first * S)
+            f.write(bytes(512))
+        with self.assertRaisesRegex(Fail, 'cannot be told apart'):
+            self.install('--name', 'Office')
+        self.assertEqual(self.writes(), [])
 
 
 if __name__ == '__main__':
