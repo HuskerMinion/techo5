@@ -40,6 +40,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/cast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/deck"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
@@ -238,6 +239,7 @@ type Display struct {
 	dashFollow    bool
 	dashEdge      int // edgeNone, or the edge the finger on it started at
 	dashEdgeAt    image.Point
+	castShowing   bool         // the cast page is up: every finger is its
 	dashKbd       dashKeyboard // the keyboard over a streamed page (dash_keyboard.go)
 	dashKbdWake   *time.Timer  // to look again when that keyboard has been left long enough
 	dashAwayUntil time.Time    // the idle dashboard put away, the clock up until then
@@ -685,6 +687,7 @@ func build() *Display {
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	d.watchRoom()
 	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
+	cast.Get().Changed.Listen(func(struct{}) { d.wake() })
 	tessera.Changed.Listen(func(struct{}) { d.wake() })
 	tessCams.mu.Lock()
 	tessCams.wake = d.wake
@@ -1495,6 +1498,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		// Up but not on the screen: something else is drawn there, and the finger is for it.
 		d.closeAppsPop()
+	}
+
+	// The cast page: nothing on it to press, and a swipe in from the left takes it away.
+	d.mu.Lock()
+	castUp := d.castShowing
+	d.mu.Unlock()
+	if castUp {
+		d.castGesture(g)
+		d.wake()
+		return
 	}
 
 	// The dashboard: every finger is its, including the one that takes it away; unless the drawer has
@@ -3153,14 +3166,15 @@ func (d *Display) frame() (next time.Duration) {
 	// boring is the plain idle page — the same set of pages draw() checks before falling through to
 	// bigClock/nowPlaying. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
+	d.castScene(&s, s.showSheet || ring.any() || s.callPageUp())
 	d.deckScene(&s, now)
 	d.customScene(&s, now)
 	// A call drawn over the page leaves the page as it was: the dashboard, the photos, the
 	// screensaver.
-	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp())
+	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp() || s.showCast)
 	boring := s.phase == "idle" && !s.callPageUp() && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
-		!s.showDash && !s.showDeck && s.custom.name == ""
+		!s.showDash && !s.showCast && !s.showDeck && s.custom.name == ""
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
 	// still standing in it. It was set only on the idle page once, and the press could not be given
@@ -3339,6 +3353,9 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if s.showCamera {
 		return 250 * time.Millisecond // frames arrive as they are fetched; this keeps up
+	}
+	if s.showCast {
+		return time.Second // a frame wakes it as it arrives
 	}
 	if s.showDash {
 		return time.Second // a streamed picture wakes it as it arrives
