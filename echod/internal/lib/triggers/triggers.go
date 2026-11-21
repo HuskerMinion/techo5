@@ -134,6 +134,17 @@ var Languages = map[string]Set{
 			"volta pro início", "volta pro inicio", "volta para o início", "volta para o inicio", "tela de início", "tela de inicio"},
 		Camera: []string{"mostra", "mostre", "mostrar", "câmera", "camera"},
 	},
+	"ro": {
+		// Each word with diacritics also without them: speech to text often leaves them off. Not
+		// "temperatur": it is inside the English "temperature", which asks for the thermostat as often.
+		Weather: []string{"vremea", "vreme", "vremii", "meteo", "prognoz", "câte grade", "cate grade",
+			"ploaie", "plouă", "ploua", "harta ploilor", "ninge", "ninsoare", "zăpadă", "zapada",
+			"furtun", "însorit", "insorit", "înnorat", "innorat", "radar"},
+		Radar:      []string{"radar", "harta ploilor", "harta meteo", "harta vremii"},
+		NotWeather: []string{"sunet de ploaie", "sunete de ploaie", "sunetul ploii", "zgomot de ploaie", "pune ploaie"},
+		GoHome:     []string{"înapoi la ceas", "inapoi la ceas", "arată ceasul", "arata ceasul", "ecranul principal"},
+		Camera:     []string{"arată", "arata", "afișează", "afiseaza", "camera"},
+	},
 	"ru": {
 		// Matched inside what was heard, so each form is listed where the stem is inside another word:
 		// "погод" is in "погоди" (wait), "облачн" in cloud storage. Thunderstorm is left out: every
