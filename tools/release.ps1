@@ -200,7 +200,7 @@ if ($ffWants.Count) {
             $ff32[$t] = (Get-FileHash -Algorithm SHA256 (Join-Path $d 'usr/local/bin/techo5-ffmpeg')).Hash
             $has64 = $names -contains 'usr/local/bin/techo5-ffmpeg64'
             if ($want64 -and -not $has64) { throw "$t has no usr/local/bin/techo5-ffmpeg64: build bin/techo5-ffmpeg-arm64 (tools/linux/build-ffmpeg-arm64.sh) before deploy-rootfs.sh" }
-            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only athena's and the Skylight's rootfs do" }
+            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only the rootfs of athena, the Skylight and the ThinkSmart View do" }
             if (-not $want64) { continue }
             & tar -xzf $t -C $d ./usr/local/bin/techo5-ffmpeg64
             if ($LASTEXITCODE -ne 0) { throw "${t}: usr/local/bin/techo5-ffmpeg64 could not be read" }
@@ -223,7 +223,7 @@ if ($ffWants.Count) {
             $ff64[$t] = (Get-FileHash -Algorithm SHA256 $f).Hash
         }
         if (@($ff32.Values | Sort-Object -Unique).Count -gt 1) { throw "the rootfs tarballs carry different usr/local/bin/techo5-ffmpeg: build them all with the same bin/techo5-ffmpeg-arm" }
-        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$AthenaRootfs and $SkylightRootfs carry different usr/local/bin/techo5-ffmpeg64: build both with the same bin/techo5-ffmpeg-arm64" }
+        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$(@($ff64.Keys) -join ', ') carry different usr/local/bin/techo5-ffmpeg64: build them all with the same bin/techo5-ffmpeg-arm64" }
         foreach ($t in $ff64.Keys) { Write-Host "== ${t}: ffmpeg64 sha256 $($ff64[$t].ToLower())" }
     } finally { Remove-Item -Recurse -Force $ffDir -ErrorAction SilentlyContinue }
 }
@@ -430,10 +430,16 @@ if ($ThinkSmartRootfs) {
     $want = (Get-FileHash -Algorithm SHA256 $ThinkSmartBoot).Hash.ToLower()
     $got = ($kernelSum -split '\s+')[0].ToLower()
     if ($got -ne $want) { throw "$ThinkSmartRootfs carries kernel $got, but -ThinkSmartBoot is ${want}: build the rootfs with KERNEL_IMAGE=$ThinkSmartBoot" }
-    # The source: build.sh's tarball, one top directory linux-<kver>-techo5-thinksmart, whose Makefile
-    # is that version.
-    $kver = python -I -c "import re,sys,tarfile`nt=tarfile.open(sys.argv[1]); names=t.getnames(); top={n.split('/')[0] for n in names}`nm=re.fullmatch(r'linux-(\d+\.\d+\.\d+)-techo5-thinksmart', top.pop()) if len(top)==1 else None`nif not m: sys.exit('not one top directory linux-<kver>-techo5-thinksmart')`nmk=t.extractfile(m.group(0)+'/Makefile').read().decode()`nv='.'.join(re.search(r'^'+k+r' = (\d+)$', mk, re.M).group(1) for k in ('VERSION','PATCHLEVEL','SUBLEVEL'))`nif v!=m.group(1): sys.exit('its Makefile is '+v)`nprint(v)" $ThinkSmartKernelSource
-    if ($LASTEXITCODE -ne 0 -or -not $kver) { throw "$ThinkSmartKernelSource is not build.sh's kernel source" }
+    # The source must be what built the kernel: check-source.py ties it to the boot image's own
+    # configuration, and to build.sh's kernel.config beside the image when it is there.
+    $chk = @((Join-Path $kdir 'check-source.py'))
+    $cfg = Join-Path (Split-Path -Parent (Resolve-Path $ThinkSmartBoot)) 'kernel.config'
+    if (Test-Path -LiteralPath $cfg -PathType Leaf) { $chk += @('--config', $cfg) }
+    $out = @(python -I @chk $ThinkSmartKernelSource $ThinkSmartBoot)
+    $out | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartKernelSource is not the source of $ThinkSmartBoot (check-source.py)" }
+    $kver = ($out | Where-Object { $_ -match '^kver (\d+\.\d+\.\d+)$' } | Select-Object -Last 1) -replace '^kver ', ''
+    if (-not $kver) { throw "check-source.py named no kernel version" }
     $thinkSmartSourceName = "linux-$kver-techo5-thinksmart-$Version-source.tar.xz"
     Test-Image $ThinkSmartRootfs -EmptyKeys
 }

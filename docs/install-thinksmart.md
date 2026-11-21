@@ -44,12 +44,24 @@ The hardware notes, and how the unit boots, are in
 - A Linux computer (x86_64), with root, about 20 GB free, what [building.md](building.md) asks for
   to build a root filesystem, and what the kernel build asks for
   ([tools/linux/thinksmart/kernel](../tools/linux/thinksmart/kernel/README.md#building)).
-- [bkerler/edl](https://github.com/bkerler/edl) (`pip install git+https://github.com/bkerler/edl`
-  in a venv). Stop ModemManager while you use it (`sudo systemctl stop ModemManager`): it takes the
-  device otherwise.
-- From [rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart): `prebuilt/lk2nd.img`
-  and the postmarketOS bootstrap image from its releases
-  (`bootstrap-pmos-ssh-generic-qcom-msm8953.img`, with its `.sha256`).
+- [bkerler/edl](https://github.com/bkerler/edl) (GPL-3.0), at the commit this was done with, in a
+  venv: `pip install git+https://github.com/bkerler/edl@1cda1a616748d608667b2d13b73a28d3197ceb45`.
+  Stop ModemManager while you use it (`sudo systemctl stop ModemManager`): it takes the device
+  otherwise.
+- From [rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart), two files, each checked
+  before it goes near a unit (`sha256sum`):
+  - `prebuilt/lk2nd.img` (commit 7b1a5f3e), sha256
+    `c81b036c75028c3d5aa915c72c89e075bc044360fe964c2ec0afb1d4a6f5209b`: lk2nd
+    `20.0-next-b9c007bb` as its version string says, built from
+    [msm8916-mainline/lk2nd](https://github.com/msm8916-mainline/lk2nd) (commit b9c007bb), signed
+    and without a QCDT as this board's stock bootloader needs. lk2nd is BSD-3-Clause, with
+    GPL-2.0-only parts (its device trees and panel drivers); rickx's repository leaves `prebuilt/`
+    under those upstream licenses. lk2nd's own release images do not start on this board: the
+    stock bootloader crashes on them.
+  - the postmarketOS bootstrap image from its release `bootstrap-2026-05-22`
+    (`bootstrap-pmos-ssh-generic-qcom-msm8953.img`), sha256
+    `7d79db19b0911647bf6ab0a9a2924ef5cf83b4674798a54acdcbd41cdf07921b` (the release's `.sha256`
+    says the same). It is postmarketOS's packages, each under its own license.
 Steps 1 and 2 are [m0s4ik/thinksmart-view-debian](https://github.com/m0s4ik/thinksmart-view-debian)'s
 own route as far as a unit running Linux, and its
 [install guide](https://github.com/m0s4ik/thinksmart-view-debian/blob/main/docs/install.md) has
@@ -209,8 +221,8 @@ It is committed after five minutes of a running daemon, and the other slot is ke
 
 Each root filesystem carries its own kernel, and the slot on trial is the kernel's trial too: the
 unit restarts once into the new slot's kernel from the `recovery` partition. If the trial settles (the
-daemon up five minutes, with a network), the kernel moves to the boot partition lk2nd starts every
-time, which takes one more restart; if it does not, the next restart is back on the old slot with its
+daemon up five minutes, with a network), the kernel moves to `system1`, whose `extlinux.conf` lk2nd
+starts every time, which takes one more restart; if it does not, the next restart is back on the old slot with its
 own kernel, which tries the new one twice more and then gives up on it. `lk2nd-ab status` on the
 unit says where it stands. The firmware is outside the slots and stays as the image left it.
 
@@ -223,6 +235,11 @@ unit says where it stands. The firmware is outside the slots and stays as the im
   image was built with `-k` and `-W`; `cat /data/techo5-linux/init.log` says what the boot did.
 - **A new slot that stops**: pull the plug and put it back. The restart is the slot and kernel the
   unit had before, which counts the failed try.
+- **Restarting over and over right after an update settled**: the new kernel fails from where lk2nd
+  starts it every time. The kernel before it is kept in `recovery` for this: power on with nothing
+  held, hold Volume Down once the logo shows, and pick Recovery in lk2nd's menu (Volume Down moves,
+  Volume Up picks). The unit starts the slot it had before, marks the new one bad and puts its kernel
+  back.
 - **Nothing at all**: enter EDL and write the image again, or go back.
 
 ## The way back

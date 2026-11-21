@@ -118,7 +118,7 @@ def main(argv):
         except ValueError as e:
             print("%s: %s" % (argv[2], e), file=sys.stderr)
             return 1
-        print(cmdline if argv[1] == "cmdline" else "%s: a ThinkSmart boot image" % argv[2])
+        print(cmdline if argv[1] == "cmdline" else "OK: %s is a ThinkSmart boot image" % argv[2])
         return 0
     print(__doc__.split("\n\n")[0], file=sys.stderr)
     return 2
