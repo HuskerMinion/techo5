@@ -388,6 +388,7 @@ func DrawStringTinted(dst draw.Image, src image.Image, face font.Face, dot fixed
 }
 
 func drawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point26_6, s string, inColor bool) fixed.Point26_6 {
+	s = hebrewVisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		return drawRun(dst, src, face, dot, s, inColor)
@@ -408,6 +409,7 @@ func drawString(dst draw.Image, src image.Image, face font.Face, dot fixed.Point
 // MeasureString is how far s advances in face, as font.MeasureString, with complex-script runs
 // shaped.
 func MeasureString(face font.Face, s string) fixed.Int26_6 {
+	s = hebrewVisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		return font.MeasureString(face, s)
@@ -426,6 +428,7 @@ func MeasureString(face font.Face, s string) fixed.Int26_6 {
 // BoundString is the bounds of s drawn in face from the origin, and its advance, as
 // font.BoundString, with complex-script runs shaped.
 func BoundString(face font.Face, s string) (bounds fixed.Rectangle26_6, advance fixed.Int26_6) {
+	s = hebrewVisualOrder(s)
 	rs := runs(face, s)
 	if rs == nil {
 		return font.BoundString(face, s)
