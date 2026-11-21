@@ -35,6 +35,11 @@ func (r Reader) LuxPath() string {
 		}
 	}
 
+	// The Echo Dot 5th gen's TSL2540, raw counts the daemon turns into lux itself (lux_tsl2540.go).
+	if at := r.tsl2540Path(); at != "" {
+		return at
+	}
+
 	vendor, _ := filepath.Glob(r.path("sys/bus/i2c/devices/*/als_lux"))
 	for _, at := range vendor {
 		if _, err := number(at); err == nil {
@@ -52,6 +57,10 @@ func (r Reader) LuxPath() string {
 func (r Reader) Lux(path string) Reading {
 	if path == "" {
 		return Reading{}
+	}
+
+	if filepath.Base(path) == "in_intensity0_raw" {
+		return r.tsl2540Lux(path)
 	}
 
 	lux, err := number(path)
