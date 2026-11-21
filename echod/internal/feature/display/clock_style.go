@@ -413,5 +413,9 @@ func onlyToday(events []hass.Event, now time.Time) []hass.Event {
 	return out
 }
 
-// clockWords is the time as the words style says it, in the screen's language.
-func clockWords(t time.Time) locale.SaidTime { return locale.SayTime(t, screenLang()) }
+// clockWords is the time as the words style says it, in the screen's language, with today's sun at
+// home for the languages that count their parts of the day by it.
+func clockWords(t time.Time) locale.SaidTime {
+	rise, set, ok := home.Get().SunTimes(t)
+	return locale.SayTimeSun(t, screenLang(), locale.Sun{Rise: rise, Set: set, OK: ok})
+}

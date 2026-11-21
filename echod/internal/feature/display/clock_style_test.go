@@ -111,13 +111,18 @@ func TestClockWordsFollowTheScreen(t *testing.T) {
 	for _, c := range []struct{ lang, said string }{
 		{"", "it's twenty-eight past six in the evening"},
 		{"de", "es ist kurz vor halb sieben abends"},
+		{"es", "son las seis y veintiocho de la tarde"},
 		{"ja", "it's twenty-eight past six in the evening"},
 	} {
 		if err := config.Set().Screen().Language(c.lang); err != nil {
 			t.Fatal(err)
 		}
 		w := clockWords(at)
-		if got := strings.Join([]string{w.Intro, w.Lead(), w.Hour, w.Period}, " "); got != c.said {
+		parts := []string{w.Intro, w.Lead(), w.Hour, w.Period}
+		if w.HourFirst {
+			parts = []string{w.Intro, w.Hour, w.Lead(), w.Period}
+		}
+		if got := strings.Join(parts, " "); got != c.said {
 			t.Errorf("%q: %q, want %q", c.lang, got, c.said)
 		}
 	}
