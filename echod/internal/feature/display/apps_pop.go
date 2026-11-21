@@ -2,7 +2,11 @@
 
 package display
 
-import "github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+import (
+	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+)
 
 // The apps list a tap on a panel's clock opens (discussion #652): the same list as Settings → General →
 // Apps, drawn on its own over the clock or the dashboard instead of over the settings. A pick opens the
@@ -24,6 +28,9 @@ func (r *renderer) appsPopup(s scene) {
 	r.zmu.Unlock()
 }
 
+// appsPopFor is how long the list stays up untouched before it closes by itself.
+const appsPopFor = 30 * time.Second
+
 // closeAppsPop puts the list away.
 func (d *Display) closeAppsPop() {
 	d.mu.Lock()
@@ -40,6 +47,9 @@ func (d *Display) appsPopGesture(g touch.Gesture) {
 	}
 	switch g.Kind {
 	case touch.SwipeUp, touch.SwipeDown:
+		d.mu.Lock()
+		d.appsPopAt = time.Now()
+		d.mu.Unlock()
 		by := d.r.s(notchPx)
 		if g.Kind == touch.SwipeDown {
 			by = -by

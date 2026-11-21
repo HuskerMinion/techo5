@@ -131,3 +131,32 @@ func TestClockTapOpensTheAppsList(t *testing.T) {
 		t.Errorf("after the PIN: list up %v, settings up %v", popped(), d.sheetUp())
 	}
 }
+
+// The PIN typed for the clock's apps list opens it only if the clock is still what is showing: with the
+// settings come up over it meanwhile, the right PIN opens nothing and the lock goes back on.
+func TestTheAppsListPINOpensNothingUnderTheSettings(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	tabletAppsFor(t)
+	appSaysApps([]string{"begin"})
+	appSaysApps([]string{"item", "org.example.notes", "Notes"})
+	appSaysApps([]string{"end"})
+	if err := security.Get().SetPIN("2468"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pinPress("cancel")
+		_ = security.Get().SetPIN("")
+	})
+	d := &Display{poke: make(chan struct{}, 1)}
+	if !d.openTabletApps() || !pinIsOpen() {
+		t.Fatal("no pad for the locked list")
+	}
+	d.showSheet(true)
+	typePIN("2468")
+	d.mu.Lock()
+	popped := d.appsPop
+	d.mu.Unlock()
+	if popped || !security.Locked() {
+		t.Errorf("under the settings: list up %v, locked %v; want neither open", popped, security.Locked())
+	}
+}

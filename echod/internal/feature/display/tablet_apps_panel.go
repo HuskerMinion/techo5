@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/panelctl"
 )
@@ -118,10 +119,12 @@ func (d *Display) openTabletApps() bool {
 		return false
 	}
 	slog.Info("screen: the apps list by a tap on the clock")
-	gate("tabletapps", tr("tablet_apps"), func() bool { return true }, func() {
+	// up: the PIN, when the lock asks for it, opens the list only if the settings have not come up over
+	// the clock meanwhile; otherwise the right PIN opens nothing and the lock goes back on (gate).
+	gate("tabletapps", tr("tablet_apps"), func() bool { return !d.sheetUp() }, func() {
 		tellPanelApp(tabletAppsList)
 		d.mu.Lock()
-		d.appsPop, d.pickScroll = true, 0
+		d.appsPop, d.appsPopAt, d.pickScroll = true, time.Now(), 0
 		d.mu.Unlock()
 		d.wake()
 	})
