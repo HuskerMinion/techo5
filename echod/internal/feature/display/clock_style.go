@@ -3,6 +3,7 @@
 package display
 
 import (
+	"image/color"
 	"log/slog"
 	"slices"
 	"strings"
@@ -224,7 +225,14 @@ type styleFacts struct {
 	places    []worldPlace
 	// hadToday is today having had an event that is over now, for the Agenda's "nothing else today".
 	hadToday bool
+	// calOrder is the calendars shown, in order, for the Dashboard and the Agenda: a calendar with no
+	// color picked in Home Assistant takes ours by its place among them, as it does in the calendar.
+	calOrder []string
 }
+
+// eventColor is the color of the calendar an event is on, as the calendar and the next-up card draw it,
+// for the dot the Dashboard and the Agenda put beside each event (#667).
+func (f styleFacts) eventColor(e hass.Event) color.RGBA { return calendarColor(f.calOrder, e.Calendar) }
 
 func styleFactsFor(style string, now time.Time) (f styleFacts) {
 	f.kind, f.chosen = style, true
@@ -233,6 +241,7 @@ func styleFactsFor(style string, now time.Time) (f styleFacts) {
 		f.rise, f.set, f.sunOK = home.Get().SunTimes(now)
 	case styleDashboard:
 		f.days = home.Get().Forecast()
+		f.calOrder = home.Get().CalendarSources()
 		f.next = upcomingEvents(now, 8) // the style draws as many as fit above the coming days: 4 on a Show 5, 7 on a Show 8
 		if config.Get().Calendar.DashboardToday {
 			f.next = onlyToday(f.next, now)
@@ -240,6 +249,7 @@ func styleFactsFor(style string, now time.Time) (f styleFacts) {
 			f.hadToday = slices.ContainsFunc(events, func(e hass.Event) bool { return !e.End.After(now) })
 		}
 	case styleAgenda:
+		f.calOrder = home.Get().CalendarSources()
 		f.next = upcomingEvents(now, 8)
 		events, _ := home.Get().EventsOn(now)
 		f.hadToday = slices.ContainsFunc(events, func(e hass.Event) bool { return !e.End.After(now) })

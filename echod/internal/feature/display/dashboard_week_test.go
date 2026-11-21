@@ -35,15 +35,17 @@ func TestDashboardWeekDraws(t *testing.T) {
 	}
 	s := scene{now: now, phase: "idle", weather: home.Weather{Condition: "partlycloudy", Temp: "27°"}, style: styleFacts{
 		days: week,
+		// Three calendars, so the events' dots show in three colors.
+		calOrder: []string{"calendar.family", "calendar.school", "calendar.work"},
 		next: []hass.Event{
-			{Summary: "Dinner", Start: day(8, 19, 30), End: day(8, 21, 0)},
-			{Summary: "Team meeting", Start: day(9, 10, 0), End: day(9, 11, 0)},
-			{Summary: "Family barbecue", Start: day(11, 0, 0), End: day(12, 0, 0), AllDay: true},
-			{Summary: "Dentist", Start: day(13, 16, 0), End: day(13, 17, 0)},
-			{Summary: "Birthday party", Start: day(14, 0, 0), End: day(15, 0, 0), AllDay: true},
-			{Summary: "Piano lesson", Start: day(15, 17, 30), End: day(15, 18, 30)},
-			{Summary: "Book club", Start: day(16, 20, 0), End: day(16, 22, 0)},
-			{Summary: "Car service", Start: day(19, 9, 0), End: day(19, 10, 0)},
+			{Summary: "Dinner", Calendar: "calendar.family", Start: day(8, 19, 30), End: day(8, 21, 0)},
+			{Summary: "Team meeting", Calendar: "calendar.school", Start: day(9, 10, 0), End: day(9, 11, 0)},
+			{Summary: "Family barbecue", Calendar: "calendar.family", Start: day(11, 0, 0), End: day(12, 0, 0), AllDay: true},
+			{Summary: "Dentist", Calendar: "calendar.work", Start: day(13, 16, 0), End: day(13, 17, 0)},
+			{Summary: "Birthday party", Calendar: "calendar.family", Start: day(14, 0, 0), End: day(15, 0, 0), AllDay: true},
+			{Summary: "Piano lesson", Calendar: "calendar.school", Start: day(15, 17, 30), End: day(15, 18, 30)},
+			{Summary: "Book club", Calendar: "calendar.work", Start: day(16, 20, 0), End: day(16, 22, 0)},
+			{Summary: "Car service", Calendar: "calendar.family", Start: day(19, 9, 0), End: day(19, 10, 0)},
 		},
 	}}
 	empty := s

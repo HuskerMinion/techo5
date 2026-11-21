@@ -446,6 +446,16 @@ func sunWords(now, rise, set time.Time) string {
 	return fmt.Sprintf(tr("ui_sunset_was_at_s"), clockText(set))
 }
 
+// eventDot draws the dot in an event's calendar color c that the Dashboard and the Agenda put before
+// its name, at x on the line whose baseline is y in face, its middle at the middle of the face's capitals,
+// and is where the name starts after it. It is small beside the name, the size of a lower-case letter,
+// so the list still reads as names and times first.
+func (r *renderer) eventDot(c color.RGBA, x, y int, face font.Face) int {
+	rad := float64(capHeight(face)) * 0.3
+	r.fxDisc(float64(x)+rad, float64(y)-float64(capHeight(face))/2, rad, c, 1)
+	return x + int(2*rad) + r.s(10)
+}
+
 // dashboardStyle is the time with the day's next events beside it and the coming days' weather along
 // the foot.
 func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
@@ -566,7 +576,10 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 		if hhm != "" {
 			r.text(r.tiny, hhm, col+r.width(r.tiny, day)+r.s(8), y, dim)
 		}
-		r.text(r.tiny, r.clipTo(r.tiny, e.Summary, right-tx), tx, y, cream)
+		// A dot in the event's calendar color before its name, as the Agenda has (#667). It takes part of
+		// the gap after the widest "when", so the names lose as little of their room as can be.
+		nx := r.eventDot(s.style.eventColor(e), tx-r.s(8), y, r.tiny)
+		r.text(r.tiny, r.clipTo(r.tiny, e.Summary, right-nx), nx, y, cream)
 		y += r.s(44)
 	}
 	// The divider, between the time and the events: past the date and the last event, and down to the

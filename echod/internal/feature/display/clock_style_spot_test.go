@@ -33,10 +33,12 @@ func TestSpotClockStylesDraw(t *testing.T) {
 		rise: time.Date(2026, 9, 16, 6, 48, 0, 0, time.Local), set: time.Date(2026, 9, 16, 19, 5, 0, 0, time.Local), sunOK: true,
 		days: week,
 		next: []hass.Event{
-			{Summary: "Dentist", Start: at.Add(83 * time.Minute), End: at.Add(143 * time.Minute)},
-			{Summary: "Soccer practice at the park", Start: at.Add(233 * time.Minute), End: at.Add(293 * time.Minute)},
+			{Summary: "Dentist", Calendar: "calendar.family", Start: at.Add(83 * time.Minute), End: at.Add(143 * time.Minute)},
+			{Summary: "Soccer practice at the park", Calendar: "calendar.school", Start: at.Add(233 * time.Minute), End: at.Add(293 * time.Minute)},
 		},
 		places: worldPlaces(nil),
+		// Two calendars, so the Dashboard and the Agenda show their dots in two colors.
+		calOrder: []string{"calendar.family", "calendar.school"},
 	}
 	named := facts
 	named.named = "Binary"

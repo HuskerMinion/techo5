@@ -132,7 +132,8 @@ func (r *roundRenderer) agendaFace(s roundScene) {
 		left := center - half
 		when := dashWhenSpot(e.Start, e.AllDay, s.now)
 		r.text(f, when, left, y, colTimer)
-		tx := left + 96
+		// A dot in the event's calendar color before its name, as the calendar face has (#667).
+		tx := r.eventDot(s.style.eventColor(e), left+96, y, f)
 		r.text(f, spotClip(r, f, e.Summary, center+half-tx), tx, y, colText)
 	}
 }

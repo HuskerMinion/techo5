@@ -525,7 +525,7 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 		y := 232 + i*36
 		when := dashWhenSpot(e.Start, e.AllDay, s.now)
 		r.text(f, when, 96, y, colTimer)
-		tx := 96 + 100
+		tx := r.eventDot(s.style.eventColor(e), 96+100, y, f)
 		r.text(f, spotClip(r, f, e.Summary, 392-tx), tx, y, colText)
 	}
 	r.line(90, 290, 390, 290, 2, colTrack)
@@ -544,6 +544,16 @@ func (r *roundRenderer) dashboardFace(s roundScene) {
 		r.weatherIcon(d.Condition, float64(cx), 350, 13)
 		r.centered2(r.styleFace(false, 22), fmt.Sprintf("%.0f°", d.High), cx, 392, colText)
 	}
+}
+
+// eventDot draws the dot in an event's calendar color c that the Dashboard and the Agenda put before
+// its name, at x on the line whose baseline is y in face, its middle at the middle of the face's capitals,
+// and is where the name starts after it. Small beside the name, so the list still reads as names and
+// times first.
+func (r *roundRenderer) eventDot(c color.RGBA, x, y int, face font.Face) int {
+	rad := float64(capHeightOf(face)) * 0.3
+	r.discAt(float64(x)+rad, float64(y)-float64(capHeightOf(face))/2, rad, c)
+	return x + int(2*rad) + 8
 }
 
 // dashWhenSpot is when an event starts, short enough for the circle.

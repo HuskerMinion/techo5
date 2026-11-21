@@ -198,7 +198,10 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 			when = clockText(e.Start)
 		}
 		r.text(r.tiny, when, col, y, amber)
-		r.text(r.small, r.clipTo(r.small, e.Summary, box.Max.X-tx), tx, y, cream)
+		// A dot in the event's calendar color before its name, so whose event it is reads at a glance
+		// (#667); the name keeps its own color, which reads on every photo and theme.
+		nx := r.eventDot(s.style.eventColor(e), tx, y, r.small)
+		r.text(r.small, r.clipTo(r.small, e.Summary, box.Max.X-nx), nx, y, cream)
 		y += r.s(48)
 	}
 }
