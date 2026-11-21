@@ -63,6 +63,27 @@ func capFeaturePages(pkt []byte, max byte) bool {
 	return true
 }
 
+// hideExtAdv clears LE Extended Advertising (bit 12) and LE Periodic Advertising (bit 13, which needs
+// it) in the controller's answer to LE Read Local Supported Features, so the kernel advertises with the
+// legacy commands. On the Echo Dot 5th gen's 5.4 kernel an extended advertisement is enabled with the
+// kernel's 2 s rotation as its duration even when it is the only one; the MediaTek controller ends it
+// then (LE Advertising Set Terminated, Advertising Timeout) and the kernel never enables it again, so
+// an advertisement bluetoothd added went out twice and stopped (Improv was never seen). Legacy
+// advertising has no duration and runs until it is turned off. Its 31 bytes are all bluetoothd's
+// advertisements take. The same bit also turns the kernel's scanning to the legacy commands.
+// Reports whether the packet was changed.
+func hideExtAdv(pkt []byte) bool {
+	// 04 0e plen ncmd opcode(03 20) status features[8]
+	if len(pkt) < 15 || pkt[0] != h4Event || pkt[1] != 0x0e || pkt[4] != 0x03 || pkt[5] != 0x20 || pkt[6] != 0 {
+		return false
+	}
+	if pkt[8]&0x30 == 0 {
+		return false
+	}
+	pkt[8] &^= 0x30
+	return true
+}
+
 // p192Key rewrites the key type in a Link Key Notification from a P-256 key to its P-192 kind:
 // authenticated (8) to authenticated (5), unauthenticated (7) to unauthenticated (4). Reports whether
 // the packet was changed.
