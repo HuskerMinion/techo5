@@ -187,6 +187,8 @@ type roundScene struct {
 	// saverCountdown draws how much of the photo's time has gone, saverDone of it (#656).
 	saverCountdown bool
 	saverDone      float64
+	// saverStep is how often the countdown has moved far enough to be drawn again (countdownStep).
+	saverStep time.Duration
 
 	// slideshowTrouble is why the slideshow has no photo, once it has given up looking.
 	slideshowTrouble string

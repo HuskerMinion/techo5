@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"image/draw"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -108,12 +109,16 @@ func (r *renderer) slideshowScreensaverPage(s scene) {
 // photoCountdown is how much of the screensaver photo's time has gone (#656): a thin line along the
 // very foot of the screen, filling from the left until the next photo, over a fainter one the whole
 // way across that says where it ends. Both are the words' color, see-through, as faint as a line can
-// be and still be seen: the photo shows through, and they dim with the screen as the clock does.
+// be and still be seen: the photo shows through, and they dim with the screen as the clock does. A
+// faint dark edge along the top of both keeps them seen on a bright photo, where a light line alone
+// was lost.
 func (r *renderer) photoCountdown(s scene) {
 	if !s.saverCountdown {
 		return
 	}
 	top := r.h - max(r.s(countdownThick), 2)
+	edge := top - max(r.s(countdownEdge), 1)
+	draw.Draw(r.dst, image.Rect(0, edge, r.w, top), image.NewUniform(color.RGBA{A: countdownShade}), image.Point{}, draw.Over)
 	draw.Draw(r.dst, image.Rect(0, top, r.w, r.h), image.NewUniform(washOf(cream, countdownTrack)), image.Point{}, draw.Over)
 	if done := int(float64(r.w)*min(max(s.saverDone, 0), 1) + 0.5); done > 0 {
 		draw.Draw(r.dst, image.Rect(0, top, done, r.h), image.NewUniform(washOf(cream, countdownFill)), image.Point{}, draw.Over)
@@ -121,9 +126,12 @@ func (r *renderer) photoCountdown(s scene) {
 }
 
 // countdownThick is how thick the countdown's line is, in the Show 5's pixels; countdownTrack and
-// countdownFill how opaque its two parts are, out of 255.
+// countdownFill how opaque its two parts are, out of 255; countdownEdge how far the dark edge under it
+// reaches above it, and countdownShade how dark that is.
 const (
 	countdownThick = 3
+	countdownEdge  = 1
+	countdownShade = 70
 	countdownTrack = 40
 	countdownFill  = 110
 )

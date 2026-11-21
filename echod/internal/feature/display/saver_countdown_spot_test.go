@@ -32,7 +32,7 @@ func TestThePhotoCountdownOnTheSpot(t *testing.T) {
 		t.Fatal("off, how much of the time has gone still changed the screensaver")
 	}
 	half := draw(true, 0.5)
-	inner := float64(rimOut - countdownWidth - 1) // the ring's soft inner edge
+	inner := float64(rimOut - countdownWidth - countdownEdge - 1) // the ring's dark, soft inner edge
 	changed := false
 	for y := 0; y < side; y++ {
 		for x := 0; x < side; x++ {

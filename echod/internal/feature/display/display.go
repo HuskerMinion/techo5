@@ -3159,8 +3159,14 @@ func (d *Display) frame() (next time.Duration) {
 		s.saverWeather = home.Get().SlideshowWeather()
 		if s.slideshowScreensaver != nil && !home.Get().SlideshowArt() {
 			s.slideshowCaptions = home.Get().SlideshowCaptions()
-			s.saverDone, s.saverCountdown = home.Get().SlideshowProgress(now)
+			var whole time.Duration
+			s.saverDone, whole, s.saverCountdown = home.Get().SlideshowTimeGone(now)
+			s.saverStep = countdownStep(whole, d.r.w)
 		}
+	}
+	if s.saverCountdown {
+		// The line fills a step at a time; drawn only on the second it moved in jumps (#656).
+		defer func() { next = min(next, s.saverStep) }()
 	}
 	// Under the screensaver the clock is not up, and a swipe is for its photos (#502). clockUp used to be
 	// settled before the screensaver was looked for, so a swipe over the photos turned the clock style.

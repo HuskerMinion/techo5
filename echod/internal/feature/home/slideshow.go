@@ -783,17 +783,26 @@ func (f *Feature) SlideshowCountdown() bool { return config.Get().Home.Slideshow
 // off, the slideshow not in Screensaver mode, the weather art up, or no photo yet. A new photo starts it
 // again from 0, one a swipe turned to too, whose time is the swipe's hold.
 func (f *Feature) SlideshowProgress(now time.Time) (float64, bool) {
+	done, _, ok := f.SlideshowTimeGone(now)
+	return done, ok
+}
+
+// SlideshowTimeGone is SlideshowProgress with the photo's whole time as well, from when it came up to
+// when the next is due, so the screen can tell how often the countdown has moved far enough to be
+// drawn again.
+func (f *Feature) SlideshowTimeGone(now time.Time) (done float64, whole time.Duration, ok bool) {
 	h := config.Get().Home.Slideshow
 	if !h.Countdown || h.Mode != config.SlideshowScreensaver || h.Art {
-		return 0, false
+		return 0, 0, false
 	}
 	f.mu.Lock()
 	up, at, hold, ticks := f.slideshow.image != nil, f.slideshow.at, f.slideshow.holdUntil, f.slideshowTicks
 	f.mu.Unlock()
 	if !up {
-		return 0, false
+		return 0, 0, false
 	}
-	return photoDone(now, at, photoEnd(at, slideshowInterval(h), hold, ticks)), true
+	end := photoEnd(at, slideshowInterval(h), hold, ticks)
+	return photoDone(now, at, end), end.Sub(at), true
 }
 
 // photoEnd is when the slideshow moves on from a photo put up at at: once it has had its time every,

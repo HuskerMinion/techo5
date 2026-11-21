@@ -14,7 +14,7 @@ import (
 )
 
 // The photo countdown (#656) is a thin line along the very foot of the screensaver and nothing else:
-// off, the screensaver is as it was; on, only the bottom rows change, filling from the left as the
+// off, the screensaver is as it was; on, only the bottom rows change (the line and a dark edge along its top), filling from the left as the
 // photo's time goes, and the photo still shows through the line. With SHOW_PREVIEW set, the Show 8's
 // is written there.
 func TestThePhotoCountdownOnTheShow(t *testing.T) {
@@ -32,7 +32,7 @@ func TestThePhotoCountdownOnTheShow(t *testing.T) {
 	}
 	half := draw(true, 0.5)
 	r := newRenderer(image.NewRGBA(image.Rect(0, 0, show8Wide, show8High)))
-	top := show8High - max(r.s(countdownThick), 2)
+	top := show8High - max(r.s(countdownThick), 2) - max(r.s(countdownEdge), 1) // the line and its dark edge
 	changed := false
 	for y := 0; y < show8High; y++ {
 		for x := 0; x < show8Wide; x++ {
