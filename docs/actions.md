@@ -2912,6 +2912,34 @@ data:
     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample you@your-pc
 ```
 
+## Set the cast key
+
+In YAML, refer to this action as `esphome.<node>_cast_key`.
+
+Sets the key a phone has to know to cast to the device ([cast.md](cast.md)). **You don't need this:** the
+device makes its own random key the first time Cast is turned on, and the pairing code on its screen
+(Settings → Connections → Pairing code) carries it to the phone. Use it to choose a key yourself, or to
+throw the old one away. Either way every paired phone has to scan the pairing code again.
+
+> **Good to know**
+>
+> Unlike `ssh_keys`, this is not refused without an ESPHome encryption key, so on a link that is not
+> encrypted the key crosses the network in the clear. Give the device's ESPHome link an encryption key
+> first. The key is an action argument, not an entity state, so Home Assistant does not keep it.
+
+### key
+
+*string*
+
+The key: at least 8 characters. Left empty, the device makes a new random one instead, which is also what
+you want to rotate it.
+
+```yaml
+action: esphome.office_cast_key
+data:
+  key: !secret techo5_office_cast_key
+```
+
 ## Join a tailnet
 
 In YAML, refer to this action as `esphome.<node>_tailscale_login`.

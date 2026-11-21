@@ -3,7 +3,7 @@
 # boot.sh before the network comes up; safe to run again.
 #
 # In on wlan0: Home Assistant's API (6053/tcp), mDNS (5353/udp), SSH (22/tcp; dropbear listens only
-# while the SSH switch is on and a key is set), Sendspin audio (8928/tcp), the setup page and the camera
+# while the SSH switch is on and a key is set), Sendspin audio (8928/tcp), phone casting (8940/tcp; listens only while Cast is on), the setup page and the camera
 # and screen views (8181/tcp; each served only while it is on), AirPlay (5000/tcp, 6001-6010/udp) and
 # Spotify Connect (4070/tcp), the camera over RTSP (8554/tcp), WS-Discovery's searches for it (3702/udp,
 # feature/camstream) and DLNA's SSDP searches (1900/udp, IPv4), and AirPlay 2 (7000/tcp, 319-320/udp, and
@@ -39,6 +39,7 @@ for T in iptables-legacy ip6tables-legacy; do
 		$T -A $CHAIN -p udp --dport 5353 -j ACCEPT &&
 		$T -A $CHAIN -p tcp --dport 22 -j ACCEPT &&
 		$T -A $CHAIN -p tcp --dport 8928 -j ACCEPT &&
+		$T -A $CHAIN -p tcp --dport 8940 -j ACCEPT &&
 		$T -A $CHAIN -p tcp --dport 8181 -j ACCEPT &&
 		$T -A $CHAIN -p udp --dport 3702 -j ACCEPT &&
 		# feature/streaming pins these (airplay.go, spotify.go).
@@ -76,7 +77,7 @@ if [ -z "$ok" ]; then
 	echo "techo5-firewall: a rule failed; Wi-Fi left open" >&2
 	exit 1
 fi
-echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8181, 5000, 6001-6010, 4070, 8554, 3702" >&2
+echo "techo5-firewall: Wi-Fi inbound closed except 6053, 5353, 22, 8928, 8940, 8181, 5000, 6001-6010, 4070, 8554, 3702" >&2
 
 # AirPlay 2 (feature/streaming), where the image carries its receiver: its session (7000/tcp), nqptp's PTP
 # (319-320/udp), and the event, data and audio ports the receiver opens for each session, which the kernel

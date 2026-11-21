@@ -1,0 +1,40 @@
+//go:build !dot && !spot
+
+package display
+
+import (
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/cast"
+)
+
+// The Cast rows, at the end of Connections: turn receiving on, choose whether a phone has to be accepted
+// here, and show the code a phone scans to pair. Everything but the key is also a switch in Home
+// Assistant; the key is made when Cast is first turned on, so none of this needs Home Assistant at all.
+
+func castRows() []settingRow {
+	c := config.Get().Cast
+	sub := tr("ui_off")
+	if c.Enabled {
+		sub = tr("cast_phones_can_cast_here")
+	}
+	rows := []settingRow{{id: "cast", label: tr("cast_from_a_phone"), sub: sub, kind: ctlToggle, on: c.Enabled}}
+	if !c.Enabled {
+		return rows
+	}
+	pair := tr("cast_scan_it_in_the_app")
+	return append(rows,
+		settingRow{id: "castpair", label: tr("cast_pairing_code"), sub: pair, kind: ctlButton, button: tr("option_show")},
+	)
+}
+
+// castRowTap is a tap on one of those rows.
+func (d *Display) castRowTap(id string) {
+	f := cast.Get()
+	switch id {
+	case "cast":
+		f.SetEnabled(!config.Get().Cast.Enabled)
+	case "castpair":
+		d.closeSheet()
+		f.ShowPairing(true)
+	}
+}

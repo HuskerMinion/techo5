@@ -78,6 +78,7 @@ type scene struct {
 	// The dashboard page, drawn instead of the clock while showDash is set: how it is shown, and
 	// when streamed, what arrived.
 	showDash    bool
+	showCast    bool // a phone is casting to the screen (cast.go)
 	dashHide    bool // the Show dashboard handle setting is off: no bar on the edge (#564)
 	dashAsked   bool // the dashboard a tap on the night screen opened (dashNight): shown over the night clock
 	dashMode    config.DashboardMode
@@ -806,6 +807,13 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.custom.name != "" {
 		r.customPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
+	if s.showCast {
+		r.castPage(s)
 		if s.showVolume {
 			r.volumeBar(s)
 		}

@@ -6,6 +6,8 @@ import "github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 
 // notOnThisDevice is what the Echo Dot does not put up: it has no screen and no camera.
 var notOnThisDevice = []string{
+	// Cast is the Show's receiver (feature/cast).
+	"cast", "cast_state",
 	// The Dot's proxy drives the HCI node itself and makes no connections.
 	"bluetooth_proxy_connections",
 	"calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popup_sources_chosen", "calendar_popups", "calendar_sources_chosen",

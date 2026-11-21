@@ -292,6 +292,7 @@ func ClearSecrets(c *Config) {
 	c.Security.ScreenKey = ""
 	c.Deck.OBS.Password = ""
 	c.Remote.Secret = ""
+	c.Cast.Key = ""
 	c.CamStream.Pass = ""
 	c.Realtime.Key = ""
 	c.Realtime.MCPToken = ""
@@ -348,6 +349,8 @@ func KeepSecrets(c *Config, from Config) (reenter []string) {
 	c.Security.BabyKey = from.Security.BabyKey
 	c.Security.ScreenKey = from.Security.ScreenKey
 	c.Remote.Secret = from.Remote.Secret
+	// The cast key is the pairing with the phones that have scanned it.
+	c.Cast.Key = from.Cast.Key
 	c.CamStream.Pass = from.CamStream.Pass
 	c.TalkBack = from.TalkBack
 	c.TalkBack.Cameras = maps.Clone(from.TalkBack.Cameras)
