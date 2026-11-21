@@ -182,7 +182,7 @@ func TestJapaneseDatesAndWeather(t *testing.T) {
 
 // completeCatalogs are the screen languages translated in full. A key added to uiEnglish has to be
 // added to each of them too, or that line shows in English on their screens.
-var completeCatalogs = []string{"ca", "de", "fr", "gl", "it", "ja", "ro", "tr"}
+var completeCatalogs = []string{"ca", "de", "es", "fr", "gl", "it", "ja", "ro", "tr"}
 
 func TestCompleteCatalogsHaveEveryKey(t *testing.T) {
 	for _, lang := range completeCatalogs {
@@ -238,7 +238,7 @@ func TestSkipWords(t *testing.T) {
 	if got := Text("es", "sunrise_skip_action"); got != "Omitir" {
 		t.Errorf("es action is %q", got)
 	}
-	if got := one("es", "sunrise_skip_done"); got != "Omitida la alarma de las %s" {
+	if got := one("es", "sunrise_skip_done"); got != "Omitida: la alarma de las %s" {
 		t.Errorf("es done is %q", got)
 	}
 	if got := one("es", "sunrise_skip_refused"); got != "No se pudo omitir la alarma de las %s" {
