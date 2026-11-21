@@ -288,6 +288,8 @@ type Display struct {
 	drawerTab    int
 	drawerScroll int
 	drawerPick   string
+	// appsPop is a panel's apps list open over the clock, from a tap on it (tablet_apps_panel.go).
+	appsPop bool
 
 	// touchedAt is the last finger on the panel; nightDark is the screen having been put out by the
 	// night schedule rather than by anyone.
@@ -1446,6 +1448,16 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 	if d.deckShowing() {
 		d.deckGesture(g)
+		d.wake()
+		return
+	}
+
+	// A panel's apps list over the clock or the dashboard: every finger is its while it is up.
+	d.mu.Lock()
+	appsUp := d.appsPop
+	d.mu.Unlock()
+	if appsUp {
+		d.appsPopGesture(g)
 		d.wake()
 		return
 	}
@@ -2970,6 +2982,7 @@ func (d *Display) frame() (next time.Duration) {
 	wants := (s.phase == "idle") && music
 	d.mu.Lock()
 	s.showDrawer, s.drawerTab, s.drawerScroll, s.drawerPick, s.pickScroll = d.drawer && !s.showSheet && !s.showCamera, d.drawerTab, d.drawerScroll, d.drawerPick, d.pickScroll
+	s.appsPop = d.appsPop && !s.showSheet && !s.showCamera
 	d.mu.Unlock()
 	d.mu.Lock()
 	s.demo = now.Before(d.demoUntil)

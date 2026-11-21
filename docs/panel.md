@@ -43,7 +43,7 @@ Android does for the app instead:
 - **The tablet's other apps.** For the same reason, **Settings → General → Apps → Open** lists the
   apps the tablet's launcher would show; pick one and it opens over the panel, until Home or Back.
   Nothing is saved, and the row is behind the settings lock too. With **Tap on the clock** set to
-  *Apps*, a tap on the clock opens the same list.
+  *Apps*, a tap on the clock opens the same list over the clock; a tap outside it puts it away.
 - **Android camera.** Where Android exposes a front camera, Home Assistant gets a camera entity and
   a **Camera streaming** switch without a permission prompt at app start. Turning the switch on asks
   for camera access on the panel screen; turning it off ends capture and discards the cached still.

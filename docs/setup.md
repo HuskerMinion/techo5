@@ -1000,7 +1000,8 @@ other Shows don't have the switches.
 - **Tap on the clock** (Show and Spot): *Assist*, as it always was, *Dashboard* to open the
   dashboard, *Deck* to open TECHO5 Deck (Show only; until a deck has buttons, a tap still starts
   Assist), or *Nothing*, for a panel you only talk to. On a TECHO5 Panel tablet there is also
-  *Apps*, which opens the list of the tablet's other apps (behind the settings lock when it's on).
+  *Apps*, which opens the list of the tablet's other apps over the clock (behind the settings lock
+  when it's on).
   A voice request under way still takes the tap. On the Spot, a long press still opens the ring
   menu, whichever you pick. Also on the setup page's Screen tab. See
   [Dashboards](dashboards.md) for the rest of a panel setup.

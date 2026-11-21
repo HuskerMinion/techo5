@@ -9,6 +9,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
 
 // tabletAppsFor puts the list back after a test, and keeps the screen and the app out of it.
@@ -83,8 +84,9 @@ func TestTabletAppsOpenAndPick(t *testing.T) {
 	}
 }
 
-// On a panel, Tap on the clock offers Apps; a tap set to it opens the settings with the apps list, the
-// PIN asked first when the lock is on, and with no list from the app it does nothing of its own.
+// On a panel, Tap on the clock offers Apps; a tap set to it puts the apps list up over the clock, not
+// the settings, the PIN asked first when the lock is on; with no list from the app it does nothing of its
+// own; and any finger that is not a pick puts the list away.
 func TestClockTapOpensTheAppsList(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	told := tabletAppsFor(t)
@@ -92,17 +94,26 @@ func TestClockTapOpensTheAppsList(t *testing.T) {
 		t.Fatalf("a panel's Tap on the clock: %q, want Apps among them", clockTapOptions())
 	}
 	d := &Display{poke: make(chan struct{}, 1)}
-	if d.openTabletApps() {
+	popped := func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.appsPop
+	}
+	if d.openTabletApps() || popped() {
 		t.Fatal("no list from the app, and the clock's tap still opened one")
 	}
 	appSaysApps([]string{"begin"})
 	appSaysApps([]string{"item", "org.example.notes", "Notes"})
 	appSaysApps([]string{"end"})
-	if !d.openTabletApps() || !d.sheetUp() || d.picker != "tabletapps" {
-		t.Fatalf("unlocked: settings up %v, picker %q", d.sheetUp(), d.picker)
+	if !d.openTabletApps() || !popped() || d.sheetUp() {
+		t.Fatalf("unlocked: list up %v, settings up %v; want the list alone", popped(), d.sheetUp())
 	}
 	if !slices.Equal(*told, []string{"apps list"}) {
 		t.Errorf("the app was told %q", *told)
+	}
+	d.appsPopGesture(touch.Gesture{Kind: touch.SwipeLeft})
+	if popped() {
+		t.Error("a swipe across left the list up")
 	}
 
 	if err := security.Get().SetPIN("2468"); err != nil {
@@ -112,12 +123,11 @@ func TestClockTapOpensTheAppsList(t *testing.T) {
 		pinPress("cancel")
 		_ = security.Get().SetPIN("")
 	})
-	d.showSheet(false)
-	if !d.openTabletApps() || d.picker != "" || !pinIsOpen() {
-		t.Fatalf("locked: picker %q, pad up %v; want the pad first", d.picker, pinIsOpen())
+	if !d.openTabletApps() || popped() || !pinIsOpen() {
+		t.Fatalf("locked: list up %v, pad up %v; want the pad first", popped(), pinIsOpen())
 	}
 	typePIN("2468")
-	if d.picker != "tabletapps" {
-		t.Errorf("after the PIN: picker %q", d.picker)
+	if !popped() || d.sheetUp() {
+		t.Errorf("after the PIN: list up %v, settings up %v", popped(), d.sheetUp())
 	}
 }

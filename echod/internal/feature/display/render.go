@@ -158,7 +158,9 @@ type scene struct {
 	drawerTab    int
 	drawerScroll int
 	drawerPick   string
-	pickScroll   int
+	// appsPop draws a panel's apps list over the page (tablet_apps_panel.go).
+	appsPop    bool
+	pickScroll int
 
 	// popup is an event popped up over the screen (calendar_popup.go).
 	popup *hass.Event
@@ -840,6 +842,9 @@ func (r *renderer) draw(s scene) {
 			r.press.on = false
 			r.drawer(s)
 		}
+		if s.appsPop {
+			r.appsPopup(s)
+		}
 		if s.showVolume {
 			r.volumeBar(s)
 		}
@@ -926,6 +931,9 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.showDrawer {
 		r.drawer(s)
+	}
+	if s.appsPop {
+		r.appsPopup(s)
 	}
 	if s.showVolume {
 		r.volumeBar(s)
