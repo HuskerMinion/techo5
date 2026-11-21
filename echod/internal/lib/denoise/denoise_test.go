@@ -169,3 +169,11 @@ func TestForgetClearsTheEstimate(t *testing.T) {
 		t.Errorf("opening = %d, started = %v; want 0, false", f.opening, f.started)
 	}
 }
+
+// logMinGain is written out as a number, since a constant cannot be worked out with math.Log; it has to
+// stay the log of minGain, or the floor the comments and #662 rely on is not the one applied.
+func TestLogMinGainIsTheLogOfMinGain(t *testing.T) {
+	if got := math.Log(minGain); math.Abs(got-logMinGain) > 1e-12 {
+		t.Fatalf("logMinGain is %v, ln(minGain) is %v", logMinGain, got)
+	}
+}

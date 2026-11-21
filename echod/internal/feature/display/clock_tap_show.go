@@ -12,3 +12,6 @@ var clockTapsHere = clockTaps
 // clock does by day. A night light is otherwise left alone when tapped, a hand in the dark being more
 // likely a knock than a request; somebody who chose the dashboard for the clock's tap asked for it.
 func nightTapOpensDashboard() bool { return config.Get().Screen.ClockTap == "dashboard" }
+
+// openTabletApps is a panel's (tablet_apps_panel.go): a Show offers no Apps for the clock's tap.
+func (*Display) openTabletApps() bool { return false }

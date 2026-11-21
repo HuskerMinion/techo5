@@ -15,5 +15,3 @@ func tabletAppsRows() []settingRow         { return nil }
 func tabletAppsTap(*Display)               {}
 func tabletAppsPicker() (pickerView, bool) { return pickerView{}, false }
 func chooseTabletApp(int)                  {}
-
-func (*Display) openTabletApps() bool { return false }
