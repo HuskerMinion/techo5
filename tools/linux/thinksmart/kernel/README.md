@@ -73,14 +73,14 @@ theirs later, when they are first used.
   functions, Bluetooth, the device mapper. That was 465 modules where the package has 670, all built
   in, then trimmed: file systems, network and USB drivers, Wi-Fi chips and HID drivers no ThinkSmart View
   uses, tracing and KVM left out. The kernel is 11 MB compressed and takes 28 MiB in memory, under
-  the 32 MiB lk2nd 20.0 starts from extlinux (`pack.py` checks it).
+  the 32 MiB lk2nd starts from extlinux (`pack.py` checks it).
 - `xt_owner` and `xt_recent`, which techo5-firewall needs and the package leaves out.
 
 ## Drivers and patches
 
 | File | From | |
 | --- | --- | --- |
-| `src/tas5782m*` | rickx ([rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart)), as changed in m0s4ik/thinksmart-view-debian 02821bc (`driver/tas5782m`), with its debug build layer (`tas5782m_dbg.h`, never compiled in) taken out here; GPL-2.0, `src/LICENSE.tas5782m` | the TAS5782M speaker amplifier; without it there is no sound card |
+| `src/tas5782m*` | rickx ([rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart)), as changed in m0s4ik/thinksmart-view-debian 02821bc (`driver/tas5782m`), with its debug build layer (`tas5782m_dbg.h`, never compiled in) taken out here, and changed here to look for its tuning file (the speaker's DSP table) at each stream start and play without it, flat and 4.5 dB lower, until it is there; GPL-2.0, `src/LICENSE.tas5782m` | the TAS5782M speaker amplifier; without it there is no sound card |
 | `src/s5kc505a.c` | Jetha Chan (jethac/lenovo-thinksmart-view), with flip controls, from m0s4ik/thinksmart-view-debian 02821bc (`driver/s5kc505a`); GPL-2.0 | the front camera's sensor |
 | `patches/0001`-`0003` | Vladyslav Tymoshchuk, from m0s4ik/thinksmart-view-debian 02821bc (`driver/q6asm`) | q6asm-dai positions: without them playback stalls when a stream is stopped and started again, which the daemon does all the time |
 | `patches/0004` | m0s4ik/thinksmart-view-debian 02821bc (`driver/venus`); GPL-2.0-only per that project's README | the video decoder's capability parser |

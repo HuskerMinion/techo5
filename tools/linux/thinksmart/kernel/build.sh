@@ -45,8 +45,9 @@ export KBUILD_BUILD_USER=techo5 KBUILD_BUILD_HOST=thinksmart-build
 # Fixed, so a build is reproducible, but it is what `uname -v` says: bump it whenever the kernel
 # changes (a patch, the config, the base tree), or a unit cannot tell the new kernel from the one
 # before. 2026-11-20 12:00 was the first; 19:00 the first with every driver built in; 23:00 the
-# first with the video decoder's interrupt fix (patches/0006).
-export KBUILD_BUILD_TIMESTAMP="2026-11-20 23:00:00 UTC" KBUILD_BUILD_VERSION=1
+# first with the video decoder's interrupt fix (patches/0006); 2026-11-21 12:00 the first whose speaker
+# driver plays untuned without its DSP table.
+export KBUILD_BUILD_TIMESTAMP="2026-11-21 12:00:00 UTC" KBUILD_BUILD_VERSION=1
 export LC_ALL=C TZ=UTC
 # The release string is the configuration's CONFIG_LOCALVERSION alone, never a git suffix.
 MAKE="make -s LOCALVERSION="

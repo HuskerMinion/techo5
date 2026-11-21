@@ -139,12 +139,24 @@ static int tas5782m_set_book_page(struct tas5782m_priv *priv,
  * Caller must hold priv->lock and the chip must be powered (firmware
  * loaded). Leaves the chip on Book 0 / Page 0.
  */
-static u8 tas5782m_dig_vol(int v)
+/*
+ * Without the tuning file there is no limiter and none of its headroom (the
+ * Lenovo file's fine volume is -4.5 dB), so the top of the scale is 4.5 dB
+ * lower: 9 register steps.
+ */
+#define TAS5782M_FLAT_STEPS 9
+
+static u8 tas5782m_dig_vol(struct tas5782m_priv *priv, int v)
 {
+	int r;
+
 	if (v <= TAS5782M_VOLUME_MIN)
 		return TAS5782M_DIG_VOL_MUTE;
 	/* 0.5 dB per register step */
-	return TAS5782M_DIG_VOL_0DB + 2 * (TAS5782M_VOLUME_MAX - v);
+	r = TAS5782M_DIG_VOL_0DB + 2 * (TAS5782M_VOLUME_MAX - v);
+	if (!priv->dsp_tuned)
+		r += TAS5782M_FLAT_STEPS;
+	return r < TAS5782M_DIG_VOL_MUTE ? r : TAS5782M_DIG_VOL_MUTE;
 }
 
 static void tas5782m_put_coef(struct regmap *rm, unsigned int reg, u32 x)
@@ -211,9 +223,9 @@ static void tas5782m_set_volume(struct tas5782m_priv *priv)
 	tas5782m_set_book_page(priv, 0x00, 0x00);
 	regmap_write(priv->regmap, TAS5782M_DIG_VOL_CTRL, 0x00);
 	regmap_write(priv->regmap, TAS5782M_DIG_VOL_LEFT,
-			      tas5782m_dig_vol(priv->vol[0]));
+			      tas5782m_dig_vol(priv, priv->vol[0]));
 	regmap_write(priv->regmap, TAS5782M_DIG_VOL_RIGHT,
-			      tas5782m_dig_vol(priv->vol[1]));
+			      tas5782m_dig_vol(priv, priv->vol[1]));
 }
 
 /*
@@ -268,42 +280,44 @@ static void tas5782m_refresh(struct tas5782m_priv *priv)
 /* Firmware handling                                                          */
 /* ========================================================================= */
 
-static int tas5782m_cache_firmware(struct tas5782m_priv *priv)
+/*
+ * The tuning file (the speaker's EQ, limiter and headroom for the chip's DSP),
+ * looked for at each stream start until it is found: the driver is built in
+ * and probes before the root filesystem, and its firmware, are there. Until
+ * then, or on a unit that has none, the chip plays with its own flat
+ * coefficients (tas5782m_dsp_flat), 4.5 dB lower.
+ */
+static void tas5782m_load_tuning(struct tas5782m_priv *priv)
 {
 	const struct firmware *fw;
 	char fw_name[128];
-	int ret;
+	u8 *data;
 
+	if (priv->dsp_tuned)
+		return;
 	snprintf(fw_name, sizeof(fw_name),
 		 "tas5728m_dsp_%s.bin", priv->dsp_config_name);
-
-	ret = request_firmware(&fw, fw_name, &priv->client->dev);
-	if (ret) {
-		dev_err(&priv->client->dev,
-			"firmware '%s' not found (%d)\n", fw_name, ret);
-		return ret;
+	if (firmware_request_nowarn(&fw, fw_name, &priv->client->dev)) {
+		dev_warn_once(&priv->client->dev,
+			      "no '%s': playing without the speaker's tuning, 4.5 dB lower\n",
+			      fw_name);
+		return;
 	}
-
 	if (fw->size < 2 || (fw->size & 1)) {
-		dev_err(&priv->client->dev, "firmware '%s' is invalid\n", fw_name);
+		dev_err(&priv->client->dev, "'%s' is invalid; playing without it\n", fw_name);
 		release_firmware(fw);
-		return -EINVAL;
+		return;
 	}
-
-	priv->dsp_cfg_data = devm_kmemdup(&priv->client->dev, fw->data,
-					  fw->size, GFP_KERNEL);
-	if (!priv->dsp_cfg_data) {
-		release_firmware(fw);
-		return -ENOMEM;
+	data = devm_kmemdup(&priv->client->dev, fw->data, fw->size, GFP_KERNEL);
+	if (data) {
+		priv->dsp_cfg_data = data;
+		priv->dsp_cfg_len = fw->size;
+		priv->dsp_tuned = true;
+		dev_info(&priv->client->dev, "speaker tuning '%s' (%zu bytes)\n",
+			 fw_name, fw->size);
+		tas5782m_parse_fine_volume(priv);
 	}
-	priv->dsp_cfg_len = fw->size;
-
-	dev_info(&priv->client->dev,
-		 "cached DSP firmware '%s' (%zu bytes)\n",
-		 fw_name, fw->size);
-
 	release_firmware(fw);
-	return 0;
 }
 
 /* ========================================================================= */
@@ -371,6 +385,7 @@ static void tas5782m_do_work(struct work_struct *work)
 	/* DSP needs ~5 ms to boot internally before accepting firmware blob */
 	usleep_range(5000, 15000);
 
+	tas5782m_load_tuning(priv);
 	tas5782m_send_cfg(priv, priv->dsp_cfg_data, priv->dsp_cfg_len);
 
 	/* The firmware's first write (reg 0x02=0x80) triggers an internal
@@ -673,9 +688,8 @@ static int tas5782m_i2c_probe(struct i2c_client *i2c)
 
 	i2c_set_clientdata(i2c, priv);
 
-	ret = tas5782m_cache_firmware(priv);
-	if (ret)
-		return ret;
+	priv->dsp_cfg_data = tas5782m_dsp_flat;
+	priv->dsp_cfg_len = tas5782m_dsp_flat_len;
 	tas5782m_parse_fine_volume(priv);
 
 	ret = regulator_enable(priv->pvdd);
