@@ -1,4 +1,4 @@
-//go:build (!dot && !spot && !panel) || donut
+//go:build (!dot && !spot && !panel) || donut || cannoli
 
 package mic
 
@@ -152,6 +152,9 @@ const athenaGainControl = "Ch%d Gain A"
 type athenaKernel struct {
 	micDevice   int
 	micChannels int
+	// micUse is how many of the stream's micChannels are microphones, the first ones; the rest are
+	// left out of the frame. Zero: all of them.
+	micUse int
 	// micBits is the microphones' sample width: 32 (S32_LE) on athena, where zero means it, or 16
 	// (S16_LE) for a codec that captures in that.
 	micBits   int
@@ -253,6 +256,14 @@ var athenaMainlineKernel = athenaKernel{
 	boostDB:  athenaMicBoostDB,
 }
 
+// mics is how many of the microphone stream's channels go into the frame.
+func (k *athenaKernel) mics() int {
+	if k.micUse > 0 {
+		return min(k.micUse, k.micChannels)
+	}
+	return k.micChannels
+}
+
 // athenaRunning is the kernel this unit is on; a workstation reads as Amazon's.
 func athenaRunning() *athenaKernel {
 	if boardKernel != nil {
@@ -283,7 +294,7 @@ func athenaWrite(m *alsa.Mixer, name string, v uint32) bool {
 // athenaGain sets the analog gain on every microphone, held to what the control allows.
 func athenaGain(m *alsa.Mixer, db int) {
 	k := athenaRunning()
-	for ch := 1; ch <= k.micChannels; ch++ {
+	for ch := 1; ch <= k.mics(); ch++ {
 		name := fmt.Sprintf(k.gainControl, ch)
 		c, err := m.Lookup(name)
 		if err != nil {
@@ -394,7 +405,7 @@ func openAthena() (capture, error) {
 		athenaADCBiasOn()
 	}
 	slog.Info("athena: capture open", "mics", fmt.Sprintf("hw:%d,%d", Card, k.micDevice),
-		"channels", k.micChannels, "rate", micRate, "reference", ref != nil, "ref_device", k.refDevice,
+		"channels", k.micChannels, "microphones", k.mics(), "rate", micRate, "reference", ref != nil, "ref_device", k.refDevice,
 		"software_reference", soft)
 	return c, nil
 }
@@ -479,7 +490,7 @@ func newPairedCapture(mics, ref *alsa.Capture, micRate int) *pairedCapture {
 	c := &pairedCapture{mics: mics, ref: ref, k: k, micRate: micRate,
 		boost: float32(math.Pow(10, k.boostDB/20)), clock: echoref.NewClock(Rate)}
 	if micRate != Rate { // at Rate the converter has decimated already
-		c.micDec = make([]*audio.Decimator, k.micChannels)
+		c.micDec = make([]*audio.Decimator, k.mics())
 		for i := range c.micDec {
 			c.micDec[i] = audio.NewDecimator(micRate/Rate, athenaMicTaps)
 		}
@@ -680,7 +691,7 @@ func (c *pairedCapture) convert(out, mics, ref []byte) {
 	}
 	if c.micDec == nil { // the converter's own 16 kHz: a frame in is a frame out
 		for at := 0; at+step <= len(mics) && f < frames; at, f = at+step, f+1 {
-			for ch := range c.k.micChannels {
+			for ch := range c.k.mics() {
 				y := sample(mics[at+width*ch:]) / c.k.micFull * c.boost
 				putS24(out[f*frameBytes+3*ch:], y)
 				c.meter.mic[ch] += float64(y) * float64(y)
