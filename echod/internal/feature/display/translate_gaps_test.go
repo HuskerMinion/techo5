@@ -23,7 +23,7 @@ func TestScreenTextOutsideTheCatalogFollowsTheLanguage(t *testing.T) {
 		{"en", "weekdays", "Enter the PIN", "Home Assistant forecast", "S", "Rings at "},
 		{"ja", "平日", "PINを入力", "Home Assistantの予報", "日", "に鳴ります（毎日）"},
 		{"de", "werktags", "PIN eingeben", "Home Assistant-Vorhersage", "S", "Klingelt um "},
-		{"es", "weekdays", "Enter the PIN", "Home Assistant forecast", "S", "Rings at "},
+		{"es", "días laborables", "Introduce el PIN", "Previsión de Home Assistant", "D", "Suena a las "},
 	} {
 		if err := config.Set().Screen().Language(c.lang); err != nil {
 			t.Fatal(err)
