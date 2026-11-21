@@ -6,8 +6,9 @@ speaker, a camera with a sliding cover, a microphone switch and a light sensor. 
 with TECHO5's 64-bit build of the msm8953-mainline kernel (`kernel/`) and the Show's 32-bit userland, as on
 the 2nd gen Show 8 and the Skylight.
 
-Status: tried on two units, one with each of the panels Lenovo fitted. Not in the releases, and there is no installer yet:
-the steps below are by hand, from a unit that already runs Linux.
+Status: tried on two units, one with each of the panels Lenovo fitted; `tools/install-thinksmart.py`
+installs it from stock Android over EDL ([docs/install-thinksmart.md](../../../docs/install-thinksmart.md)).
+Not in the releases yet: the image is built (below) and passed to the installer.
 
 ## What works
 
@@ -26,20 +27,24 @@ the steps below are by hand, from a unit that already runs Linux.
 | Bluetooth | the QCA9379's controller, hci_uart |
 | Firewall | techo5-firewall as on every Show, with `xt_owner` and `xt_recent` built for this kernel |
 
-Not there: a USB gadget (the rescue environment is reached over Wi-Fi and SSH only), the GPU for
-the screen, the hardware video decoder for the camera stream.
+Not there: the GPU for the screen (the driver loads its microcode when something first opens it,
+and nothing draws with it), the hardware video decoder for the camera stream.
 
 ## How it boots
 
-lk2nd is in the `boot` partition. It reads `extlinux/extlinux.conf`, the kernel and the device tree
-from the first partition of an MBR inside what was Android's `system` partition. There is no
+lk2nd is in the `boot` partition, started by Lenovo's own bootloader, which is locked and starts
+only a signed boot image without an appended QCDT (`lk2nd/build.sh` builds one; lk2nd's release
+images crash it). lk2nd reads `extlinux/extlinux.conf`, the kernel and the device tree from the
+first partition of an MBR inside the GPT partition named `system`: Android's `userdata`, renamed by
+the installer, which renames Android's own `system` to `android-system`. There is no
 initramfs: the kernel's command line has its device mapper make the MBR's two partitions
 (`dm-mod.create`, `system1` and `system2`, by the GPT name `system` and the image's offsets), and the
 kernel mounts `system2` read-only as `/` and runs its `/sbin/init`.
 
 So `system2` is the slot store and its `/sbin/init` is `init` here: the Skylight's, with this boot
-chain under it. It mounts `techo5-data`, a GPT partition after `system` that `repartition.sh` makes,
-links the audio DSP's firmware from the unit's modem partition where the kernel looks first, starts
+chain under it. It mounts `techo5-data`, the GPT partition after `system` (formatted at the first
+boot, after taking the installer's settings from its start), makes the firmware from the unit's
+modem and vendor partitions where the kernel looks first (`thinksmart-firmware`), starts
 the built-in drivers that found no firmware when they probed (the audio DSP, the video decoder,
 Wi-Fi), binds the store's `/lib/firmware` into the slot and pivots into it, or stays as the rescue
 environment.
@@ -53,8 +58,15 @@ camera in the device tree, and a configuration trimmed to this board, every driv
 `boot-thinksmart.img`, which a root filesystem carries (`deploy-rootfs.sh KERNEL_IMAGE`), and
 `vmlinuz` and the device tree for `mkimage.sh -K`.
 
-The firmware (`mkstore.sh -F`) is `/lib/firmware` of a unit running postmarketOS or the Debian
-project's image: Wi-Fi, Bluetooth and the GPU. The audio DSP's is the unit's own.
+The firmware is the unit's own, made at every boot by `thinksmart-firmware` and never in an image:
+the audio DSP's and Bluetooth's from the modem partition as they are, the Wi-Fi's (ath10k's
+`firmware-sdio-6.bin` and `board-2.bin`) put together from the modem partition's files the way
+qca-swiss-army-knife's encoders do, the GPU's zap shader from the vendor partition, and the speaker
+amplifier's tuning from what the installer took out of the stock kernel. The store adds what no
+partition has: the GPU's microcode and the Wi-Fi regulatory database, from Alpine's packages
+(`mkstore.sh` without `-F`). `mkstore.sh -F firmware.tar` puts a whole `/lib/firmware` in the store
+instead, which wins over the unit's. Without the speaker's tuning the amplifier plays untuned: flat,
+and 4.5 dB quieter to stay safe.
 
 ## Building an image
 
@@ -63,8 +75,9 @@ tools/linux/thinksmart/kernel/build.sh
 K=~/techo5-thinksmart-kbuild/out
 DEVICE_OVERLAY=tools/linux/thinksmart/overlay KERNEL_IMAGE=$K/boot-thinksmart.img \
 	tools/linux/deploy-rootfs.sh --out rootfs.tar.gz
-tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -F firmware.tar -S 2048 -o store.img
+tools/linux/thinksmart/mkstore.sh -r rootfs.tar.gz -k none -S 2048 -o store.img
 tools/linux/thinksmart/mkimage.sh -K $K -s store.img -o system.img
+tools/linux/thinksmart/lk2nd/build.sh
 ```
 
 No `EXTRA_PACKAGES=busybox-extras`, which athena and the Skylight add for `udhcpd`: they offer a
@@ -77,9 +90,13 @@ every boot, and a network for a unit with nobody at its screen. Never for anyone
 
 ## Putting it on a unit
 
-A unit comes with Android. Getting from there to lk2nd, the larger `system` partition and a
-running Linux is m0s4ik/thinksmart-view-debian's install guide (a full backup over EDL first,
-lk2nd, rickx's bootstrap and partition table), and is not repeated here. From such a unit:
+From stock Android: `tools/install-thinksmart.py --system system.img --lk2nd lk2nd-thinksmart.img`
+([docs/install-thinksmart.md](../../../docs/install-thinksmart.md)), which backs the whole eMMC up
+first, takes the speaker's tuning from the stock kernel, and writes lk2nd, the new partition table,
+the image and the settings over EDL.
+
+A unit that already runs Linux from m0s4ik/thinksmart-view-debian's route (rickx's lk2nd and a
+`system` partition grown over `userdata`) can take the image by hand instead:
 
 1. On the unit, as root: `repartition.sh` shows the table it would write, `repartition.sh --write`
    writes it. `system` becomes the image's size and the rest of it `techo5-data`. What ran from
@@ -125,7 +142,7 @@ or, in recovery mode, the Android boot image in `recovery`, once. So the boot la
   lk2nd's menu: power on with nothing held, then hold Volume Down once the logo shows (held from
   power-on it is Lenovo's own locked fastboot instead); Volume Down moves, Volume Up picks
   Recovery.
-- lk2nd 20.0 (on the units, January 2025) starts a kernel taking at most 32 MiB in memory from
+- lk2nd (23.1 from `lk2nd/build.sh`; rickx's 20.0-next on units set up by hand) starts a kernel taking at most 32 MiB in memory from
   extlinux, so a slot whose kernel is bigger is marked bad before its trial (and `pack.py` refuses to
   build one).
 
@@ -133,13 +150,15 @@ or, in recovery mode, the Android boot image in `recovery`, once. So the boot la
 under busybox with a made-up unit. An image from before the boot layer has no record: `init` then
 starts the slot `slotctl` picks, on whatever kernel `system1` has.
 
-The firmware is outside the slots and is not updated.
+The firmware is outside the slots: it is made from the unit's partitions at every boot.
 
 ## Files
 
 - `init`: the store's `/sbin/init`.
+- `thinksmart-firmware`: makes the firmware from the unit's own partitions at every boot.
 - `mkstore.sh`, `mkimage.sh`: the store and the image for `system`.
-- `repartition.sh`: run on the unit, makes `techo5-data`.
+- `lk2nd/build.sh`: the lk2nd the installer writes into `boot` (signed, no QCDT).
+- `repartition.sh`: run on a unit set up by hand, makes `techo5-data`.
 - `rescue-profile.sh`: the rescue environment's login text.
 - `overlay/`: the board's `device.conf`.
 - `kernel/`: the kernel's build, its drivers, patches and configuration, and `pack.py`, its boot image.

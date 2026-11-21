@@ -47,3 +47,8 @@ jobs:
 
       - name: ThinkSmart View boot layer tests (lk2nd-ab, under busybox in Docker)
         run: python3 tools/test_lk2nd_ab.py
+
+      - name: ThinkSmart View firmware and installer tests
+        run: |
+          python3 tools/test_thinksmart_firmware.py
+          python3 tools/test_install_thinksmart.py

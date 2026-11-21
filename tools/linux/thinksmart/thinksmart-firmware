@@ -1,0 +1,138 @@
+#!/bin/sh
+# thinksmart-firmware — the firmware a Lenovo ThinkSmart View carries in its own partitions, made into
+# what the mainline drivers ask for. Run by the store's /sbin/init at every boot, after it has linked
+# the modem partition's files into the directory the kernel looks in first (firmware_class.path).
+#
+#   thinksmart-firmware <target> <modem> [<vendor>]
+#
+# <target> is that directory, <modem> the modem partition mounted (FAT, Android's), <vendor> Android's
+# vendor partition mounted, where a unit installed by tools/install-thinksmart.py still has it. A file
+# the store's own tree has already (FIRMWARE, default /lib/firmware: an image built with a firmware tar,
+# mkstore.sh -F) is left to it, so such an image boots as it did. Everything made here is in the tmpfs
+# <target>, made again at the next boot; nothing is written to a partition.
+#
+#   Bluetooth   qca/rampatch_00150100.bin and nvm_00150100.bin: the modem's btfwnpla.tlv and
+#               btnvnpla.bin, as they are
+#   Wi-Fi       ath10k/QCA9379/hw1.0/firmware-sdio-6.bin: the modem's otp30.bin and qwlan30.bin in the
+#               container ath10k reads, with the WLAN version from verinfo/ver_info.txt, as
+#               qca-swiss-army-knife's ath10k-fwencoder makes it (the same bytes, with -t its timestamp);
+#               board-2.bin: the modem's bdwlan30.bin under this board's name, as ath10k-bdencoder does
+#   GPU         qcom/msm8953/lenovo/cd-18781y/a506_zap.*: the zap shader, from the vendor partition, at
+#               the name the board's device tree gives
+#   speaker     tas5728m_dsp_lenovo_cd-18781y.bin: the amplifier's DSP table, taken from the unit's
+#               stock kernel by the installer and kept in /data (DSP)
+#
+# One line per file made, or per file that could not be, on stdout.
+set -u
+TARGET=${1:?target}
+MODEM=${2:?modem}
+VENDOR=${3:-}
+FIRMWARE=${FIRMWARE:-/lib/firmware}
+DSP=${DSP:-/data/techo5-linux/firmware/tas5728m_dsp_lenovo_cd-18781y.bin}
+TIMESTAMP=${TIMESTAMP:-0}
+TMP=${TMPDIR:-/tmp}/thinksmart-firmware.$$
+IMG=$MODEM/image
+
+# The board's name, as ath10k asks for it: the SDIO ids of the QCA9379 and the calibration variant in
+# the board's device tree (qcom,ath10k-calibration-variant).
+BOARD_NAME='bus=sdio,vendor=0271,device=0801,subsystem-vendor=0000,subsystem-device=0000,variant=WCBN3510A'
+# What the container says beside the two images: the features (wowlan, ignore-otp-result,
+# mfp-support), the WMI and HTT op versions (both TLV) and the firmware API: ath10k-fwencoder
+# --features=wowlan,ignore-otp-result,mfp-support --set-wmi-op-version=tlv --set-htt-op-version=tlv
+# --set-fw-api=6.
+FEATURES='\300\020'
+WMI_TLV=4
+HTT_TLV=3
+
+mkdir -p "$TMP" || exit 1
+trap 'rm -rf "$TMP"' EXIT
+
+# A file the store has, or one already in <target> (the modem's links), is not made again.
+have() { [ -e "$FIRMWARE/$1" ] || [ -e "$TARGET/$1" ]; }
+size() { wc -c < "$1" | tr -d ' '; }
+# A little-endian 32-bit number, as bytes.
+u32() {
+	printf "$(printf '\\%03o\\%03o\\%03o\\%03o' $(($1 & 255)) $(($1 >> 8 & 255)) $(($1 >> 16 & 255)) $(($1 >> 24 & 255)))"
+}
+# Pad a field of $1 bytes to a multiple of four with the character $2.
+pad() {
+	n=$(((4 - $1 % 4) % 4))
+	[ $n -gt 0 ] && printf "%${n}s" '' | tr ' ' "$2"
+	return 0
+}
+# A field: type, length, the file's bytes, padding.
+field() {
+	n=$(size "$2")
+	u32 "$1"; u32 "$n"; cat "$2"; pad "$n" "$3"
+}
+
+link() {
+	have "$2" && return 0
+	if [ -s "$1" ]; then
+		case $2 in */*) mkdir -p "$TARGET/${2%/*}";; esac
+		ln -sf "$1" "$TARGET/$2" && echo "$2: from ${1#"${1%/*/*}"/}"
+	else
+		echo "$2: not made: no ${1##*/}"
+	fi
+}
+
+# --- Bluetooth
+link "$IMG/btfwnpla.tlv" qca/rampatch_00150100.bin
+link "$IMG/btnvnpla.bin" qca/nvm_00150100.bin
+
+# --- Wi-Fi
+W=ath10k/QCA9379/hw1.0
+if ! have $W/firmware-sdio-6.bin; then
+	ver=$(sed -n 's/.*"wlan": *"\([^"]*\)".*/\1/p' "$MODEM/verinfo/ver_info.txt" 2>/dev/null | head -1)
+	if [ -s "$IMG/otp30.bin" ] && [ -s "$IMG/qwlan30.bin" ] && [ -n "$ver" ]; then
+		printf %s "$ver" > "$TMP/ver"
+		u32 "$TIMESTAMP" > "$TMP/ts"
+		printf "$FEATURES" > "$TMP/features"
+		u32 $WMI_TLV > "$TMP/wmi"
+		u32 $HTT_TLV > "$TMP/htt"
+		mkdir -p "$TARGET/$W"
+		{
+			printf 'QCA-ATH10K\000w'
+			field 0 "$TMP/ver" w
+			field 1 "$TMP/ts" w
+			field 4 "$IMG/otp30.bin" w
+			field 3 "$IMG/qwlan30.bin" w
+			field 2 "$TMP/features" w
+			field 5 "$TMP/wmi" w
+			field 6 "$TMP/htt" w
+		} > "$TARGET/$W/firmware-sdio-6.bin" && echo "$W/firmware-sdio-6.bin: made, $ver"
+	else
+		echo "$W/firmware-sdio-6.bin: not made: no otp30.bin, qwlan30.bin or WLAN version in the modem partition"
+	fi
+fi
+if ! have $W/board-2.bin; then
+	if [ -s "$IMG/bdwlan30.bin" ]; then
+		printf %s "$BOARD_NAME" > "$TMP/name"
+		n=$(size "$TMP/name"); d=$(size "$IMG/bdwlan30.bin")
+		mkdir -p "$TARGET/$W"
+		{
+			printf 'QCA-ATH10K-BOARD\000mmm'
+			u32 0; u32 $((8 + n + (4 - n % 4) % 4 + 8 + d + (4 - d % 4) % 4))
+			field 0 "$TMP/name" m
+			field 1 "$IMG/bdwlan30.bin" m
+		} > "$TARGET/$W/board-2.bin" && echo "$W/board-2.bin: made"
+	else
+		echo "$W/board-2.bin: not made: no bdwlan30.bin in the modem partition"
+	fi
+fi
+
+# --- GPU: the zap shader, the .mdt and its pieces
+Z=qcom/msm8953/lenovo/cd-18781y
+if ! have $Z/a506_zap.mdt; then
+	if [ -n "$VENDOR" ] && [ -s "$VENDOR/firmware/a506_zap.mdt" ]; then
+		mkdir -p "$TARGET/$Z"
+		for f in "$VENDOR"/firmware/a506_zap.*; do ln -sf "$f" "$TARGET/$Z/${f##*/}"; done
+		echo "$Z/a506_zap.mdt: from the vendor partition"
+	else
+		echo "$Z/a506_zap.mdt: not made: no vendor partition with it"
+	fi
+fi
+
+# --- The speaker amplifier's DSP table
+link "$DSP" tas5728m_dsp_lenovo_cd-18781y.bin
+exit 0

@@ -87,6 +87,19 @@ param(
     # linux-<kver>-techo5-thinksmart-<version>-source.tar.xz). Both go with -ThinkSmartRootfs.
     [string]$ThinkSmartBoot = '',
     [string]$ThinkSmartKernelSource = '',
+    # The ThinkSmart View's system image for new units (tools/linux/thinksmart/mkimage.sh, from a store
+    # made with mkstore.sh -k none and no -F: the unit makes its Wi-Fi, Bluetooth and GPU firmware from its
+    # own partitions, and install-thinksmart.py brings the speaker's table from its own stock kernel, so
+    # nothing of the vendor's is in a release; gzipped), published as
+    # techo5-system-thinksmart-<version>.img.gz for install-thinksmart.py. Goes with -ThinkSmartRootfs.
+    [string]$ThinkSmartSystem = '',
+    # The lk2nd install-thinksmart.py writes into boot (tools/linux/thinksmart/lk2nd/build.sh: signed, no
+    # QCDT, which the board's stock bootloader needs and lk2nd's own release images are not), published as
+    # techo5-lk2nd-thinksmart-<version>.img and named in the signed manifest. Goes with -ThinkSmartSystem.
+    # Its source goes with it (build.sh's lk2nd-<tag>-source.tar.gz: the image carries GPL-2.0 parts),
+    # published as lk2nd-<tag>-techo5-thinksmart-<version>-source.tar.gz.
+    [string]$ThinkSmartLk2nd = '',
+    [string]$ThinkSmartLk2ndSource = '',
     # The release signing key (ed25519 seed, base64). Devices take a manifest only with its signature, so
     # a release cannot be published without it. Keep it off every repository and backed up: $env:TECHO5_SIGN_KEY.
     [string]$SignKey = $env:TECHO5_SIGN_KEY,
@@ -414,6 +427,7 @@ if ($skylightGiven) {
 # The ThinkSmart View: its rootfs, the kernel it carries and that kernel's source go together. Every
 # slot starts with its own kernel (tools/linux/thinksmart/lk2nd-ab), so a rootfs without one is refused.
 $thinkSmartSourceName = $null
+$thinkSmartLk2ndSourceName = $null
 $thinkSmartSet = @($ThinkSmartRootfs, $ThinkSmartBoot, $ThinkSmartKernelSource)
 $thinkSmartGiven = @($thinkSmartSet | Where-Object { $_ }).Count
 if ($thinkSmartGiven -and $thinkSmartGiven -ne $thinkSmartSet.Count) {
@@ -443,6 +457,32 @@ if ($ThinkSmartRootfs) {
     $thinkSmartSourceName = "linux-$kver-techo5-thinksmart-$Version-source.tar.xz"
     Test-Image $ThinkSmartRootfs -EmptyKeys
 }
+if ($ThinkSmartSystem -and -not $ThinkSmartRootfs) { throw "-ThinkSmartSystem needs -ThinkSmartRootfs: the image holds that rootfs, and installed units update from it" }
+if ($ThinkSmartSystem) {
+    # mkimage.sh's: 4694016 sectors, the MBR's two partitions (lk2nd's boot files at 2048, the store at
+    # 499712, ext4 labeled techo5-store), as install-thinksmart.py checks it; this release's rootfs and
+    # kernel in its store; none of the unit's firmware, and no SSH key.
+    python -I -c "import gzip,struct,sys`nf=gzip.open(sys.argv[1],'rb'); m=f.read(512)`nparts=[struct.unpack_from('<4xB3xII',m,446+16*i)[1:] for i in range(2)]`nf.seek(499712*512+1024); sb=f.read(1024)`nok=m[510:]==b'\x55\xaa' and parts==[(2048,497664),(499712,4194304)] and sb[56:58]==b'\x53\xef' and sb[120:136].rstrip(b'\0')==b'techo5-store'`nn=499712*512+2048`nwhile True:`n    b=f.read(1<<24)`n    if not b: break`n    n+=len(b)`nsys.exit(0 if ok and n==4694016*512 else 1)" $ThinkSmartSystem
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartSystem is not a gzipped ThinkSmart View system image (mkimage.sh)" }
+    $bootSum = (Get-FileHash -Algorithm SHA256 $ThinkSmartBoot).Hash.ToLower()
+    $holds = "import gzip,sys`nwant={w.encode():False for w in sys.argv[2:]}`nf=gzip.open(sys.argv[1],'rb'); tail=b''`nwhile not all(want.values()):`n    b=f.read(1<<20)`n    if not b: break`n    for w in want:`n        if w in tail+b: want[w]=True`n    tail=(tail+b)[-256:]`nmissing=[w.decode() for w,ok in want.items() if not ok]`nfor m in missing: print('missing: '+m)`nsys.exit(1 if missing else 0)"
+    python -I -c $holds $ThinkSmartSystem "$bootSum  boot-thinksmart.img`n" "techo5 rootfs $Version built "
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartSystem does not hold this release: build it (mkstore.sh -k none, mkimage.sh) from the ThinkSmart rootfs made for $Version" }
+    Test-Image $ThinkSmartSystem -NoFile @('firmware-sdio-6.bin', 'board-2.bin', 'rampatch_00150100.bin', 'nvm_00150100.bin', 'a506_zap.mdt', 'tas5728m_dsp_lenovo_cd-18781y.bin')
+    if (-not $ThinkSmartLk2nd) { throw "-ThinkSmartSystem needs -ThinkSmartLk2nd: install-thinksmart.py writes the release's lk2nd into boot" }
+}
+if ($ThinkSmartLk2nd -and -not $ThinkSmartSystem) { throw "-ThinkSmartLk2nd goes with -ThinkSmartSystem" }
+if ($ThinkSmartLk2nd) {
+    # The checks install-thinksmart.py makes (check_lk2nd): an lk2nd boot image for this board, no QCDT
+    # appended, an AVB1 signature right after the image.
+    python -I -c "import struct,sys`nd=open(sys.argv[1],'rb').read()`nk,_,r,_,s,_,_,pg,dt=struct.unpack_from('<9I',d,8)`np=lambda n:-(-n//pg)*pg`ne=pg+p(k)+p(r)+p(s)+p(dt) if pg in (2048,4096) else len(d)+1`nok=d[:8]==b'ANDROID!' and b'lk2nd' in d and b'lenovo,cd-18781y' in d and dt==0 and d[e:e+2]==b'\x30\x82'`nsys.exit(0 if ok else 1)" $ThinkSmartLk2nd
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartLk2nd is not an lk2nd this board's bootloader starts (signed, no QCDT, lenovo,cd-18781y): build it with tools/linux/thinksmart/lk2nd/build.sh" }
+    if (-not $ThinkSmartLk2ndSource) { throw "-ThinkSmartLk2nd needs -ThinkSmartLk2ndSource: the image carries GPL-2.0 parts, and the GPL wants their source" }
+    $lk2ndTag = python -I -c "import re,sys,tarfile`nt=tarfile.open(sys.argv[1]); top={n.split('/')[0] for n in t.getnames()}`nm=re.fullmatch(r'lk2nd-([0-9.]+)', top.pop()) if len(top)==1 else None`nif not m or m.group(0)+'/lk2nd/device/dts/msm8953/apq8053-lenovo-cd-18781y.dts' not in t.getnames(): sys.exit(1)`nprint(m.group(1))" $ThinkSmartLk2ndSource
+    if ($LASTEXITCODE -ne 0 -or -not $lk2ndTag) { throw "$ThinkSmartLk2ndSource is not lk2nd/build.sh's source tarball" }
+    $thinkSmartLk2ndSourceName = "lk2nd-$lk2ndTag-techo5-thinksmart-$Version-source.tar.gz"
+}
+if ($ThinkSmartLk2ndSource -and -not $ThinkSmartLk2nd) { throw "-ThinkSmartLk2ndSource goes with -ThinkSmartLk2nd" }
 if (-not $SignKey -or -not (Test-Path $SignKey)) { throw "no release signing key: set TECHO5_SIGN_KEY or pass -SignKey" }
 $repo = 'HuskerMinion/techo5'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
@@ -604,6 +644,16 @@ try {
         $named = Join-Path $bin "techo5-boot-thinksmart-$Version.img"
         Copy-Item $ThinkSmartBoot $named -Force
         $bootAssets += $named
+        if ($ThinkSmartSystem) {
+            $named = Join-Path $bin "techo5-system-thinksmart-$Version.img.gz"
+            Copy-Item $ThinkSmartSystem $named -Force
+            $bootAssets += $named
+            $named = Join-Path $bin "techo5-lk2nd-thinksmart-$Version.img"
+            Copy-Item $ThinkSmartLk2nd $named -Force
+            $bootAssets += $named
+        } else {
+            Write-Warning "no -ThinkSmartSystem: install-thinksmart.py has nothing to install from this release"
+        }
     }
     $athenaRootfsNamed = $null
     if ($AthenaRootfs) {
@@ -699,6 +749,11 @@ if ($skylightSourceName) {
 if ($thinkSmartSourceName) {
     $named = Join-Path $bin $thinkSmartSourceName
     Copy-Item $ThinkSmartKernelSource $named -Force
+    $args += $named
+}
+if ($ThinkSmartLk2ndSource) {
+    $named = Join-Path $bin $thinkSmartLk2ndSourceName
+    Copy-Item $ThinkSmartLk2ndSource $named -Force
     $args += $named
 }
 # SHA256SUMS: for checking a download by hand. No installer reads it — the signed manifest covers
