@@ -71,7 +71,7 @@ func (r *renderer) labelRow(s scene, label string, bar bool) {
 	y := r.s(150)
 	p := s.musicPosition
 	if !bar || p.Dur <= 0 {
-		r.text(r.small, label, r.margin, y, amber)
+		r.text(r.small, r.clipTo(r.small, label, r.w-2*r.margin), r.margin, y, amber)
 		return
 	}
 	// The label has the left half at least; the bar the rest, starting past the label's end.

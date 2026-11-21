@@ -36,8 +36,10 @@ type playingSnapshot struct {
 	recvFrom, recvTitle, recvArtist, recvAlbum string
 	carried                                    bool
 	extTitle, extArtist, extAlbum              string
+	extLive                                    bool
 	held                                       bool
 	heldTitle, heldArtist, heldAlbum           string
+	heldLive                                   bool
 
 	// ownPlaying and ownPaused are this player's own track (Player.Playing); screenPlaying and
 	// screenPaused are the room's music as a screen shows it (Player.ScreenState).
@@ -61,7 +63,9 @@ type nowPlayer interface {
 	ReceivedTrack() (from, title, artist, album string)
 	Carried() bool
 	Track() (title, artist, album string)
+	TrackLive() bool
 	Held() (title, artist, album string, ok bool)
+	HeldLive() bool
 	Playing() (playing, paused bool)
 	ScreenState() (playing, paused bool)
 	OwnTitle() *media.Title
@@ -83,7 +87,9 @@ func snapshotOf(p nowPlayer) playingSnapshot {
 	s.recvFrom, s.recvTitle, s.recvArtist, s.recvAlbum = p.ReceivedTrack()
 	s.carried = p.Carried()
 	s.extTitle, s.extArtist, s.extAlbum = p.Track()
+	s.extLive = p.TrackLive()
 	s.heldTitle, s.heldArtist, s.heldAlbum, s.held = p.Held()
+	s.heldLive = p.HeldLive()
 	s.ownPlaying, s.ownPaused = p.Playing()
 	s.screenPlaying, s.screenPaused = p.ScreenState()
 	if t := p.OwnTitle(); t != nil {
