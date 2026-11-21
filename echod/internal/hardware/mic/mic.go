@@ -96,7 +96,9 @@ type Source struct {
 	leveling    atomic.Bool
 
 	// The same shape for the noise estimator, which also has state to throw away when it is turned off.
-	denoiser     *denoise.Stream
+	denoiser *denoise.Stream
+	// denoised is the denoiser's last frame before it was rounded, for the leveler (#662).
+	denoised     []float32
 	wasDenoising bool
 	denoising    atomic.Bool
 
@@ -509,8 +511,13 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 
 	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the
 	// room, and before leveling, so the gain is not put back on a floor that has just been removed.
+	var exact []float32
 	if quiet := s.denoising.Load(); quiet {
-		s.denoiser.Apply(frame)
+		if cap(s.denoised) < len(frame) {
+			s.denoised = make([]float32, len(frame))
+		}
+		exact = s.denoised[:len(frame)]
+		s.denoiser.ApplyKeeping(frame, exact)
 		s.wasDenoising = true
 	} else if s.wasDenoising {
 		s.denoiser.Forget()
@@ -522,7 +529,7 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 	on := s.leveling.Load()
 	switch {
 	case on:
-		s.leveler.apply(frame)
+		s.leveler.applyFrom(frame, exact)
 	default:
 		// Measured even with the gain switched off, because how loud the room is has watchers of its
 		// own: the ring can be set to react to it, and that should not depend on a setting about what

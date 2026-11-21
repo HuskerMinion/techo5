@@ -317,10 +317,17 @@ func (l *leveler) publishLevel(rms float32) {
 
 // apply scales a frame in place, following the level it has been carrying rather than this frame
 // alone: gain that jumped per frame would pump audibly and change what a wake model hears mid-word.
-func (l *leveler) apply(frame []int16) {
+func (l *leveler) apply(frame []int16) { l.applyFrom(frame, nil) }
+
+// applyFrom levels frame as apply does, but brings up exact instead where it is as long as the frame:
+// the same samples as frame before they were rounded to whole steps (noise reduction's output, #662),
+// so a quiet stretch that rounded to zero comes back as the faint sound it was rather than staying
+// digital silence. The gain is worked out from frame either way.
+func (l *leveler) applyFrom(frame []int16, exact []float32) {
 	if len(frame) == 0 {
 		return
 	}
+	fine := len(exact) >= len(frame)
 	rms, peak := l.observe(frame)
 
 	// Silence says nothing about how loud speech is, so the gain is left where speech left it.
@@ -343,7 +350,11 @@ func (l *leveler) apply(frame []int16) {
 	l.publish()
 
 	for i, s := range frame {
-		switch v := float32(s) * l.gain; {
+		in := float32(s)
+		if fine {
+			in = exact[i]
+		}
+		switch v := float32(math.Round(float64(in * l.gain))); {
 		case v > fullScale-1:
 			frame[i] = fullScale - 1
 			l.clipped.Add(1)

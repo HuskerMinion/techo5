@@ -42,10 +42,13 @@ const (
 
 	// minPrior floors the a priori SNR at -25 dB, and minGain the gain a band judged empty falls to.
 	minPrior = 10.0 / 316.22776601683796 // -25 dB
-	minGain  = 0.01                      // -20 dB
+	// minGain is an amplitude gain, as every gain here is (apply scales the spectrum by it): 0.1 is
+	// -20 dB. It was 0.01, -40 dB, which took a quiet room below one sample step, so between words a
+	// request held runs of exact digital silence that leveling could not bring back (#662).
+	minGain = 0.1 // -20 dB
 
 	// logMinGain is ln(minGain), which the gain is worked in.
-	logMinGain = -4.605170185988091
+	logMinGain = -2.302585092994046
 )
 
 // Filter is one stream. It is not safe for concurrent use.
