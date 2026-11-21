@@ -1,4 +1,4 @@
-//go:build (!dot && !spot && !panel) || donut
+//go:build (!dot && !spot && !panel) || donut || cannoli
 
 package mic
 

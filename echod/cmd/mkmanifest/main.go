@@ -37,6 +37,9 @@ func main() {
 		// internal/update/arch_donut.go).
 		armDonut    = flag.String("arm-donut", "", "the Echo Dot 3rd gen build (-tags dot,donut), hashed and measured")
 		rootfsDonut = flag.String("rootfs-arm-donut", "", "the Echo Dot 3rd gen rootfs tarball, hashed and measured")
+		// The Echo Dot 5th gen (cannoli), likewise ("arm-cannoli", internal/update/arch_cannoli.go).
+		armCannoli    = flag.String("arm-cannoli", "", "the Echo Dot 5th gen build (-tags dot,cannoli), hashed and measured")
+		rootfsCannoli = flag.String("rootfs-arm-cannoli", "", "the Echo Dot 5th gen rootfs tarball, hashed and measured")
 		// The Echo Spot likewise ("arm-spot", internal/update/arch_spot.go).
 		armSpot    = flag.String("arm-spot", "", "the Echo Spot build (-tags spot), hashed and measured")
 		rootfsSpot = flag.String("rootfs-arm-spot", "", "the Echo Spot rootfs tarball, hashed and measured")
@@ -66,8 +69,10 @@ func main() {
 	flag.StringVar(&m.ReleaseURL, "release-url", "", "what the card's link points at")
 	flag.Parse()
 
-	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-donut": *armDonut, "arm-spot": *armSpot}
-	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-donut": *rootfsDonut, "arm-spot": *rootfsSpot,
+	builds := map[string]string{"arm64": *arm64, "arm": *arm, "arm-dot": *armDot, "arm-donut": *armDonut, "arm-cannoli": *armCannoli,
+		"arm-spot": *armSpot}
+	rootfses := map[string]string{"arm": *rootfs, "arm-dot": *rootfsDot, "arm-donut": *rootfsDonut, "arm-cannoli": *rootfsCannoli,
+		"arm-spot":   *rootfsSpot,
 		"arm-athena": *rootfsAthena, "arm-skylight": *rootfsSkylight}
 	if err := withRootfs(rootfses, extraRootfs); err != nil {
 		fmt.Fprintln(os.Stderr, err)

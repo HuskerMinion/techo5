@@ -1,0 +1,104 @@
+//go:build dot && cannoli
+
+package mic
+
+import (
+	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
+)
+
+// The Echo Dot 5th gen (cannoli) capture path: the converter's own stream on the speaker's card, without
+// the HiFi5 DSP. The microphones go into a TI TLV320ADC5140 (i2c 4-004c), which the MT8519's AFE reads on
+// eTDM1 (four slots at 96 kHz, 32 bits: the DVT device tree's etdm1-in-fix-*). ETDM1 Capture lands on the
+// AFE's inputs I42..I45 (mt8519-afe-pcm.c in the 6.5.5.5 GPL tree), and the interconnect takes them to
+// O26..O29, the first four channels of the UL9 memory interface: mt-snd-card's capture device 9,
+// "UL9 Capture" (listed on the unit, 2026-11-21). Fire OS hands eTDM1 to the DSP instead (Amazon's
+// voice_dsp_card and its closed dsp_lifecycle make a card of their own, sndvoicedspcard), which a slot-B
+// boot does not load; the DSP shares UL9 there.
+//
+// So the capture is athena's paired one (athena.go) on card 0, device 9: the four channels decimated to
+// 16 kHz by athena's filters, and the software reference (lib/echoref) in place of a playback copy. The
+// converter is the 2nd gen Echo Show 8's, on the same Amazon driver, and is woken the same way: its
+// "ADC Reset A" handler takes it out of sleep (athena.go, athenaControls), which nothing else does.
+//
+// The converter has four inputs and the board three microphones. On one unit (2026-11-21,
+// `echod tools mic`, at the default 20 dB): ch0..ch2 are live, a quiet room at -57 to -60 dBFS rms and
+// speech at -46 to -51; ch3 stays at -80 whatever is said, the unwired input, so the frame takes the
+// first three. The samples are left-aligned in the 32 bits (micFull 1<<31): read against 2^23, as
+// athena's on the same converter are, that room would sit 48 dB louder than full scale allows.
+// Which channel is which microphone on the top is not known yet.
+const (
+	Channels      = 5
+	CaptureDevice = cannoliMicDevice
+
+	Mics     = 3
+	RefFirst = 3
+	Refs     = 2
+
+	maxMics = 3
+
+	// CenterMic: no microphone in the middle; ch0 stands in, as on the Dot 3.
+	CenterMic = 0
+
+	// CancelOnMix is off until it is measured on this device.
+	CancelOnMix = false
+
+	cannoliMicDevice   = 9
+	cannoliMicChannels = 4
+	cannoliMicRate     = 96000
+)
+
+// adcs is empty: the TLV320ADC3101 routes gain.go writes are the older Dots'. The TLV320ADC5140's gain is
+// setBoardGain's.
+var adcs []string
+
+// cannoliControls wake the converter and route eTDM1's four slots (I42..I45) into UL9's first four
+// channels (O26..O29), the one-to-one switches among the many the AFE offers there.
+var cannoliControls = []athenaControl{
+	{"ADC Reset A", 1},
+	{"O26 I42 Switch", 1},
+	{"O27 I43 Switch", 1},
+	{"O28 I44 Switch", 1},
+	{"O29 I45 Switch", 1},
+}
+
+var cannoliKernel = athenaKernel{
+	micDevice:   cannoliMicDevice,
+	micChannels: cannoliMicChannels,
+	micUse:      Mics,
+	micFull:     1 << 31,
+	refDevice:   -1,
+	softRef:     true,
+	controls:    cannoliControls,
+	// The converter's analog gain on Amazon's TLV320ADC5140 driver, as athena's (athenaGainControl).
+	gainControl: athenaGainControl,
+	micRates:    []int{cannoliMicRate},
+	refRate:     Rate,
+	// 80 ms rings, as the Dot 3's: the AFE's ring sizes here are not known.
+	micPeriods: 8,
+	refPeriods: 8,
+}
+
+// boardKernel is the Dot 5's capture, which athenaRunning hands the paired capture.
+var boardKernel = &cannoliKernel
+
+// MediaService is the init service that holds the capture on Fire OS: Amazon's mixer daemon.
+const MediaService = "mixer"
+
+// VendorBeamformer is off: the coefficient sets the daemon reads (lib/subband) are the Dot 2's.
+const VendorBeamformer = false
+
+// vendorBeamformerSkipped is false: this board was never offered it.
+const vendorBeamformerSkipped = false
+
+// resetsOnMute is false until the mute latch has been tried with the capture open.
+func resetsOnMute() bool { return false }
+
+// openDevice is the paired capture on the speaker's card.
+func openDevice() (capture, error) { return openAthena() }
+
+// setBoardGain sets the TLV320ADC5140's analog gain per microphone (athenaGain), on the card the
+// converter is linked to, the speaker's (captureDevice gives Card).
+func setBoardGain(m *alsa.Mixer, db int) bool {
+	athenaGain(m, db)
+	return true
+}
