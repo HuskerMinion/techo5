@@ -609,7 +609,7 @@ func TestAnswerActsOnlyOnTheNearestDevice(t *testing.T) {
 }
 
 // A detector that fires again on the same words (#661): the device that answered goes on saying so while
-// its turn is open, and the device that stood down does not claim the repeat.
+// its turn is open, so the repeat on another device is told so and stands down.
 func TestARepeatFiringOfTheSameWordsOpensNoSecondTurn(t *testing.T) {
 	h := newHouse(t)
 	h.n.Woke(0)
@@ -630,20 +630,4 @@ func TestARepeatFiringOfTheSameWordsOpensNoSecondTurn(t *testing.T) {
 		t.Error("a claim long after the word was told it was answered here, turn or not")
 	}
 
-	// The device that lost drops its own repeats quietly, and answers a word heard later.
-	l := newHouse(t)
-	l.n.Woke(0)
-	l.claimFrom("Kitchen", 26)
-	l.wait(300 * time.Millisecond)
-	l.now = l.now.Add(1200 * time.Millisecond)
-	l.n.Woke(0)
-	if len(l.sent) != 1 || l.at0 != 0 || len(l.later) != 0 {
-		t.Errorf("the repeat was claimed again: sent %d, at once %d, waiting %d", len(l.sent), l.at0, len(l.later))
-	}
-	l.now = l.now.Add(3 * time.Second)
-	l.n.Woke(0)
-	l.wait(300 * time.Millisecond)
-	if len(l.sent) != 2 || len(l.opened) != 1 {
-		t.Errorf("a wake word after the hold: sent %d, opened %d; want it claimed and answered", len(l.sent), len(l.opened))
-	}
 }

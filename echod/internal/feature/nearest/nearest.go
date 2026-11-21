@@ -128,10 +128,6 @@ type Nearest struct {
 	enabled bool
 	others  []arrived
 	mine    *pending
-	// lost is the word this device last stood down for, and when (#661): the same word again within
-	// kept is the detector firing more than once on what one person said, not a new wake word.
-	lost   string
-	lostAt time.Time
 }
 
 var (
@@ -323,10 +319,6 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 		now()
 		return
 	}
-	if n.lostJustNow(word) {
-		slog.Debug("nearest device: the same word again, already stood down for", "word", word)
-		return
-	}
 	peers := hearing(n.peers())
 	if len(peers) == 0 {
 		now()
@@ -378,9 +370,6 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		best, beaten = n.bestSince(mine.at.Add(-mine.window), mine.claim)
 		elsewhere = mine.elsewhere
 		mine.answered = !beaten && !elsewhere && able
-		if beaten || elsewhere {
-			n.lost, n.lostAt = word, n.now()
-		}
 	}()
 	if !current {
 		return
@@ -473,13 +462,6 @@ func (n *Nearest) took(c claim) (answeredHere bool) {
 	}
 	since := now.Sub(mine.at)
 	return since <= 2*mine.window || busy && since < kept
-}
-
-// lostJustNow is whether this device stood down for word less than kept ago.
-func (n *Nearest) lostJustNow(word string) bool {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.lost == word && n.now().Sub(n.lostAt) < kept
 }
 
 func round(v float64) float64 { return float64(int(v*10+0.5)) / 10 }
