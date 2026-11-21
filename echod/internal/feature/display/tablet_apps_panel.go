@@ -109,3 +109,16 @@ func chooseTabletApp(i int) {
 	slog.Info("apps: opening one from the screen", "app", a.pkg)
 	tellPanelApp(tabletAppsOpen + a.pkg)
 }
+
+// openTabletApps is a tap on the clock set to Apps: the settings come up with the apps list open, the
+// PIN asked first when the settings lock is on, as the row itself would. False when the app has sent
+// no list, so the tap does what Assist would.
+func (d *Display) openTabletApps() bool {
+	if len(tabletAppsRows()) == 0 {
+		return false
+	}
+	slog.Info("screen: the apps list by a tap on the clock")
+	d.showSheet(true)
+	gate("tabletapps", tr("tablet_apps"), d.sheetUp, func() { tabletAppsTap(d) })
+	return true
+}

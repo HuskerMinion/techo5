@@ -1,10 +1,11 @@
-//go:build !dot && !spot
+//go:build !dot && !spot && !panel
 
 package display
 
 import "github.com/HuskerMinion/techo5/echod/internal/config"
 
-// clockTapsHere are the Tap on the clock choices the Show offers: all of them (clock_tap.go).
+// clockTapsHere are the Tap on the clock choices the Show offers: all of them (clock_tap.go); a
+// panel adds Apps (clock_tap_panel.go).
 var clockTapsHere = clockTaps
 
 // nightTapOpensDashboard is whether a tap on the night screen opens the dashboard: when a tap on the

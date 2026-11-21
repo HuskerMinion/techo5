@@ -3,8 +3,12 @@
 package display
 
 import (
+	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 )
 
 // tabletAppsFor puts the list back after a test, and keeps the screen and the app out of it.
@@ -76,5 +80,44 @@ func TestTabletAppsOpenAndPick(t *testing.T) {
 	d.choose("tabletapps", 2)
 	if want := []string{"apps list", "apps open org.example.cam"}; !slices.Equal(*told, want) {
 		t.Errorf("the app was told %q; want %q", *told, want)
+	}
+}
+
+// On a panel, Tap on the clock offers Apps; a tap set to it opens the settings with the apps list, the
+// PIN asked first when the lock is on, and with no list from the app it does nothing of its own.
+func TestClockTapOpensTheAppsList(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	told := tabletAppsFor(t)
+	if !slices.Contains(clockTapOptions(), "Apps") {
+		t.Fatalf("a panel's Tap on the clock: %q, want Apps among them", clockTapOptions())
+	}
+	d := &Display{poke: make(chan struct{}, 1)}
+	if d.openTabletApps() {
+		t.Fatal("no list from the app, and the clock's tap still opened one")
+	}
+	appSaysApps([]string{"begin"})
+	appSaysApps([]string{"item", "org.example.notes", "Notes"})
+	appSaysApps([]string{"end"})
+	if !d.openTabletApps() || !d.sheetUp() || d.picker != "tabletapps" {
+		t.Fatalf("unlocked: settings up %v, picker %q", d.sheetUp(), d.picker)
+	}
+	if !slices.Equal(*told, []string{"apps list"}) {
+		t.Errorf("the app was told %q", *told)
+	}
+
+	if err := security.Get().SetPIN("2468"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pinPress("cancel")
+		_ = security.Get().SetPIN("")
+	})
+	d.showSheet(false)
+	if !d.openTabletApps() || d.picker != "" || !pinIsOpen() {
+		t.Fatalf("locked: picker %q, pad up %v; want the pad first", d.picker, pinIsOpen())
+	}
+	typePIN("2468")
+	if d.picker != "tabletapps" {
+		t.Errorf("after the PIN: picker %q", d.picker)
 	}
 }

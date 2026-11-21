@@ -1727,9 +1727,10 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.toggleMusic()
 			return
 		}
-		// The clock itself: a voice turn, unless the Tap on the clock setting says the dashboard, or
-		// nothing. A turn under way still takes the tap either way, as the way to stop or answer it,
-		// and with no dashboard set up a tap meant for one starts a turn rather than doing nothing.
+		// The clock itself: a voice turn, unless the Tap on the clock setting says the dashboard, the
+		// deck, a panel's apps, or nothing. A turn under way still takes the tap either way, as the way to
+		// stop or answer it, and with no dashboard set up a tap meant for one starts a turn rather than
+		// doing nothing.
 		if idle {
 			switch config.Get().Screen.ClockTap {
 			case "nothing":
@@ -1741,6 +1742,10 @@ func (d *Display) gesture(g touch.Gesture) {
 				}
 			case "deck":
 				if d.openDeck() {
+					return
+				}
+			case "apps":
+				if d.openTabletApps() {
 					return
 				}
 			}
