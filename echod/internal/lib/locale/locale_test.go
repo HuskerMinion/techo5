@@ -13,6 +13,7 @@ func TestDates(t *testing.T) {
 		{"en", "Monday, January 5", "Mon, Jan 5", "January 5", "Mon 5"},
 		{"xx", "Monday, January 5", "Mon, Jan 5", "January 5", "Mon 5"},
 		{"de", "Montag, 5. Januar", "Mo., 5. Jan.", "5. Januar", "Mo 5"},
+		{"ca", "Dilluns, 5 de gener", "Dl., 5 gen.", "5 de gener", "Dl. 5"},
 		{"es", "Lunes, 5 de enero", "Lun, 5 ene", "5 de enero", "Lun 5"},
 		{"fr", "Lundi 5 janvier", "Lun. 5 janv.", "5 janvier", "Lun. 5"},
 		{"it", "Lunedì 5 gennaio", "Lun 5 gen", "5 gennaio", "Lun 5"},
@@ -38,6 +39,30 @@ func TestDates(t *testing.T) {
 	}
 	if got := Weekday(mon.AddDate(0, 0, 2), "it"); got != "Mercoledì" {
 		t.Errorf("Italian Wednesday: %q", got)
+	}
+}
+
+// The Valencian "de" joins a month that starts with a vowel: 5 d'abril, but 5 de maig.
+func TestValencianMonthsAfterDe(t *testing.T) {
+	for _, c := range []struct {
+		month      time.Month
+		long, date string
+	}{
+		{time.April, "Diumenge, 5 d'abril", "5 d'abril de 2026"},
+		{time.August, "Dimecres, 5 d'agost", "5 d'agost de 2026"},
+		{time.October, "Dilluns, 5 d'octubre", "5 d'octubre de 2026"},
+		{time.May, "Dimarts, 5 de maig", "5 de maig de 2026"},
+	} {
+		d := time.Date(2026, c.month, 5, 9, 0, 0, 0, time.UTC)
+		if got := LongDate(d, "ca"); got != c.long {
+			t.Errorf("LongDate: %q, want %q", got, c.long)
+		}
+		if got := PhotoDate(d, "ca"); got != c.date {
+			t.Errorf("PhotoDate: %q, want %q", got, c.date)
+		}
+	}
+	if Today("ca") != "Hui" || Alarm("ca", true) != "Posposada fins a les" {
+		t.Errorf("phrases: %q %q", Today("ca"), Alarm("ca", true))
 	}
 }
 
@@ -107,6 +132,7 @@ func TestPhotoDate(t *testing.T) {
 		"":   "January 2, 2019",
 		"de": "2. Januar 2019",
 		"es": "2 de enero de 2019",
+		"ca": "2 de gener de 2019",
 	} {
 		if got := PhotoDate(d, lang); got != want {
 			t.Errorf("PhotoDate(%q) = %q, want %q", lang, got, want)

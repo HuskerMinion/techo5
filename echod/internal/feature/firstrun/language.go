@@ -18,7 +18,7 @@ type Lang struct{ Code, Name string }
 // Languages are the screen's languages, every choice of the Language setting but Match all, which
 // draws in English and is shown as English here.
 var Languages = []Lang{
-	{"en", "English"}, {"de", "Deutsch"}, {"es", "Español"}, {"fr", "Français"}, {"gl", "Galego"},
+	{"en", "English"}, {"ca", "Valencià"}, {"de", "Deutsch"}, {"es", "Español"}, {"fr", "Français"}, {"gl", "Galego"},
 	{"it", "Italiano"}, {"nl", "Nederlands"}, {"pt", "Português"}, {"ru", "Русский"}, {"tr", "Türkçe"},
 	{"ja", "日本語"},
 }

@@ -46,6 +46,18 @@ var langs = map[string]*words{
 			"sunny": "Sonnig", "windy": "Windig", "windy-variant": "Windig",
 		},
 	},
+	"ca": {
+		days:        [7]string{"diumenge", "dilluns", "dimarts", "dimecres", "dijous", "divendres", "dissabte"},
+		shortDays:   [7]string{"dg.", "dl.", "dt.", "dc.", "dj.", "dv.", "ds."},
+		months:      [12]string{"gener", "febrer", "març", "abril", "maig", "juny", "juliol", "agost", "setembre", "octubre", "novembre", "desembre"},
+		shortMonths: [12]string{"gen.", "febr.", "març", "abr.", "maig", "juny", "jul.", "ag.", "set.", "oct.", "nov.", "des."},
+		sky: map[string]string{
+			"clear-night": "Serè", "cloudy": "Ennuvolat", "exceptional": "Extrem", "fog": "Boira", "hail": "Granís",
+			"lightning": "Llamps", "lightning-rainy": "Tempestes", "partlycloudy": "Parcialment ennuvolat",
+			"pouring": "Pluja intensa", "rainy": "Pluja", "snowy": "Neu", "snowy-rainy": "Aiguaneu",
+			"sunny": "Assolellat", "windy": "Ventós", "windy-variant": "Ventós",
+		},
+	},
 	"es": {
 		days:        [7]string{"domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"},
 		shortDays:   [7]string{"dom", "lun", "mar", "mié", "jue", "vie", "sáb"},
@@ -156,6 +168,9 @@ var phrases = map[string]map[string]string{
 	"de": {"here": "Hier", "today": "Heute", "alarm": "Wecker", "snoozed": "Schlummern bis", "tomorrow": "Morgen", "yesterday": "Gestern",
 		"now": "Jetzt", "allday": "Ganztägig", "nothing": "Keine Termine", "nothingtoday": "Heute nichts",
 		"nothingelse": "Heute nichts mehr", "upcoming": "DEMNÄCHST", "nothingsoon": "Nichts geplant"},
+	"ca": {"here": "Ací", "today": "Hui", "alarm": "Alarma", "snoozed": "Posposada fins a les", "tomorrow": "Demà", "yesterday": "Ahir",
+		"now": "Ara", "allday": "Tot el dia", "nothing": "Res en el calendari", "nothingtoday": "Res hui",
+		"nothingelse": "Res més hui", "upcoming": "PRÒXIMS", "nothingsoon": "Res previst"},
 	"es": {"here": "Aquí", "today": "Hoy", "alarm": "Alarma", "snoozed": "Pospuesta hasta", "tomorrow": "Mañana", "yesterday": "Ayer",
 		"now": "Ahora", "allday": "Todo el día", "nothing": "Nada en el calendario", "nothingtoday": "Nada hoy",
 		"nothingelse": "Nada más hoy", "upcoming": "PRÓXIMOS", "nothingsoon": "Nada próximo"},
@@ -272,6 +287,8 @@ func LongDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + ", " + day(t) + ". " + m
+	case "ca":
+		return up(d) + ", " + day(t) + " " + of(m)
 	case "es", "gl", "pt":
 		return up(d) + ", " + day(t) + " de " + m
 	case "ru", "tr":
@@ -293,7 +310,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "es", "gl", "pt", "ru", "tr":
+	case "ca", "es", "gl", "pt", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -328,6 +345,8 @@ func MonthDay(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return day(t) + ". " + m
+	case "ca":
+		return day(t) + " " + of(m)
 	case "es", "gl", "pt":
 		return day(t) + " de " + m
 	}
@@ -361,10 +380,19 @@ func PhotoDate(t time.Time, lang string) string {
 	if _, ok := langs[lang]; !ok {
 		return MonthDay(t, lang) + ", " + y
 	}
-	if lang == "es" || lang == "gl" || lang == "pt" {
+	if lang == "ca" || lang == "es" || lang == "gl" || lang == "pt" {
 		return MonthDay(t, lang) + " de " + y
 	}
 	return MonthDay(t, lang) + " " + y
+}
+
+// of is a month with the Valencian "de" before it, which an apostrophe joins to a vowel: "de gener",
+// "d'abril".
+func of(m string) string {
+	if strings.ContainsRune("aeiou", rune(m[0])) {
+		return "d'" + m
+	}
+	return "de " + m
 }
 
 // DayAndNumber is the shortest date, a day's name and its number: "Mon 2", "Mo 2", "Lun 2".
