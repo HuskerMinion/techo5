@@ -396,6 +396,9 @@ func TestSnoozingAFavoriteResumesIt(t *testing.T) {
 			if !a.Snooze() {
 				t.Fatal("not snoozed")
 			}
+			// The snooze fires minutes later on a device; here it fires at once, so the first ring has to
+			// have ended first, or the snooze is folded into it as a second reason to ring.
+			until(t, "the first ring to end", func() bool { return !a.Ringing() })
 			m.running.Wait()
 			_, stops, _, _ := m.state()
 			if held, _, pauses, _ := m.volume(); pauses != 1 || stops != 0 || held != -1 {
