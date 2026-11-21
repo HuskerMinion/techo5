@@ -41,8 +41,8 @@ type ScreenChoices struct {
 	RemoveFont func(file string) error
 	MaxFont    int64
 
-	// Taps are what a tap on the clock can do, where the screen offers the choice (the Show), with the
-	// one chosen and how to choose one.
+	// Taps are what a tap on the clock can do, where the screen offers the choice (the Show and the
+	// Spot), with the one chosen and how to choose one.
 	Taps      []string
 	TapNow    func() int
 	ChooseTap func(int)
@@ -164,7 +164,7 @@ func screenSection(w http.ResponseWriter, token string) {
 	fmt.Fprintf(w, `<p><label><input type="checkbox" name="swipe" value="yes" style="width:auto"%s> Swipe between clock
 	 styles: a swipe left or right across the clock turns to the next style or the one before</label></p>`, swipe)
 	if len(s.Taps) > 0 {
-		// Only where there is a Tap on the clock to set (the Show).
+		// Only where there is a Tap on the clock to set (the Show and the Spot).
 		fmt.Fprint(w, `<p class="note">Off whenever Tap on the clock is Nothing, too.</p>`)
 	}
 	volume := ""

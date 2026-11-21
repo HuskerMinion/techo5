@@ -113,6 +113,9 @@ Each device has its own settings, so the kitchen and a bedroom can show differen
 
 - Hold a finger on the screen for the ring menu, and pick **Dashboard**. Pick it again (it then says
   *Clock*) to go back.
+- Or set **Tap on the clock** to *Dashboard* (on the Spot under Settings → Display, on the setup
+  page, or in Home Assistant), and a tap on the clock opens it. The red night clock still only lights
+  up when tapped.
 - On the dashboard, a finger held still and then lifted brings the ring menu up.
 
 **Drawn dashboards**

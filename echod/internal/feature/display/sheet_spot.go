@@ -149,6 +149,8 @@ func adaptRows(rows []settingRow, sv sheetView) []settingRow {
 			row.sub = tr("ui_no_sound_at_all")
 		case row.id == "ringvol":
 			row.sub = tr("ui_not_the_music_s")
+		case row.id == "clocktap":
+			row.sub = "" // the Show's line names the deck, which the Spot does not have; the choice says it
 		case row.id == "musicstrip":
 			continue // the strip is the Show's; the round face has no clock page under it to share
 		case row.id == "musiclayout":

@@ -169,13 +169,11 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 				rows = append(rows, settingRow{id: "callscreen", label: tr("call_screen"), sub: tr("page_or_hang_up_button"), kind: ctlChoice, value: callScreenOptions()[callScreenIndex()]})
 			}
 		}
-		if hasClockTap {
-			sub := tr("ui_start_assist_open_the_dashboard_or_the_deck_or_nothing")
-			if !hasMicrophone() {
-				sub = tr("ui_open_the_dashboard_or_the_deck_or_nothing")
-			}
-			rows = append(rows, settingRow{id: "clocktap", label: tr("tap_on_the_clock"), sub: sub, kind: ctlChoice, value: clockTapChoices()[clockTapIndex()].label})
+		sub := tr("ui_start_assist_open_the_dashboard_or_the_deck_or_nothing")
+		if !hasMicrophone() {
+			sub = tr("ui_open_the_dashboard_or_the_deck_or_nothing")
 		}
+		rows = append(rows, settingRow{id: "clocktap", label: tr("tap_on_the_clock"), sub: sub, kind: ctlChoice, value: clockTapChoices()[clockTapIndex()].label})
 		rows = append(rows,
 			settingRow{label: tr("weather"), kind: ctlHeading},
 			settingRow{id: "weatherfx", label: tr("weather_animation"), sub: tr("rain_snow_and_storms_move_on_the_forecast"), kind: ctlToggle, on: weatherAnimation.Load()},

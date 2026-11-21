@@ -11,8 +11,8 @@ import (
 )
 
 // What a tap on the clock does: start a voice turn, as it always has, put the dashboard up, or nothing,
-// for a panel that is only ever talked to. Only the Show offers it (hasClockTap): the Spot's clock is
-// the middle of its ring menu.
+// for a panel that is only ever talked to. The Show and the Spot both offer it; the deck is the Show's
+// alone (clockTapsHere), and the Spot's ring menu stays a hold away whatever the tap does.
 
 type clockTap struct {
 	label string
@@ -31,9 +31,31 @@ var clockTaps = []clockTap{
 // kept as Assist opens the dashboard (Display.gesture), and so reads as Dashboard.
 func clockTapChoices() []clockTap {
 	if !hasMicrophone() {
-		return clockTaps[1:]
+		return clockTapsHere[1:]
 	}
-	return clockTaps
+	return clockTapsHere
+}
+
+// clockTapSelect is the Home Assistant setting.
+func clockTapSelect() *esphome.Select {
+	s := &esphome.Select{
+		Base: esphome.Base{
+			ObjectID: "screen_clock_tap",
+			Name:     "Tap on the clock",
+			Icon:     "mdi:gesture-tap",
+			Category: esphome.CategoryConfig,
+		},
+		Options: clockTapOptions(),
+	}
+	s.OnCommand = func(v string) {
+		for i, c := range clockTapChoices() {
+			if c.label == v {
+				setClockTap(s, i)
+				return
+			}
+		}
+	}
+	return s
 }
 
 func clockTapOptions() []string {

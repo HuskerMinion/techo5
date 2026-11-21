@@ -174,6 +174,8 @@ type Display struct {
 	saverBtn *esphome.Button
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
+	// clockTap is what a tap on the clock does (clock_tap.go).
+	clockTap *esphome.Select
 	// volumeSwipeSw is Swipe for volume (volume_swipe.go).
 	volumeSwipeSw *esphome.Switch
 	// weatherFx is the weather page's sky moving, on or off (weatherfx.go).
@@ -413,6 +415,7 @@ func build() *Display {
 	setup.SetScreen(&setup.ScreenChoices{Styles: clockStyleOptions(), Current: clockStyleIndex, Choose: d.setClockStyle,
 		Fonts: fonts.Names(), FontNow: fontIndex, ChooseFont: d.setFont,
 		OwnFonts: ownFonts, AddFont: d.addOwnFont, RemoveFont: d.removeOwnFont, MaxFont: fonts.MaxOwnFile,
+		Taps: clockTapOptions(), TapNow: clockTapIndex, ChooseTap: func(i int) { setClockTap(d.clockTap, i) },
 		Places: spotWorld, Swipe: func(on bool) { setStyleSwipe(d.styleSwipeSw, on) }, VolumeSwipe: func(on bool) { setVolumeSwipe(d.volumeSwipeSw, on) },
 		IgnoreRoomLights: d.setRoomLightsIgnored})
 	d.camTime = cameraTimeSelect()
@@ -422,6 +425,7 @@ func build() *Display {
 	d.callBtn = callButtonSwitch(d.wake)
 	d.saverBtn = screensaverButton(d)
 	d.styleSwipeSw = styleSwipeSwitch()
+	d.clockTap = clockTapSelect()
 	d.volumeSwipeSw = volumeSwipeSwitch()
 	d.weatherFx = weatherAnimationSwitch(d.wake)
 	d.muteRing = muteRingSwitch(d.wake)
@@ -501,7 +505,7 @@ func (d *Display) timerStyleSel() *esphome.Select { return nil }
 func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.saverBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.fontSel, d.textSizeSel,
+	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.saverBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.clockTap, d.fontSel, d.textSizeSel,
 		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
 }
 
@@ -520,6 +524,7 @@ func (d *Display) Restore(c config.Config) {
 	d.skinSl.Set(skins[skinIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
+	d.clockTap.Set(clockTapChoices()[clockTapIndex()].label)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
 	setWeatherAnimation(d.weatherFx, !c.Screen.WeatherStill)
 	setMuteRingSubtle(d.muteRing, c.Screen.MuteRingSubtle)
@@ -1027,6 +1032,15 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.openAlertSpot(0)
 			d.mu.Unlock()
 			d.wake()
+			return
+		}
+		// The clock itself: a voice turn, unless Tap on the clock says the dashboard or nothing
+		// (clock_tap_spot.go). A turn under way still takes the tap either way, as the way to stop or
+		// answer it, and the ring menu stays a hold away.
+		d.mu.Lock()
+		idle := pageIdle(d.view.Phase)
+		d.mu.Unlock()
+		if idle && d.clockTapTaken() {
 			return
 		}
 		voice.Get().Action()

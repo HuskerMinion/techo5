@@ -997,10 +997,10 @@ other Shows don't have the switches.
   Assistant: **Theme mode** (*Dark*, *Light*, *Auto*), **Theme** (the dark theme) and **Light theme**;
   neither theme select changes when the mode does. On the screen, Settings > Display > Theme sets the
   theme it is wearing. The night clock keeps its own look.
-- **Tap on the clock** (Show): *Assist*, as it always was, *Dashboard* to open the dashboard, *Deck*
-  to open TECHO5 Deck (until a deck has buttons, a tap still starts Assist), or *Nothing*, for a panel
-  you only talk to. A voice request under way still
-  takes the tap. Also on the setup page's Screen tab. See [Dashboards](dashboards.md) for the
+- **Tap on the clock** (Show and Spot): *Assist*, as it always was, *Dashboard* to open the
+  dashboard, *Deck* to open TECHO5 Deck (Show only; until a deck has buttons, a tap still starts
+  Assist), or *Nothing*, for a panel you only talk to. A voice request under way still takes the
+  tap. On the Spot, a long press still opens the ring menu, whichever you pick. Also on the setup page's Screen tab. See [Dashboards](dashboards.md) for the
   rest of a panel setup.
 - **TECHO5 Deck** (Show): pages of buttons for OBS Studio, opened with a swipe up from the bottom
   edge of the clock. Set up on the setup page's Screen tab. See [TECHO5 Deck](deck.md).
