@@ -28,6 +28,7 @@ var spoken = map[string]struct{ weather, radar, home, camera string }{
 	"ja": {"明日は雨が降りますか", "雨雲レーダーを見せて", "時計に戻って", "玄関のカメラを見せて"},
 	"en": {"what's the weather", "show me the rain map", "go home", "show the front door"},
 	"de": {"Wie ist das Wetter?", "Zeig mir die Regenkarte", "Zurück zur Uhr", "Zeig die Haustür"},
+	"ca": {"Quin temps farà demà?", "Mostra'm el mapa de pluja", "Torna al rellotge", "Mostra la porta d'entrada"},
 	"es": {"¿Qué tiempo hace?", "Muéstrame el mapa de lluvia", "Volver al reloj", "Muestra la puerta principal"},
 	"fr": {"Quel temps fait-il ?", "Montre la carte des pluies", "Retour à l'horloge", "Montre la porte d'entrée"},
 	"it": {"Che tempo fa?", "Mostra la mappa della pioggia", "Torna all'orologio", "Mostra la porta d'ingresso"},
@@ -151,6 +152,7 @@ func TestOrdinaryCommandsLeaveTheScreenAlone(t *testing.T) {
 		"accendi la luce", "metti un timer di dieci minuti",
 		"doe het licht aan", "zet een timer van tien minuten",
 		"acende a luz da cozinha", "coloca um timer de dez minutos",
+		"encén la llum de la cuina", "posa un temporitzador de deu minuts", "posa música",
 	}
 	for _, s := range quiet {
 		if AboutWeather(s, MatchAll) {
@@ -229,7 +231,7 @@ func TestPortugueseLookalikes(t *testing.T) {
 // other language still asks for it.
 func TestEnglishInsideOtherLanguagesWords(t *testing.T) {
 	for _, heard := range []string{"what does the temporal lobe do", "call my neighbor", "how much storage is left",
-		"I never said that"} {
+		"I never said that", "plough the field", "is it neutral"} {
 		if AboutWeather(heard, MatchAll) {
 			t.Errorf("%q was taken as the weather under match all", heard)
 		}

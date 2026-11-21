@@ -44,6 +44,18 @@ var updateTranslations = map[string]map[string]string{
 		UpdatePowerHint:    "Gerät eingeschaltet lassen",
 		UpdateRetryHint:    "Erneut versuchen: Settings > General > Updates",
 	},
+	"ca": {
+		UpdateSystemTitle:  "Actualització del sistema",
+		UpdateFailedTitle:  "Ha fallat l'actualització",
+		UpdateDownloading:  "Baixant l'actualització · %d%%",
+		UpdateInstalling:   "Instal·lant…",
+		UpdateRestartingIn: "L'aplicació es reinicia d'ací a %d…",
+		UpdateRestarting:   "Reiniciant l'aplicació…",
+		UpdateRebootingIn:  "Reinici d'ací a %d…",
+		UpdateRebooting:    "Reiniciant…",
+		UpdatePowerHint:    "Mantín el dispositiu encés",
+		UpdateRetryHint:    "Torna-ho a provar en Ajustos > General > Actualitzacions",
+	},
 	"es": {
 		UpdateSystemTitle:  "Actualización del sistema",
 		UpdateFailedTitle:  "Actualización fallida",
