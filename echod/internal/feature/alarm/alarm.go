@@ -636,6 +636,7 @@ func (a *Alarms) fire(s source, now time.Time) {
 	// back. Written outside the lock: saving marshals and fsyncs the whole file.
 	spent := len(a.snoozed) != before
 	if a.ringing != nil {
+		into := a.ringing
 		a.ringing.folded = append(a.ringing.folded, folded{key: s.key, label: s.label, at: now})
 		a.ringing.lit = a.ringing.lit || lights(s)
 		a.mu.Unlock()
@@ -647,7 +648,7 @@ func (a *Alarms) fire(s source, now time.Time) {
 		ring.Again()
 		fireEvent("ringing", s.key, s.label, now)
 		if words := spokenNow(s.label, now); words != "" {
-			safe.Go("alarm words", func() { sayOverRing(words) })
+			safe.Go("alarm words", func() { a.sayOverRing(words, into) })
 		}
 		return
 	}
@@ -688,7 +689,7 @@ func (a *Alarms) fire(s source, now time.Time) {
 					return
 				}
 			}
-			sayOverRing(words)
+			a.sayOverRing(words, r)
 		})
 	}
 }
@@ -704,12 +705,22 @@ const sayFor = 9 * time.Second
 
 // sayOverRing says an alarm's words (spoken), with the chime held back so they are heard. The ring's
 // first chime has already gone by then, which is what turns somebody's head; the words follow.
-func sayOverRing(words string) {
+//
+// Only while r is the ring: once it ends, a ring that starts within sayFor (the next alarm, a timer)
+// is somebody else's, and holding its chime back would hush it for nothing.
+func (a *Alarms) sayOverRing(words string, r *Ring) {
 	remind.Say(words)
-	for end := time.Now().Add(sayFor); time.Now().Before(end) && ring.IsSounding(); {
+	for end := time.Now().Add(sayFor); time.Now().Before(end) && ring.IsSounding() && a.isRinging(r); {
 		ring.Hush()
 		time.Sleep(ring.HushFor / 2)
 	}
+}
+
+// isRinging is whether r is still the ring sounding.
+func (a *Alarms) isRinging(r *Ring) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ringing == r
 }
 
 // rang is the bell telling the alarm its ring is over, however that came about.

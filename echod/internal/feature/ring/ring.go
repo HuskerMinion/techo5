@@ -248,7 +248,9 @@ func SnoozeFor(minutes int) bool {
 func End() bool {
 	state.mu.Lock()
 	silences := append([]func() bool(nil), state.silences...)
-	state.offer = time.Time{}
+	// A hush is for the rings being ended here; one left over would hold back the first chime of the
+	// next ring to start within HushFor.
+	state.offer, state.until = time.Time{}, time.Time{}
 	state.mu.Unlock()
 
 	did := false
