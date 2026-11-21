@@ -46,7 +46,7 @@ export KBUILD_BUILD_USER=techo5 KBUILD_BUILD_HOST=thinksmart-build
 # changes (a patch, the config, the base tree), or a unit cannot tell the new kernel from the one
 # before. 2026-11-20 12:00 was the first; 19:00 the first with every driver built in; 23:00 the
 # first with the video decoder's interrupt fix (patches/0006); 2026-11-21 12:00 the first whose speaker
-# driver plays untuned without its DSP table.
+# driver plays untuned without its DSP table, and whose console stands the way the device does.
 export KBUILD_BUILD_TIMESTAMP="2026-11-21 12:00:00 UTC" KBUILD_BUILD_VERSION=1
 export LC_ALL=C TZ=UTC
 # The release string is the configuration's CONFIG_LOCALVERSION alone, never a git suffix.
@@ -57,12 +57,14 @@ MAKE="make -s LOCALVERSION="
 # system (mkimage.sh's offsets: keep the two the same) as system1, lk2nd's /boot, and system2, the
 # store, which is mounted read-only as / with its /sbin/init. The device stands the other way up from
 # the panel's own top, so the display plane turns the picture half a turn (echod turns the touch
-# readings: hardware/touch/thinksmart.go). The camera wants 128 MiB of contiguous memory. A panic
+# readings: hardware/touch/thinksmart.go). The panel is portrait and the device stands landscape:
+# echod turns its picture a quarter turn clockwise onto it, and fbcon=rotate:1 turns the console's
+# text the same way. The camera wants 128 MiB of contiguous memory. A panic
 # restarts, which is how a kernel on trial that panics gives way to system1's; and the wait for the
 # root device ends, in a panic, after 30 s: a plain rootwait waits forever, and a kernel on trial
 # that cannot find its root would hang there instead of giving way.
 MAP="system1,,,rw,0 497664 linear PARTLABEL=system 2048;system2,,,rw,0 4194304 linear PARTLABEL=system 499712"
-CMDLINE="consoleblank=0 vt.global_cursor_default=0 video=DSI-1:800x1280,rotate=180 cma=128M panic=10 dm-mod.waitfor=PARTLABEL=system dm-mod.create=\"$MAP\" root=/dev/dm-1 rootfstype=ext4 ro rootwait=30 init=/sbin/init"
+CMDLINE="consoleblank=0 vt.global_cursor_default=0 video=DSI-1:800x1280,rotate=180 fbcon=rotate:1 cma=128M panic=10 dm-mod.waitfor=PARTLABEL=system dm-mod.create=\"$MAP\" root=/dev/dm-1 rootfstype=ext4 ro rootwait=30 init=/sbin/init"
 
 mkdir -p "$WORK" "$OUT"
 WORK=$(cd "$WORK" && pwd) OUT=$(cd "$OUT" && pwd)
