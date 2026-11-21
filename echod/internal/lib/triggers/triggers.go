@@ -84,6 +84,16 @@ var Languages = map[string]Set{
 		// Not "neu" or "plou" alone: they are inside "neutral" and "plough", which Match all would take as
 		// the weather.
 		Weather: []string{"el temps", "quin temps", "previsió", "temperatura", "pluja", "plourà", "plovent",
+			"plou avui", "plou demà", "neu avui", "neu demà", "nevarà", "nevant",
+			"tempesta", "assolellat", "ennuvolat", "radar"},
+		Radar:  []string{"radar", "mapa de pluja", "mapa del temps"},
+		GoHome: []string{"pantalla d'inici", "ves a l'inici", "torna al rellotge", "mostra el rellotge"},
+		Camera: []string{"mostra", "ensenya", "càmera"},
+	},
+	"ca-valencia": {
+		// Not "neu" or "plou" alone: they are inside "neutral" and "plough", which Match all would take as
+		// the weather.
+		Weather: []string{"el temps", "quin temps", "previsió", "temperatura", "pluja", "plourà", "plovent",
 			"plou hui", "plou demà", "neu hui", "neu demà", "nevarà", "nevant",
 			"tempesta", "assolellat", "ennuvolat", "radar"},
 		Radar:  []string{"radar", "mapa de pluja", "mapa del temps"},
