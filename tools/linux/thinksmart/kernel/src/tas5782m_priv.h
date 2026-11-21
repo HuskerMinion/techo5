@@ -21,8 +21,9 @@ struct tas5782m_priv {
 	struct gpio_desc         *gpio_pdn;
 
 	char                      dsp_config_name[64];
-	u8                       *dsp_cfg_data;
+	const u8                 *dsp_cfg_data;    /* the tuning file, or tas5782m_dsp_flat */
 	size_t                    dsp_cfg_len;
+	bool                      dsp_tuned;       /* the tuning file is loaded */
 
 	int                       vol[2];
 	bool                      is_powered;

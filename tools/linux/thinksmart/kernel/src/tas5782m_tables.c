@@ -148,6 +148,33 @@ const uint8_t tas5782m_dsp_init[] = {
 const size_t tas5782m_dsp_init_len = ARRAY_SIZE(tas5782m_dsp_init);
 
 // ---------------------------------------------------------------------------
+// Without a tuning file: the chip's own DSP program with its default, flat
+// coefficients. These are the writes a tuning file makes outside the DSP's
+// coefficient memory (Book 0x8C), in its order: the same in every one seen.
+// Format: { reg, val } pairs
+// ---------------------------------------------------------------------------
+
+const uint8_t tas5782m_dsp_flat[] = {
+	TAS5782M_REG_PAGE, 0x00,
+	TAS5782M_REG_BOOK, 0x00,
+	TAS5782M_CTRL2,    0x80,
+	0x22,              0x03,
+	TAS5782M_CTRL2,    0x00,
+	0x07,              0x00,
+	0x08,              0x20,
+	0x55,              0x07,
+	TAS5782M_DIG_VOL_LEFT,  TAS5782M_DIG_VOL_0DB,
+	TAS5782M_DIG_VOL_RIGHT, TAS5782M_DIG_VOL_0DB,
+	TAS5782M_REG_PAGE, 0x01,
+	0x02,              0x00,
+	TAS5782M_REG_PAGE, 0x00,
+	TAS5782M_CTRL3,    0x00,
+	0x2a,              0x11,
+};
+
+const size_t tas5782m_dsp_flat_len = ARRAY_SIZE(tas5782m_dsp_flat);
+
+// ---------------------------------------------------------------------------
 // regmap config — IMPORTANT: no cache, chip uses Book/Page multiplexing
 // ---------------------------------------------------------------------------
 

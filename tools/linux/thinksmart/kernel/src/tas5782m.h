@@ -98,6 +98,8 @@ extern const uint32_t tas5782m_volume[TAS5782M_VOLUME_ENTRIES];
 
 extern const uint8_t tas5782m_dsp_init[];
 extern const size_t  tas5782m_dsp_init_len;
+extern const uint8_t tas5782m_dsp_flat[];
+extern const size_t  tas5782m_dsp_flat_len;
 
 // ---------------------------------------------------------------------------
 // ASoC descriptors (defined in tas5782m.c or tas5782m_codec.c)
