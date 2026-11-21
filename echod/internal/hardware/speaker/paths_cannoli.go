@@ -155,8 +155,9 @@ const DRAMHold = ""
 // startFull is off: no restart storm has been seen on this board.
 const startFull = false
 
-// softRef is on: the capture has no playback copy on this card (mic/device_cannoli.go), so it takes the
-// software reference, which this player feeds.
+// softRef is on as a fallback: the capture reads the playback looped back on UL9 (mic/device_cannoli.go)
+// and turns the software reference off (echoref.Use), so this player only feeds it where that loopback's
+// routes could not be set.
 const softRef = true
 
 // speakerFormat is eTDM2's own rate, 96 kHz, so the AFE has nothing to convert on the way out; the FE

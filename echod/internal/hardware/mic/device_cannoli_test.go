@@ -12,8 +12,21 @@ func TestTheDot5ReadsTheConvertersFourChannels(t *testing.T) {
 	if k != &cannoliKernel {
 		t.Fatal("the paired capture is not the Dot 5's")
 	}
-	if k.micDevice != 9 || k.micChannels != 4 || k.mics() != Mics || k.micRates[0] != 96000 {
-		t.Errorf("not UL9 at 96 kHz, four channels: %d %d %d %v", k.micDevice, k.micChannels, k.mics(), k.micRates)
+	if k.micDevice != 9 || k.micChannels != 6 || k.mics() != Mics || k.micRates[0] != 96000 {
+		t.Errorf("not UL9 at 96 kHz, six channels: %d %d %d %v", k.micDevice, k.micChannels, k.mics(), k.micRates)
+	}
+	if len(k.streamRef) != 2 || k.streamRef[0] != 4 || k.streamRef[1] != 5 {
+		t.Errorf("the playback is not read from UL9's channels 4 and 5: %v", k.streamRef)
+	}
+	ref := map[string]uint32{"O30 I40 Switch": 1, "O31 I41 Switch": 1}
+	for _, c := range k.refControls {
+		if ref[c.name] != c.value {
+			t.Errorf("reference control %s = %d", c.name, c.value)
+		}
+		delete(ref, c.name)
+	}
+	if len(ref) != 0 {
+		t.Errorf("reference controls not written: %v", ref)
 	}
 	if Channels != Mics+Refs || RefFirst != Mics {
 		t.Errorf("frame: %d channels, references from %d", Channels, RefFirst)
@@ -54,6 +67,44 @@ func TestTheDot5FrameCarriesOnlyItsMicrophones(t *testing.T) {
 			if got < want-2 || got > want+2 {
 				t.Errorf("frame %d ch%d = %d, want %d", f, ch, got, want)
 			}
+		}
+	}
+}
+
+// The playback looped into UL9 comes out as the frame's reference, at the microphones' full scale and
+// without their boost, decimated with them; the converter's unwired fourth slot goes nowhere.
+func TestTheDot5ReferenceIsTheLoopbackInTheStream(t *testing.T) {
+	k := &athenaKernel{micChannels: 6, micUse: 3, micFull: 1 << 31, refDevice: -1, streamRef: []int{4, 5}, refRate: Rate}
+	c := newPairedCaptureFor(k, Rate)
+	c.inStream = true
+	c.boost = 4
+	frames := 4
+	mics := make([]byte, frames*6*4)
+	put := func(f, ch int, v int32) {
+		at := (f*6 + ch) * 4
+		mics[at], mics[at+1], mics[at+2], mics[at+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
+	}
+	for f := range frames {
+		put(f, 0, 1<<27)
+		put(f, 3, 1<<30) // the unwired slot
+		put(f, 4, 1<<29)
+		put(f, 5, -(1 << 28))
+	}
+	out := make([]byte, frames*Channels*3)
+	c.convert(out, mics, nil)
+	s24 := func(at int) int32 { return int32(uint32(out[at])<<8|uint32(out[at+1])<<16|uint32(out[at+2])<<24) >> 8 }
+	near := func(got, want int32) bool { return got >= want-2 && got <= want+2 }
+	for f := range frames {
+		base := f * Channels * 3
+		if got := s24(base); !near(got, 4*(1<<19)) {
+			t.Errorf("frame %d mic0 = %d", f, got)
+		}
+		// The first reference channel is the mix of the two (putRef), the second the second as played.
+		if got, want := s24(base+3*RefFirst), int32((1<<21-1<<20)/2); !near(got, want) {
+			t.Errorf("frame %d ref mix = %d, want %d", f, got, want)
+		}
+		if got := s24(base + 3*(RefFirst+1)); !near(got, -(1 << 20)) {
+			t.Errorf("frame %d ref R = %d", f, got)
 		}
 	}
 }

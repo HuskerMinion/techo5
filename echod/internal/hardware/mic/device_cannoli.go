@@ -15,8 +15,8 @@ import (
 // voice_dsp_card and its closed dsp_lifecycle make a card of their own, sndvoicedspcard), which a slot-B
 // boot does not load; the DSP shares UL9 there.
 //
-// So the capture is athena's paired one (athena.go) on card 0, device 9: the four channels decimated to
-// 16 kHz by athena's filters, and the software reference (lib/echoref) in place of a playback copy. The
+// So the capture is athena's paired one (athena.go) on card 0, device 9: the microphones decimated to
+// 16 kHz by athena's filters, with the playback in the same stream (cannoliRefControls). The
 // converter is the 2nd gen Echo Show 8's, on the same Amazon driver, and is woken the same way: its
 // "ADC Reset A" handler takes it out of sleep (athena.go, athenaControls), which nothing else does.
 //
@@ -42,10 +42,25 @@ const (
 	// CancelOnMix is off until it is measured on this device.
 	CancelOnMix = false
 
-	cannoliMicDevice   = 9
-	cannoliMicChannels = 4
+	cannoliMicDevice = 9
+	// cannoliMicChannels: UL9 opened six wide, O26..O31: the converter's four slots, then the playback.
+	cannoliMicChannels = 6
 	cannoliMicRate     = 96000
 )
+
+// cannoliStreamRef are UL9's channels 4 and 5 (O30, O31), where cannoliRefControls put DL2's two
+// channels (I40, I41): the stream the speaker plays, as the AFE hands it to eTDM2, recorded with the
+// microphones on the same memory interface and clock. UL9 takes O26..O41 (mt8519-afe-pcm.c: "UL9" from
+// O26 to O41; "O30 I40 Switch" on AFE_CONN30_1 bit 8, "O31 I41 Switch" on AFE_CONN31_1 bit 9). It is
+// the digital stream before the MAX98396, so it does not grow with the amplifier's gain, and it holds
+// none of the speaker's distortion. Its lag behind the microphones and its polarity are not measured
+// yet (`techo5 echo` reports both).
+var cannoliStreamRef = []int{4, 5}
+
+var cannoliRefControls = []athenaControl{
+	{"O30 I40 Switch", 1},
+	{"O31 I41 Switch", 1},
+}
 
 // adcs is empty: the TLV320ADC3101 routes gain.go writes are the older Dots'. The TLV320ADC5140's gain is
 // setBoardGain's.
@@ -67,8 +82,11 @@ var cannoliKernel = athenaKernel{
 	micUse:      Mics,
 	micFull:     1 << 31,
 	refDevice:   -1,
-	softRef:     true,
-	controls:    cannoliControls,
+	streamRef:   cannoliStreamRef,
+	refControls: cannoliRefControls,
+	// softRef stands in where the loopback's routes cannot be set (an older kernel or card).
+	softRef:  true,
+	controls: cannoliControls,
 	// The converter's analog gain on Amazon's TLV320ADC5140 driver, as athena's (athenaGainControl).
 	gainControl: athenaGainControl,
 	micRates:    []int{cannoliMicRate},
