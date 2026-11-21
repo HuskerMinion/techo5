@@ -1016,7 +1016,7 @@ other Shows don't have the switches.
 - **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
-- **Screen language** (Settings → General): the language of the screen. German, French, Galician,
+- **Screen language** (Settings → General): the language of the screen. German, Catalan, French, Galician,
   Italian, Japanese, Romanian, Spanish, Turkish and Valencian translate the whole screen, settings included, and Dutch
   its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.

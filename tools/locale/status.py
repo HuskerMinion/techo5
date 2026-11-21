@@ -30,7 +30,7 @@ def catalogs(src):
         if line.startswith('var uiTranslations'):
             in_tr, cur = True, None
             continue
-        m = re.match(r'^\t"([a-z]{2})": \{$', line)
+        m = re.match(r'^\t"([a-z]{2}(?:-[a-z]+)?)": \{$', line)
         if in_tr and m:
             cur = langs.setdefault(m.group(1), set())
             continue

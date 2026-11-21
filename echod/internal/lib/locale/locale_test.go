@@ -14,6 +14,7 @@ func TestDates(t *testing.T) {
 		{"xx", "Monday, January 5", "Mon, Jan 5", "January 5", "Mon 5"},
 		{"de", "Montag, 5. Januar", "Mo., 5. Jan.", "5. Januar", "Mo 5"},
 		{"ca", "Dilluns, 5 de gener", "Dl., 5 gen.", "5 de gener", "Dl. 5"},
+		{"ca-valencia", "Dilluns, 5 de gener", "Dl., 5 gen.", "5 de gener", "Dl. 5"},
 		{"es", "Lunes, 5 de enero", "Lun, 5 ene", "5 de enero", "Lun 5"},
 		{"ro", "Luni, 5 ianuarie", "Lun., 5 ian.", "5 ianuarie", "Lun. 5"},
 		{"fr", "Lundi 5 janvier", "Lun. 5 janv.", "5 janvier", "Lun. 5"},
@@ -43,8 +44,9 @@ func TestDates(t *testing.T) {
 	}
 }
 
-// The Valencian "de" joins a month that starts with a vowel: 5 d'abril, but 5 de maig.
-func TestValencianMonthsAfterDe(t *testing.T) {
+// The Catalan "de" joins a month that starts with a vowel: 5 d'abril, but 5 de maig. Both
+// variants write dates the same way.
+func TestCatalanMonthsAfterDe(t *testing.T) {
 	for _, c := range []struct {
 		month      time.Month
 		long, date string
@@ -55,15 +57,20 @@ func TestValencianMonthsAfterDe(t *testing.T) {
 		{time.May, "Dimarts, 5 de maig", "5 de maig de 2026"},
 	} {
 		d := time.Date(2026, c.month, 5, 9, 0, 0, 0, time.UTC)
-		if got := LongDate(d, "ca"); got != c.long {
-			t.Errorf("LongDate: %q, want %q", got, c.long)
-		}
-		if got := PhotoDate(d, "ca"); got != c.date {
-			t.Errorf("PhotoDate: %q, want %q", got, c.date)
+		for _, lang := range []string{"ca", "ca-valencia"} {
+			if got := LongDate(d, lang); got != c.long {
+				t.Errorf("LongDate(%q): %q, want %q", lang, got, c.long)
+			}
+			if got := PhotoDate(d, lang); got != c.date {
+				t.Errorf("PhotoDate(%q): %q, want %q", lang, got, c.date)
+			}
 		}
 	}
-	if Today("ca") != "Hui" || Alarm("ca", true) != "Posposada fins a les" {
+	if Today("ca") != "Avui" || Alarm("ca", true) != "Posposada fins a les" {
 		t.Errorf("phrases: %q %q", Today("ca"), Alarm("ca", true))
+	}
+	if Today("ca-valencia") != "Hui" {
+		t.Errorf("phrases: Today(ca-valencia) = %q", Today("ca-valencia"))
 	}
 }
 
