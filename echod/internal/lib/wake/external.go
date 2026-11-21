@@ -52,7 +52,12 @@ func Adopt(ctx context.Context, dir string, o esphome.ExternalWakeWord) (Model, 
 		return Model{}, fmt.Errorf("wake: %q is not a name a model can be kept under", o.ID)
 	}
 	if Have(dir, o) {
-		if err := markFromHomeAssistant(dir, o.ID); err != nil {
+		// One the image carries is the image's, even when Home Assistant hosts the same file: it stays
+		// on the approximate front end with the rest of them (image.go).
+		if fromImage(o.Hash) {
+			return load(dir, o.ID), nil
+		}
+		if err := markFromHomeAssistant(dir, o); err != nil {
 			return Model{}, err
 		}
 		return load(dir, o.ID), nil
@@ -163,16 +168,23 @@ func beside(url, name string) string {
 
 // markFromHomeAssistant records in a model's manifest that Home Assistant offered it, for one adopted
 // before Adopt wrote that down: it is the same model, and should run the way one adopted today does.
-// A model with no manifest gets one with just the mark.
-func markFromHomeAssistant(dir, id string) error {
+// A model with no manifest gets one made from the offer, as Adopt would have written it. With only the
+// mark in it, the phrase would come from the id rather than from what Home Assistant calls the word.
+func markFromHomeAssistant(dir string, o esphome.ExternalWakeWord) error {
+	id := o.ID
 	path := filepath.Join(dir, id+".json")
 	var m manifest
 	data, err := os.ReadFile(path)
-	if err == nil {
+	switch {
+	case err == nil:
 		if err := json.Unmarshal(data, &m); err != nil {
 			return fmt.Errorf("wake: manifest for %s: %w", id, err)
 		}
-	} else if !os.IsNotExist(err) {
+	case os.IsNotExist(err):
+		m.WakeWord = o.Phrase
+		m.TrainedLanguages = o.TrainedLanguages
+		m.Model = filepath.Base(modelPath(dir, id))
+	default:
 		return err
 	}
 	if m.FromHomeAssistant {

@@ -129,7 +129,7 @@ func TestStaleIsARunningWordWithANewModel(t *testing.T) {
 	if got := l.Stale(); len(got) != 2 || got[0] != "alfred" || got[1] != "same" {
 		t.Errorf("stale %v, want [alfred same]", got)
 	}
-	if err := markFromHomeAssistant(l.Dir(), "same"); err != nil {
+	if err := markFromHomeAssistant(l.Dir(), l.offer("same")); err != nil {
 		t.Fatal(err)
 	}
 	l.Reload()

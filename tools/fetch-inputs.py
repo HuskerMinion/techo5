@@ -72,7 +72,9 @@ EXTRA_MODELS_REPO = ('https://raw.githubusercontent.com/fwartner/home-assistant-
                      % EXTRA_MODELS_COMMIT)
 
 # sha256 of every model file fetched, keyed by the name it is written under. Recorded from what the two
-# pinned commits serve; see the note above MODELS_COMMIT for moving a pin.
+# pinned commits serve; see the note above MODELS_COMMIT for moving a pin. The .tflite sums are also
+# echod/internal/lib/wake/image.go's shipped set, which keeps the image's words off the exact front end;
+# a test there fails until the two agree.
 MODEL_SHA256 = {
     'okay_nabu.tflite': '0689abe1912a95a3318a0d8cb2e67bad0cbcfe3e24dd6e050c75debddfb6f891',
     'okay_nabu.json': '6dd65604f70fe5ea9d1af73a7bf239529d1fbabc363807f45d2b22ce464ddbed',

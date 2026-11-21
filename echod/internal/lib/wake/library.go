@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -45,6 +46,10 @@ type Library struct {
 	// selecting is the ids the latest selection asked for (Ensure), then the ones it loaded (Loaded).
 	// Guarded by muOwn.
 	selecting []string
+
+	// version counts the times the list of models was found changed (Reload, and a Reread that found
+	// something), so a caller can tell whether what it looked at before is still what is here.
+	version atomic.Uint64
 
 	// failed is the hash each id last failed to download as, under muOffers. A model that cannot be
 	// fetched is not tried again on every connect, only once Home Assistant offers a different one.
@@ -99,8 +104,13 @@ func (l *Library) Reload() {
 	l.muOurs.Lock()
 	l.ours = models
 	l.muOurs.Unlock()
+	l.version.Add(1)
 	l.Changed.Emit(struct{}{})
 }
+
+// Version changes whenever the list of models does. A model fetched again under the same id counts:
+// the file is new even though the list reads the same.
+func (l *Library) Version() uint64 { return l.version.Load() }
 
 // Reread is Reload for a look that usually finds nothing new: it tells listeners only when the models
 // on disk are not the ones it had (#657). Home Assistant's question about what the device can hear is
@@ -118,6 +128,7 @@ func (l *Library) Reread() {
 	l.ours = models
 	l.muOurs.Unlock()
 	if !same {
+		l.version.Add(1)
 		slog.Info("wake words on disk changed since they were last read", "ours", len(models))
 		l.Changed.Emit(struct{}{})
 	}
@@ -194,11 +205,7 @@ func (l *Library) Purge(inUse []string) (int, int64) {
 // Ensure downloads any of these that are offered and not already here, and reports everything the
 // device has afterwards, which is what a selection is resolved against.
 func (l *Library) Ensure(ids []string) []Model {
-	// Said before anything is resolved: a removal from the setup page after this sees the selection,
-	// and one before it has already gone from what the selection finds.
-	l.muOwn.Lock()
-	l.selecting = slices.Clone(ids)
-	l.muOwn.Unlock()
+	l.asking(ids)
 
 	var fetched bool
 	for _, id := range ids {
@@ -206,8 +213,9 @@ func (l *Library) Ensure(ids []string) []Model {
 			continue
 		}
 		o := l.offer(id)
-		// One adopted before Adopt marked what it fetched is adopted again, which marks it.
-		if o.URL == "" || (Have(l.dir, o) && l.adopted(id)) || l.uploaded(id) {
+		// One adopted before Adopt marked what it fetched is adopted again, which marks it. One the image
+		// carries is never marked, so a copy of it in custom_wake_words has nothing to adopt (image.go).
+		if o.URL == "" || (Have(l.dir, o) && (l.adopted(id) || fromImage(o.Hash))) || l.uploaded(id) {
 			continue
 		}
 		l.fetch(o)
@@ -218,6 +226,23 @@ func (l *Library) Ensure(ids []string) []Model {
 		l.Reload()
 	}
 	return l.Ours()
+}
+
+// OnDisk is Ensure without the downloads: what the device has now, for a load that cannot wait for
+// one. Home Assistant waits on the answer that restoring the saved selection comes before, and gives
+// up after five seconds, while a download is allowed twenty. A word offered with a new model loads as
+// it is on disk, and Stale finds it for a refresh to fetch afterwards.
+func (l *Library) OnDisk(ids []string) []Model {
+	l.asking(ids)
+	return l.Ours()
+}
+
+// asking says what a selection asks for, before anything is resolved: a removal from the setup page
+// after this sees the selection, and one before it has already gone from what the selection finds.
+func (l *Library) asking(ids []string) {
+	l.muOwn.Lock()
+	l.selecting = slices.Clone(ids)
+	l.muOwn.Unlock()
 }
 
 // Stale is the ids a slot is running from an old download: Home Assistant now offers a different model
@@ -237,8 +262,9 @@ func (l *Library) Stale() []string {
 		// One that is not here yet is the selection's to fetch, one sent from the setup page stays, and
 		// one that already failed as this hash waits for a new one.
 		// One adopted before Adopt marked what it fetched counts too: adopting it again marks it, and
-		// loading it again puts it on the exact front end.
-		if m, ok := Find(l.Ours(), id); !ok || m.Uploaded || (Have(l.dir, o) && m.FromHomeAssistant) || l.failedAs(id) == o.Hash {
+		// loading it again puts it on the exact front end. Not one the image carries, which stays where it
+		// is however many times Home Assistant offers the same file.
+		if m, ok := Find(l.Ours(), id); !ok || m.Uploaded || (Have(l.dir, o) && (m.FromHomeAssistant || fromImage(o.Hash))) || l.failedAs(id) == o.Hash {
 			continue
 		}
 		stale = append(stale, id)
