@@ -160,9 +160,9 @@ func TestARingNobodyStopsRingsOut(t *testing.T) {
 
 	Start("timer", "", nil, e.ended)
 	waitFor(t, "the ring to run out", func() bool { return e.count() == 1 })
-	if IsSounding() {
-		t.Error("still sounding after ringing out")
-	}
+	// ended is told first and the ring stops sounding right after it (bell.go), so a look straight
+	// after ended can still find it sounding: it has to stop, not have stopped already.
+	waitFor(t, "the ring to stop sounding", func() bool { return !IsSounding() })
 }
 
 // A button press silences, and nobody answers the offer: every ring on the bell ends, not just one.
