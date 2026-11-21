@@ -1,0 +1,28 @@
+#!/bin/sh
+# thinksmart-console: turn the kernel's text console to the way the ThinkSmart View stands, portrait
+# or landscape, from its accelerometer (a BMA253, bmc150-accel). The console draws on the same
+# framebuffer as the daemon, which the display plane turns half a turn for the daemon's sake
+# (video=...,rotate=180); the console's own rotation (fbcon) is on top of that, so it alone changes.
+#
+# Read on a unit 2026-11-20: standing in portrait the accelerometer read y = -509 (1 g at its 0.019
+# m/s^2 scale), and the console, unrotated, was upside down. So unrotated the console's top is the
+# +y end; each quarter turn of fbcon (1 is clockwise) moves it a quarter turn on: +x, then -y, -x.
+# Whichever axis reads most upward picks the rotation. Lying flat (neither x nor y reads half of g),
+# the console is left as it is.
+#
+# Run by the store's /sbin/init as soon as the sensor is there, and by etc/techo5/device.conf.
+for d in /sys/bus/iio/devices/iio:device*; do
+	case "$(cat "$d/name" 2>/dev/null)" in bma253|bmc150*) ;; *) continue;; esac
+	x=$(cat "$d/in_accel_x_raw" 2>/dev/null) && y=$(cat "$d/in_accel_y_raw" 2>/dev/null) || exit 0
+	ax=${x#-} ay=${y#-}
+	[ "$ax" -lt 256 ] && [ "$ay" -lt 256 ] && exit 0
+	if [ "$ay" -ge "$ax" ]; then
+		[ "$y" -gt 0 ] && r=0 || r=2
+	else
+		[ "$x" -gt 0 ] && r=1 || r=3
+	fi
+	[ "$(cat /sys/class/graphics/fbcon/rotate 2>/dev/null)" = $r ] && exit 0
+	echo $r > /sys/class/graphics/fbcon/rotate_all 2>/dev/null && echo "console turned to $r (x $x, y $y)"
+	exit 0
+done
+exit 0

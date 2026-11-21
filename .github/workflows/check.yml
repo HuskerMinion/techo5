@@ -44,3 +44,6 @@ jobs:
 
       - name: Boot layer tests (bootctl, slotctl, under busybox in Docker)
         run: python3 tools/test_boot_layer.py
+
+      - name: ThinkSmart View boot layer tests (lk2nd-ab, under busybox in Docker)
+        run: python3 tools/test_lk2nd_ab.py
