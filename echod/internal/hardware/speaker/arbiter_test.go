@@ -373,3 +373,29 @@ func TestLowerHoldsTheBackgroundUnderFull(t *testing.T) {
 		t.Errorf("let up to %d and %d dB", first.level(), second.level())
 	}
 }
+
+// A producer that gives the speaker back while lowered is let back up: a Lower(0) after it has gone
+// cannot reach it, and a long-lived stream would otherwise play every later track 30 dB down.
+func TestGivingBackUnderLowerLetsTheProducerBackUp(t *testing.T) {
+	a := &Arbiter{}
+	stream := &lowered{}
+	a.Took(stream)
+	a.Lower(-30)
+	a.Gave(stream)
+	if got := stream.level(); got != 0 {
+		t.Errorf("given back at %d dB", got)
+	}
+	a.Lower(0)
+	a.Took(stream)
+	if got := stream.level(); got != 0 {
+		t.Errorf("came back at %d dB after the lowering ended", got)
+	}
+
+	// And one that comes back while the lowering still holds comes back under it.
+	a.Lower(-30)
+	a.Gave(stream)
+	a.Took(stream)
+	if got := stream.level(); got != -30 {
+		t.Errorf("came back at %d dB under a -30 dB lowering", got)
+	}
+}

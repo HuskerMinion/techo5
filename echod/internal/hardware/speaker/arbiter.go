@@ -106,9 +106,10 @@ func (a *Arbiter) Took(p Producer) {
 		stood.Suspend()
 	}
 	p.Duck(duck)
-	if lower != 0 {
-		lowerTo(p, lower)
-	}
+	// Always, 0 included: a long-lived producer (a media stream, a sendspin room) keeps the level it
+	// was last given, and one lowered while it played and then let go of the speaker would otherwise
+	// come back at that level after the lowering had ended.
+	lowerTo(p, lower)
 	switch {
 	case below && !held:
 		p.Resume()
@@ -136,6 +137,11 @@ func (a *Arbiter) Gave(p Producer) {
 		a.hold = nil
 	}
 	a.mu.Unlock()
+
+	// Off the stack, a later Lower(0) no longer reaches it, so it is let back up now. An alarm stopping
+	// its music before letting go of the lowering (#651) left the stream 30 to 60 dB down for every
+	// track after it until echod restarted. Took sets it again if it comes back while the lowering holds.
+	lowerTo(p, 0)
 
 	if now == nil || now == was || held {
 		return
