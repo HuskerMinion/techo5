@@ -1094,6 +1094,8 @@ var uiEnglish = map[string]string{
 	"this_tablet_s_own_settings_wi_fi_display_apps": "This tablet's own settings: Wi-Fi, display, apps",
 	"ui_open": "Open",
 	"ui_this_tablet_has_no_settings_screen_to_open": "This tablet has no settings screen to open",
+	"tablet_apps":                        "Apps",
+	"ui_open_another_app_on_this_tablet": "Open another app on this tablet",
 }
 
 var uiTranslations = map[string]map[string]string{
@@ -2153,6 +2155,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Els ajustos propis d'esta tauleta: Wi-Fi, pantalla, aplicacions",
 		"ui_open":                                       "Obrir",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Esta tauleta no té cap pantalla d'ajustos per a obrir",
+		"tablet_apps":                                   "Aplicacions",
+		"ui_open_another_app_on_this_tablet":            "Obri una altra aplicació d'esta tauleta",
 	},
 	"es": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -2741,6 +2745,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Los ajustes propios de esta tableta: wifi, pantalla, aplicaciones",
 		"ui_open": "Abrir",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Esta tableta no tiene una pantalla de ajustes que abrir",
+		"tablet_apps":                        "Aplicaciones",
+		"ui_open_another_app_on_this_tablet": "Abre otra aplicación de esta tableta",
 	},
 	"fr": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -3812,6 +3818,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Les paramètres de cette tablette : Wi-Fi, affichage, applications",
 		"ui_open": "Ouvrir",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Cette tablette n'a pas d'écran de paramètres à ouvrir",
+		"tablet_apps":                        "Applications",
+		"ui_open_another_app_on_this_tablet": "Ouvrir une autre application de cette tablette",
 	},
 	"gl": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -4879,6 +4887,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Os axustes propios desta tableta: wifi, pantalla, aplicacións",
 		"ui_open": "Abrir",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Esta tableta non ten unha pantalla de axustes que abrir",
+		"tablet_apps":                        "Aplicacións",
+		"ui_open_another_app_on_this_tablet": "Abre outra aplicación desta tableta",
 	},
 	"it": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -5950,6 +5960,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Le impostazioni di questo tablet: Wi-Fi, display, app",
 		"ui_open": "Apri",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Questo tablet non ha una schermata di impostazioni da aprire",
+		"tablet_apps":                        "App",
+		"ui_open_another_app_on_this_tablet": "Apri un'altra app di questo tablet",
 	},
 	"nl": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -7770,6 +7782,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "De eigen instellingen van deze tablet: wifi, scherm, apps",
 		"ui_open": "Openen",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Deze tablet heeft geen instellingenscherm om te openen",
+		"tablet_apps":                        "Apps",
+		"ui_open_another_app_on_this_tablet": "Open een andere app op deze tablet",
 	},
 	"ja": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -8841,6 +8855,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "このタブレット自体の設定：Wi-Fi、ディスプレイ、アプリ",
 		"ui_open": "開く",
 		"ui_this_tablet_has_no_settings_screen_to_open": "このタブレットには開ける設定画面がありません",
+		"tablet_apps":                        "アプリ",
+		"ui_open_another_app_on_this_tablet": "このタブレットの別のアプリを開く",
 	},
 
 	// de is the German catalog. The English of every entry is above it, so a
@@ -10539,6 +10555,8 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Die eigenen Einstellungen dieses Tablets: WLAN, Display, Apps",
 		"ui_open": "Öffnen",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Dieses Tablet hat keinen Einstellungsbildschirm zum Öffnen",
+		"tablet_apps":                        "Apps",
+		"ui_open_another_app_on_this_tablet": "Eine andere App auf diesem Tablet öffnen",
 	},
 	"tr": {
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
@@ -11611,5 +11629,7 @@ var uiTranslations = map[string]map[string]string{
 		"this_tablet_s_own_settings_wi_fi_display_apps": "Bu tabletin kendi ayarları: Wi-Fi, ekran, uygulamalar",
 		"ui_open": "Aç",
 		"ui_this_tablet_has_no_settings_screen_to_open": "Bu tablette açılacak bir ayarlar ekranı yok",
+		"tablet_apps":                        "Uygulamalar",
+		"ui_open_another_app_on_this_tablet": "Bu tabletteki başka bir uygulamayı aç",
 	},
 }
