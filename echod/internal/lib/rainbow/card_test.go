@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 )
 
 // A long answer, about forty seconds of it said, many times the card's four lines.
@@ -257,5 +259,61 @@ func BenchmarkCardScroll3(b *testing.B) {
 	for range b.N {
 		s.card.offset = -1
 		s.card.draw(dst, g, when)
+	}
+}
+
+// An answer far past cardMost lines is cut in bounded work, however long it is: the last line was cut
+// from the whole rest of the answer, a rune at a time, which took seconds on a device for an AI
+// assistant's few thousand characters. A single word too long for the line is cut quickly as well.
+func TestAHugeAnswerIsCutQuickly(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	w := int(cardW*g.k - 2*cardPad*g.k)
+	huge := strings.Repeat(longReply+" ", 400) // about 160,000 characters
+	start := time.Now()
+	lines := wrapLines(f.Reply, huge, w, cardMost)
+	link := clipLine(f.Reply, "https://"+strings.Repeat("x", 100000), w)
+	if took := time.Since(start); took > 2*time.Second {
+		t.Errorf("cutting took %v", took)
+	}
+	if len(lines) != cardMost || !strings.HasSuffix(lines[cardMost-1], "…") {
+		t.Fatalf("%d lines, the last %q", len(lines), lines[len(lines)-1])
+	}
+	for _, l := range append(lines, link) {
+		if got := fonts.MeasureString(f.Reply, l).Ceil(); got > w {
+			t.Errorf("%q is %d wide, more than %d", l, got, w)
+		}
+	}
+	if !strings.HasSuffix(link, "…") || len(link) < 10 {
+		t.Errorf("the long word was cut to %q", link)
+	}
+}
+
+// Said is a share of the whole answer, and the window goes over the lines shown of it: for an answer
+// cut at cardMost lines the window reaches the last of them when the voice does, not when the voice
+// is done with everything after them as well.
+func TestTheWindowKeepsUpWithTheVoiceOnACutAnswer(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	huge := strings.Repeat(longReply+" ", 20)
+	w := newCardWords(g, f, "tell me everything about the weather", huge, true, "k")
+	shown := len(w.chars) - 1
+	for _, c := range w.chars {
+		shown += c
+	}
+	all := len([]rune(strings.Join(strings.Fields(huge), " ")))
+	if want := float64(all) / float64(shown); math.Abs(w.whole-want) > 1e-9 || w.whole < 2 {
+		t.Fatalf("the answer is %.2f times what is shown, want %.2f", w.whole, want)
+	}
+	end := float64(len(w.chars) - cardLines)
+	if got := scrollFor(w.chars, cardLines, float64(shown)/float64(all)*w.whole); math.Abs(got-end) > 1e-6 {
+		t.Errorf("the voice at the end of the last line shown: %.2f lines down, want %.0f", got, end)
+	}
+	if got := scrollFor(w.chars, cardLines, 0.5*float64(shown)/float64(all)*w.whole); got < end/3 || got > end*2/3 {
+		t.Errorf("the voice half through what is shown: %.2f lines down of %.0f", got, end)
+	}
+	// An answer laid out whole goes by its share as it is.
+	if whole := newCardWords(g, f, "what's the weather tomorrow", longReply, true, "k").whole; whole != 1 {
+		t.Errorf("an answer laid out whole is %.3f times what is shown", whole)
 	}
 }

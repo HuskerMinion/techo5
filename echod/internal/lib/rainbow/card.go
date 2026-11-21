@@ -69,6 +69,9 @@ type cardWords struct {
 	winTop, winH, more, lineH float64
 	chars                     []int
 	scroll, scrollTo          float64
+	// whole is how many times longer the answer is than what is laid out of it, 1 when none of it is
+	// cut: said is a share of the whole answer, and the window goes over the lines that are shown.
+	whole float64
 }
 
 // scrolls is whether the words are more than the card shows at once.
@@ -196,7 +199,7 @@ func (c *card) update(g *geometry, now time.Time, dt float64, t Turn, want bool,
 		// The window follows the voice, a little behind it so a jump in the reckoning is no jump on the
 		// screen, and only ever down: the reckoning can go back a little as the audio comes in. New
 		// words start where the voice already is.
-		to := scrollFor(w.chars, cardLines, t.Said)
+		to := scrollFor(w.chars, cardLines, t.Said*w.whole)
 		if w != was {
 			w.scroll, w.scrollTo = to, to
 		}
@@ -291,7 +294,7 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 	}
 	hgt := max(cardMin*k, 2*edge+text+gap)
 	img := image.NewRGBA(image.Rect(0, 0, w, int(math.Ceil(hgt))))
-	cw := &cardWords{key: key, reply: isReply, img: img, height: max(cardMin*k, 2*edge+text+gap-hidden) / k}
+	cw := &cardWords{key: key, reply: isReply, img: img, whole: 1, height: max(cardMin*k, 2*edge+text+gap-hidden) / k}
 	y := edge
 	for i, l := range lines {
 		if over > 0 && i >= title {
@@ -310,8 +313,24 @@ func newCardWords(g *geometry, f Faces, heard, reply string, isReply bool, key s
 	if over > 0 {
 		cw.lineH = lineOf(f.Reply)
 		cw.winH, cw.more = cardLines*cw.lineH, hidden
+		cw.whole = wholeOf(reply, cw.chars)
 	}
 	return cw
+}
+
+// wholeOf is how many times longer reply is than the lines laid out of it, chars long, 1 when they are
+// all of it. The voice says the whole reply, and an answer cut at cardMost lines would otherwise have
+// the window fall further and further behind it, still on the first lines when the voice is done.
+func wholeOf(reply string, chars []int) float64 {
+	shown := max(len(chars)-1, 0) // the spaces the lines were broken at
+	for _, c := range chars {
+		shown += c
+	}
+	all := utf8.RuneCountInString(strings.Join(strings.Fields(reply), " "))
+	if shown <= 0 || all <= shown {
+		return 1
+	}
+	return float64(all) / float64(shown)
 }
 
 // capital is s with its first letter a capital, accented or not.
@@ -332,8 +351,7 @@ func capital(s string) string {
 func wrapLines(face font.Face, text string, w, n int) []string {
 	var out []string
 	line := ""
-	words := strings.Fields(text)
-	for i, word := range words {
+	for _, word := range strings.Fields(text) {
 		try := word
 		if line != "" {
 			try = line + " " + word
@@ -341,7 +359,9 @@ func wrapLines(face font.Face, text string, w, n int) []string {
 		if line != "" && fonts.MeasureString(face, try).Ceil() > w {
 			out = append(out, line)
 			if len(out) == n {
-				out[n-1] = clipLine(face, out[n-1]+" "+strings.Join(words[i:], " "), w)
+				// One word past the line is enough to cut it with the ellipsis: the whole rest of a long
+				// answer would be measured again for every rune clipLine takes off its end.
+				out[n-1] = clipLine(face, out[n-1]+" "+word, w)
 				return out
 			}
 			line = word
@@ -360,11 +380,19 @@ func clipLine(face font.Face, text string, w int) string {
 	if fonts.MeasureString(face, text).Ceil() <= w {
 		return text
 	}
+	// The longest start of it that fits with the ellipsis, found by halves: one long word, a link
+	// say, taken off a rune at a time would be measured once for each of its runes.
 	r := []rune(text)
-	for len(r) > 0 && fonts.MeasureString(face, string(r)+"…").Ceil() > w {
-		r = r[:len(r)-1]
+	lo, hi := 0, len(r) // r[:lo] fits, r[:hi+1] does not
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fonts.MeasureString(face, string(r[:mid])+"…").Ceil() <= w {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
 	}
-	return strings.TrimRight(string(r), " ") + "…"
+	return strings.TrimRight(string(r[:lo]), " ") + "…"
 }
 
 // frost makes the glass from the page on dst in at: shrunk to a quarter, blurred, kept for draw. A
