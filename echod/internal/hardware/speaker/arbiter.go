@@ -110,6 +110,14 @@ func (a *Arbiter) Took(p Producer) {
 	// was last given, and one lowered while it played and then let go of the speaker would otherwise
 	// come back at that level after the lowering had ended.
 	lowerTo(p, lower)
+	// A lowering that changed while that was applied, outside the lock, is applied again: otherwise a
+	// stream starting just as an alarm lowered the music came in at full and stayed there.
+	a.mu.Lock()
+	again, on := a.lower, slices.Contains(a.stack, p)
+	a.mu.Unlock()
+	if on && again != lower {
+		lowerTo(p, again)
+	}
 	switch {
 	case below && !held:
 		p.Resume()

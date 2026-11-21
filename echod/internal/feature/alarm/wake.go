@@ -314,6 +314,9 @@ func maPlayer() (musicassistant.Client, string, error) {
 // wakeFavoritesFor is how long Music Assistant's favorites are kept before they are asked for again.
 const wakeFavoritesFor = 10 * time.Minute
 
+// wakeNoLibraryAgain is how soon a device with no Music Assistant set up looks again.
+const wakeNoLibraryAgain = 5 * time.Second
+
 var wakeFavorites struct {
 	sync.Mutex
 	list []config.WakeWith
@@ -346,10 +349,12 @@ func (a *Alarms) WakeChoices(wait time.Duration) []config.WakeWith {
 			wakeFavorites.Lock()
 			if errors.Is(err, errNoLibrary) {
 				// Nothing to ask, and nothing kept as an answer either: a library set up a minute later
-				// is asked at once rather than ten minutes on. Changed only fires when favorites go,
-				// since an editor drawn again for it would ask again, and fire it again.
+				// is asked within seconds rather than ten minutes on. Not at once, though: the Wake with
+				// list asks on every frame it is drawn. Changed only fires when favorites go, since an
+				// editor drawn again for it would ask again, and fire it again.
 				had := len(wakeFavorites.list) > 0
 				wakeFavorites.list, wakeFavorites.fetching = nil, nil
+				wakeFavorites.at = time.Now().Add(-wakeFavoritesFor + wakeNoLibraryAgain)
 				wakeFavorites.Unlock()
 				close(done)
 				if had {

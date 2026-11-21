@@ -476,10 +476,14 @@ func TestNoLibraryIsNotKeptAsAnAnswer(t *testing.T) {
 	wakeFavorites.Lock()
 	at, fetching := wakeFavorites.at, wakeFavorites.fetching
 	wakeFavorites.Unlock()
-	if !at.IsZero() || fetching != nil {
-		t.Errorf("no library was kept as an answer from %v, fetching %v", at, fetching != nil)
+	if again := time.Until(at.Add(wakeFavoritesFor)); again > wakeNoLibraryAgain || fetching != nil {
+		t.Errorf("no library was kept as an answer for %v, fetching %v", again, fetching != nil)
 	}
 
+	// A few seconds on, a library set up meanwhile is asked.
+	wakeFavorites.Lock()
+	wakeFavorites.at = time.Now().Add(-wakeFavoritesFor - time.Second)
+	wakeFavorites.Unlock()
 	morning := config.WakeWith{Kind: config.WakeMusic, Name: "Morning", URI: "library://playlist/1"}
 	fetchFavorites = func(context.Context) ([]config.WakeWith, error) { return []config.WakeWith{morning}, nil }
 	if got := a.WakeChoices(time.Second); len(got) != 1 || got[0] != morning {

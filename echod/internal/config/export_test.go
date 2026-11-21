@@ -549,6 +549,7 @@ func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 	from.Microphone.Noise, from.Microphone.Claps = true, true
 	from.Screen.ClockHold = true
 	from.Update.Channel, from.Update.AutoInstall = "dev", true
+	from.Update.HeldBack = "v9.9.9"
 	from.CamStream = CamStream{On: true, User: "them", Pass: "their-password"}
 	from.Remote = Remote{On: true, Secret: "theirs"}
 	from.Home.Go2RTC.Base = "http://192.0.2.9:1984"
@@ -576,7 +577,7 @@ func TestARestoreKeepsTheNewSwitchesAndLogins(t *testing.T) {
 	if c.Microphone.Noise || c.Microphone.Claps || c.CamStream.On || c.Remote.On || c.Nearest.Enabled() || c.Screen.ClockHold {
 		t.Errorf("a restore turned on what the device had off: %+v %+v %+v %+v", c.Microphone, c.CamStream, c.Remote, c.Nearest)
 	}
-	if c.Update.Channel != here.Update.Channel || c.Update.AutoInstall {
+	if c.Update.Channel != here.Update.Channel || c.Update.AutoInstall || c.Update.HeldBack != here.Update.HeldBack {
 		t.Errorf("a restore changed how the device updates: %+v", c.Update)
 	}
 	if c.CamStream.Pass != "my-password" || c.Remote.Secret != "mine" {

@@ -664,3 +664,11 @@ func TestATitledTrackIsNamedAsItWasTold(t *testing.T) {
 		t.Errorf("without a source: named as from %q, want %q", got.source, PlaybackName)
 	}
 }
+
+// A station's name standing in for the artist is shown, but is nobody's song: no lyrics are looked up
+// for it, while a track with its own artist still is.
+func TestAStationUnderTheTitleIsNotLookedUpForLyrics(t *testing.T) {
+	if _, ok := Get().LyricNow(Radio{Title: "Song", Artist: "SWR3", Stand: true}, time.Now()); ok {
+		t.Error("lyrics were offered for a station standing in for the artist")
+	}
+}
