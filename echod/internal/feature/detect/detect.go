@@ -62,6 +62,11 @@ type Detect struct {
 	asked      []string
 	refreshing atomic.Bool
 	lib        *wake.Library
+	// refused is the saved selection restore last loaded and the engine would not take all of, with the
+	// library's version then, under loading. The same selection over the same models is not loaded
+	// again on every configuration request: each load lights the ring and moves the command and hang-up
+	// words, and a model the engine refuses refuses again.
+	refused *refusal
 
 	// hangup is the hang-up word's select and threshold, and its loading with the call: see hangup.go.
 	hangup *hangup
@@ -433,21 +438,62 @@ func (d *Detect) Actions() []*esphome.Action { return d.clips.actions() }
 func (d *Detect) load(ids []string) []string {
 	d.loading.Lock()
 	defer d.loading.Unlock()
+	// A selection or a start is a fresh look, so a selection restore gave up on is worth trying again.
+	d.refused = nil
 	return d.loadLocked(ids)
+}
+
+// refusal is a saved selection the engine would not take all of, and the library's version then.
+type refusal struct {
+	want    []string
+	version uint64
 }
 
 // restore loads the saved selection when what runs is not it (#657). Home Assistant asks what runs
 // once per connection and believes the answer, so a slot that came up empty after an update read as "No
-// wake word" there, and choosing it again was the only way back. Only models on disk are in the saved
-// selection here, so nothing is downloaded while Home Assistant waits.
+// wake word" there, and choosing it again was the only way back.
 func (d *Detect) restore() {
 	turn := voice.Get()
-	want := voice.SavedWakeWords(d.library().Ours())
-	if slices.Equal(want, turn.ActiveWakeWords()) {
-		return
+	saved := func() []string { return voice.SavedWakeWords(d.library().Ours()) }
+	if accepted, ok := d.restoreFrom(saved, turn.ActiveWakeWords); ok {
+		turn.SetActiveWakeWords(accepted)
 	}
-	slog.Warn("wake words running are not the ones chosen, loading them again", "running", turn.ActiveWakeWords(), "chosen", want)
-	turn.SetActiveWakeWords(d.load(want))
+}
+
+// restoreFrom is restore with the saved selection and what runs passed in, reporting what runs after it
+// and whether it loaded anything.
+//
+// Home Assistant is waiting for the answer this comes before, and gives up after five seconds, so it
+// never waits itself. Nothing is downloaded: the selection is resolved against what is on disk, and a
+// word offered with a new model loads as it is, for the refresh after the answer to fetch. And a load
+// or a refresh already running is left to finish rather than queued behind: either one ends by saying
+// what runs, and the next request looks again.
+func (d *Detect) restoreFrom(saved, running func() []string) ([]string, bool) {
+	if d.refreshing.Load() || !d.loading.TryLock() {
+		slog.Debug("wake words are loading, not restoring the saved selection over them")
+		return nil, false
+	}
+	defer d.loading.Unlock()
+
+	// Read under the lock, so a load that finished a moment ago is what is compared.
+	want, now := saved(), running()
+	if slices.Equal(want, now) {
+		return nil, false
+	}
+	version := d.library().Version()
+	if r := d.refused; r != nil && r.version == version && slices.Equal(r.want, want) {
+		return nil, false
+	}
+
+	slog.Warn("wake words running are not the ones chosen, loading them again", "running", now, "chosen", want)
+	accepted := d.loadFrom(want, d.library().OnDisk)
+	d.refused = nil
+	if !slices.Equal(accepted, want) {
+		slog.Warn("the chosen wake words would not all load; not trying again until they or the models change",
+			"chosen", want, "running", accepted)
+		d.refused = &refusal{want: slices.Clone(want), version: version}
+	}
+	return accepted, true
 }
 
 // refresh swaps in the models Home Assistant replaced under the ids that are running. The new file is
@@ -497,13 +543,18 @@ func (d *Detect) library() *wake.Library {
 	return wake.Lib()
 }
 
-func (d *Detect) loadLocked(ids []string) []string {
+// loadLocked loads a selection, downloading what it names that is offered and not here: a selection may
+// name a model Home Assistant is offering but this device has never had, so the library is asked
+// rather than a list captured at boot. This is where a new word arrives.
+func (d *Detect) loadLocked(ids []string) []string { return d.loadFrom(ids, d.library().Ensure) }
+
+// loadFrom is loadLocked with the models resolved by resolve: Ensure, which downloads, or OnDisk, which
+// does not.
+func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []string {
 	d.asked = slices.Clone(ids)
 	d.busy.begin()
 
-	// A selection may name a model Home Assistant is offering but this device has never had, so the
-	// library is asked rather than a list captured at boot: this is where a new word arrives.
-	models := d.library().Ensure(ids)
+	models := resolve(ids)
 
 	var accepted []string
 	var loaded []int

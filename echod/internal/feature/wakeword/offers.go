@@ -44,5 +44,5 @@ func Answer(offered []esphome.ExternalWakeWord) []esphome.WakeWord {
 var Refresh func()
 
 // Restore loads the saved selection again when what runs is not it, before the answer says what runs.
-// Detection sets it.
+// It downloads nothing and waits for nothing, since Home Assistant is waiting. Detection sets it.
 var Restore func()
