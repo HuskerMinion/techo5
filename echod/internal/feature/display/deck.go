@@ -95,7 +95,7 @@ func (d *Display) openDeck() bool {
 	}
 	d.closeAlert()
 	d.calUntil, d.weatherUntil = time.Time{}, time.Time{}
-	d.sheet, d.dash, d.drawer = false, false, false
+	d.sheet, d.dash, d.drawer, d.appsPop = false, false, false, false
 	pages := len(config.Get().Deck.Pages)
 	if d.deckPage >= pages {
 		d.deckPage = 0

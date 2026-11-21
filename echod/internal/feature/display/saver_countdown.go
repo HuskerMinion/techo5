@@ -15,5 +15,6 @@ func countdownStep(whole time.Duration, span int) time.Duration {
 	return min(max(whole*2/time.Duration(span), countdownFastest), time.Second)
 }
 
-// countdownFastest is the countdown's quickest redraw: ten a second.
-const countdownFastest = 100 * time.Millisecond
+// countdownFastest is the countdown's quickest redraw: four a second. Each is the whole screen, and on
+// the oldest Shows ten a second was steady work beside the wake word for a line a few pixels long.
+const countdownFastest = 250 * time.Millisecond

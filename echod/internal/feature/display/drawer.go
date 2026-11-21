@@ -41,6 +41,9 @@ func (d *Display) openDrawer(tab int) {
 func (d *Display) closeDrawer() {
 	d.mu.Lock()
 	d.drawer, d.drawerPick = false, ""
+	// Whatever puts the drawer away for a page of its own (the settings, the dashboard, a page Home
+	// Assistant asked for) takes a panel's apps list down with it, so it does not come back after.
+	d.appsPop = false
 	d.mu.Unlock()
 	slog.Info("drawer closed")
 	d.wake()

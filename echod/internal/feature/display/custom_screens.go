@@ -198,6 +198,7 @@ func (d *Display) openCustom(name string) bool {
 		name = all[0].id
 	}
 	d.customs.up, d.customs.last, d.customs.touched, d.customs.awayUntil = name, name, time.Now(), time.Time{}
+	d.appsPop = false // a panel's apps list does not wait under the screen to come back after it
 	d.closeAlert()
 	d.calUntil, d.weatherUntil = time.Time{}, time.Time{}
 	d.sheet, d.dash, d.drawer, d.deckUp = false, false, false, false
