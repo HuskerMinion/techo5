@@ -30,9 +30,11 @@ partition table. Each step is checked before the next:
                stock bootloader starts only a signed lk2nd without an appended QCDT, which lk2nd's own
                release images are not, so the image is checked for both; the new partition table, made
                from the unit's own
-  3. backup    the whole eMMC (about 7.3 GiB), into backups/thinksmart-<disk id>/, its size and
-               partition table checked against the unit. Without a verified backup nothing is written
-               (--backup points at one made before)
+  3. backup    the whole eMMC (about 7.3 GiB), into backups/thinksmart-<serial>/ (the serial on the
+               unit's label, read from its devinfo partition: every unit has the same disk id and
+               partition table), its size and partition table checked against the unit. A backup is
+               taken as this unit's only if its devinfo holds this serial. Without a verified backup
+               nothing is written (--backup points at one made before)
   4. speaker   the amplifier's DSP table (Lenovo's tuning of this speaker), out of the stock kernel in
                the backup's boot partition, found by the registers it writes, into the backup folder; it
                goes back onto this unit only. Without one the speaker plays untuned, flat and quieter
@@ -415,13 +417,42 @@ def check_lk2nd(path):
 
 # ------------------------------------------------------------------------------------------ backup
 
-def backup_name(gpt):
-    return 'thinksmart-%s' % str(gpt.disk_guid)[:8]
+# What tells one unit from another. Not the GPT's disk id, nor any partition's UUID, nor persist's
+# filesystem UUID: Lenovo's factory image gives every unit the same ones. devinfo holds the unit's
+# serial (the one on its label) at byte 228, after aboot's "ANDROID-BOOT!" magic, and nothing TECHO5
+# runs writes devinfo.
+DEVINFO_MAGIC = b'ANDROID-BOOT!'
+SERIAL_AT = 228
+SERIAL_RE = re.compile(rb'[A-Z0-9]{6,16}')
 
 
-def backup_verified(folder, gpt):
-    """'' when folder holds a verified backup of this unit's eMMC (its size and disk id, and the table
-    the unit had when it was made: the stock one, or this table), else why not."""
+def serial_of(devinfo):
+    """The unit's serial from the first sector of its devinfo partition, or None."""
+    if devinfo[:len(DEVINFO_MAGIC)] != DEVINFO_MAGIC:
+        return None
+    s = devinfo[SERIAL_AT:SERIAL_AT + 17].split(b'\0', 1)[0]
+    return s.decode('ascii') if SERIAL_RE.fullmatch(s) else None
+
+
+def unit_serial(edl, gpt, work):
+    dv = gpt.named('devinfo')
+    if dv is None:
+        fail('this unit has no devinfo partition, so it cannot be told apart from another. Nothing was written.')
+    serial = serial_of(edl.read(dv.first, 1, os.path.join(work, 'thinksmart-devinfo.bin')))
+    if not serial:
+        fail("this unit's devinfo holds no serial, so it cannot be told apart from another unit and its "
+             "backup\n   cannot be named. Nothing was written.")
+    return serial
+
+
+def backup_name(serial):
+    return 'thinksmart-%s' % serial
+
+
+def backup_verified(folder, gpt, serial):
+    """'' when folder holds a verified backup of this unit's eMMC (its size, the table the unit had
+    when it was made: the stock one, or this table, and this unit's serial in the backup's own devinfo),
+    else why not."""
     try:
         marker = read_file(os.path.join(folder, 'verified')).decode('ascii', 'replace')
     except OSError:
@@ -433,8 +464,13 @@ def backup_verified(folder, gpt):
     try:
         if os.path.getsize(img) != gpt.total * SECTOR:
             return '%s is not the size of the eMMC' % img
+        with open(img, 'rb') as f:
+            f.seek(gpt.named('devinfo').first * SECTOR)
+            theirs = serial_of(f.read(SECTOR))
     except OSError:
         return 'no emmc.img in %s' % folder
+    if theirs != serial:
+        return 'the backup in %s is of another unit (serial %s, and this one is %s)' % (folder, theirs, serial)
     return ''
 
 
@@ -684,7 +720,9 @@ def main(argv=None):
     note('eMMC: %d MiB, disk %s; %s' % (gpt.total >> 11, gpt.disk_guid,
                                         'the stock partition table; userdata is %d MiB' % (ud.sectors >> 11)
                                         if ud else 'installed by this installer before: installing again'))
-    folder = os.path.abspath(a.backup or os.path.join(a.backups, backup_name(gpt)))
+    serial = unit_serial(edl, gpt, a.work)
+    note('unit: serial %s' % serial)
+    folder = os.path.abspath(a.backup or os.path.join(a.backups, backup_name(serial)))
     key_file = a.key_file or os.path.join(folder, 'home-assistant.key')
     wifi = None
     if a.wifi:
@@ -743,7 +781,7 @@ def main(argv=None):
 
     # ------------------------------------------------------------------------------------ 3. backup
     step('backup')
-    why = backup_verified(folder, gpt)
+    why = backup_verified(folder, gpt, serial)
     if not why:
         note('a verified backup of this unit is there already: %s' % folder)
         img = os.path.join(folder, 'emmc.img')
