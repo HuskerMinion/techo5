@@ -421,3 +421,68 @@ func TestSnoozingAFavoriteResumesIt(t *testing.T) {
 		})
 	}
 }
+
+// alarm_wake_with runs on the Home Assistant connection's read loop: a name among the favorites kept
+// is taken at once, without waiting on Music Assistant for fresh ones.
+func TestAKnownFavoriteDoesNotWaitForMusicAssistant(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	a := build()
+	wasStations, wasFetch := wakeStations, fetchFavorites
+	t.Cleanup(func() { wakeStations, fetchFavorites = wasStations, wasFetch })
+	morning := config.WakeWith{Kind: config.WakeMusic, Name: "Morning", URI: "library://playlist/1"}
+	wakeStations = func() []config.WakeWith { return nil }
+	slow := make(chan struct{})
+	t.Cleanup(func() {
+		// The fetch left under way ends before the next test, which would otherwise find its answer.
+		close(slow)
+		wakeFavorites.Lock()
+		f := wakeFavorites.fetching
+		wakeFavorites.Unlock()
+		if f != nil {
+			<-f
+		}
+	})
+	fetchFavorites = func(context.Context) ([]config.WakeWith, error) { <-slow; return nil, nil }
+	wakeFavorites.Lock()
+	wakeFavorites.list, wakeFavorites.at = []config.WakeWith{morning}, time.Now().Add(-time.Hour)
+	wakeFavorites.Unlock()
+
+	start := time.Now()
+	got, err := a.ParseWake("music_assistant: Morning")
+	if err != nil || got != morning {
+		t.Fatalf("%+v %v, want %+v", got, err, morning)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("took %v with the favorite already kept", took)
+	}
+}
+
+// With no Music Assistant set up there is nothing to keep: once one is, it is asked at once, not ten
+// minutes later.
+func TestNoLibraryIsNotKeptAsAnAnswer(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	a := build()
+	wasStations, wasFetch := wakeStations, fetchFavorites
+	t.Cleanup(func() { wakeStations, fetchFavorites = wasStations, wasFetch })
+	wakeStations = func() []config.WakeWith { return nil }
+	fetchFavorites = maFavorites
+	wakeFavorites.Lock()
+	wakeFavorites.list, wakeFavorites.at = nil, time.Time{}
+	wakeFavorites.Unlock()
+
+	if got := a.WakeChoices(time.Second); len(got) != 0 {
+		t.Errorf("offered %+v with no library", got)
+	}
+	wakeFavorites.Lock()
+	at, fetching := wakeFavorites.at, wakeFavorites.fetching
+	wakeFavorites.Unlock()
+	if !at.IsZero() || fetching != nil {
+		t.Errorf("no library was kept as an answer from %v, fetching %v", at, fetching != nil)
+	}
+
+	morning := config.WakeWith{Kind: config.WakeMusic, Name: "Morning", URI: "library://playlist/1"}
+	fetchFavorites = func(context.Context) ([]config.WakeWith, error) { return []config.WakeWith{morning}, nil }
+	if got := a.WakeChoices(time.Second); len(got) != 1 || got[0] != morning {
+		t.Errorf("a library set up after is not asked: %+v", got)
+	}
+}

@@ -344,6 +344,19 @@ func (a *Alarms) WakeChoices(wait time.Duration) []config.WakeWith {
 			defer cancel()
 			list, err := fetchFavorites(ctx)
 			wakeFavorites.Lock()
+			if errors.Is(err, errNoLibrary) {
+				// Nothing to ask, and nothing kept as an answer either: a library set up a minute later
+				// is asked at once rather than ten minutes on. Changed only fires when favorites go,
+				// since an editor drawn again for it would ask again, and fire it again.
+				had := len(wakeFavorites.list) > 0
+				wakeFavorites.list, wakeFavorites.fetching = nil, nil
+				wakeFavorites.Unlock()
+				close(done)
+				if had {
+					a.Changed.Emit(struct{}{})
+				}
+				return
+			}
 			if err == nil {
 				wakeFavorites.list, wakeFavorites.at = list, time.Now()
 			} else {
@@ -385,11 +398,14 @@ func radioStations() []config.WakeWith {
 	return out
 }
 
+// errNoLibrary is fetchFavorites with no Music Assistant set up to ask.
+var errNoLibrary = errors.New("no music library is set up")
+
 // maFavorites is fetchFavorites: Music Assistant's favorite playlists, albums and radio stations.
 func maFavorites(ctx context.Context) ([]config.WakeWith, error) {
 	m := config.Get().MusicAssistant
 	if !m.Set() {
-		return nil, nil
+		return nil, errNoLibrary
 	}
 	c := musicassistant.Client{URL: m.URL, Token: m.Token}
 	var out []config.WakeWith
@@ -414,6 +430,10 @@ func maFavorites(ctx context.Context) ([]config.WakeWith, error) {
 	return out, nil
 }
 
+// wakeParseWait is how long ParseWake waits for Music Assistant's favorites when the name is not
+// among those it has.
+const wakeParseWait = 3 * time.Second
+
 // ParseWake reads what an alarm wakes with as Home Assistant writes it (config.WakeWith's String):
 // "alarm_sound", "radio: <station>" or "music_assistant: <favorite>", the name as WakeChoices lists it.
 // A Music Assistant URI, or a stream's address for the radio, is taken as it is.
@@ -434,10 +454,22 @@ func (a *Alarms) ParseWake(s string) (config.WakeWith, error) {
 	if name == "" {
 		return config.WakeWith{}, fmt.Errorf("alarms: %.64q names no %s", s, kind)
 	}
-	for _, c := range a.WakeChoices(10 * time.Second) {
-		if c.Kind == kind && (strings.EqualFold(c.Name, name) || c.URI == name) {
-			return c, nil
+	// The list as it is first, and only then waiting for Music Assistant's favorites, and not for long:
+	// this runs on the Home Assistant connection's read loop, which hears nothing else while it waits.
+	// The wait is only for a fetch under way, a new favorite or the first after a start.
+	find := func(wait time.Duration) (config.WakeWith, bool) {
+		for _, c := range a.WakeChoices(wait) {
+			if c.Kind == kind && (strings.EqualFold(c.Name, name) || c.URI == name) {
+				return c, true
+			}
 		}
+		return config.WakeWith{}, false
+	}
+	if c, ok := find(0); ok {
+		return c, nil
+	}
+	if c, ok := find(wakeParseWait); ok {
+		return c, nil
 	}
 	if strings.Contains(name, "://") && (kind == config.WakeMusic || strings.HasPrefix(name, "http")) {
 		return config.WakeWith{Kind: kind, Name: name, URI: name}, nil
