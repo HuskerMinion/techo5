@@ -2,7 +2,9 @@ package home
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -15,7 +17,9 @@ import (
 // left from the station before are not this one's, and an entity with no song gives none.
 func TestTheNowEntityCarriesTheSongOfTheStationItNames(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	const entity = "sensor.own_now_test_radio"
+	// An entity of its own each run: Home Assistant's values are kept for the whole process (hastate),
+	// so a second run (-count 2) found the song the first one left there.
+	entity := fmt.Sprintf("sensor.own_now_test_radio_%d", ownNowRuns.Add(1))
 	if err := config.Set().Home().Radio(config.Radio{Now: entity}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,3 +106,6 @@ func TestTheNowEntityNamesItsStationBetweenSongs(t *testing.T) {
 		t.Error("a song with no song attributes")
 	}
 }
+
+// ownNowRuns numbers the runs of the test above, for an entity name no earlier run has used.
+var ownNowRuns atomic.Int64
