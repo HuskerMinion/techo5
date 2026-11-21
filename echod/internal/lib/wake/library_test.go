@@ -124,6 +124,15 @@ func TestStaleIsARunningWordWithANewModel(t *testing.T) {
 	})
 	l.Loaded([]string{"alfred", "same", "absent"})
 
+	// "same" was adopted before Adopt marked what it fetched, so it is stale until it is marked: adopted
+	// again, it runs on the exact front end like one fetched today.
+	if got := l.Stale(); len(got) != 2 || got[0] != "alfred" || got[1] != "same" {
+		t.Errorf("stale %v, want [alfred same]", got)
+	}
+	if err := markFromHomeAssistant(l.Dir(), "same"); err != nil {
+		t.Fatal(err)
+	}
+	l.Reload()
 	if got := l.Stale(); len(got) != 1 || got[0] != "alfred" {
 		t.Errorf("stale %v, want [alfred]", got)
 	}

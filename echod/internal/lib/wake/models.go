@@ -57,6 +57,10 @@ type Model struct {
 	// Uploaded is whether it was sent from the setup page (own.go), which is what lets the page
 	// remove it and keeps a cache purge from deleting what cannot be downloaded again.
 	Uploaded bool
+
+	// FromHomeAssistant is whether it came from Home Assistant's custom_wake_words (Adopt), which is
+	// nearly always somebody's own trained model and so runs on the exact front end, like an upload.
+	FromHomeAssistant bool
 }
 
 // manifest is the JSON that ships beside a model, as Home Assistant serves it from
@@ -77,6 +81,10 @@ type manifest struct {
 	// Uploaded marks a manifest the setup page wrote for a model sent from it. It is ours, not part
 	// of the format, and is never taken from a manifest that arrived from elsewhere (Adopt).
 	Uploaded bool `json:"techo5_uploaded,omitempty"`
+
+	// FromHomeAssistant marks a manifest Adopt wrote for a model Home Assistant offered. Ours too, and
+	// likewise never taken from the config Home Assistant serves.
+	FromHomeAssistant bool `json:"techo5_home_assistant,omitempty"`
 }
 
 // Installed lists the models in dir, one per .tflite, reading a sidecar JSON of the same name when
@@ -162,6 +170,7 @@ func load(dir, id string) Model {
 	}
 
 	m.Uploaded = man.Uploaded
+	m.FromHomeAssistant = man.FromHomeAssistant
 	if man.WakeWord != "" {
 		m.Phrase = man.WakeWord
 	}

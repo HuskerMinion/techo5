@@ -206,7 +206,8 @@ func (l *Library) Ensure(ids []string) []Model {
 			continue
 		}
 		o := l.offer(id)
-		if o.URL == "" || Have(l.dir, o) || l.uploaded(id) {
+		// One adopted before Adopt marked what it fetched is adopted again, which marks it.
+		if o.URL == "" || (Have(l.dir, o) && l.adopted(id)) || l.uploaded(id) {
 			continue
 		}
 		l.fetch(o)
@@ -235,7 +236,9 @@ func (l *Library) Stale() []string {
 		}
 		// One that is not here yet is the selection's to fetch, one sent from the setup page stays, and
 		// one that already failed as this hash waits for a new one.
-		if m, ok := Find(l.Ours(), id); !ok || m.Uploaded || Have(l.dir, o) || l.failedAs(id) == o.Hash {
+		// One adopted before Adopt marked what it fetched counts too: adopting it again marks it, and
+		// loading it again puts it on the exact front end.
+		if m, ok := Find(l.Ours(), id); !ok || m.Uploaded || (Have(l.dir, o) && m.FromHomeAssistant) || l.failedAs(id) == o.Hash {
 			continue
 		}
 		stale = append(stale, id)
@@ -283,6 +286,12 @@ func (l *Library) Loaded(ids []string) {
 func (l *Library) uploaded(id string) bool {
 	m, ok := Find(l.Ours(), id)
 	return ok && m.Uploaded
+}
+
+// adopted is whether the model with this id is marked as Home Assistant's (Adopt).
+func (l *Library) adopted(id string) bool {
+	m, ok := Find(l.Ours(), id)
+	return ok && m.FromHomeAssistant
 }
 
 func (l *Library) offer(id string) esphome.ExternalWakeWord {

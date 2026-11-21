@@ -52,6 +52,9 @@ func Adopt(ctx context.Context, dir string, o esphome.ExternalWakeWord) (Model, 
 		return Model{}, fmt.Errorf("wake: %q is not a name a model can be kept under", o.ID)
 	}
 	if Have(dir, o) {
+		if err := markFromHomeAssistant(dir, o.ID); err != nil {
+			return Model{}, err
+		}
 		return load(dir, o.ID), nil
 	}
 
@@ -81,6 +84,7 @@ func Adopt(ctx context.Context, dir string, o esphome.ExternalWakeWord) (Model, 
 	m.TrainedLanguages = o.TrainedLanguages
 	m.Model = filepath.Base(modelPath(dir, o.ID))
 	m.Uploaded = false // Home Assistant's config does not get to say it came from the setup page
+	m.FromHomeAssistant = true
 
 	if err := write(dir, o.ID, model, m); err != nil {
 		return Model{}, err
@@ -155,6 +159,35 @@ func get(ctx context.Context, url string) ([]byte, error) {
 func beside(url, name string) string {
 	cut := len(url) - len(path.Base(url))
 	return url[:cut] + name
+}
+
+// markFromHomeAssistant records in a model's manifest that Home Assistant offered it, for one adopted
+// before Adopt wrote that down: it is the same model, and should run the way one adopted today does.
+// A model with no manifest gets one with just the mark.
+func markFromHomeAssistant(dir, id string) error {
+	path := filepath.Join(dir, id+".json")
+	var m manifest
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if err := json.Unmarshal(data, &m); err != nil {
+			return fmt.Errorf("wake: manifest for %s: %w", id, err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if m.FromHomeAssistant {
+		return nil
+	}
+	m.FromHomeAssistant = true
+	config, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, config, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func modelPath(dir, id string) string { return filepath.Join(dir, id+".tflite") }

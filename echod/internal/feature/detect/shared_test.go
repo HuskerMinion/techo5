@@ -281,3 +281,22 @@ func TestAnUploadedModelRunsOnTheExactFrontEnd(t *testing.T) {
 		t.Errorf("fronts after unloading the uploaded model: %v", b.fronts)
 	}
 }
+
+// A model from Home Assistant's custom_wake_words runs on the exact front end too, like an upload: the
+// same file woke a Dot uploaded and stayed silent from there. The image's words stay where they were.
+func TestAHomeAssistantModelRunsOnTheExactFrontEnd(t *testing.T) {
+	for _, c := range []struct {
+		m     wake.Model
+		exact bool
+		want  bool
+	}{
+		{wake.Model{ID: "image"}, false, false},
+		{wake.Model{ID: "image"}, true, true},
+		{wake.Model{ID: "own", Uploaded: true}, false, true},
+		{wake.Model{ID: "ha", FromHomeAssistant: true}, false, true},
+	} {
+		if got := exactFor(c.m, c.exact); got != c.want {
+			t.Errorf("exactFor(%s, %v) = %v, want %v", c.m.ID, c.exact, got, c.want)
+		}
+	}
+}
