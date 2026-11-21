@@ -971,7 +971,10 @@ func (p *Player) Sounding(on bool) {
 }
 
 // remoteTrack is a name for what is playing that this player did not choose.
-type remoteTrack struct{ Title, Artist, Album string }
+type remoteTrack struct {
+	Title, Artist, Album string
+	Live                 bool
+}
 
 // Transport is a track's own controls, which belong to whoever is playing it. A stream this player is
 // only carrying is somebody else's — Music Assistant plays it — so these go to the remote rather than
@@ -1380,9 +1383,11 @@ func (p *Player) Carried() bool {
 // ExternalTrack takes what a remote says it is playing, so the room can name it. An empty title means
 // the remote has stopped naming anything.
 func (p *Player) ExternalTrack(title, artist, album string) {
-	p.extTrack.Store(remoteTrack{Title: title, Artist: artist, Album: album})
+	pos, ok := TrackPosition(title)
+	t := remoteTrack{Title: title, Artist: artist, Album: album, Live: ok && pos.Dur == 0}
+	p.extTrack.Store(t)
 	if title != "" {
-		p.lastExt.Store(lastTrack{remoteTrack: remoteTrack{Title: title, Artist: artist, Album: album}})
+		p.lastExt.Store(lastTrack{remoteTrack: t})
 	} else {
 		if l, _ := p.lastExt.Load().(lastTrack); l.Title != "" && l.clearedAt.IsZero() {
 			l.clearedAt = time.Now()
@@ -1423,20 +1428,39 @@ func (p *Player) HoldRemote() {
 	if t.Title == "" {
 		return
 	}
+	if !t.Live {
+		if pos, ok := TrackPosition(t.Title); ok && pos.Dur == 0 {
+			t.Live = true
+		}
+	}
 	p.held.Store(heldTrack{remoteTrack: t, at: time.Now()})
+}
+
+func (p *Player) currentHeld() (heldTrack, bool) {
+	h, _ := p.held.Load().(heldTrack)
+	if h.at.IsZero() || time.Since(h.at) > stoppedFor {
+		return heldTrack{}, false
+	}
+	if playing, paused := p.stream.Playing(); playing || paused {
+		return heldTrack{}, false
+	}
+	return h, true
 }
 
 // Held is a remote's track paused from here and still worth offering to play: until something plays,
 // it is stopped, or stoppedFor goes by, as this player's own paused track is ended then.
 func (p *Player) Held() (title, artist, album string, ok bool) {
-	h, _ := p.held.Load().(heldTrack)
-	if h.at.IsZero() || time.Since(h.at) > stoppedFor {
-		return "", "", "", false
-	}
-	if playing, paused := p.stream.Playing(); playing || paused {
+	h, ok := p.currentHeld()
+	if !ok {
 		return "", "", "", false
 	}
 	return h.Title, h.Artist, h.Album, true
+}
+
+// HeldLive reports whether the held track paused from here is a live stream.
+func (p *Player) HeldLive() bool {
+	h, ok := p.currentHeld()
+	return ok && h.Live
 }
 
 // ForgetHeld lets a held track go: the music is over, whatever it was.
@@ -1468,6 +1492,18 @@ func (p *Player) ScreenState() (playing, paused bool) {
 func (p *Player) Track() (title, artist, album string) {
 	t, _ := p.extTrack.Load().(remoteTrack)
 	return t.Title, t.Artist, t.Album
+}
+
+// TrackLive reports whether the carried track is a live stream (a track with no duration).
+func (p *Player) TrackLive() bool {
+	t, _ := p.extTrack.Load().(remoteTrack)
+	if t.Title == "" {
+		return false
+	}
+	if pos, ok := TrackPosition(t.Title); ok {
+		return pos.Dur == 0
+	}
+	return t.Live
 }
 
 // Playing reports what the track is doing, which is what decides whether a turn has anything to take

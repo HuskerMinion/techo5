@@ -52,7 +52,7 @@ func (r *renderer) nowPlaying(s scene) {
 		label += "  ·  " + station
 		headline, sub = rd.Title, rd.Artist
 	}
-	r.text(r.small, label, r.margin, r.s(150), amber)
+	r.text(r.small, r.clipTo(r.small, label, r.w-2*r.margin), r.margin, r.s(150), amber)
 	if s.hasLyric && rd.Title != "" && starting == "" {
 		r.lyricLines(s.lyric, rd)
 	} else {
