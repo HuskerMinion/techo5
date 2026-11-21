@@ -1,9 +1,15 @@
 package home
 
 import (
+	"context"
+	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
 func TestMAServiceOf(t *testing.T) {
@@ -250,5 +256,112 @@ func TestNowPlayingNamesTheMusicAssistantService(t *testing.T) {
 	unknown := playingSnapshot{carried: true, extTitle: "Song", screenPlaying: true}
 	if got := nowPlayingOf(unknown); got.source != MusicAssistantName {
 		t.Errorf("unknown: source %q, want %q", got.source, MusicAssistantName)
+	}
+}
+
+// fakeMALibrary gives the device a Music Assistant token when token is set, and puts answer in Music
+// Assistant's place for the library item asked about; it returns the URIs asked for.
+func fakeMALibrary(t *testing.T, token bool, answer func(uri string) (musicassistant.Item, error)) *[]string {
+	t.Helper()
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if token {
+		tok := "token"
+		if err := config.Set().MusicAssistant().Server("http://music.example:8095", &tok); err != nil {
+			t.Fatal(err)
+		}
+	}
+	was := maItemByURI
+	var asked []string
+	var mu sync.Mutex
+	maItemByURI = func(_ context.Context, _ musicassistant.Client, uri string) (musicassistant.Item, error) {
+		mu.Lock()
+		asked = append(asked, uri)
+		mu.Unlock()
+		return answer(uri)
+	}
+	t.Cleanup(func() { maItemByURI = was })
+	return &asked
+}
+
+func mapped(domains ...string) musicassistant.Item {
+	it := musicassistant.Item{URI: "library://track/22", Provider: "library"}
+	for _, d := range domains {
+		it.Mappings = append(it.Mappings, musicassistant.Mapping{Domain: d, Instance: d + "--x"})
+	}
+	return it
+}
+
+// A library track is named by the service Music Assistant has it from (#674).
+func TestMASourceLibraryTrackNamesItsService(t *testing.T) {
+	asked := fakeMALibrary(t, true, func(string) (musicassistant.Item, error) { return mapped("ytmusic"), nil })
+	h := &maHome{}
+	h.set(maAnswer{"library://track/22", "Song", true})
+	found := fakeMASource(t, h)
+	maSourceFor("Song")
+	waitFound(t, found)
+	if got := maSourceFor("Song"); got != "YouTube Music" {
+		t.Errorf("got %q, want YouTube Music", got)
+	}
+	if len(*asked) != 1 || (*asked)[0] != "library://track/22" {
+		t.Errorf("Music Assistant asked for %v", *asked)
+	}
+}
+
+func TestMALibraryService(t *testing.T) {
+	no := false
+	for name, c := range map[string]struct {
+		item musicassistant.Item
+		want string
+	}{
+		"youtube music":     {mapped("ytmusic"), "YouTube Music"},
+		"files first":       {mapped("filesystem_local", "spotify"), "Spotify"},
+		"files only":        {mapped("filesystem_local"), "Library"},
+		"files on shares":   {mapped("filesystem_smb", "filesystem_nfs"), "Library"},
+		"radio":             {mapped("radiobrowser"), "Radio"},
+		"unknown provider":  {mapped("newprovider"), ""},
+		"files and unknown": {mapped("filesystem_local", "newprovider"), ""},
+		"no mappings":       {mapped(), ""},
+		"unavailable skipped": {func() musicassistant.Item {
+			it := mapped("spotify", "tidal")
+			it.Mappings[0].Available = &no
+			return it
+		}(), "Tidal"},
+	} {
+		fakeMALibrary(t, true, func(string) (musicassistant.Item, error) { return c.item, nil })
+		if got := maServiceOfContent("library://track/22"); got != c.want {
+			t.Errorf("%s: got %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+// Without a token, or when Music Assistant cannot say, a library track is Music Assistant's, not the
+// Library: it may well be a service's.
+func TestMALibraryServiceUnknown(t *testing.T) {
+	asked := fakeMALibrary(t, false, func(string) (musicassistant.Item, error) { return mapped("filesystem_local"), nil })
+	if got := maServiceOfContent("library://track/22"); got != "" {
+		t.Errorf("no token: %q, want nothing known", got)
+	}
+	if len(*asked) != 0 {
+		t.Errorf("Music Assistant asked without a token")
+	}
+	if got := maScreenName(maServiceOfContent("library://track/22")); got != MusicAssistantName {
+		t.Errorf("no token on the screen: %q, want %q", got, MusicAssistantName)
+	}
+
+	fakeMALibrary(t, true, func(string) (musicassistant.Item, error) { return musicassistant.Item{}, errors.New("down") })
+	if got := maServiceOfContent("library://track/22"); got != "" {
+		t.Errorf("lookup failed: %q, want nothing known", got)
+	}
+
+	// Other URIs are named by their scheme alone, without asking.
+	asked = fakeMALibrary(t, true, func(string) (musicassistant.Item, error) { return mapped("ytmusic"), nil })
+	if got := maServiceOfContent("filesystem_local--m://track/a.flac"); got != "Library" {
+		t.Errorf("own files: %q, want Library", got)
+	}
+	if got := maServiceOfContent("spotify--a://track/1"); got != "Spotify" {
+		t.Errorf("spotify: %q", got)
+	}
+	if len(*asked) != 0 {
+		t.Errorf("Music Assistant asked about %v", *asked)
 	}
 }

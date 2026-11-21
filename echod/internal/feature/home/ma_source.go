@@ -1,6 +1,7 @@
 package home
 
 import (
+	"context"
 	"log/slog"
 	"strings"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
 // Where a Music Assistant track comes from: Spotify, Plex, a radio station, the music on its own disks.
@@ -22,6 +24,12 @@ import (
 // The entity is asked once per track, in the background, with the Home Assistant token the device was
 // given (as resume and the emptied queue ask it, resume_ma.go and emptied_ma.go). Without the token, or
 // for a provider not known here, the name stays Music Assistant.
+//
+// A track saved in Music Assistant's library plays as library://track/<id> whichever service it streams
+// from (#674), and Home Assistant does not say which. Music Assistant does: with the token the device
+// was given for its music library, the item is asked for by that URI and named by the services it is
+// mapped to (maLibraryService). Without the token, or when that fails, it is Music Assistant, not
+// Library: most library tracks are a service's, and nothing says this one is the server's own files.
 
 // MusicAssistantName is what a Music Assistant track is called when where it comes from is not known.
 const MusicAssistantName = "Music Assistant"
@@ -179,21 +187,73 @@ func maLookup() {
 // maLookupTitle asks Home Assistant what Music Assistant's entity for this device plays, until it names
 // title or the tries run out, and says the service of what it last named.
 func maLookupTitle(title string) string {
-	service := ""
+	last := ""
 	for try := 0; try < maLookupTries; try++ {
 		if try > 0 {
 			maLookupWait()
 		}
 		content, named, ok := maContent()
 		if !ok {
-			return service
+			break
 		}
-		service = maServiceOf(content)
+		last = content
 		if sameTitle(named, title) {
-			return service
+			break
 		}
 	}
-	return service
+	return maServiceOfContent(last)
+}
+
+// maServiceOfContent is maServiceOf, but for an item of Music Assistant's library (library://...), which
+// can be any service's, the service Music Assistant has it from (maLibraryService).
+func maServiceOfContent(contentID string) string {
+	scheme, _, _ := strings.Cut(strings.TrimSpace(contentID), "://")
+	if !strings.EqualFold(scheme, "library") {
+		return maServiceOf(contentID)
+	}
+	return maLibraryService(strings.TrimSpace(contentID))
+}
+
+// maLibraryService is the service the library item uri is played from, asked of Music Assistant: the
+// first playable mapping to a service known here, other than the library and the server's own files;
+// Library when the server's own files are all it is mapped to; empty when Music Assistant cannot be
+// asked (no token) or does not say.
+func maLibraryService(uri string) string {
+	m := config.Get().MusicAssistant
+	if !m.Set() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	item, err := maItemByURI(ctx, musicassistant.Client{URL: m.URL, Token: m.Token}, uri)
+	if err != nil {
+		slog.Warn("music assistant: asking for the library track's services failed", "err", err)
+		return ""
+	}
+	files := 0
+	for _, mp := range item.Mappings {
+		domain := strings.ToLower(mp.Domain)
+		if maLocalFiles(domain) {
+			files++
+			continue
+		}
+		if s := maProviders[domain]; s != "" && s != maServiceLibrary && mp.Playable() {
+			return s
+		}
+	}
+	if files > 0 && files == len(item.Mappings) {
+		return maServiceLibrary
+	}
+	return ""
+}
+
+// maLocalFiles is whether a provider domain is the server's own files: a music folder on its disk or on
+// a share (filesystem_local, filesystem_smb, filesystem_nfs ...).
+func maLocalFiles(domain string) bool { return strings.HasPrefix(domain, "filesystem_") }
+
+// maItemByURI asks Music Assistant for the item uri; tests put their own in.
+var maItemByURI = func(ctx context.Context, c musicassistant.Client, uri string) (musicassistant.Item, error) {
+	return c.ItemByURI(ctx, uri)
 }
 
 // sameTitle is whether Home Assistant's media_title is the title Sendspin gave, as far as the two can

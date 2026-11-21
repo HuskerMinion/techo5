@@ -84,11 +84,28 @@ type Item struct {
 	} `json:"artists"`
 	// Provider is where the item is held: a service's instance id, or "library"; Mappings are the
 	// services it is found on, a library item's included.
-	Provider string `json:"provider"`
-	Mappings []struct {
-		Instance string `json:"provider_instance"`
-		Domain   string `json:"provider_domain"`
-	} `json:"provider_mappings"`
+	Provider string    `json:"provider"`
+	Mappings []Mapping `json:"provider_mappings"`
+}
+
+// Mapping is one service an item is found on: its domain ("ytmusic"), the instance of it, and whether
+// the item can be played from there; Available is nil when the server does not say, which it takes as
+// available.
+type Mapping struct {
+	Instance  string `json:"provider_instance"`
+	Domain    string `json:"provider_domain"`
+	Available *bool  `json:"available"`
+}
+
+// Playable is whether the item can be played from this mapping, as far as the server says.
+func (m Mapping) Playable() bool { return m.Available == nil || *m.Available }
+
+// ItemByURI is the item the server knows by uri, read in full: a library item ("library://track/22")
+// with the services it is mapped to.
+func (c Client) ItemByURI(ctx context.Context, uri string) (Item, error) {
+	var out Item
+	err := c.do(ctx, "music/item_by_uri", map[string]any{"uri": uri}, &out)
+	return out, err
 }
 
 // From is whether the item is on the service with this instance id or domain, by where it is held,
