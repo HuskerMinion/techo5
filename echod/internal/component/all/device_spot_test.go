@@ -4,7 +4,7 @@ package all
 
 // notOnThisDevice: what the Echo Spot build leaves out of the shared list: the LED ring's entities, as
 // on the Show, and the Show's own screen settings.
-var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popup_sources_chosen", "calendar_popups", "calendar_sources_chosen", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_night_warmth", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_dim_after_idle", "screen_dim", "screen_dimmed", "screen_date_color", "screen_glance_chip_size", "screen_glance_with_music", "screen_weather_position", "screen_clock_tap", "screen_dashboard_tiles", "screen_dashboard_layout", "screen_dashboard_handle", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
+var notOnThisDevice = append(ringOnly, "calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popup_sources_chosen", "calendar_popups", "calendar_sources_chosen", "screen_now_playing", "screen_theme", "screen_theme_mode", "screen_timer_style", "screen_night_warmth", "screen_light_theme", "screen_auto_brightness_dimmest", "screen_dim_after_idle", "screen_dim", "screen_dimmed", "screen_date_color", "screen_glance_chip_size", "screen_glance_with_music", "screen_weather_position", "screen_dashboard_tiles", "screen_dashboard_layout", "screen_dashboard_handle", "lyrics", "screen_night_tap_lifts", "slideshow_pairs",
 	// A call keeps its own page on the Spot (feature/display callscreen_spot.go).
 	"screen_call_screen",
 	// The next alarm on the night clock is the Echo Show 5's and Show 8's (feature/display night_alarm.go).
