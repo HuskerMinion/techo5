@@ -78,7 +78,7 @@ type Lyric struct {
 // switch is off, the source does not say where the song is, or the song has no timed words. A song not
 // yet looked up is looked up, and shows once the answer is in.
 func (f *Feature) LyricNow(r Radio, now time.Time) (Lyric, bool) {
-	if !LyricsOn() || r.Title == "" || r.Artist == "" {
+	if !LyricsOn() || r.Title == "" || r.Artist == "" || r.Stand {
 		return Lyric{}, false
 	}
 	pos, ok := TrackPosition(r)

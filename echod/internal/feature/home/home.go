@@ -58,10 +58,13 @@ type Radio struct {
 	// What the station is playing, when its service says: the song, and a picture for the
 	// background — the cover when there is one, else the station's logo (Logo true).
 	Title, Artist, Album string
-	Art                  *image.RGBA
-	Thumb                *image.RGBA // the same picture as a square, fitted or filled the same way
-	Logo                 bool
-	Music                bool // a music station, for the default picture when there is none
+	// Stand is Artist being the album standing in for an artist Music Assistant did not send (byline):
+	// a station's name, which is shown under the title but is nobody's song to look up words for.
+	Stand bool
+	Art   *image.RGBA
+	Thumb *image.RGBA // the same picture as a square, fitted or filled the same way
+	Logo  bool
+	Music bool // a music station, for the default picture when there is none
 
 	// Followed is another of Home Assistant's players on the page (follow.go): its buttons go to it,
 	// and Done puts it away rather than stopping it.
@@ -811,6 +814,7 @@ func carried(r Radio) Radio {
 		// has let it go.
 		r.Playing, r.Now = false, maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.heldTitle, byline(s.heldArtist, s.heldAlbum), s.heldAlbum
+		r.Stand = s.heldArtist == "" && r.Artist != ""
 		r.Art, r.Thumb = remoteArt()
 		r.Logo = false
 		r.Music = true
@@ -821,6 +825,7 @@ func carried(r Radio) Radio {
 		r.Chosen = ""
 		r.Playing, r.Now = true, maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.extTitle, byline(s.extArtist, s.extAlbum), s.extAlbum
+		r.Stand = s.extArtist == "" && r.Artist != ""
 		// Music Assistant's own picture for the track when it sent one. Without one the page draws a
 		// stand-in of its own, so the last station's cover and logo must not be left behind somebody
 		// else's.
