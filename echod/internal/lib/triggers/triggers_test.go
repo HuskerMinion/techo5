@@ -155,6 +155,8 @@ func TestOrdinaryCommandsLeaveTheScreenAlone(t *testing.T) {
 		"acende a luz da cozinha", "coloca um timer de dez minutos",
 		"encén la llum de la cuina", "posa un temporitzador de deu minuts", "posa música",
 		"aprinde lumina în bucătărie", "pune un cronometru de zece minute", "pune muzică",
+		"trezește-mă devreme", "pune alarma mai devreme", "pune o alarmă cu o oră mai devreme",
+		"pornește muzica în vreme ce gătesc", "de vreme ce ai timp, pune muzică",
 	}
 	for _, s := range quiet {
 		if AboutWeather(s, MatchAll) {
@@ -233,7 +235,8 @@ func TestPortugueseLookalikes(t *testing.T) {
 // other language still asks for it.
 func TestEnglishInsideOtherLanguagesWords(t *testing.T) {
 	for _, heard := range []string{"what does the temporal lobe do", "call my neighbor", "how much storage is left",
-		"I never said that", "plough the field", "is it neutral"} {
+		"I never said that", "plough the field", "is it neutral",
+		"betaal de rekeningen", "hoeveel woningen zijn er", "duplicate grade report"} {
 		if AboutWeather(heard, MatchAll) {
 			t.Errorf("%q was taken as the weather under match all", heard)
 		}
@@ -242,7 +245,8 @@ func TestEnglishInsideOtherLanguagesWords(t *testing.T) {
 		"fr": {"Il va neiger demain ?", "Il a neigé ?", "Un orage ce soir ?", "Risque d'orage ?"},
 		"it": {"Domani ci sarà neve?", "Cade la neve?"},
 		"pt": {"Vai ter temporal?", "Vem temporal hoje?"},
-		"ro": {"Va ploua azi?", "Ninge mâine?", "Vine furtuna?", "Cate grade sunt afara?"},
+		"ro": {"Va ploua azi?", "Ninge mâine?", "Vine furtuna?", "Cate grade sunt afara?", "Ce temperatură e afară?",
+			"Ce vreme e azi?", "O să ningă?"},
 	} {
 		for _, h := range heard {
 			if !AboutWeather(h, lang) || !AboutWeather(h, MatchAll) {
