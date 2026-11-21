@@ -672,7 +672,11 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 			cur = sv.draft.alarm.Wake
 		}
 		p := pickerView{title: tr("wake_with"), cur: 0}
-		for i, w := range wakeOptions(cur) {
+		opts := wakeOptions(cur)
+		wakeShown.Lock()
+		wakeShown.opts = opts
+		wakeShown.Unlock()
+		for i, w := range opts {
 			p.opts = append(p.opts, wakeLabel(w))
 			if w == cur {
 				p.cur = i
@@ -1048,7 +1052,10 @@ func (d *Display) choose(id string, i int) {
 		if dr == nil {
 			break
 		}
-		if opts := wakeOptions(dr.alarm.Wake); i >= 0 && i < len(opts) {
+		wakeShown.Lock()
+		opts := wakeShown.opts
+		wakeShown.Unlock()
+		if i >= 0 && i < len(opts) {
 			d.editDraft(func(dr *alarmDraft) { dr.alarm.Wake = opts[i] })
 		}
 	case "slideshow":

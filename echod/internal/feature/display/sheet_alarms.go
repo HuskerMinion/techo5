@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -442,6 +443,14 @@ func wakeOptions(cur config.WakeWith) []config.WakeWith {
 		out = append(out, cur)
 	}
 	return out
+}
+
+// wakeShown is the Wake with list as it was last drawn, which a tap is read against: Music Assistant's
+// favorites can arrive while the list is open, and a list built again at the tap could have moved the
+// one tapped.
+var wakeShown struct {
+	sync.Mutex
+	opts []config.WakeWith
 }
 
 // wakeLabel is a Wake with choice as the list says it.
