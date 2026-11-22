@@ -2091,6 +2091,14 @@ worst a fault can do is what happened before: two devices hear you and Home Assi
 faster. A wake word heard by Home Assistant's own engine (above) is settled by Home Assistant as
 before.
 
+A wake the device wasn't sure of and asks Home Assistant about (Confirm wake with Home Assistant,
+above) takes part too. As it asks, it tells the others how clearly it heard the word. A device that
+heard it for sure but less clearly waits for Home Assistant's answer, up to about two seconds,
+instead of answering at once. If Home Assistant hears the word, whichever device heard it more clearly
+answers; if not, the one that was sure answers. The log on the waiting device says "nearest device:
+waiting on a device asking home assistant". A device on a release before this one doesn't wait, and
+answers as it did before.
+
 **Nearest device window** (100 to 500 ms, 300 to start with) is how long a device waits to hear from
 the others. Every wake word waits this long. Raise it if two devices sometimes both answer, or a
 nearer one loses; lower it if the wait is noticeable. **Nearest device offset** (-30 to 30 dB, 0 to

@@ -94,8 +94,12 @@ type Engine struct {
 	// away again without reaching the slot's threshold, with the peak it reached: a wake that is
 	// either a word said unlike the voices the model learned from or a sound like it, which Home
 	// Assistant's engine can tell apart (see voice's confirm).
-	Candidate   func(slot int) float64
-	OnCandidate func(slot int, peak float64)
+	// OnCandidateStart runs, off the audio path, as an utterance first goes over it: the moment a
+	// device sure of the word would claim it (feature/nearest), where OnCandidate only comes once the
+	// utterance has fallen away, up to CandidateFor later (#685).
+	Candidate        func(slot int) float64
+	OnCandidate      func(slot int, peak float64)
+	OnCandidateStart func(slot int)
 	// OnFrame sees every frame the detector scores, with the engine's lock held: it must only copy
 	// (clips.go).
 	OnFrame func(frame []int16)
@@ -661,6 +665,10 @@ func (e *Engine) candidate(n int, s *slot, score, cutoff float64, now time.Time)
 	if score >= bound {
 		if !s.candidate {
 			s.candidate, s.candidateAt, s.candidatePeak = true, now, score
+			if e.OnCandidateStart != nil {
+				i := n
+				safe.Go("wake candidate start", func() { e.OnCandidateStart(i) })
+			}
 		}
 		s.candidatePeak = max(s.candidatePeak, score)
 		if now.Sub(s.candidateAt) < CandidateFor {

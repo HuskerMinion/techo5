@@ -19,8 +19,13 @@ const History = 250 * time.Millisecond
 // score the word at all.
 const Confirming = 2 * time.Second
 
+// Held is how far back a turn can reach after a wake word held back while another device asked Home
+// Assistant about one it was not sure of (feature/nearest, #685): the word, the wait, and the request
+// said straight after the word.
+const Held = 3 * time.Second
+
 // The ring holds the longest of these, whatever is being sent of it.
-const historySamples = 2 * Rate
+const historySamples = 3 * Rate
 
 // history is a ring of the most recently captured mono samples.
 type history struct {
