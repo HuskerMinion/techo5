@@ -53,8 +53,15 @@ const (
 // microphones on the same memory interface and clock. UL9 takes O26..O41 (mt8519-afe-pcm.c: "UL9" from
 // O26 to O41; "O30 I40 Switch" on AFE_CONN30_1 bit 8, "O31 I41 Switch" on AFE_CONN31_1 bit 9). It is
 // the digital stream before the MAX98396, so it does not grow with the amplifier's gain, and it holds
-// none of the speaker's distortion. Its lag behind the microphones and its polarity are not measured
-// yet (`techo5 echo` reports both).
+// none of the speaker's distortion.
+//
+// Measured on one unit (2026-11-22, `echod tools echo`, five runs of the sweep and of white
+// noise, all alike): the microphones hear the speaker 8 samples at 16 kHz (0.5 ms) after this
+// reference, ch2 9 (0.56 ms), so the reference leads and the canceller never has to look back. The
+// polarity is the same: the strongest positive correlation is at that lag for white noise too, which
+// an inverted reference would not give. ch0 and ch1 hear the speaker alike (-34.9 dBFS at level 0.25),
+// ch2 6 dB under them. One delayed copy removes only 1 to 3 dB (the driver and the enclosure filter
+// what reaches the microphones); the 1024-tap canceller took 31 dB off the sweep and 15 off the noise.
 var cannoliStreamRef = []int{4, 5}
 
 var cannoliRefControls = []athenaControl{
