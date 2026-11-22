@@ -3,6 +3,7 @@
 package plexcast
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"testing"
@@ -153,6 +154,43 @@ func TestWhereItIs(t *testing.T) {
 	p.base, p.started = time.Minute, now
 	if got := p.atLocked(now); got != time.Minute {
 		t.Errorf("past the end: %v, want the length", got)
+	}
+}
+
+// A link tells the screens and not the player's life. Waking the life with no account linked has it
+// clean up (off), which cancels the link it was just asked for: a device said "context canceled" ten
+// milliseconds after Link Account was tapped because of exactly that (plexcast.go).
+func TestALinkDoesNotWakeThePlayer(t *testing.T) {
+	f := &Feature{wake: make(chan struct{}, 1)}
+	told := 0
+	f.els = []func(){func() { told++ }}
+	f.listeners()
+	if told != 1 {
+		t.Errorf("the listeners told the screens %d times, want 1", told)
+	}
+	select {
+	case <-f.wake:
+		t.Error("a link's news woke the player's life, which cancels it")
+	default:
+	}
+	f.changed()
+	if told != 2 {
+		t.Errorf("changed told the screens %d times, want 2", told)
+	}
+	select {
+	case <-f.wake:
+	default:
+		t.Error("an account going on or off did not wake the player's life")
+	}
+}
+
+// A link put away while plex.tv was answering says nothing: it is not an error, and the screen should
+// not read "plex.tv could not be reached" for somebody's own Cancel (pin.go, finishPin).
+func TestAPinPutAwaySaysNothing(t *testing.T) {
+	f := &Feature{}
+	f.finishPin("", context.Canceled)
+	if st := f.status(); st.Err != "" || st.Waiting {
+		t.Errorf("a cancelled link left %q on the screen, waiting %v", st.Err, st.Waiting)
 	}
 }
 

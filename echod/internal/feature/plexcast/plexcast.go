@@ -127,14 +127,23 @@ func Listen(fn func()) {
 	g.mu.Unlock()
 }
 
-// changed tells the listeners, and starts or stops the servers when the account went on or off.
-func (f *Feature) changed() {
+// listeners tells every screen and page that something of the link changed -- a code arriving, a link
+// failing, a poll cancelled -- and nothing of the player. It is what the PIN's own steps say, and the
+// split from changed matters: with no account linked the life's answer to a wake is to clean up (off),
+// which cancels the link being made, so a link would fail the moment it started.
+func (f *Feature) listeners() {
 	f.mu.Lock()
 	els := append([]func(){}, f.els...)
 	f.mu.Unlock()
 	for _, fn := range els {
 		fn()
 	}
+}
+
+// changed tells the listeners and wakes the life, for an account going on or off: the player starts
+// when there is a token, and stops when there is none.
+func (f *Feature) changed() {
+	f.listeners()
 	select {
 	case f.wake <- struct{}{}:
 	default:
@@ -201,7 +210,8 @@ func (f *Feature) Run(ctx context.Context) error {
 }
 
 // off forgets an account that is no longer linked: a link that was in progress, what was playing, and
-// the status the screens read.
+// the status the screens read. Only the life may cancel a link here, reached by changed: a PIN's own
+// steps use listeners, or this would end the link they had just begun.
 func (f *Feature) off() {
 	f.mu.Lock()
 	if f.pin.cancel != nil {

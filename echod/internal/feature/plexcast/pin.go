@@ -5,6 +5,7 @@ package plexcast
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -64,7 +65,7 @@ func (f *Feature) startPin() (string, error) {
 	f.pin = pinFlow{cancel: cancel, waiting: true}
 	f.st.Code, f.st.Waiting, f.st.Err = "", true, ""
 	f.mu.Unlock()
-	f.changed()
+	f.listeners()
 
 	reply, err := createPin(ctx)
 	if err != nil {
@@ -76,7 +77,7 @@ func (f *Feature) startPin() (string, error) {
 	f.pin.code = reply.Code
 	f.st.Code = reply.Code
 	f.mu.Unlock()
-	f.changed()
+	f.listeners()
 	slog.Info("plex: waiting for the code to be entered", "code", reply.Code)
 	safe.Go("plex pin", func() { f.pollPin(ctx, idString(reply.ID)) })
 	return reply.Code, nil
@@ -185,6 +186,9 @@ func (f *Feature) finishPin(code string, err error) {
 	msg := ""
 	switch {
 	case err == nil:
+	case errors.Is(err, context.Canceled):
+		// The card was put away while plex.tv was answering: nobody is waiting for it, so there is
+		// nothing to say and nothing to warn about.
 	case err == errExpired || strings.Contains(err.Error(), "expired"):
 		msg = "the code expired"
 	default:
@@ -198,7 +202,7 @@ func (f *Feature) finishPin(code string, err error) {
 	f.pin = pinFlow{code: code, err: msg}
 	f.st.Code, f.st.Waiting, f.st.Err = code, false, msg
 	f.mu.Unlock()
-	f.changed()
+	f.listeners()
 }
 
 // CancelPinLink stops a link being made: the poll ends and the code is forgotten. It is the Cancel on
@@ -213,7 +217,7 @@ func (f *Feature) cancelPin() {
 	f.pin = pinFlow{}
 	f.st.Code, f.st.Waiting = "", false
 	f.mu.Unlock()
-	f.changed()
+	f.listeners()
 }
 
 // UnlinkAccount forgets the account: the token and who it belonged to, the servers (the Run loop stops
