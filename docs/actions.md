@@ -1731,10 +1731,11 @@ comes up, and once more as it goes.
 
 | Field | |
 |---|---|
-| `event` | `shown` as it comes up; then `dismissed` (somebody tapped it, or its picture's camera page was closed), `expired` (its time ran out), `replaced` (a newer notification, or a camera put up over its picture, took its place) or `cleared` (an automation took it down with `notify_clear`) |
+| `event` | `shown` as it comes up; then `dismissed` (somebody tapped it, or its picture's camera page was closed), `expired` (its time ran out), `replaced` (a newer notification, or a camera put up over its picture, took its place), `cleared` (an automation took it down with `notify_clear`) or `action` (somebody tapped one of its [buttons](#show-a-notification-with-buttons)) |
+| `action` | The `id` of the button that was tapped, with `event: action`; `""` on every other event |
 | `id` | The notification's own, unique on its device: the numbers count up from a random start each time the device starts, so one from before a restart is very unlikely to come again. Pair it with `device` |
 | `tag` | The `tag` the call passed, `""` for none |
-| `kind` | `text` for `notify`, `picture` for `notify_picture` |
+| `kind` | `text` for `notify`, `notify_buttons` and `notify_critical`, `picture` for `notify_picture` |
 | `title` | The title as shown (clipped), `""` for none |
 | `message` | The message as shown (clipped), `""` for none |
 | `device` | The device's own name, as set on the device (`Kitchen`), not the node in the action's name (`kitchen`). A name given to the device in Home Assistant's own settings is not seen by the device, so the event still carries the device's own |
@@ -2039,13 +2040,166 @@ actions:
           message: "Nobody answered the door"
 ```
 
+## Show a notification with buttons
+
+In YAML, refer to this action as `esphome.<node>_notify_buttons`.
+
+`notify_sized` with up to three buttons along the foot of the card, like an actionable notification
+on a phone. A tap on a button tells Home Assistant which one, and that ends the notification. A tap
+anywhere else on the card puts it away, as on any card.
+
+It takes every argument `notify_sized` takes, in the same order, and then `buttons`:
+
+| Argument | Type | Accepted values | Empty means |
+|---|---|---|---|
+| `buttons` | string | Up to three, split by commas or new lines. Each is `Label=id`, or `Label` alone for a button whose id is its label. A label is one line of up to 24 bytes; an id is up to 64 bytes of any text. A list with any bad button is refused whole, with the reason. | No buttons: the same as `notify_sized`. |
+
+- **The tap.** It fires the [notification event](#the-event) with `event: action` and `action` set to
+  the button's id. That is the notification's last event: no `dismissed` follows.
+- **Night.** As any notification: no chime and no words, and it waits for a touch before it is shown.
+  With **Night clock shows Next up and notifications** on, a card with buttons is not drawn on the
+  night clock, which has no room for them: it waits for a touch, then shows as by day.
+- **On a Spot** the face shows two lines of the message and the first two buttons.
+- **A Dot** has nothing to tap. It shows the notification as `notify` does: the chime, the words if
+  asked, the events.
+
+```yaml
+# The washer is done: put it on the list, or leave it.
+action: esphome.kitchen_notify_buttons
+data:
+  message: "The washing machine is done"
+  title: "Washer"
+  icon: "mdi:washing-machine"
+  chime: ""
+  speak: ""
+  tag: "washer"
+  seconds: 0
+  size: ""
+  buttons: "Hang up later=later, Done=done"
+```
+
+```yaml
+# What the tap does: wait for one of the two buttons on that card.
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_notification
+    event_data:
+      event: action
+      tag: washer
+      action: later
+actions:
+  - action: todo.add_item
+    target:
+      entity_id: todo.chores
+    data:
+      item: "Hang up the washing"
+```
+
+## Show a critical notification
+
+In YAML, refer to this action as `esphome.<node>_notify_critical`.
+
+For news somebody must not miss: water under the sink, smoke, a freezer left open. The card comes up
+with buttons, as [`notify_buttons`](#show-a-notification-with-buttons), and the device rings, as an
+alarm does: a repeating three-note tone, the light ring pulsing and music ducked under it.
+
+- **It rings through the night and quiet hours**, at its own `volume`, whatever the device's volume
+  is set to. It is not held for a touch.
+- **The screen pulses red while it rings.** On a Show the whole screen around the card pulses and the
+  card has a red edge; on a Spot a wide band along the rim pulses.
+- **The screen takes its own brightness while it rings.** A screen that was off turns on, at night
+  too. It goes to `brightness`, whatever auto-brightness, Dim after idle or the night light would
+  give, climbing from where it was over `brightness_rise` seconds. Nothing is saved: the Brightness
+  setting and the screen's light in Home Assistant stay as they were.
+- **Afterwards.** Once it is quieted, the pulse stops and the screen fades back to the brightness it
+  would otherwise have, over `brightness_rise` again (2 seconds at least). The card stays up, so it
+  can still be read. A screen that was off when it came turns off again once the notification is
+  gone: answered with a button, cleared, or run out.
+- **It rings until it is quieted**, for 15 minutes at most, as an alarm does. A tap on the card off the
+  buttons, the stop word, and Stop in Home Assistant quiet it.
+- **Quieting leaves the card up.** Only a button answers it: the tap fires the event with
+  `event: action`, and the notification ends. An automation can also take it down with
+  [`notify_clear`](#take-a-notification-down), or let `seconds` run out.
+- **Nothing takes its place but another critical one.** A notification that comes while it is up
+  waits, the latest one only, and shows without its chime once the critical one goes. One that is
+  replaced while waiting reports `replaced`. A picture notification is refused while one is up: it is
+  not shown, and the device's log says *a critical notification is up*. (Home Assistant reports the
+  call as done either way, since an ESPHome action does not carry an error back.)
+- **Sound.** There is no `chime` and no `speak`: the ring is the sound.
+- **A Dot** has no screen and no buttons. It rings. The stop word or the action button ends the
+  notification as `dismissed`, and ringing out ends it as `expired`.
+
+| Argument | Type | Accepted values | Empty / `0` means |
+|---|---|---|---|
+| `message` | string | As for [`notify`](#show-a-notification). | Not allowed. |
+| `title` | string | As for `notify`. Also the ring's name in the **Sounding what** sensor. | No heading text. |
+| `icon` | string | As for `notify`. | No icon. |
+| `tag` | string | As for `notify`. | No tag. |
+| `seconds` | integer | How long the card stays, in seconds, a day at most. The ring stops after 15 minutes either way. | Until a button answers it, 12 hours at most. |
+| `size` | string | `normal`, `large` or `huge`, as [`notify_sized`](#reading-it-from-across-the-room). | `normal`. |
+| `buttons` | string | As for [`notify_buttons`](#show-a-notification-with-buttons). | One button, **OK** in the screen's language, with the id `ok`. |
+| `volume` | integer | How loud it rings, in percent of the speaker's range, 1 to 100. | The ring volume set on the device for alarms, not silent: a critical notification always rings. |
+| `volume_rise` | integer | Seconds over which the ring fades in: it starts at the device's volume at that moment (one step at least, so a device turned down to 0 is still heard) and climbs evenly to `volume`. A device already as loud as `volume` or louder rings at `volume` from the start. At most 15 minutes, the length of the whole ring. | No fade: `volume` from the first tone. |
+| `brightness` | integer | How bright the screen is while it rings, in percent, 1 to 100. A Dot has no screen and ignores it. | Full brightness, not dark. |
+| `brightness_rise` | integer | Seconds over which the screen climbs from its brightness at that moment to `brightness`, and over which it fades back afterwards. At most 15 minutes. | At once; the way back takes 2 seconds. |
+
+```yaml
+# A leak: ring loud, at any hour, until somebody answers.
+action: esphome.kitchen_notify_critical
+data:
+  message: "Water under the kitchen sink"
+  title: "Leak"
+  icon: "mdi:water-alert"
+  tag: "leak"
+  seconds: 0
+  size: large
+  buttons: "Water off=valve_off, Seen=ok"
+  volume: 80
+  volume_rise: 20
+  brightness: 0
+  brightness_rise: 5
+```
+
+```yaml
+# Somebody pressed Water off: close the valve.
+triggers:
+  - trigger: event
+    event_type: esphome.techo5_notification
+    event_data:
+      event: action
+      tag: leak
+      action: valve_off
+actions:
+  - action: valve.close_valve
+    target:
+      entity_id: valve.main_water
+```
+
+### Like a phone's notifications
+
+Home Assistant's phone app takes one `notify.mobile_app_*` call with `message`, `title` and `data`.
+The ESPHome connection TECHO5 uses has no notify entities, so the device can't be a `notify.*`
+target itself. The [Notify devices](../blueprints/script/techo5/notify_devices.yaml) script blueprint
+fills that role: it takes `message`, `title`, `buttons`, `critical`, `volume`, `volume_rise`, `brightness` and `brightness_rise`, and calls the right
+action on each device. What a phone notification does maps onto it like this:
+
+| Phone app | TECHO5 |
+|---|---|
+| `data.actions` (`action`, `title`) | `buttons: "Title=action, ..."` |
+| `mobile_app_notification_action` event | `esphome.techo5_notification` with `event: action` and `action` |
+| `data.push.sound.critical: 1`, `volume` | `notify_critical`, `volume` in percent (`volume_rise` to fade it in); `brightness` for the screen |
+| `data.tag` and `message: clear_notification` | `tag`, then `notify_clear` with that tag |
+| `data.ttl` / timeout | `seconds` |
+
 ## Take a notification down
 
 In YAML, refer to this action as `esphome.<node>_notify_clear`.
 
 Takes a notification down before its time, when the news is over: the messages have been heard, the
 washer has been emptied, somebody opened the door on another device. It works for both kinds, a card
-and a picture, and takes a picture's camera view down with it. The notification reports `cleared`.
+and a picture, and takes a picture's camera view down with it. It stops a critical notification's
+ring, and takes down a notification waiting behind a critical one too. The notification reports
+`cleared`.
 
 | Argument | Type | Accepted values | Empty means |
 |---|---|---|---|
