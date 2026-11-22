@@ -115,7 +115,7 @@ func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 		t.Fatal("still advertised after the switch went off")
 	}
 
-	// A server in the room: still advertised, and nothing is dialed.
+	// Set up, with a server in the room: nothing is dialed over it, and nothing advertised.
 	tok := "t"
 	if err := config.Set().MusicAssistant().Server("http://127.0.0.1:8095", &tok); err != nil {
 		t.Fatal(err)
@@ -125,19 +125,23 @@ func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 	done = make(chan struct{})
 	go func() { l.connect(ctx, "Test", Port); close(done) }()
 	time.Sleep(time.Second)
-	if !advertised.Load() || dialed.Load() != 0 {
+	if advertised.Load() || dialed.Load() != 0 {
 		t.Fatalf("held: advertised %v, dialed %d", advertised.Load(), dialed.Load())
 	}
 	cancel()
 	<-done
 	l.give()
 
-	// Set up and free: the advertisement goes, then Music Assistant is dialed and the session runs.
+	// Set up and free: Music Assistant is dialed first, at once, and the session runs.
+	start := time.Now()
 	connectFor(t, l)
 	select {
 	case <-ran:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the device never dialed Music Assistant")
+	}
+	if waited := time.Since(start); waited > time.Second {
+		t.Errorf("dialed after %v, not at once", waited)
 	}
 	if dialed.Load() != 1 {
 		t.Errorf("dialed %d times", dialed.Load())
@@ -147,8 +151,8 @@ func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 	}
 }
 
-// A Music Assistant that cannot be reached is dialed for a while, and then the device is advertised
-// again.
+// A Music Assistant that cannot be reached is dialed for a while, then the device is advertised, and
+// with no server dialing in it dials again.
 func TestTheDeviceAdvertisesAgainWhenMusicAssistantIsAway(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	advertised := fakeAdvertise(t)
@@ -171,7 +175,10 @@ func TestTheDeviceAdvertisesAgainWhenMusicAssistantIsAway(t *testing.T) {
 		}
 		t.Fatalf("advertised never became %v", want)
 	}
-	saw(true, time.Second)
-	saw(false, 2*time.Second) // gave up on servers dialing in
+	time.Sleep(200 * time.Millisecond)
+	if advertised.Load() {
+		t.Fatal("advertised before Music Assistant was dialed")
+	}
 	saw(true, 15*time.Second) // gave up on Music Assistant
+	saw(false, 2*time.Second) // gave up on servers dialing in, dialing again
 }

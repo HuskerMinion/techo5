@@ -54,10 +54,11 @@ func maSendspinURL(api string) string {
 }
 
 // The device is found one way at a time, as the spec has it: a client does not dial servers while it
-// advertises itself, nor advertise while it dials. It advertises, for the servers on its network to
-// dial in, and with Music Assistant set up and no server having dialed in for advertiseFor it stops
-// advertising and dials Music Assistant instead. Once dialing has failed for dialFor it advertises
-// again. Variables for the tests.
+// advertises itself, nor advertise while it dials. With Music Assistant set up it dials it first, so
+// a device reached only that way (over a VPN) plays seconds after it starts, as it did before the
+// spec's rule; once dialing has failed for dialFor it advertises instead, for the servers on its
+// network to dial in, and with no server having dialed in for advertiseFor it dials again. Without
+// Music Assistant set up it only advertises. Variables for the tests.
 var (
 	advertiseFor = 2 * time.Minute
 	dialFor      = 5 * time.Minute
@@ -67,11 +68,15 @@ var (
 	advertiseFn = advertise
 )
 
-// connect keeps the device findable until ctx ends: advertised, or dialing Music Assistant.
+// connect keeps the device findable until ctx ends: dialing Music Assistant, or advertised.
+// dialUntilAway is back at once when Music Assistant is not set up.
 func (l *listener) connect(ctx context.Context, name string, port int) {
 	for ctx.Err() == nil {
-		l.advertiseUntilIdle(ctx, name, port)
 		l.dialUntilAway(ctx, name)
+		if ctx.Err() != nil {
+			return
+		}
+		l.advertiseUntilIdle(ctx, name, port)
 	}
 }
 
