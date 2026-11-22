@@ -226,6 +226,9 @@ starts every time, which takes one more restart; if it does not, the next restar
 own kernel, which tries the new one twice more and then gives up on it. `lk2nd-ab status` on the
 unit says where it stands. The firmware is outside the slots and stays as the image left it.
 
+An update replaces a slot, not the boot layer (`lk2nd-ab` and the rest of the store's `init`): a
+newer boot layer comes only from installing the unit again from an image that has it.
+
 ## If it does not start
 
 - **Text on the screen that stops**: the last lines say where. A line about `device-mapper` or
