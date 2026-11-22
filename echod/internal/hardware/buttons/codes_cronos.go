@@ -12,7 +12,7 @@ const longHoldAfter = 0
 // The 2nd gen Show 8 on TECHO5's mainline kernel has no gpio-privacy driver: its device tree puts the
 // mute button in gpio-keys as KEY_MICMUTE (248), so nothing on the system takes it for a power key.
 // None of the Shows on Amazon's kernels reports 248. The latch still moves in hardware there, so the
-// mute feature follows it as on the 2nd gen Show 5 (privacy's mainlineMute).
+// mute feature follows it as on the 2nd gen Show 5 (privacy's athenaMute).
 var codes = map[uint16]Name{
 	114: VolumeDown,
 	115: VolumeUp,

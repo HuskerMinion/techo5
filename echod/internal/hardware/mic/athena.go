@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/asp"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/audio"
@@ -326,12 +327,58 @@ func athenaInit(k *athenaKernel) {
 	}
 	defer m.Close()
 	failed := 0
+	cut := privacy.SoftwareCut()
 	for _, c := range k.controls {
-		if !athenaWrite(m, c.name, c.value) {
+		v := c.value
+		// The software mute's own switches: a microphone opened while it is on opens with its channels
+		// off, so not one frame of the room reaches the bus (privacy, platform_athena.go).
+		if cut && athenaChannelEnable(c.name) {
+			v = 0
+		}
+		if !athenaWrite(m, c.name, v) {
 			failed++
 		}
 	}
-	slog.Info("athena: converter set up", "controls", len(k.controls), "failed", failed)
+	slog.Info("athena: converter set up", "controls", len(k.controls), "failed", failed, "software_mute", cut)
+}
+
+// athenaChannelEnable is whether a control is one of the mainline converter's channel enables, which
+// the software mute switches off.
+func athenaChannelEnable(name string) bool {
+	return strings.HasPrefix(name, "CH") && strings.HasSuffix(name, "_ASI_EN Switch")
+}
+
+// athenaCodecCut switches the converter's microphone channels off (cut) or back on, under a running
+// capture as well: every sample reads zero within a period, and the stream does not have to be opened
+// again (measured on a unit, 2026-11-22). It is the software mute's hold on the hardware on TECHO5's
+// mainline kernel, handed to privacy at start.
+func athenaCodecCut(cut bool) error {
+	k := athenaRunning()
+	m, err := alsa.OpenMixer(Card)
+	if err != nil {
+		return fmt.Errorf("athena: opening the mixer: %w", err)
+	}
+	defer m.Close()
+	var v uint32
+	if !cut {
+		v = 1
+	}
+	failed := 0
+	for _, c := range k.controls {
+		if athenaChannelEnable(c.name) && !athenaWrite(m, c.name, v) {
+			failed++
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("athena: %d of the converter's channel switches did not take", failed)
+	}
+	return nil
+}
+
+func init() {
+	if layout.AthenaMainline() {
+		privacy.SetCodec(athenaCodecCut)
+	}
 }
 
 // pairedCapture is the two devices read as one.
