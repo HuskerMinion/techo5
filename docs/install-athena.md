@@ -35,7 +35,10 @@ Known limits:
   Amazon built this model with several panels. TECHO5's kernel has the others' settings too, but they
   haven't been tried on a unit yet. The installer checks which one your unit has (see [Which screen](#which-screen)).
 - The light sensor works but its lux values aren't calibrated yet.
-- The microphone beamformer is off; the microphones are used without it.
+- Amazon's microphone beamformer is off; the microphones are used without it. Its coefficients are
+  read and point where they should, but choosing the beam by loudness made it worse than **All
+  microphones** with a radio in the room, so it is not offered until it chooses the beam better.
+  Where the four microphones sit: [Microphones](../tools/linux/athena/kernel/README.md#microphones).
 
 ## Before you start
 
