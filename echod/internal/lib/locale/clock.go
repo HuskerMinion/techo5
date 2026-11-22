@@ -36,6 +36,10 @@ var sayers = map[string]func(time.Time, Sun) SaidTime{
 // SayTime is the time t as it is said in lang, with no sun to go by.
 func SayTime(t time.Time, lang string) SaidTime { return SayTimeSun(t, lang, Sun{}) }
 
+// NeedsSun is whether lang counts its parts of the day by the sun, so a screen looks home's place
+// up for it only where it changes the saying (clock_es.go).
+func NeedsSun(lang string) bool { return lang == "es" }
+
 // SayTimeSun is the time t as it is said in lang, with today's sun at home.
 func SayTimeSun(t time.Time, lang string, sun Sun) SaidTime {
 	if say, ok := sayers[lang]; ok {

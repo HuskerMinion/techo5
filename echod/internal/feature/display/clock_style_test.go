@@ -128,6 +128,33 @@ func TestClockWordsFollowTheScreen(t *testing.T) {
 	}
 }
 
+// The Spanish hour-first layout at a long time - "son las / cuatro / y cuarenta y tres de la
+// madrugada" - which is what makes it shrink and split the part of the day; with SHOW_PREVIEW set,
+// each panel's is written there.
+func TestShowClockWordsSpanishPreview(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	previewFont(t)
+	t.Cleanup(func() {
+		_ = config.Set().Screen().ClockStyle("")
+		_ = config.Set().Screen().Language("")
+	})
+	if err := config.Set().Screen().ClockStyle("words"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Screen().Language("es"); err != nil {
+		t.Fatal(err)
+	}
+	s := scene{now: time.Date(2026, 9, 16, 4, 43, 0, 0, time.Local), phase: "idle"}
+	for _, panel := range []struct {
+		name       string
+		wide, high int
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+		img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
+		newRenderer(img).draw(s)
+		goldenSave(t, "style-Words-es"+panel.name, img)
+	}
+}
+
 // The Dashboard and the Agenda put each event's calendar color beside it (#667): a calendar with no
 // color from Home Assistant takes ours by its place among the calendars shown, as in the calendar, so
 // two calendars' events have two colors.
