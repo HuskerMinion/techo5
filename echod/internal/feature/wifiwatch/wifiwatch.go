@@ -161,6 +161,7 @@ func (w *Watch) Run(ctx context.Context) error {
 		<-ctx.Done()
 		return nil
 	}
+	wifi.FollowKernel()
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
