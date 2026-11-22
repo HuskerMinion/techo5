@@ -1382,7 +1382,8 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	if _, showing := remind.Get().Showing(); showing && g.Kind == touch.Tap &&
+	n, noticeUp := notify.Get().Card()
+	if _, showing := remind.Get().Showing(); showing && !criticalOnTop(noticeUp, n) && g.Kind == touch.Tap &&
 		d.r != nil && image.Pt(g.X, g.Y).In(d.r.reminderBox()) {
 		go remind.Get().Stop()
 		d.wake()
@@ -1390,8 +1391,9 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 
 	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
-	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
-	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
+	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it, but for a
+	// critical one, which is drawn over the reminder (criticalOnTop).
+	if noticeUp && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
 		d.r.tapNotifyCard(n, image.Pt(g.X, g.Y))
 		d.wake()
 		return

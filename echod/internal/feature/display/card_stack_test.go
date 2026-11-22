@@ -75,3 +75,26 @@ func TestACardSaysHowManyWaitUnderIt(t *testing.T) {
 		t.Error("a card with nothing under it changed after one that had: the count was kept")
 	}
 }
+
+// A critical notification goes over a reminder: it rings until it is answered, and its buttons are how.
+// With a reminder under it, it is drawn as it is alone with one card waiting, the count included.
+func TestACriticalNotificationGoesOverAReminder(t *testing.T) {
+	at := time.Date(2025, 9, 10, 14, 7, 0, 0, time.Local)
+	r := testRenderer()
+	frame := func(s scene) string {
+		r.draw(s)
+		return string(r.dst.Pix)
+	}
+	crit := notify.Notification{Kind: notify.Text, Message: "Water in the basement", Critical: true}
+	over := scene{now: at, phase: "idle", showReminder: true, reminder: remind.Reminder{Label: "Take the trash out"},
+		showNotification: true, notification: crit}
+	alone := scene{now: at, phase: "idle", showNotification: true, notification: crit, popupWaiting: 1}
+	if frame(over) != frame(alone) {
+		t.Error("the reminder was drawn over a critical notification")
+	}
+	plain := over
+	plain.notification.Critical = false
+	if frame(plain) == frame(alone) {
+		t.Error("a plain notification went over the reminder too")
+	}
+}

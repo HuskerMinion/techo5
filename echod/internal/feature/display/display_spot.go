@@ -889,6 +889,17 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// A critical notification takes the face over a reminder and an announcement (render_spot.go), and
+	// the taps with it, unless a camera view is over it.
+	if _, camera := home.Get().Camera(); !camera {
+		if n, up := notify.Get().Card(); up && n.Critical {
+			if g.Kind == touch.Tap && d.r != nil {
+				d.r.tapNotifyFace(n, image.Pt(g.X, g.Y))
+			}
+			d.wake()
+			return
+		}
+	}
 	// A reminder takes the face, over an announcement, and every gesture on it is its.
 	if _, showing := remind.Get().Showing(); showing {
 		d.reminderGesture(g)

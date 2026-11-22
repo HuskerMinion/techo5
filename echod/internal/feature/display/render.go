@@ -762,9 +762,10 @@ func (r *renderer) draw(s scene) {
 		}
 		// The card is in the middle and the strips along the bottom, so a reminder and an
 		// announcement can both be up at once. One card at a time: a reminder over a notification
-		// over an event's pop-up. The one drawn says how many wait under it.
+		// over an event's pop-up, but a critical notification over all of them, since it rings until
+		// it is answered and its buttons are how. The one drawn says how many wait under it.
 		r.cardsUnder = cardsUnder(s)
-		if s.showReminder {
+		if s.showReminder && !criticalOnTop(s.showNotification, s.notification) {
 			r.reminderCard(s)
 		} else if s.showNotification {
 			r.notifyCard(s)
