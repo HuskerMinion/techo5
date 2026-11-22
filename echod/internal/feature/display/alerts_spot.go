@@ -165,6 +165,9 @@ func (r *roundRenderer) alertFace(s roundScene) {
 		c color.RGBA
 	}
 	var lines []line
+	for _, l := range r.wrap(r.small, a.Headline, 340) { // a MeteoAlarm warning's own headline
+		lines = append(lines, line{l, colText})
+	}
 	for _, p := range strings.Split(a.Description, "\n") {
 		for _, l := range r.wrap(r.small, p, 340) {
 			lines = append(lines, line{l, colText})
@@ -173,6 +176,11 @@ func (r *roundRenderer) alertFace(s roundScene) {
 	for _, p := range strings.Split(a.Instruction, "\n") {
 		for _, l := range r.wrap(r.small, p, 340) {
 			lines = append(lines, line{l, colAccent})
+		}
+	}
+	if is := alertIssued(a, s.now); is != "" {
+		for _, l := range r.wrap(r.small, is+" · "+a.Sender, 340) {
+			lines = append(lines, line{l, colDim})
 		}
 	}
 	first, rows := top+34, max((392-(top+34))/alertLineH, 1)

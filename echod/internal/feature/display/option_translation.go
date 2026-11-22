@@ -265,7 +265,7 @@ func weekdayInitials() []string {
 
 func builtinOptionRow(id string) bool {
 	switch id {
-	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "output", "cal_open", "cal_opens_on", "cal_dashboard_events", "cal_next_up_within", "cal_month_details", "cal_chip_size", "calpopallday", "calpopwhen",
+	case "photoevery", "clocktap", "alarmwords", "alarmrise", "clock", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "timerstyle", "callring", "alarmsound", "turnstyle", "musicstrip", "atnight", "nightstyle", "radarsrc", "alertsrc", "output", "cal_open", "cal_opens_on", "cal_dashboard_events", "cal_next_up_within", "cal_month_details", "cal_chip_size", "calpopallday", "calpopwhen",
 		"skin", "weather", "callscreen", "waketone", "updates":
 		return true
 	}
