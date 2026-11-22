@@ -130,7 +130,7 @@ type Feature struct {
 	// quiet, and Home Assistant's event bus.
 	now    func() time.Time
 	pics   pictures
-	chime  func()
+	chime  func(step int)
 	say    func(words string)
 	hushed func() bool
 	fire   func(component.Event)
@@ -209,7 +209,7 @@ func newFeature(pics pictures) *Feature {
 		seq:    rand.IntN(1_000_000_000),
 		now:    time.Now,
 		pics:   pics,
-		chime:  Chime,
+		chime:  ChimeAt,
 		say:    remind.Say,
 		hushed: hushedNow,
 		ring: func(label string, step int, rise time.Duration, ended func()) func() {
@@ -421,6 +421,7 @@ func (f *Feature) Alert(title, message string, d time.Duration, silent bool) {
 // how is what a notification is put up with.
 type how struct {
 	silent bool // the caller asked for no chime
+	step   int  // the chime's own volume, in steps (notify_buttons); 0 for its usual level
 	aloud  bool // the caller asked for the words said
 	hushed bool // night or quiet hours: no chime, no words, no camera sound
 	// untilDone ends a notification on a device with no screen once its chime and words are done, when
@@ -502,7 +503,7 @@ func (f *Feature) put(n Notification, h how) {
 		// over it would be lost under it.
 		safe.Go("notification", func() {
 			if chime {
-				f.chime()
+				f.chime(h.step)
 			}
 			if words != "" {
 				f.say(words)

@@ -23,9 +23,17 @@ const chimeWait = 10 * time.Second
 // when they are done. The calendar pop-up uses it too, since the two are the same kind of thing. It waits
 // its turn rather than cutting off what is being said (speaker.ClaimTurn), and sounds in the bell's own
 // lane, which is what lets it play over a camera's sound rather than wait out the view.
-func Chime() {
+func Chime() { ChimeAt(0) }
+
+// ChimeAt is Chime at step, in volume steps (1 to VolumeSteps), for a notification sent with a volume of
+// its own (notify_buttons); 0 or less is Chime's own level.
+func ChimeAt(step int) {
 	claim := speaker.Sound().ClaimTurn("notification", chimeWait, func(ctx context.Context, pl *speaker.Player) error {
-		pl.Bell(max(pl.Step(), chimeFloor), 0.5, tone...)
+		level := max(pl.Step(), chimeFloor)
+		if step > 0 {
+			level = min(step, speaker.VolumeSteps)
+		}
+		pl.Bell(level, 0.5, tone...)
 		select {
 		case <-ctx.Done():
 		case <-time.After(700 * time.Millisecond):

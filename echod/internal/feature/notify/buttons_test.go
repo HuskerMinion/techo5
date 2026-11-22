@@ -125,6 +125,29 @@ func TestACriticalRiseIsHeldToTheRing(t *testing.T) {
 	}
 }
 
+// A notification with buttons chimes at its own volume, at its usual level when sent 0, and not at all
+// at night, whatever its volume.
+func TestNotifyButtonsChimesAtItsOwnVolume(t *testing.T) {
+	r := newRig(t, true)
+	for _, c := range []struct{ volume, step int }{{0, 0}, {10, volumeStep(10)}, {100, config.VolumeSteps}} {
+		n := r.chimes.Load()
+		if err := r.f.NotifyButtons("Washer done", "", "", "", "", "", 0, "", "", c.volume); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "the chime", func() bool { return r.chimes.Load() == n+1 })
+		if got := int(r.chimeStep.Load()); got != c.step {
+			t.Errorf("volume %d chimed at step %d, want %d", c.volume, got, c.step)
+		}
+	}
+	r.hushed.Store(true)
+	n := r.chimes.Load()
+	_ = r.f.NotifyButtons("Washer done", "", "", "", "", "", 0, "", "", 100)
+	time.Sleep(20 * time.Millisecond)
+	if r.chimes.Load() != n {
+		t.Error("chimed at night")
+	}
+}
+
 func TestACriticalVolumeIsInTheSpeakersSteps(t *testing.T) {
 	for _, c := range []struct{ in, want int }{
 		{-5, 0}, {0, 0}, {1, 1}, {50, config.VolumeSteps / 2}, {100, config.VolumeSteps}, {250, config.VolumeSteps},
@@ -139,7 +162,7 @@ func TestACriticalVolumeIsInTheSpeakersSteps(t *testing.T) {
 // is reported of it. A tap on the card off the buttons puts it away, as on any card.
 func TestAButtonTapEndsTheNotificationWithItsAction(t *testing.T) {
 	r := newRig(t, true)
-	if err := r.f.NotifyButtons("Someone is at the door", "Door", "", "", "", "door", 0, "", "Open=open, Ignore=ignore"); err != nil {
+	if err := r.f.NotifyButtons("Someone is at the door", "Door", "", "", "", "door", 0, "", "Open=open, Ignore=ignore", 0); err != nil {
 		t.Fatal(err)
 	}
 	n, up := r.f.Card()
@@ -163,7 +186,7 @@ func TestAButtonTapEndsTheNotificationWithItsAction(t *testing.T) {
 	}
 	waitFor(t, "the chime", func() bool { return r.chimes.Load() == 1 })
 
-	if err := r.f.NotifyButtons("Washer done", "", "", "off", "", "", 0, "", "OK"); err != nil {
+	if err := r.f.NotifyButtons("Washer done", "", "", "off", "", "", 0, "", "OK", 0); err != nil {
 		t.Fatal(err)
 	}
 	n, _ = r.f.Card()
@@ -173,7 +196,7 @@ func TestAButtonTapEndsTheNotificationWithItsAction(t *testing.T) {
 	if e := r.last(); e.Data["event"] != "dismissed" || e.Data["action"] != "" {
 		t.Errorf("last event %v, want dismissed with no action", e.Data)
 	}
-	if err := r.f.NotifyButtons("x", "", "", "", "", "", 0, "", "A,B,C,D"); err == nil {
+	if err := r.f.NotifyButtons("x", "", "", "", "", "", 0, "", "A,B,C,D", 0); err == nil {
 		t.Error("four buttons taken")
 	}
 }

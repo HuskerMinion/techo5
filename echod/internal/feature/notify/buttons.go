@@ -125,9 +125,10 @@ func (f *Feature) buttonActions() []*esphome.Action {
 				{Name: "seconds", Type: esphome.ArgInt},
 				{Name: "size", Type: esphome.ArgString},
 				{Name: "buttons", Type: esphome.ArgString},
+				{Name: "volume", Type: esphome.ArgInt},
 			},
 			Run: func(c esphome.Call) (any, error) {
-				return nil, f.NotifyButtons(c.String("message"), c.String("title"), c.String("icon"), c.String("chime"), c.String("speak"), c.String("tag"), c.Int("seconds"), c.String("size"), c.String("buttons"))
+				return nil, f.NotifyButtons(c.String("message"), c.String("title"), c.String("icon"), c.String("chime"), c.String("speak"), c.String("tag"), c.Int("seconds"), c.String("size"), c.String("buttons"), c.Int("volume"))
 			},
 		},
 		{
@@ -153,10 +154,12 @@ func (f *Feature) buttonActions() []*esphome.Action {
 	}
 }
 
-// NotifyButtons is NotifySized with buttons (parseButtons). A tap on a button ends it with an "action"
-// event naming the button; a tap anywhere else on the card puts it away, as on any card. A Dot has
-// nothing to tap, and shows it as notify does.
-func (f *Feature) NotifyButtons(message, title, icon, chime, speak, tag string, seconds int, size, buttons string) error {
+// NotifyButtons is NotifySized with buttons (parseButtons) and a chime volume of its own, volume percent
+// (0 for the chime's usual level, not silent; night, quiet hours and chime off still keep it quiet). A
+// tap on a button ends it with an "action" event naming the button; a tap anywhere else on the card puts
+// it away, as on any card. With no buttons it is NotifySized with a volume. A Dot has nothing to tap,
+// and shows it as notify does.
+func (f *Feature) NotifyButtons(message, title, icon, chime, speak, tag string, seconds int, size, buttons string, volume int) error {
 	bs, err := parseButtons(buttons)
 	if err != nil {
 		return err
@@ -171,7 +174,8 @@ func (f *Feature) NotifyButtons(message, title, icon, chime, speak, tag string, 
 		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message,
 		Icon: strings.TrimSpace(icon), Tag: strings.TrimSpace(tag), Until: f.now().Add(lasting(seconds, false)),
 		Size: ParseSize(size), Buttons: bs,
-	}, how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0})
+	}, how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0,
+		step: volumeStep(volume)})
 	return nil
 }
 
