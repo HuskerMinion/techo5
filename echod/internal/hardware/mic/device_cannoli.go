@@ -36,11 +36,16 @@ const (
 
 	maxMics = 3
 
-	// CenterMic: no microphone in the middle; ch0 stands in, as on the Dot 3.
-	CenterMic = 0
+	// CenterMic: no microphone in the middle, so ch2 stands in: of the three it hears the speaker least,
+	// 6 dB under ch0 and ch1 (`echod tools echo`, cannoliStreamRef), which is the most room for a voice
+	// over the music once the canceller has taken what it can. ch0, as on the Dot 3, was the loudest.
+	CenterMic = 2
 
-	// CancelOnMix is off until it is measured on this device.
-	CancelOnMix = false
+	// CancelOnMix runs the canceller on the chosen mix, so Microphone mixing decides what the wake word
+	// hears over music too: Center mic is ch2 alone, All microphones (and Delay and sum, which falls back
+	// to it while canceling) the average of the three. Which hears a voice over music better is not
+	// measured yet; with it on, the two are compared from Home Assistant without a new build.
+	CancelOnMix = true
 
 	cannoliMicDevice = 9
 	// cannoliMicChannels: UL9 opened six wide, O26..O31: the converter's four slots, then the playback.
