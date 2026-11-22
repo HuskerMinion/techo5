@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -154,7 +155,13 @@ func (d *Detect) setWakeProblem(problems []string) {
 	// A text sensor's state is at most 255 characters in Home Assistant.
 	s := strings.Join(problems, "; ")
 	if len(s) > 255 {
-		s = s[:252] + "..."
+		// Cut on a character's boundary: half a character is not valid UTF-8, and the state would not
+		// be sent at all.
+		cut := 252
+		for cut > 0 && !utf8.RuneStart(s[cut]) {
+			cut--
+		}
+		s = s[:cut] + "..."
 	}
 	d.wakeProblem.Set(s)
 }

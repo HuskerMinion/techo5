@@ -54,8 +54,7 @@ func (d *Detect) wakeDropped(slot int, id string, now time.Time) {
 	later(reloadAfter, func() {
 		safe.Go("wake word put back", func() {
 			slog.Info("putting a dropped wake word back", "slot", slot+1, "id", id)
-			ids := voice.SavedWakeWords(d.library().Ours())
-			voice.Get().SetActiveWakeWords(d.load(ids))
+			d.reloadSaved()
 		})
 	})
 }
@@ -71,4 +70,15 @@ func (d *Detect) addWakeProblem(s string) {
 		return
 	}
 	d.setWakeProblem([]string{cur, s})
+}
+
+// reloadSaved loads the saved selection again and says it is the active one, reading the selection under
+// the load lock, so a choice made in Home Assistant at the same moment is not overwritten with the one it
+// replaced.
+func (d *Detect) reloadSaved() {
+	d.loading.Lock()
+	defer d.loading.Unlock()
+	d.refused = nil
+	ids := voice.SavedWakeWords(d.library().Ours())
+	voice.Get().SetActiveWakeWords(d.loadLocked(ids))
 }
