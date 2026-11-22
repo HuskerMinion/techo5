@@ -97,11 +97,6 @@ type pending struct {
 
 	// answered is set once the turn opened here; elsewhere when a device that already answered said so.
 	answered, elsewhere bool
-
-	// lost runs when another device has the word instead (Confirmed): beaten, already answered, or a
-	// newer claim of this device's own took this one's place. Nil for a wake word heard here, which
-	// simply does not open.
-	lost func()
 }
 
 // Nearest is the switch, its two settings and the claims.
@@ -215,7 +210,6 @@ func build() *Nearest {
 		}
 	}
 	web.Handle(path, "", n.open, n.receive)
-	voice.SetConfirmedContest(n.Confirmed)
 	return n
 }
 
@@ -308,19 +302,6 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 	n.woke(slot, at)
 }
 
-// Confirmed is a wake this device was not sure of that Home Assistant then heard too (#685), heard at at
-// with clarity, measured then. It takes part in the decision as a wake over the threshold does, claimed
-// only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
-// is talking to stand down. decide is told whether this device answers. Home Assistant has already
-// confirmed it, so a faint one is not asked about again (#503).
-func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, decide func(answer bool)) {
-	n.contendHeard(n.wakeWord(slot), at, clarity,
-		func() bool { return n.canAnswer(slot) },
-		func(time.Time, float64) { decide(true) },
-		func() { decide(true) },
-		func() { decide(false) })
-}
-
 // Answer is the same question for something other than a wake word, the next song word: of the devices
 // that heard word, only the one that heard it best acts. It acts at once when this device does not take
 // part, cannot act, or has nobody to ask, and only the nearest does otherwise. What it does is act, run
@@ -338,16 +319,6 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 		now()
 		return
 	}
-	n.contendHeard(word, at, n.score(), can, open, now, nil)
-}
-
-// contendHeard is contend with how clearly this device heard the word already measured, and lost, if
-// not nil, run when another device has it instead.
-func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, can func() bool, open func(time.Time, float64), now, lost func()) {
-	if !n.open() || n.busy() || !can() {
-		now()
-		return
-	}
 	peers := hearing(n.peers())
 	if len(peers) == 0 {
 		now()
@@ -356,13 +327,13 @@ func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, can f
 
 	c := config.Get()
 	window := c.Nearest.Window()
+	clarity := n.score()
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: word,
 			Score: clarity + float64(c.Nearest.Offset) + n.callBonus()},
 		at:      at,
 		window:  window,
 		clarity: clarity,
-		lost:    lost,
 	}
 	n.mu.Lock()
 	n.mine = mine
@@ -401,24 +372,15 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		mine.answered = !beaten && !elsewhere && able
 	}()
 	if !current {
-		if mine.lost != nil {
-			mine.lost()
-		}
 		return
 	}
 
 	switch {
 	case elsewhere:
 		slog.Info("nearest device: another had already answered", "word", word, "score", round(mine.Score))
-		if mine.lost != nil {
-			mine.lost()
-		}
 	case beaten:
 		slog.Info("nearest device: another heard it better", "word", word, "mine", round(mine.Score),
 			"theirs", round(best.Score), "by", best.From)
-		if mine.lost != nil {
-			mine.lost()
-		}
 	case !able:
 		slog.Info("nearest device: could not answer after all, passing it on", "word", word)
 		open(mine.at, mine.clarity)

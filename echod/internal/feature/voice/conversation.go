@@ -106,7 +106,6 @@ const (
 	evAnnouncing                   // an announcement that asks for an answer is being said (event.text)
 	evAnnounced                    // and was cut off, so no answer follows
 	evScored                       // the peak a wake word reached (event.slot, event.peak)
-	evContested                    // the devices decided on a wake Home Assistant confirmed (event.gen, event.answer)
 )
 
 type event struct {
@@ -136,10 +135,6 @@ type event struct {
 
 	// peak is an evCandidate's or an evScored's score.
 	peak float64
-
-	// gen and answer are an evContested's: which decision (deciding.gen), and whether this device answers.
-	gen    uint64
-	answer bool
 
 	// spoken is an evReplyText whose words have already been said: realtime voice has them only once
 	// the answer is over.
@@ -287,11 +282,6 @@ type conversation struct {
 	// watch is a run open at Home Assistant's wake word stage, nil when there is none (hawake.go).
 	// While one is, the conversation is idle.
 	watch *watching
-
-	// deciding is a wake Home Assistant confirmed, waiting on the devices to decide which answers it
-	// (#685); decided numbers them, so a late decision is told from the current one.
-	deciding *deciding
-	decided  uint64
 
 	// runOpen is a run Home Assistant has yet to close, and stoppedAt when it was last told to stop.
 	// A run at the wake word stage waits for the last one to close: its RUN_END would end it.
@@ -982,14 +972,6 @@ func (c *conversation) start(n nextTurn) (started bool) {
 			c.grace = time.NewTimer(graceStart)
 		}
 		return false
-	}
-
-	// A wake Home Assistant confirmed is waiting on the devices' decision: a turn asked for here
-	// meanwhile, by a button or the device's own engine, takes over, and waits for that run to close.
-	if c.phase == phaseIdle && c.deciding != nil {
-		slog.Info("a turn asked for while the devices decide on a confirmed wake", "slot", slot+1)
-		c.deciding = nil
-		c.closeRun()
 	}
 
 	// A turn ended as a mistake is still being closed by Home Assistant (draining): this one waits for
