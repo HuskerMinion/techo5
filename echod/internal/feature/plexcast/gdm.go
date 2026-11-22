@@ -90,6 +90,10 @@ func (f *Feature) announce(ctx context.Context) {
 			return
 		}
 		if !isSearch(buf[:n]) || !local(from.IP) || from.Port == 0 {
+			// Said at debug because it is the question a player that is not found asks: whether the
+			// searches arrive and are turned away, or never arrive at all.
+			slog.Debug("plex: a datagram on the search port was not answered",
+				"from", from.String(), "search", isSearch(buf[:n]), "home", local(from.IP))
 			continue
 		}
 		select {
@@ -98,7 +102,11 @@ func (f *Feature) announce(ctx context.Context) {
 				defer func() { <-answering }()
 				if _, err := conn.WriteToUDP([]byte(answer()), from); err != nil && ctx.Err() == nil {
 					slog.Debug("plex: answering a search failed", "err", err)
+					return
 				}
+				// A controller that finds nothing is either not searching, or searching and being
+				// answered something it will not take: this line tells the two apart.
+				slog.Info("plex: answered a search", "from", from.IP.String())
 			}()
 		default: // more searches than any home sends at once: the rest go unanswered
 		}

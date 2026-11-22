@@ -158,6 +158,36 @@ func TestWhereItIs(t *testing.T) {
 	}
 }
 
+// The answer to a search is what Plex's own players write, header for header: a controller that cannot
+// read the port or the identifier out of it has found a player it cannot use (gdm.go).
+func TestTheDiscoveryAnswer(t *testing.T) {
+	a := answer()
+	if !strings.HasPrefix(a, "HTTP/1.0 200 OK\r\n") {
+		t.Fatalf("the answer does not start with a status line: %q", a)
+	}
+	if !strings.HasSuffix(a, "\r\n\r\n") {
+		t.Errorf("the answer does not end in a blank line: %q", a)
+	}
+	for _, want := range []string{
+		"Content-Type: plex/media-player\r\n",
+		"\r\nName: ",
+		"\r\nPort: 32500\r\n",
+		"\r\nProduct: TECHO5\r\n",
+		"\r\nProtocol: plex\r\n",
+		"\r\nProtocol-Capabilities: timeline,playback,navigation,playqueues\r\n",
+		"\r\nProtocol-Version: 3\r\n",
+		"\r\nResource-Identifier: ",
+		"\r\nDevice-Class: tv\r\n",
+	} {
+		if !strings.Contains(a, want) {
+			t.Errorf("the answer does not say %q: %q", want, a)
+		}
+	}
+	if !strings.HasPrefix(helloPacket(), "HELLO * HTTP/1.0\r\n") || !strings.HasPrefix(byePacket(), "BYE * HTTP/1.0\r\n") {
+		t.Error("the announcement does not start with its own verb")
+	}
+}
+
 // The code somebody types at plex.tv/link is the four-character one, which is what a plain pin is:
 // strong=true asks for the 25-odd character pin that goes in a link, and the screen showed that instead,
 // which nobody could type (pin.go).

@@ -34,8 +34,16 @@ func (f *Feature) register(ctx context.Context) {
 		if ip.To4() == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
 			continue
 		}
+		// A connection as Plex's own resource answers write it: a full http address, its protocol,
+		// address and port beside it, and the mark that it is the home network's. A uri without the
+		// scheme is not something a controller can connect to, though plex.tv takes the request.
+		host, port := ip.String(), strconv.Itoa(Port)
 		q := url.Values{}
-		q.Add("Connection[][uri]", net.JoinHostPort(ip.String(), strconv.Itoa(Port)))
+		q.Add("Connection[][uri]", "http://"+net.JoinHostPort(host, port))
+		q.Add("Connection[][protocol]", "http")
+		q.Add("Connection[][address]", host)
+		q.Add("Connection[][port]", port)
+		q.Add("Connection[][local]", "1")
 		q.Set("X-Plex-Device-Name", friendlyName())
 		req, err := http.NewRequestWithContext(ctx, http.MethodPut,
 			devicesURL+"/"+url.PathEscape(clientIdentifier())+"?"+q.Encode(), nil)
