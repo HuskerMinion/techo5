@@ -59,6 +59,11 @@ type Mute struct {
 	// what lets the detector stop running models over silence.
 	Changed hook.Hook[bool]
 
+	// LiftedByButton fires when the mute button, letting the latch go, took a mute set from Home
+	// Assistant or the screen with it (the 2nd gen Show 8 on TECHO5's mainline kernel), so the screen
+	// can say why the microphones are live.
+	LiftedByButton hook.Hook[struct{}]
+
 	// mu takes whatever publishes the line one at a time: Home Assistant, the screen, the button, a
 	// press that went to a ring, and the watch after a hold. Each reads the switch as the state it
 	// starts from, so none may publish a move that another is in the middle of.
@@ -138,14 +143,22 @@ func build() *Mute {
 
 // external follows a panel's physically silent microphone without saving that hardware position as
 // a software mute. The next boot must follow the slider's actual state, not replay yesterday's cut.
+//
+// It also follows a latch that moved without a press (the 2nd gen Show 8 on TECHO5's mainline kernel,
+// where something drove the latch's enable line). A move made by the button is left to the press: the
+// latch moves as the button goes down, and the tap that follows publishes it, chime and all, from the
+// state before the press, which publishing here first would take from it.
 func (m *Mute) external() {
+	if down, _ := m.pressedState(); down {
+		return
+	}
 	m.mu.Lock()
 	before := m.sw.Get()
 	m.settled(false)
 	after := m.sw.Get()
 	m.mu.Unlock()
 	if before != after {
-		slog.Info("microphone mute followed Android capture", "muted", after)
+		slog.Info("microphone mute followed the hardware", "muted", after)
 		m.Changed.Emit(after)
 	}
 }
@@ -167,6 +180,17 @@ func (m *Mute) Entities() []esphome.Entity {
 		return []esphome.Entity{m.sw, m.brightness}
 	}
 	return []esphome.Entity{m.sw, m.ring, m.brightness}
+}
+
+// ShownOnScreen is whether the screen should say the microphones are off while they are. Yes for every
+// mute, except where the button's latch lights its own red light and has a software mute beside it
+// (the 2nd gen Show 8 on TECHO5's mainline kernel): there the light says the button's mute, and the
+// screen says only the one Home Assistant or the screen set, which has no light.
+func (m *Mute) ShownOnScreen() bool {
+	if line, ok := m.line.(interface{ SoftwareMuted() bool }); ok {
+		return line.SoftwareMuted()
+	}
+	return true
 }
 
 // Muted reports whether the line is cut, which is what a turn has to check before opening the
@@ -198,7 +222,11 @@ func (m *Mute) Restore(c config.Config) {
 	component.RestoreEffect(m.ring, c.Ring.Muted, nil, config.Set().Ring().Muted)
 
 	want := c.Microphone.Muted
-	if want != was {
+	// A mute to restore is put on even where the line already reads muted: on the 2nd gen Show 8 on
+	// TECHO5's mainline kernel that can be the button's latch alone, and the software mute that was
+	// saved has to be under it for when the button lets the latch go. Everywhere else muting a muted
+	// line changes nothing.
+	if want != was || want {
 		if err := m.line.Set(want); err != nil {
 			slog.Error("setting mute failed", "muted", want, "err", err)
 		}
@@ -526,6 +554,11 @@ func (m *Mute) announced(muted, asked bool) {
 	if line, ok := m.line.(interface{ Persisted() bool }); ok {
 		saved = line.Persisted()
 	}
+	// Where the mute has a software part beside the button's latch (the 2nd gen Show 8 on TECHO5's
+	// mainline kernel), only that part is kept: the latch is the button's.
+	if line, ok := m.line.(interface{ Saved() bool }); ok {
+		saved = line.Saved()
+	}
 	if err := config.Set().Microphone().Muted(saved); err != nil {
 		slog.Error("saving mute state failed", "err", err)
 	}
@@ -538,6 +571,20 @@ func (m *Mute) announced(muted, asked bool) {
 		return
 	}
 	speaker.Sound().Chime(speaker.MuteSound(false))
+	m.liftedNote()
+}
+
+// liftedNote tells the screen (LiftedByButton) that the mute button took a mute set from Home Assistant or the screen
+// with it, where it can (the 2nd gen Show 8 on TECHO5's mainline kernel): pressing the button to let
+// the latch go lifts both, so the microphones are live, and whoever muted it from afar would otherwise
+// find it listening with no word of why.
+func (m *Mute) liftedNote() {
+	line, ok := m.line.(interface{ LiftedByButton() bool })
+	if !ok || !line.LiftedByButton() {
+		return
+	}
+	slog.Info("microphone mute: the button lifted the mute set from Home Assistant or the screen")
+	m.LiftedByButton.Emit(struct{}{})
 }
 
 // pollInterval is how often await looks while it waits.
