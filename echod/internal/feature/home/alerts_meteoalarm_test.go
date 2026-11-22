@@ -26,8 +26,7 @@ func regionCodes(rs []maRegion) []string {
 	return out
 }
 
-// Home's regions are the ones it lies in and the sea off it; a neighbor counts only within the reach
-// asked for.
+// Home's regions are the ones it lies in and the sea off it; a neighbor does not count.
 func TestRegionsFoundFromWhereHomeIs(t *testing.T) {
 	all := loadRegions()
 	if len(all) < 1900 {
@@ -36,21 +35,17 @@ func TestRegionsFoundFromWhereHomeIs(t *testing.T) {
 	for _, c := range []struct {
 		name     string
 		lat, lon float64
-		near     int
 		want     []string
 	}{
-		{"Santander", 43.46, -3.80, 0, []string{"ES133", "ES842"}}, // the coast, and the waters off it
-		{"Bremen", 53.08, 8.80, 0, []string{"DE369"}},
-		{"Rome", 41.90, 12.50, 0, []string{"IT012"}},
+		{"Santander", 43.46, -3.80, []string{"ES133", "ES842"}}, // the coast, and the waters off it
+		{"Bremen", 53.08, 8.80, []string{"DE369"}},
+		{"Rome", 41.90, 12.50, []string{"IT012"}},
 	} {
-		if got := regionCodes(regionsNear(all, c.lat, c.lon, c.near)); !slices.Equal(got, c.want) {
+		if got := regionCodes(regionsNear(all, c.lat, c.lon)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
 	}
-	if got := regionsNear(all, 53.08, 8.80, 25); len(got) < 3 || !slices.Contains(regionCodes(got), "DE369") {
-		t.Errorf("Bremen with 25 km: %v, want it and the districts around it", regionCodes(got))
-	}
-	if got := regionsNear(all, 35.68, 139.69, 50); len(got) != 0 {
+	if got := regionsNear(all, 35.68, 139.69); len(got) != 0 {
 		t.Errorf("Tokyo: %v, want none", regionCodes(got))
 	}
 	i := slices.IndexFunc(all, func(g maRegion) bool { return g.code == "ES842" })
@@ -214,18 +209,9 @@ func TestMeteoAlarmAlertsAtHome(t *testing.T) {
 	if _, err := f.buildMeteoAlarm(context.Background(), 43.46, -3.80); err != nil || m.count("/api/") != capsRead {
 		t.Errorf("a second refresh read %d CAP documents more (err %v)", m.count("/api/")-capsRead, err)
 	}
-
-	// Set by hand, the regions are only those.
-	if err := config.Set().Home().AlertRegions([]string{"ES242"}); err != nil {
-		t.Fatal(err)
-	}
-	v, err = f.buildMeteoAlarm(context.Background(), 43.46, -3.80)
-	if err != nil || len(v.Here) != 1 || v.Here[0].Area != "Interior norte de Castellón" || v.Here[0].Level != levelRed {
-		t.Errorf("with ES242 set: %+v, %v", v.Here, err)
-	}
 }
 
-// A country that sends outlines is matched by home's place: inside, or within the reach asked for.
+// A country that sends outlines is matched by home's place: the outlines home lies in.
 func TestMeteoAlarmOutlines(t *testing.T) {
 	useConfig(t, config.Place{Name: "Zürich", Lat: 47.37, Lon: 8.54, Country: "CH"})
 	m := &fakeMeteoAlarm{caps: map[string]string{}}
@@ -248,34 +234,24 @@ func TestMeteoAlarmOutlines(t *testing.T) {
 	if len(v.Near) != 1 {
 		t.Errorf("%d alerts for the map, want home's one, outlined", len(v.Near))
 	}
-	if err := config.Set().Home().AlertsNearKm(50); err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := f.buildMeteoAlarm(context.Background(), 47.37, 8.54); len(v.Here) != 1 {
-		t.Errorf("Ticino, 130 km off, counted within 50 km")
-	}
 }
 
 // France names its regions by NUTS3 code, which MeteoAlarm's alias list ties to the EMMA_ID.
 func TestMeteoAlarmAliasCodes(t *testing.T) {
 	useConfig(t, config.Place{Name: "Paris", Lat: 48.857, Lon: 2.35, Country: "FR"})
 	all := loadRegions()
-	i := slices.IndexFunc(all, func(g maRegion) bool { return g.code == "FR068" })
-	if i < 0 || !slices.Contains(all[i].aliases, [2]string{"NUTS3", "FR102"}) {
-		t.Fatalf("FR068's aliases: %v", all[i].aliases)
-	}
-	h := areaFor(all, 48.857, 2.35, []string{"FR068"}, 0, "FR")
+	h := areaFor(all, 48.857, 2.35, "FR")
 	e := maEntry{}
 	e.Geocodes = append(e.Geocodes, struct {
 		Name  string `xml:"valueName"`
 		Value string `xml:"value"`
-	}{"NUTS3", "FR102"})
+	}{"NUTS3", "FR101"})
 	if !h.at(e, nil) {
-		t.Error("a warning for NUTS3 FR102 is not FR068's")
+		t.Errorf("a warning for NUTS3 FR101 (Paris) is not home's, whose regions are %v", h.names)
 	}
-	e.Geocodes[0].Name = "EMMA_ID" // the same digits as another region's EMMA_ID are not this one
+	e.Geocodes[0].Value = "FR102" // Seine-et-Marne, next door
 	if h.at(e, nil) {
-		t.Error("EMMA_ID FR102 counted as FR068")
+		t.Error("a warning for the district next door counted as home's")
 	}
 	if !slices.Equal(h.countries, []string{"FR"}) {
 		t.Errorf("countries %v", h.countries)
@@ -299,50 +275,30 @@ func TestMeteoAlarmNotAFeed(t *testing.T) {
 
 func TestAlertSourceFor(t *testing.T) {
 	for _, c := range []struct {
-		place   config.Place
-		regions []string
-		want    alertSource
+		place config.Place
+		want  alertSource
 	}{
-		{config.Place{Lat: 43.46, Lon: -3.80, Country: "ES"}, nil, alertsFromMeteoAlarm},
-		{config.Place{Lat: 51.51, Lon: -0.13, Country: "GB"}, nil, alertsFromMeteoAlarm}, // outlines, no regions
-		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, nil, alertsFromNWS},
-		{config.Place{Lat: 35.68, Lon: 139.69, Country: "JP"}, nil, alertsFromNone},
-		{config.Place{Lat: 53.08, Lon: 8.80}, nil, alertsFromMeteoAlarm}, // no country: one of MeteoAlarm's regions
-		{config.Place{Lat: 41.26, Lon: -95.94}, nil, alertsFromNWS},      // no country: the U.S.
-		// No country, in a country MeteoAlarm has no regions for: nothing, unless regions are set by hand.
-		{config.Place{Lat: 51.51, Lon: -0.13}, nil, alertsFromNone},
-		{config.Place{Lat: 51.51, Lon: -0.13}, []string{"UK012"}, alertsFromMeteoAlarm},
+		{config.Place{Lat: 43.46, Lon: -3.80, Country: "ES"}, alertsFromMeteoAlarm},
+		{config.Place{Lat: 51.51, Lon: -0.13, Country: "GB"}, alertsFromMeteoAlarm}, // outlines, no regions
+		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, alertsFromNWS},
+		{config.Place{Lat: 35.68, Lon: 139.69, Country: "JP"}, alertsFromNone},
+		{config.Place{Lat: 53.08, Lon: 8.80}, alertsFromMeteoAlarm}, // no country: one of MeteoAlarm's regions
+		{config.Place{Lat: 41.26, Lon: -95.94}, alertsFromNWS},      // no country: the U.S.
+		// No country, in a country MeteoAlarm has no regions for: nothing (docs/overview.md says so).
+		{config.Place{Lat: 51.51, Lon: -0.13}, alertsFromNone},
 	} {
 		c.place.Name = "Home"
 		useConfig(t, c.place)
-		if err := config.Set().Home().AlertRegions(c.regions); err != nil {
-			t.Fatal(err)
-		}
 		if got := alertSourceFor(c.place.Lat, c.place.Lon); got != c.want {
-			t.Errorf("%+v with regions %v: %v, want %v", c.place, c.regions, got, c.want)
+			t.Errorf("%+v: %v, want %v", c.place, got, c.want)
 		}
 	}
-	if (alertsFromMeteoAlarm).every() != meteoAlarmEvery || alertsFromNWS.every() != alertsEvery {
-		t.Error("the sources' default paces")
-	}
-	if err := config.Set().Home().AlertsEveryMinutes(60); err != nil || alertsFromMeteoAlarm.every() != time.Hour {
-		t.Errorf("an hour set: %v (%v)", alertsFromMeteoAlarm.every(), err)
+	if alertsFromMeteoAlarm.every() != 10*time.Minute || alertsFromNWS.every() != alertsEvery {
+		t.Error("the sources' paces")
 	}
 }
 
-func TestParseAlertRegions(t *testing.T) {
-	if got, bad := ParseAlertRegions(" es133, ES842;ES842  de369 "); bad != "" || !slices.Equal(got, []string{"ES133", "ES842", "DE369"}) {
-		t.Errorf("%v %q", got, bad)
-	}
-	if _, bad := ParseAlertRegions("ES133, Bremen"); bad != "BREMEN" {
-		t.Errorf("a name taken for a code (%q)", bad)
-	}
-	if got, bad := ParseAlertRegions(""); got != nil || bad != "" {
-		t.Errorf("empty: %v %q", got, bad)
-	}
-}
-
-func TestFromTitleAndCodeCountry(t *testing.T) {
+func TestFromTitle(t *testing.T) {
 	for title, want := range map[string][2]int{
 		"Orange Coastalevent Warning issued for Spain - Costa": {levelOrange, 7},
 		"Yellow Snow-ice Warning issued for Germany - Kreis":   {levelYellow, 2},
@@ -352,11 +308,6 @@ func TestFromTitleAndCodeCountry(t *testing.T) {
 	} {
 		if l, k := fromTitle(title); l != want[0] || k != want[1] {
 			t.Errorf("%q: level %d kind %d, want %v", title, l, k, want)
-		}
-	}
-	for code, want := range map[string]string{"ES842": "ES", "EI810": "IE", "UK012": "GB", "DE369": "DE"} {
-		if got := codeCountry(code); got != want {
-			t.Errorf("%s is in %q, want %q", code, got, want)
 		}
 	}
 }

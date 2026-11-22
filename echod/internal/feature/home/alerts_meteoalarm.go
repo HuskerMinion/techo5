@@ -13,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // Weather alerts from MeteoAlarm (meteoalarm.org), which carries the official warnings of the
@@ -23,21 +21,20 @@ import (
 // Each country has one public Atom feed listing its warnings, one entry per region a warning names.
 // Most countries name a region by its EMMA_ID ("ES842", the Cantabrian coast) or another code for it
 // (France its NUTS3); a few (Switzerland, Sweden, the U.K....) give the area's outline instead. Home's
-// regions are found from its location, among MeteoAlarm's own region outlines (alerts_regions.go),
-// unless they are set by hand; an outline is matched against home itself. A warning at home is then
-// read in full from its CAP document, which has its text in every language it was issued in.
+// regions are found from its location, among MeteoAlarm's own region outlines (alerts_regions.go);
+// an outline is matched against home itself. A warning at home is then read in full from its CAP
+// document, which has its text in every language it was issued in.
 //
-// The feed is read every ten minutes (AlertsEveryMinutes): MeteoAlarm's terms ask that what is shown
-// be never more than ten minutes behind meteoalarm.org (https://meteoalarm.org/en/live/page/terms-and-conditions,
-// section 5). It cannot say it has not changed, and a big country's runs to megabytes, so a longer
-// wait may be chosen. Listed warnings stay in the feed after they run out; those are left out by their
-// expiry.
+// The feed is read every ten minutes: MeteoAlarm's terms ask that what is shown be never more than
+// ten minutes behind meteoalarm.org (https://meteoalarm.org/en/live/page/terms-and-conditions,
+// section 5). It cannot say it has not changed, and a big country's runs to megabytes. Listed
+// warnings stay in the feed after they run out; those are left out by their expiry.
 
 // Where MeteoAlarm is; a test points it at its own server.
 var meteoAlarmFeeds = "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-"
 
 const (
-	// meteoAlarmEvery is how often the feed is read unless set otherwise: MeteoAlarm's terms' longest delay.
+	// meteoAlarmEvery is how often the feed is read: the longest MeteoAlarm's terms let it lag.
 	meteoAlarmEvery = 10 * time.Minute
 	// capFetches caps how many CAP documents one refresh asks for; the rest are shown from the feed.
 	capFetches = 12
@@ -59,23 +56,6 @@ var meteoAlarmCountries = map[string]string{
 	"RS": "serbia", "SE": "sweden", "SI": "slovenia", "SK": "slovakia", "UA": "ukraine",
 }
 
-// codeCountry is the country an EMMA_ID is in: its first two letters, but for the few that differ.
-func codeCountry(code string) string {
-	if len(code) < 2 {
-		return ""
-	}
-	switch c := strings.ToUpper(code[:2]); c {
-	case "EI":
-		return "IE"
-	case "UK":
-		return "GB"
-	case "EL":
-		return "GR"
-	default:
-		return c
-	}
-}
-
 // maRegion is one of MeteoAlarm's regions: its EMMA_ID, country, name, the other codes warnings may
 // name it by (type, code), and its outline, longitude and latitude.
 type maRegion struct {
@@ -88,14 +68,14 @@ type maRegion struct {
 // marine is whether a region is a sea area: MeteoAlarm numbers those from 800.
 func (g maRegion) marine() bool { return len(g.code) == 5 && g.code[2] == '8' }
 
-// regionsNear are the regions home's alerts are for, found from where it is: those it lies in, the
-// sea areas just off it, and any within nearKm.
-func regionsNear(all []maRegion, lat, lon float64, nearKm int) []maRegion {
+// regionsNear are the regions home's alerts are for, found from where it is: those it lies in, and
+// the sea areas just off it.
+func regionsNear(all []maRegion, lat, lon float64) []maRegion {
 	var out []maRegion
 	for _, g := range all {
-		reach := float64(nearKm)
+		reach := 0.0
 		if g.marine() {
-			reach = max(reach, coastKm)
+			reach = coastKm
 		}
 		if !g.boxNear(lat, lon, reach) {
 			continue
@@ -163,53 +143,31 @@ func ringKm(r [][2]float64, lat, lon float64) float64 {
 }
 
 // homeArea is what home's alerts are matched against: its regions' codes, by their type ("EMMA_ID",
-// "NUTS3"...), where home is, how far around it an outline still counts, and the countries to read.
+// "NUTS3"...), where home is, and the countries to read.
 type homeArea struct {
 	codes     map[[2]string]bool
 	lat, lon  float64
-	nearKm    float64
 	countries []string
-	names     []string // the regions, for the log and the setup page
+	names     []string // the regions, for the log
 }
 
-// areaFor is home's area: the regions set by hand when there are any, else the ones found from where
-// home is. The countries are those regions', and Home Assistant's own.
-func areaFor(all []maRegion, lat, lon float64, set []string, nearKm int, country string) homeArea {
-	h := homeArea{codes: map[[2]string]bool{}, lat: lat, lon: lon, nearKm: float64(nearKm)}
+// areaFor is home's area: the regions found from where home is. The countries are those regions',
+// and Home Assistant's own.
+func areaFor(all []maRegion, lat, lon float64, country string) homeArea {
+	h := homeArea{codes: map[[2]string]bool{}, lat: lat, lon: lon}
 	add := func(c string) {
 		if _, ok := meteoAlarmCountries[c]; ok && !slices.Contains(h.countries, c) && len(h.countries) < maxFeeds {
 			h.countries = append(h.countries, c)
 		}
 	}
 	add(country)
-	var found []maRegion
-	if len(set) > 0 {
-		for _, c := range set {
-			c = strings.ToUpper(strings.TrimSpace(c))
-			if c == "" {
-				continue
-			}
-			h.codes[[2]string{"EMMA_ID", c}] = true
-			add(codeCountry(c))
-			name := c
-			if i := slices.IndexFunc(all, func(g maRegion) bool { return g.code == c }); i >= 0 {
-				found = append(found, all[i])
-				name = c + " " + all[i].name
-			}
-			h.names = append(h.names, name)
-		}
-	} else {
-		found = regionsNear(all, lat, lon, nearKm)
-		for _, g := range found {
-			h.codes[[2]string{"EMMA_ID", g.code}] = true
-			h.names = append(h.names, g.code+" "+g.name)
-			add(g.country)
-		}
-	}
-	for _, g := range found {
+	for _, g := range regionsNear(all, lat, lon) {
+		h.codes[[2]string{"EMMA_ID", g.code}] = true
 		for _, a := range g.aliases {
 			h.codes[a] = true
 		}
+		h.names = append(h.names, g.code+" "+g.name)
+		add(g.country)
 	}
 	return h
 }
@@ -276,7 +234,7 @@ func (e maEntry) rings() [][][2]float64 {
 }
 
 // at is whether the entry is for home: one of its codes is one of home's regions', or its outline holds
-// home or comes within its reach.
+// home.
 func (h homeArea) at(e maEntry, rings [][][2]float64) bool {
 	for _, g := range e.Geocodes {
 		if h.codes[[2]string{strings.TrimSpace(g.Name), strings.ToUpper(strings.TrimSpace(g.Value))}] {
@@ -284,7 +242,7 @@ func (h homeArea) at(e maEntry, rings [][][2]float64) bool {
 		}
 	}
 	for _, r := range rings {
-		if ringContains(r, h.lat, h.lon) || h.nearKm > 0 && ringKm(r, h.lat, h.lon) <= h.nearKm {
+		if ringContains(r, h.lat, h.lon) {
 			return true
 		}
 	}
@@ -454,8 +412,7 @@ func readFeed(ctx context.Context, country string) ([]maEntry, error) {
 
 // buildMeteoAlarm is the alerts for a home at lat, lon from MeteoAlarm.
 func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertView, error) {
-	h := config.Get().Home
-	area := areaFor(loadRegions(), lat, lon, h.AlertRegions, h.AlertsNearKm, homeCountry())
+	area := areaFor(loadRegions(), lat, lon, homeCountry())
 	if len(area.countries) == 0 {
 		f.alerts.mu.Lock()
 		if !f.alerts.ma.logged {

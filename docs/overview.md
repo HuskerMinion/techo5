@@ -62,15 +62,16 @@ project started on:
   National Weather Service's, with their storm polygons and counties outlined on the map. In a country
   MeteoAlarm covers they are [MeteoAlarm](https://meteoalarm.org)'s, the
   national weather services' own warnings, yellow, orange or red, in the words the service issued them
-  in: in the screen's language where the service issues that language, else in English. MeteoAlarm's
-  regions for home are found from its location (the regions it lies in, and the coastal waters off
-  it), or set by hand by their EMMA_ID; "Alerts nearby" also counts the regions within 10, 25 or 50 km.
-  Its feed is read every 10 minutes while the screen is drawing (5, 15, 30 or 60 if chosen; MeteoAlarm's
-  [terms](https://meteoalarm.org/en/live/page/terms-and-conditions) ask that warnings be shown no more
-  than ten minutes after meteoalarm.org has them, so a longer wait is one's own choice to make). With
-  no country set in Home Assistant, MeteoAlarm is used for a home in one of its regions or with regions
-  set by hand. All of it is on the setup page (System, Weather alerts) and as Home Assistant's
-  `alert_regions`, `alerts_nearby` and `alerts_refresh`. On
+  in: in the screen's language where the service issues that language, else in English. Home's
+  MeteoAlarm regions are found from its location: the regions it lies in, and the coastal waters off
+  it. The U.K., Switzerland, Sweden, Norway, Estonia, Ukraine and Israel send each warning with its
+  own outline instead, which is matched against home's location. The feed is read every 10 minutes
+  while the screen is drawing, the longest MeteoAlarm's
+  [terms](https://meteoalarm.org/en/live/page/terms-and-conditions) let what is shown lag behind
+  meteoalarm.org. With no country set in Home Assistant, MeteoAlarm is still used for a home in one of
+  its regions, but **a home in a country whose warnings come as outlines (the U.K., Switzerland,
+  Sweden, Norway, Estonia, Luxembourg, Ukraine, Andorra, Israel) gets no alerts without Home
+  Assistant's country**, since the source follows the country. On
   unless turned off ("Weather alerts" on the settings screen, or the `weather_alerts` switch). They are
   a convenience, not an alert device: they make no sound, and a device that is off, offline or dark at
   night can miss one. For warnings that must wake you, keep a weather radio or your phone's emergency
