@@ -2,6 +2,7 @@ package detect
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"slices"
 	"sync"
@@ -73,6 +74,10 @@ type Detect struct {
 
 	// score is the last wake's peak, for setting the threshold by: see newScoreEntity.
 	score *esphome.Sensor
+
+	// wakeProblem says why a wake word chosen in Home Assistant is not listening, or "None": a model
+	// the device refuses drops the slot to no wake word, and its reason was only in the log.
+	wakeProblem *esphome.TextSensor
 
 	// frames is how the wake word loop keeps up: see newFrameEntities.
 	frames frameEntities
@@ -314,6 +319,7 @@ func newDetect() *Detect {
 		d.commands = append(d.commands, c)
 	}
 	d.score = newScoreEntity()
+	d.wakeProblem = newWakeProblemEntity()
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
 	d.frames = newFrameEntities()
@@ -558,6 +564,7 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 
 	var accepted []string
 	var loaded []int
+	var problems []string
 	for slot := range wakeword.Slots {
 		if slot >= len(ids) || ids[slot] == "" {
 			d.engine.Clear(slot)
@@ -567,11 +574,13 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 		m, ok := wake.Find(models, ids[slot])
 		if !ok {
 			slog.Warn("unknown wake word", "slot", slot+1, "id", ids[slot])
+			problems = append(problems, fmt.Sprintf("Wake word %d (%s): not on this device or offered by Home Assistant", slot+1, ids[slot]))
 			d.engine.Clear(slot)
 			continue
 		}
 		if err := d.engine.Use(slot, m); err != nil {
 			slog.Error("loading the selected wake word failed", "slot", slot+1, "id", m.ID, "err", err)
+			problems = append(problems, fmt.Sprintf("Wake word %d (%s): %s", slot+1, m.ID, wakeProblemText(err)))
 			d.engine.Clear(slot)
 			continue
 		}
@@ -579,6 +588,7 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 		loaded = append(loaded, slot)
 	}
 	d.library().Loaded(accepted)
+	d.setWakeProblem(problems)
 	// A word running as a wake word now is not listened for as a command word too. A selection looks
 	// again once it is saved (OnWakeWord); this covers a start and a refresh.
 	for _, c := range d.commands {

@@ -3,6 +3,7 @@ package detect
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -102,7 +103,7 @@ func (d *Detect) Entities() []esphome.Entity {
 		out = append(out, c.word, c.threshold)
 	}
 	out = append(out, d.frames.busy, d.frames.rate, d.frames.worst)
-	return append(out, d.score, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.onHA.faint, d.clipsTotal, d.clipsKinds,
+	return append(out, d.score, d.wakeProblem, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.onHA.faint, d.clipsTotal, d.clipsKinds,
 		d.keepClips, d.send.to, d.send.unsent, d.send.status)
 }
 
@@ -119,6 +120,43 @@ func newScoreEntity() *esphome.Sensor {
 		},
 		Decimals: 2,
 	}
+}
+
+// newWakeProblemEntity is Wake word problem: why a wake word chosen in Home Assistant is not
+// listening. A model the device refuses (one too big for it, or with an operation its engine does not
+// run) leaves the slot with no wake word, and Home Assistant shows only that; the reason is here.
+func newWakeProblemEntity() *esphome.TextSensor {
+	return &esphome.TextSensor{Base: esphome.Base{
+		ObjectID: "wake_word_problem", Name: "Wake word problem", Icon: "mdi:alert-circle-outline",
+		Category: esphome.CategoryDiagnostic,
+	}}
+}
+
+// wakeProblemText is a load error as Wake word problem says it: the reason, without the path the
+// engine names the model by, which means nothing in Home Assistant.
+func wakeProblemText(err error) string {
+	msg := err.Error()
+	if _, after, ok := strings.Cut(msg, ".tflite: "); ok && strings.HasPrefix(msg, "wake: loading ") {
+		return after
+	}
+	return msg
+}
+
+// setWakeProblem publishes what loadFrom found: each slot whose word is not listening and why, or None.
+func (d *Detect) setWakeProblem(problems []string) {
+	if d.wakeProblem == nil {
+		return
+	}
+	if len(problems) == 0 {
+		d.wakeProblem.Set("None")
+		return
+	}
+	// A text sensor's state is at most 255 characters in Home Assistant.
+	s := strings.Join(problems, "; ")
+	if len(s) > 255 {
+		s = s[:252] + "..."
+	}
+	d.wakeProblem.Set(s)
 }
 
 // Restore only publishes the value. Loading the model is Start's, through the engine's Load, so that a
