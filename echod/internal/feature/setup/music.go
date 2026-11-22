@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"html"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"rsc.io/qr"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
@@ -60,7 +63,35 @@ func musicSection(ctx context.Context, w http.ResponseWriter, token string) {
 	 Music Assistant schedules it. It applies as soon as it is saved, even in a song that is playing.</p>`,
 		config.MaxSendspinDelayMs, config.MaxSendspinDelayMs, sendspin.Get().Delay())
 	fmt.Fprint(w, `<p><button type="submit">Save</button></p></form>`)
+	pairingToken(w, sendspin.PairingToken())
 	sectionClose(w)
+}
+
+// pairingToken is the Sendspin pairing token, which pairs Music Assistant with this device: the two then
+// know each other, and no one else on the network can pass for either. It is a credential, so it is
+// folded away until asked for.
+func pairingToken(w http.ResponseWriter, tok string) {
+	if tok == "" {
+		return
+	}
+	fmt.Fprintf(w, `<details><summary>Pair with Music Assistant</summary><div class="body">
+	 <p class="note">Music Assistant plays to this device once it is approved there. Pairing goes further: copy
+	 this token into Music Assistant when it offers to pair with the device, and from then on the two know each
+	 other. Anyone with the token can pair a server with this device, so keep it to yourself.</p>
+	 <p><code id="sstok" style="overflow-wrap:anywhere;word-break:break-all">%s</code></p>
+	 <p><button type="button" class="quiet" onclick="ssCopy(this)">Copy the token</button></p>
+	 <script>
+	 // The page is plain HTTP, where a browser may refuse the clipboard: then the token is selected to copy.
+	 function ssCopy(b){const k=document.getElementById('sstok');
+	  const pick=()=>{const r=document.createRange();r.selectNodeContents(k);const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected: copy it'};
+	  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(k.textContent).then(()=>{b.textContent='Copied'},pick)}else{pick()}}
+	 </script>`, html.EscapeString(tok))
+	if c, err := qr.Encode(tok, qr.M); err == nil {
+		c.Scale = 5
+		fmt.Fprintf(w, `<p><img alt="The token as a QR code" width="%d" height="%d" src="data:image/png;base64,%s"></p>`,
+			(c.Size+8)*5, (c.Size+8)*5, base64.StdEncoding.EncodeToString(c.PNG()))
+	}
+	fmt.Fprint(w, `</div></details>`)
 }
 
 // musicSummary is the line on the shut card: whether a Music Assistant is set, and the playback delay
