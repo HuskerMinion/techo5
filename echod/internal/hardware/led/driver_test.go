@@ -163,15 +163,14 @@ func TestTimedClaimExpires(t *testing.T) {
 	base := d.Claim(PriorityBase)
 	base.Paint(solid(green))
 
+	// Long enough that a loaded machine still sees the notice before it goes, and waited for both ways
+	// rather than slept on: a fixed sleep either side of 80 ms flaked under the full race run.
 	notice := d.Claim(PriorityNotice)
-	notice.PaintFor(solid(blue), 80*time.Millisecond)
-	settle()
-	if got := shown(t, d.ring); got != blue {
+	notice.PaintFor(solid(blue), 400*time.Millisecond)
+	if got := waitFor(t, d.ring, blue); got != blue {
 		t.Fatalf("the notice shows %+v, want blue", got)
 	}
-
-	time.Sleep(140 * time.Millisecond)
-	if got := shown(t, d.ring); got != green {
+	if got := waitFor(t, d.ring, green); got != green {
 		t.Errorf("after the notice expired the ring shows %+v, want the base back", got)
 	}
 }

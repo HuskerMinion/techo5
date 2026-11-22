@@ -81,10 +81,12 @@ func overStream(t *testing.T) string {
 var neverMuted = func() bool { return false }
 
 // waitUntil waits for what happens off the reading's own goroutine: a sound starts, ends and is taken from
-// in the claim, so the state it leaves behind arrives a moment later.
+// in the claim, so the state it leaves behind arrives a moment later. The deadline only matters when it
+// never does: 2 s was too little under the full race run on a loaded machine
+// (TestAPhoneThatIgnoresAPauseEndsItsTrack).
 func waitUntil(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		if ok() {
 			return
 		}
