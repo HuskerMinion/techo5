@@ -123,14 +123,19 @@ func (d *Display) followCriticalLight() {
 		d.critSeen = l.Since
 		go d.relight(true)
 	}
-	if d.critWoke == "" {
-		return
-	}
-	if n, up := notify.Get().Showing(); up && n.ID == d.critWoke {
-		return
-	}
-	d.critWoke = ""
 	d.mu.Lock()
+	woke := d.critWoke
+	d.mu.Unlock()
+	if woke == "" {
+		return
+	}
+	if n, up := notify.Get().Showing(); up && n.ID == woke {
+		return
+	}
+	d.mu.Lock()
+	if d.critWoke == woke {
+		d.critWoke = ""
+	}
 	on := d.on
 	d.mu.Unlock()
 	if on {

@@ -33,7 +33,10 @@ func (d *Display) noticeLights(on, night bool) bool {
 	if !on {
 		d.apply(true, d.ceilingOrDefault(), false)
 		if n.Critical {
+			// Under d.mu: on the Spot this runs on notify's listener, and the frame loop reads it.
+			d.mu.Lock()
 			d.critWoke = n.ID // dark again once it is gone (followCriticalLight)
+			d.mu.Unlock()
 		}
 	}
 	return true
