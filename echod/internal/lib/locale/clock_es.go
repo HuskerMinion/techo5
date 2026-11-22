@@ -7,11 +7,12 @@ import (
 // The Spanish clock says every minute, the hour first - "las dos y media" - and keeps "menos" for
 // the round minutes near the next hour only: menos veinte, menos cuarto, menos diez, menos cinco.
 // Nobody says "las ocho menos veintitrés": twenty-three minutes past is "las siete y treinta y
-// siete". The parts of the day are counted by the sun where it is known: the morning starts when
-// it rises and the afternoon ends when it sets, never before eight - "las ocho" is "de la noche"
-// in winter, and a summer sunset keeps the afternoon going past eight. Mediodía and medianoche are
-// the exact hours only: ten past twelve is "las doce y diez", and the twelve hours go without a
-// part of the day.
+// siete". The parts of the day are counted by the sun where it is known, but the sun only moves
+// them so far: the morning starts when it rises, never later than seven, and the afternoon ends
+// when it sets, never later than nine - in Madrid in December eight o'clock is "de la mañana" with
+// the sun still down, and half past nine is "de la noche" on the longest summer evening. Mediodía
+// and medianoche are the exact hours only - ten past twelve is "las doce y diez" - and they take
+// the verb, "es mediodía", while the twelve hours go without a part of the day.
 
 // esMinutes are the minutes Spanish counts with y, to fifty-nine. The round ones near the next hour
 // are said with menos instead, so their entries here go unused.
@@ -31,16 +32,16 @@ var esHours = []string{"", "una", "dos", "tres", "cuatro", "cinco", "seis", "sie
 	"once", "doce"}
 
 // saySpanish says the time to the minute: "las dos y media de la tarde", "las tres menos cuarto",
-// "una en punto", "mediodía".
+// "una en punto", "es mediodía".
 func saySpanish(t time.Time, sun Sun) SaidTime {
 	s := SaidTime{HourFirst: true}
 	h, m := t.Hour(), t.Minute()
 	switch {
 	case h == 0 && m == 0:
-		s.Hour = "medianoche"
+		s.Intro, s.Hour = "es", "medianoche"
 		return s
 	case h == 12 && m == 0:
-		s.Hour = "mediodía"
+		s.Intro, s.Hour = "es", "mediodía"
 		return s
 	}
 	// The minutes near the next hour are said with menos only when they are round; the rest keep
@@ -85,10 +86,15 @@ func saySpanish(t time.Time, sun Sun) SaidTime {
 			s.Period = "de la tarde"
 		}
 	case h < 12:
-		// The morning starts when the sun rises; with no sun to go by, at six. Before it, madrugada.
+		// The morning starts when the sun rises, but never later than seven: a December sun that
+		// comes up at half past eight still leaves eight o'clock "de la mañana". With no sun to go
+		// by, at six. Before it, madrugada.
 		start := time.Date(t.Year(), t.Month(), t.Day(), 6, 0, 0, 0, t.Location())
 		if sun.OK {
-			start = sun.Rise
+			start = time.Date(t.Year(), t.Month(), t.Day(), 7, 0, 0, 0, t.Location())
+			if sun.Rise.Before(start) {
+				start = sun.Rise
+			}
 		}
 		if t.Before(start) {
 			s.Period = "de la madrugada"
@@ -96,11 +102,15 @@ func saySpanish(t time.Time, sun Sun) SaidTime {
 			s.Period = "de la mañana"
 		}
 	default:
-		// The afternoon ends when the sun sets, but never before eight: eight o'clock is "de la
-		// noche" in winter, and in summer the late sunset keeps it "de la tarde" a while longer.
+		// The afternoon ends when the sun sets, but never before eight and never later than nine:
+		// eight o'clock is "de la noche" in winter, and even the latest sunset does not keep
+		// "de la tarde" going past nine.
 		night := time.Date(t.Year(), t.Month(), t.Day(), 20, 0, 0, 0, t.Location())
 		if sun.OK && sun.Set.After(night) {
 			night = sun.Set
+		}
+		if late := time.Date(t.Year(), t.Month(), t.Day(), 21, 0, 0, 0, t.Location()); night.After(late) {
+			night = late
 		}
 		if t.Before(night) {
 			s.Period = "de la tarde"
