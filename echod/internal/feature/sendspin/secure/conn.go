@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"sync"
 	"time"
 
@@ -51,6 +53,15 @@ type Wire interface {
 // ErrNotEncrypted is a server that answered client/init with something other than server/init or
 // server/error, or hung up on it: a server from before encryption, which knows only client/hello.
 var ErrNotEncrypted = errors.New("the server does not speak encrypted Sendspin")
+
+// hungUpOrSilent is a wait for server/init that ended as a server from before encryption ends it:
+// the server closed the connection, or said nothing until the deadline.
+func hungUpOrSilent(err error) bool {
+	var ce *websocket.CloseError
+	var ne net.Error
+	return errors.As(err, &ce) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		(errors.As(err, &ne) && ne.Timeout())
+}
 
 // RefusedError is a server/error: the server could not take this client/init.
 type RefusedError struct{ Reason string }
@@ -116,14 +127,19 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 
 	// A server from before encryption reads client/init as a broken client/hello: it hangs up, or
 	// waits for a hello that never comes. Either is taken as that, and if it was only the network, the
-	// unencrypted connection that follows fails to start and the next one is encrypted again.
+	// unencrypted connection that follows fails to start and the next one is encrypted again. Any
+	// other failure is the network's. A device paired with a server takes neither as a server from
+	// before encryption: one dropped frame is not to turn its encryption off.
 	if err := w.SetReadDeadline(time.Now().Add(initTimeout)); err != nil {
 		return nil, err
 	}
 	kind, reply, err := w.ReadMessage()
 	_ = w.SetReadDeadline(time.Time{})
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrNotEncrypted, err)
+		if hungUpOrSilent(err) && !st.Paired() {
+			return nil, fmt.Errorf("%w: %v", ErrNotEncrypted, err)
+		}
+		return nil, fmt.Errorf("waiting for server/init: %w", err)
 	}
 	var env envelope
 	if kind != websocket.TextMessage || json.Unmarshal(reply, &env) != nil {
@@ -231,14 +247,18 @@ func (c *Conn) respond(serverKey, prologue, msg1 []byte, fallback bool, send fun
 	if err != nil {
 		return err
 	}
-	if err := send(b); err != nil {
-		return err
-	}
-
+	// Message 2 and the new send keys go together under the lock: a message written between them
+	// would go out under the old keys, which the server has already left.
 	// The responder sends with the second cipher state and reads with the first.
 	c.mu.Lock()
-	c.send = toClient
+	err = send(b)
+	if err == nil {
+		c.send = toClient
+	}
 	c.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	c.recv = toServer
 	c.hash = hs.ChannelBinding()
 	c.Category, c.Mismatch = got.category, mismatch
@@ -266,7 +286,10 @@ func (c *Conn) Rehandshake(payload json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	return c.respond(serverKey, c.hash, msg1, false, c.WriteText)
+	// respond holds c.mu while it sends message 2.
+	return c.respond(serverKey, c.hash, msg1, false, func(b []byte) error {
+		return c.writeLocked(append([]byte{typeJSON}, b...))
+	})
 }
 
 // readWithin reads one message, giving up after the handshake timeout.
@@ -314,6 +337,11 @@ func (c *Conn) WriteBinary(b []byte) error {
 func (c *Conn) write(plain []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.writeLocked(plain)
+}
+
+// writeLocked is write with c.mu held.
+func (c *Conn) writeLocked(plain []byte) error {
 	if len(plain) <= maxPlain {
 		return c.seal(plain)
 	}

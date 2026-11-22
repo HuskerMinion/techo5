@@ -23,15 +23,38 @@ import (
 // keysPath is the device's Sendspin identity and its pairings. A variable for the tests.
 var keysPath = layout.StateDir + "/sendspin-keys.json"
 
-// keys opens the store once. A store that cannot be opened leaves the device on the unencrypted wire,
-// which is how it played before, rather than without music.
-var keys = sync.OnceValues(func() (*secure.Store, error) {
+// keys is the store, opened on first use. A store that cannot be opened leaves the device on the
+// unencrypted wire, which is how it played before, rather than without music, and is tried again on
+// the next use, at most once every keysRetry: early in boot the state directory may not be ready.
+func keys() (*secure.Store, error) {
+	keyStore.Lock()
+	defer keyStore.Unlock()
+	if keyStore.st != nil {
+		return keyStore.st, nil
+	}
+	if keyStore.err != nil && time.Since(keyStore.tried) < keysRetry {
+		return nil, keyStore.err
+	}
 	st, err := secure.Open(keysPath)
+	keyStore.tried = time.Now()
 	if err != nil {
 		slog.Error("sendspin keys", "err", err)
+		keyStore.err = err
+		return nil, err
 	}
-	return st, err
-})
+	keyStore.st, keyStore.err = st, nil
+	return st, nil
+}
+
+// keysRetry is the least time between two attempts to open a store that failed to open.
+const keysRetry = 30 * time.Second
+
+var keyStore struct {
+	sync.Mutex
+	st    *secure.Store
+	err   error
+	tried time.Time
+}
 
 // unencryptedFor is how long a server that did not speak encrypted Sendspin is taken to be one from
 // before it. Music Assistant updated in the meantime is tried encrypted again after that.

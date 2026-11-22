@@ -418,3 +418,46 @@ func TestTheStoreKeepsItsIdentityAndEvictsTheOldest(t *testing.T) {
 		t.Fatalf("records %d, first %q", len(b.file.Records), b.file.Records[0].ServerID)
 	}
 }
+
+// errWire is a wire whose wait for server/init ends in err.
+type errWire struct{ err error }
+
+func (w errWire) ReadMessage() (int, []byte, error) { return 0, nil, w.err }
+func (w errWire) WriteMessage(int, []byte) error    { return nil }
+func (w errWire) SetReadDeadline(time.Time) error   { return nil }
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "i/o timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
+
+func TestOnlyAHangUpOrSilenceIsAServerFromBeforeEncryption(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		old  bool
+	}{
+		{"closed", &websocket.CloseError{Code: websocket.CloseProtocolError}, true},
+		{"eof", io.EOF, true},
+		{"silent", timeoutErr{}, true},
+		{"reset", errors.New("connection reset by peer"), false},
+	} {
+		_, err := Handshake(errWire{tc.err}, store(t))
+		if errors.Is(err, ErrNotEncrypted) != tc.old {
+			t.Errorf("%s: err = %v", tc.name, err)
+		}
+	}
+}
+
+func TestAPairedDeviceDoesNotTakeAHangUpForAServerFromBeforeEncryption(t *testing.T) {
+	st := store(t)
+	if err := st.remember(strings.Repeat("a", 43), bytes.Repeat([]byte{1}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []error{io.EOF, timeoutErr{}} {
+		if _, err := Handshake(errWire{e}, st); err == nil || errors.Is(err, ErrNotEncrypted) {
+			t.Errorf("%v: err = %v", e, err)
+		}
+	}
+}
