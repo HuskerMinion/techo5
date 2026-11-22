@@ -611,6 +611,14 @@ HTTP.
   playing, including the song's address (some servers put a login token in it, as with any DLNA
   speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
   ([Video](video.md)).
+- **Plex.** On the Show and the Spot, the **Plex** card (Sound, on this page, or Settings →
+  Connections → Plex on the device) links a Plex account with a four-character code from
+  plex.tv/link: *Link Account* puts the code on the screen and in this card, and the Plex apps and
+  Plexamp then list the device as a player, on the network and from away. Music plays with its cover on
+  Now Playing and films play full screen, transcoded by the server to what this hardware decodes
+  (H.264 at 720p). Pause, seek, skip and the volume go both ways, and the device reports what it plays
+  to the Plex server. It is off until an account is linked, and **Unlink Account** ends it and closes
+  the device's Plex ports again ([Plex](plex.md)).
 - **A phone over Bluetooth.** On the Show, the Spot and the Dot, the **Bluetooth phone**
   switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
   minutes the device can be found and paired with, with no scan for speakers, and a phone connects

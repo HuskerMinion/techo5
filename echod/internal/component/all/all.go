@@ -49,6 +49,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/person"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/plexcast"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/recording"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/remote"

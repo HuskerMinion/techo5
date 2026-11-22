@@ -295,6 +295,9 @@ func ClearSecrets(c *Config) {
 	c.CamStream.Pass = ""
 	c.Realtime.Key = ""
 	c.Realtime.MCPToken = ""
+	// The Plex account's token, and who it belongs to: what is linked is this device's own, as the
+	// tailnet below is. The identifier stays, so a file that comes back is still the same player.
+	c.Plex.Token, c.Plex.User, c.Plex.UserID = "", "", ""
 	for i := range c.Deck.Computers {
 		c.Deck.Computers[i].Key = ""
 	}

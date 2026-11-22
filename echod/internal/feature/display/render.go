@@ -284,6 +284,8 @@ type scene struct {
 
 	// pin is the settings lock's PIN pad (pin.go), drawn over everything but a call or a ring while open.
 	pin pinView
+	// link is the Plex link's card (plex.go), drawn in the same place and for the same reason.
+	link linkView
 
 	// lyric is the words of the song on the full now-playing page, when hasLyric (home/lyrics.go).
 	lyric    home.Lyric
@@ -712,6 +714,10 @@ func (r *renderer) draw(s scene) {
 	}
 	if s.pin.open {
 		r.pinPage(s.pin)
+		return
+	}
+	if s.link.open {
+		r.plexPage(s.link)
 		return
 	}
 	// A browser waiting to be let in: the answer is a tap here, since this device has no button for

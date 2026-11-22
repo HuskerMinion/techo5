@@ -81,6 +81,7 @@ var findKeywords = map[string][]string{
 	"speaker":   {"volume", "loud", "quiet", "mute", "sound", "disturb"},
 	"stations":  {"radio", "stream"},
 	"streaming": {"airplay", "spotify", "dlna", "cast"},
+	"plex":      {"plex", "cast", "account", "link"},
 	"bluetooth": {"pair", "headphones"},
 	"music":     {"music", "sendspin"},
 	"sounds":    {"sound", "chime", "ringtone"},

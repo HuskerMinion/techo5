@@ -222,7 +222,7 @@ func nav(w http.ResponseWriter, on string, cards []card) {
 // uploads, the settings file, sharing, the takes, the history, the remote key), and the ones several
 // forms share (sectionFor).
 var tabFor = map[string]string{
-	"speaker": "sound", "stations": "sound", "music": "sound", "streaming": "sound", "bluetooth": "sound",
+	"speaker": "sound", "stations": "sound", "music": "sound", "streaming": "sound", "plex": "sound", "bluetooth": "sound",
 	"sound-play": "sound", "sound-remove": "sound", "sounds": "sound",
 
 	"brain": "voice", "replyplayer": "voice", "realtime": "voice", "listening": "voice",

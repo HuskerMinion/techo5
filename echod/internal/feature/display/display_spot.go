@@ -55,6 +55,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/plexcast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
@@ -480,6 +481,8 @@ func build() *Display {
 		d.wake()
 	})
 	btaudio.Get().Changed.Listen(func(btaudio.State) { d.wake() })
+	// The Plex link's card (plex.go): a code arriving from plex.tv, and an account going on or off.
+	plexcast.Listen(func() { d.wake() })
 	d.listenDashboard()
 	assistant.SetScreen(d.showPageSpot)
 	phone.Get().Changed.Listen(d.callLights)
@@ -814,7 +817,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	if d.callGesture(g) || d.ringGesture(g) || d.pinGesture(g) {
+	if d.callGesture(g) || d.ringGesture(g) || d.pinGesture(g) || d.plexGesture(g) {
 		return
 	}
 	// The setup page asking something of whoever is at the device: a browser to be let in, or takes of
@@ -1658,6 +1661,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.playing, s.paused = musicState()
 	s.maxVolume = config.VolumeSteps
 	s.pin = pinNow(now)
+	s.link = linkNow(now)
 	relockOnClose(s.sheetOpen)
 	if s.sheetOpen {
 		s.sheet = d.sheetView(now)

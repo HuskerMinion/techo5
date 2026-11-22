@@ -34,9 +34,15 @@ const (
 	API      = "ECHOLOCAL_API"
 	ADB      = "ECHOLOCAL_ADB"
 	Sendspin = "ECHOLOCAL_SENDSPIN"
+
+	// Plex is the Companion control port (feature/plexcast): a controller that found the player by
+	// GDM connects to it. PlexGDM is Plex's own discovery over UDP, which is not SSDP: a search gets a
+	// unicast answer from the searching device's port, and the player announces itself to the group.
+	Plex    = "ECHOLOCAL_PLEX"
+	PlexGDM = "ECHOLOCAL_PLEXGDM"
 )
 
-var All = []string{API, ADB, Sendspin}
+var All = []string{API, ADB, Sendspin, Plex, PlexGDM}
 
 // The interface is wlan0 throughout: this device has no other way in.
 const iface = "wlan0"
@@ -45,7 +51,17 @@ const iface = "wlan0"
 var ready sync.Mutex
 
 func acceptRule(chain string, port int) []string {
-	return []string{chain, "-i", iface, "-p", "tcp", "--dport", fmt.Sprint(port), "-j", "ACCEPT"}
+	return acceptRange(chain, "tcp", port, port)
+}
+
+// acceptRange is one port, or a range of them, open on the interface: tcp for a server, udp for a
+// listener that is answered by datagram (Plex's GDM, feature/plexcast).
+func acceptRange(chain, proto string, from, to int) []string {
+	port := fmt.Sprint(from)
+	if to != from {
+		port = fmt.Sprintf("%d:%d", from, to)
+	}
+	return []string{chain, "-i", iface, "-p", proto, "--dport", port, "-j", "ACCEPT"}
 }
 
 func jumpRule(chain string) []string {
@@ -72,6 +88,31 @@ func open(chain string, port int) error {
 		return err
 	}
 	return iptablesRun(append([]string{"-A"}, acceptRule(chain, port)...)...)
+}
+
+// OpenUDP is Open for a range of datagram ports. The chain is rebuilt as Open's is, so TCP and UDP of
+// one feature never share a chain: each has its own, and closing one leaves the other alone.
+func OpenUDP(chain string, from, to int) error {
+	if !managed {
+		return nil
+	}
+	ready.Lock()
+	defer ready.Unlock()
+	if err := ensure(chain); err != nil {
+		return err
+	}
+	if err := iptablesRun("-F", chain); err != nil {
+		return err
+	}
+	return iptablesRun(append([]string{"-A"}, acceptRange(chain, "udp", from, to)...)...)
+}
+
+// OpenedUDP reports whether the datagram range is allowed right now, as Opened does for a port.
+func OpenedUDP(chain string, from, to int) (bool, error) {
+	if !managed {
+		return true, nil
+	}
+	return has(acceptRange(chain, "udp", from, to))
 }
 
 // Close shuts the port by emptying the chain. The chain and its jump stay, so nothing has to be put

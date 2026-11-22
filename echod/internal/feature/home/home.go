@@ -972,9 +972,10 @@ const (
 	AirPlayName = "AirPlay"
 	SpotifyName = "Spotify"
 	DLNAName    = "DLNA"
+	PlexName    = "Plex"
 )
 
 // Receiver is whether a received track's name is one of the receivers'.
 func Receiver(from string) bool {
-	return from == AirPlayName || from == SpotifyName || from == DLNAName
+	return from == AirPlayName || from == SpotifyName || from == DLNAName || from == PlexName
 }

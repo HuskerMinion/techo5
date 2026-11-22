@@ -39,6 +39,7 @@ type Config struct {
 	TalkBack       TalkBack       `json:"talk_back,omitempty"`
 	Doorbell       Doorbell       `json:"doorbell,omitempty"`
 	Streaming      Streaming      `json:"streaming,omitempty"`
+	Plex           Plex           `json:"plex,omitempty"`
 	Presence       Presence       `json:"presence,omitempty"`
 	Screen         Screen         `json:"screen"`
 	Home           Home           `json:"home"`
@@ -124,6 +125,7 @@ func (w Writer) Brain() BrainWriter                   { return BrainWriter(w) }
 func (w Writer) TalkBack() TalkBackWriter             { return TalkBackWriter(w) }
 func (w Writer) Doorbell() DoorbellWriter             { return DoorbellWriter(w) }
 func (w Writer) Streaming() StreamingWriter           { return StreamingWriter(w) }
+func (w Writer) Plex() PlexWriter                     { return PlexWriter(w) }
 func (w Writer) Presence() PresenceWriter             { return PresenceWriter(w) }
 func (w Writer) Deck() DeckWriter                     { return DeckWriter(w) }
 func (w Writer) Video() VideoWriter                   { return VideoWriter(w) }

@@ -51,6 +51,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/plexcast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
@@ -670,6 +671,8 @@ func build() *Display {
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	d.watchRoom()
 	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
+	// The Plex link's card (plex.go): a code arriving from plex.tv, and an account going on or off.
+	plexcast.Listen(func() { d.wake() })
 	tessera.Changed.Listen(func(struct{}) { d.wake() })
 	tessCams.mu.Lock()
 	tessCams.wake = d.wake
@@ -1285,8 +1288,12 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	// The PIN pad of the settings lock takes every tap while it is up, under a call and a ring.
+	// The PIN pad of the settings lock takes every tap while it is up, under a call and a ring; and so
+	// does the Plex link's card, which is the same kind of thing.
 	if d.pinGesture(g) {
+		return
+	}
+	if d.plexGesture(g) {
 		return
 	}
 
@@ -2930,6 +2937,7 @@ func (d *Display) frame() (next time.Duration) {
 	s.updateTarget = d.updateTarget
 	s.updateMessage = d.updateMessage
 	s.pin = pinNow(now)
+	s.link = linkNow(now)
 	// The network address page is one of the settings, opened from them and going back to them: the
 	// lock stays open behind it. So is the camera test.
 	// The apps list over the clock is behind the lock too (openTabletApps): it closing locks again.

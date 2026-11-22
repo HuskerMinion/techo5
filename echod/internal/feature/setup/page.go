@@ -336,6 +336,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveMusic(r)
 	case "streaming":
 		problem = saveStreaming(r)
+	case "plex":
+		problem = savePlex(r)
 	case "bluetooth":
 		problem = saveBluetooth(r)
 	case "speaker":
@@ -619,6 +621,9 @@ func (f *Feature) drawTab(ctx context.Context, w http.ResponseWriter, token, tab
 		fmt.Fprint(w, `<h3>Music</h3>`)
 		stationsSection(w, token)
 		streamingSection(w, token)
+		if hasScreen {
+			plexSection(w, token) // a Dot is not a player: it has nothing to cast to
+		}
 		bluetoothSection(w, token)
 		musicSection(ctx, w, token)
 		// A device that cannot hear has no Voice tab: the announcements it plays are set here.

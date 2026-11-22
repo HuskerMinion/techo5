@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/mute"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/plexcast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/presence"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remote"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
@@ -471,6 +472,7 @@ func connectionRows(sv sheetView) []settingRow {
 	if st.addressSet != "" {
 		rows = append(rows, settingRow{id: "address", label: tr("network_address"), sub: st.addressSet, kind: ctlButton, button: tr("ui_change")})
 	}
+	rows = append(rows, plexRow())
 	switch {
 	case !bt.Available:
 		rows = append(rows, settingRow{label: tr("bluetooth_audio"), sub: tr("not_available_on_this_build"), kind: ctlValue})
@@ -1355,6 +1357,16 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		streaming.Get().SetSpotify(!config.Get().Streaming.Spotify)
 	case "dlna":
 		dlna.Get().Set(!config.Get().Streaming.DLNA)
+	case "plex":
+		// Linking is the code on the screen; unlinking is this row, since it is the only way back out
+		// of an account (feature/plexcast).
+		if plexcast.On() {
+			if err := plexcast.UnlinkAccount(); err != nil {
+				slog.Warn("unlinking Plex failed", "err", err)
+			}
+			return
+		}
+		startPlexLink()
 	case "presence":
 		safe.Go("presence from the screen", func() { presence.Get().SetOn(!config.Get().Presence.On) })
 	case "settingslock":

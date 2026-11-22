@@ -78,7 +78,8 @@ type roundScene struct {
 	firstRunUp bool
 	firstRun   firstRunView
 
-	pin pinView // the settings lock's PIN pad (pin.go), over everything but a call or a ring
+	pin  pinView  // the settings lock's PIN pad (pin.go), over everything but a call or a ring
+	link linkView // the Plex link's card (plex.go), there for the same reason
 	// The dashboard face: whether it is up, how it is shown, and what it shows.
 	showDash   bool
 	dashMode   config.DashboardMode
@@ -412,6 +413,10 @@ func (r *roundRenderer) draw(s roundScene) {
 	// it. Under a call and under a ringing alarm, both of which are somebody already being answered.
 	if s.pin.open {
 		r.pinFace(s.pin)
+		return
+	}
+	if s.link.open {
+		r.plexFace(s.link)
 		return
 	}
 	if s.setupAsking {

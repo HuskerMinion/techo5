@@ -16,6 +16,11 @@ const (
 	// FromDLNA is a DLNA controller, which anybody on the network can be: the first video from an
 	// address asks on the screen first.
 	FromDLNA
+
+	// FromPlex is this device's own Plex account casting to it (feature/plexcast): the owner asked for
+	// the film from their own phone or browser, over the LAN or through plex.tv, so it asks nothing on
+	// the screen, as a play_video action does not. Only the Video switch can turn it away.
+	FromPlex
 )
 
 // Request is a video to play.

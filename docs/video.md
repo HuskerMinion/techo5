@@ -1,7 +1,8 @@
 # Video
 
-An Echo Show or Spot can play a video full screen, with its sound. Home Assistant sends it an address, or a
-DLNA app on your phone or computer sends it one, and the Show plays it.
+An Echo Show or Spot can play a video full screen, with its sound. Home Assistant sends it an address, a
+DLNA app on your phone or computer sends it one, or a film cast from Plex arrives as the stream the Plex
+server made for this device ([Plex](plex.md)), and the Show plays it.
 
 The Echo Show 5, the Show 8, the Spot and the Skylight Calendar. The Dot has no screen. On the Spot's round screen a wide
 picture fills the width, and the edge of the glass takes its corners.
@@ -34,6 +35,8 @@ Videos are off on a new device. On the device's setup page, **Screen → Video**
 1. Tick **Play videos** and **Save**. Home Assistant can now send videos.
 2. For DLNA apps too, tick **DLNA video** as well. DLNA itself has to be on
    (**Sound → Play to this device → DLNA**).
+3. For films cast from Plex, link the account (**Sound → Plex**): a cast film plays when **Play
+   videos** is on, and the server scales it to 720p itself.
 
 Home Assistant has the same two switches: **Video** and **DLNA video**.
 
