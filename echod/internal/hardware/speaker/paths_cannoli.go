@@ -190,14 +190,18 @@ const mayHaveTAS5805M = false
 // OutputBoost is make-up gain on the output.
 const OutputBoost = 1.0
 
-// DriverTuning is off: no vendor tuning set lib/asp reads is known for this board.
-const DriverTuning = false
+// DriverTuning is on: Fire OS's own chain for this board (lib/asp iir.go, asp.Cannoli), read from the
+// unit's /vendor/etc/audio-algorithms, which the boot script adopts from system_a into the store. Without
+// it the speaker plays flat: no bass lift, no presence cut, and nothing holding the driver.
+const DriverTuning = true
 
-// tuningSet is nil: no tuning is loaded by name here.
-var tuningSet *asp.Set
+// tuningSet is asp.Cannoli, by name: the directory also holds an EQ_100.cfg its AFE.cfg never names.
+var tuningSet = &asp.Cannoli
 
-// firstCurves is empty: without the tuning, the volume is volumeCurves as they are.
-var firstCurves = map[string][VolumeSteps + 1]float64{}
+// firstCurves puts the volume in front of the tuning, where Fire OS has it (audio policy turns the
+// music down, then the vendor's chain lifts and limits it): the same curve as untuned, so a step is as
+// loud tuned or not in the mids, and the limiters see the level they were set for.
+var firstCurves = map[string][VolumeSteps + 1]float64{"cannoli": cannoliCurve}
 
 // HasJack is false: the Dot 5 has no headphone jack.
 const HasJack = false

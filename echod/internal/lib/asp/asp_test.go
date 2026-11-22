@@ -247,6 +247,9 @@ var shapes = map[string][]struct {
 // a stock device. A tuning that does not look like this is not the one we think we are applying.
 func TestVendorFilterHasTheShapeWeMeasured(t *testing.T) {
 	v := vendorTuning(t)
+	if v.set.IIR != "" {
+		t.Skip("an IIR set; TestVendorCannoliHasTheShapeWeMeasured")
+	}
 	want, known := shapes[v.set.Name]
 	if !known {
 		// The Spot's was never measured this way; a filter with no bass lift at all is still wrong.
@@ -289,6 +292,9 @@ func TestVendorFilterHasTheShapeWeMeasured(t *testing.T) {
 
 func TestVendorMBCLIsTheOneWeBuiltFor(t *testing.T) {
 	v := vendorTuning(t)
+	if v.set.IIR != "" {
+		t.Skip("an IIR set has limiters, not an MBCL; TestVendorCannoliLimits")
+	}
 	m := v.mbcl
 
 	if len(m.Bands) != 4 || len(m.Crossovers) != 3 {
