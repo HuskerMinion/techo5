@@ -22,7 +22,6 @@ type deck struct {
 	clock   time.Time
 	ducked  []bool
 	playing bool
-	busy    bool
 	on      bool
 	ringing bool
 	hushes  int
@@ -33,7 +32,6 @@ func newDeck() *deck {
 	k.d = &ducker{
 		enabled: func() bool { return k.on },
 		playing: func() bool { return k.playing },
-		busy:    func() bool { return k.busy },
 		duck:    func(on bool) { k.ducked = append(k.ducked, on) },
 		ringing: func() bool { return k.ringing },
 		hush:    func() { k.hushes++ },
@@ -129,16 +127,16 @@ func TestADuckIsFollowedByAQuietPeriod(t *testing.T) {
 	}
 }
 
-func TestAnExpiredDuckLeavesATurnAlone(t *testing.T) {
+// A near miss that turns into a turn still lets go of its own duck when it runs out: the turn holds
+// the music down under its own name, and a near-miss duck left held would keep it down after the turn.
+func TestAnExpiredDuckLetsGoDuringATurn(t *testing.T) {
 	k := newDeck()
 	k.d.heard(0, 0.7)
 
-	// The repeat was heard: a turn is running and has ducked the music itself.
-	k.busy = true
 	k.tick(nearMissDuck)
 	k.timer.fire()
 
-	if len(k.ducked) != 1 {
-		t.Fatalf("the turn owns the level now, so this must not restore it, got %v", k.ducked)
+	if len(k.ducked) != 2 || k.ducked[1] {
+		t.Fatalf("the near-miss duck must be let go of when it runs out, got %v", k.ducked)
 	}
 }
