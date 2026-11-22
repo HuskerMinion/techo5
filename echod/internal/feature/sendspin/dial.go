@@ -95,7 +95,16 @@ func (l *listener) held() bool {
 // runSession is a session on a connection made here; a variable so that a test can stand in for the
 // player, which needs the speaker.
 var runSession = func(ctx context.Context, l *listener, conn *websocket.Conn, name string) error {
-	return newSession(conn, l.out, l.bg, name, l.report).run(ctx)
+	peer, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	ws, plain, err := secured(ctx, conn, peer)
+	if err != nil {
+		return err
+	}
+	s := newSession(ws, l.out, l.bg, name, l.report)
+	s.encrypted = !plain
+	err = s.run(ctx)
+	unstarted(plain, peer, err)
+	return err
 }
 
 // dialOnce connects to Music Assistant and runs a session; it reports whether one ran for long enough to

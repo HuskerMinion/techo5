@@ -21,6 +21,10 @@ var suite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.Ha
 // recommends.
 const handshakeTimeout = 30 * time.Second
 
+// initTimeout is the wait for server/init, which a server sends at once: a server still silent after
+// this is one from before encryption, waiting for a client/hello.
+const initTimeout = 10 * time.Second
+
 // Transport message types, the first byte of a decrypted message.
 const (
 	typeJSON     = 0
@@ -110,13 +114,16 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 		return nil, err
 	}
 
-	kind, reply, err := readWithin(w)
-	if err != nil {
-		// A server from before encryption reads client/init as a broken client/hello and hangs up.
-		if _, closed := err.(*websocket.CloseError); closed {
-			return nil, ErrNotEncrypted
-		}
+	// A server from before encryption reads client/init as a broken client/hello: it hangs up, or
+	// waits for a hello that never comes. Either is taken as that, and if it was only the network, the
+	// unencrypted connection that follows fails to start and the next one is encrypted again.
+	if err := w.SetReadDeadline(time.Now().Add(initTimeout)); err != nil {
 		return nil, err
+	}
+	kind, reply, err := w.ReadMessage()
+	_ = w.SetReadDeadline(time.Time{})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotEncrypted, err)
 	}
 	var env envelope
 	if kind != websocket.TextMessage || json.Unmarshal(reply, &env) != nil {

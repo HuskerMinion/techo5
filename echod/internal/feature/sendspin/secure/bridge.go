@@ -419,8 +419,8 @@ func (b *bridge) player(data []byte) error {
 	return b.forward(data, false)
 }
 
-// hello is the library's client/hello as an encrypted session has it: client_id and version are in
-// client/init, and the pairing methods and unpaired access are said here.
+// rewriteHello is the library's client/hello as an encrypted session has it: client_id and version are
+// in client/init, and the pairing methods and unpaired access are said here.
 func (b *bridge) rewriteHello(payload json.RawMessage) ([]byte, error) {
 	var p map[string]any
 	if err := json.Unmarshal(payload, &p); err != nil {
@@ -428,6 +428,11 @@ func (b *bridge) rewriteHello(payload json.RawMessage) ([]byte, error) {
 	}
 	delete(p, "client_id")
 	delete(p, "version")
+	// The artwork channels and the player's commands are said in client/state on this wire.
+	delete(p, "artwork@v1_support")
+	if ps, ok := p["player@v1_support"].(map[string]any); ok {
+		delete(ps, "supported_commands")
+	}
 	p["supported_pair_methods"] = map[string]any{"pairing_psk": map[string]any{}}
 	p["unpaired_access"] = map[string]bool{"enabled": b.opts.Unpaired}
 	return json.Marshal(map[string]any{"type": "client/hello", "payload": p})
