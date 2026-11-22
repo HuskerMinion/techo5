@@ -3,9 +3,12 @@
 package plexcast
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
 
 // A search is Plex's own and not SSDP's: one line, "M-SEARCH * " and a version this player does not
@@ -150,5 +153,59 @@ func TestWhereItIs(t *testing.T) {
 	p.base, p.started = time.Minute, now
 	if got := p.atLocked(now); got != time.Minute {
 		t.Errorf("past the end: %v, want the length", got)
+	}
+}
+
+// The profile is the one place the server is told what this device takes, so what it says is checked:
+// H.264 at 720p for a Show or a Spot, and at 1080p for the Skylight (transcode.go).
+func TestProfileSize(t *testing.T) {
+	show := capProfileAt(1280, 720)
+	sky := capProfileAt(1920, 1080)
+	for _, want := range []struct{ profile, name string }{{show, "the 720p one"}, {sky, "the 1080p one"}} {
+		for _, s := range []string{
+			"add-transcode-target(type=videoProfile&context=streaming&protocol=hls",
+			"&container=mpegts&videoCodec=h264&",
+			"&audioCodec=aac,mp3,ac3&",
+			"&subtitleCodec=srt&",
+			"name=video.bitDepth&value=8&",
+		} {
+			if !strings.Contains(want.profile, s) {
+				t.Errorf("%s does not say %q: %s", want.name, s, want.profile)
+			}
+		}
+	}
+	for _, want := range []struct {
+		profile string
+		w, h    int
+	}{{show, 1280, 720}, {sky, 1920, 1080}} {
+		if !strings.Contains(want.profile, "name=video.width&value="+strconv.Itoa(want.w)+"&") ||
+			!strings.Contains(want.profile, "name=video.height&value="+strconv.Itoa(want.h)+"&") {
+			t.Errorf("the profile does not hold the picture to %dx%d: %s", want.w, want.h, want.profile)
+		}
+	}
+	if show == sky {
+		t.Error("720p and 1080p ask the server for the same thing")
+	}
+	// H.264 and nothing else. Plex may encode to a codec a client lists, and its HEVC encoding is
+	// hardware-only and experimental (docs/plex.md): one it cannot make, or one this board cannot
+	// decode, would be a film that does not play.
+	for _, p := range []string{show, sky} {
+		if strings.Contains(p, "hevc") || strings.Contains(p, "h265") {
+			t.Errorf("the profile offers H.265: %s", p)
+		}
+	}
+}
+
+// A board's own answer, and the one this build runs with: the init that sets capProfile has to have
+// picked this board's profile, or a Skylight is sent what a Show is (transcode_board.go).
+func TestProfileFollowsTheBoard(t *testing.T) {
+	if got, want := profileFor(false), capProfileAt(1280, 720); got != want {
+		t.Errorf("a Show is asked for %s, want the 720p profile", got)
+	}
+	if got, want := profileFor(true), capProfileAt(1920, 1080); got != want {
+		t.Errorf("the Skylight is asked for %s, want the 1080p profile", got)
+	}
+	if got, want := capProfile, profileFor(layout.Skylight()); got != want {
+		t.Errorf("this board's profile is %s, want %s", got, want)
 	}
 }

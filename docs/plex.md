@@ -84,6 +84,10 @@ account linked.
   it, and a board with a faster decoder and a bigger screen asks for more (`transcode_board.go`). The
   device does not do the transcoding: the Plex server does. A server too slow to transcode will
   stutter a film, which is the server's doing and not the Show's.
+- **H.264 only**, even on the Skylight, whose decoder also plays H.265: a server may encode to any codec its
+  client lists, and Plex's HEVC encoding is hardware-only, needs a Plex Pass and is still experimental,
+  under which a board that listed it could be sent a film it cannot play. The gain HEVC would bring is
+  on the server's side, and this device asks for 720p (1080p on the Skylight) over a home network.
 - **Plex's Companion protocol is not a published API.** What is implemented is what Plex's own
   players answer (see the notes at the top of `echod/internal/feature/plexcast`), verified against
   them. A future Plex client that expects something else would need this code changed; it is written

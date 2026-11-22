@@ -12,8 +12,15 @@ import "github.com/HuskerMinion/techo5/echod/internal/layout"
 //
 // This is where a future board with a better decoder adds itself, as cores_show.go adds one to
 // feature/video's limits: the profile itself is written once, in capProfileAt.
-func init() {
-	if layout.Skylight() {
-		capProfile = capProfileAt(1920, 1080)
+func init() { capProfile = profileFor(layout.Skylight()) }
+
+// profileFor is what a board's own screen and decoder take: the Skylight's 1920 by 1080, and 720p for
+// every other screen here -- the Shows' 960 by 480 and 1280 by 800, the Spot's 480 by 480. It is a
+// function rather than the switch above so that both answers are covered by a test, which also checks
+// that the profile this build runs with is the one its board asks for (plexcast_test.go).
+func profileFor(skylight bool) string {
+	if skylight {
+		return capProfileAt(1920, 1080)
 	}
+	return capProfileAt(1280, 720)
 }
