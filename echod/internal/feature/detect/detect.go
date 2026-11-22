@@ -79,6 +79,10 @@ type Detect struct {
 	// the device refuses drops the slot to no wake word, and its reason was only in the log.
 	wakeProblem *esphome.TextSensor
 
+	// dropMu guards lastDrop: when each wake word's model last failed on live audio (dropped.go).
+	dropMu   sync.Mutex
+	lastDrop map[string]time.Time
+
 	// frames is how the wake word loop keeps up: see newFrameEntities.
 	frames frameEntities
 
@@ -365,7 +369,7 @@ func newDetect() *Detect {
 		}
 	})
 	e.OnReady = d.busy.scored
-	e.OnDropped = d.commandDropped
+	e.OnDropped = d.dropped
 
 	// The engine loads on every start, including a restart. Home Assistant only pushes a selection when
 	// the user changes one, so an engine that came back empty would leave the device deaf while it went

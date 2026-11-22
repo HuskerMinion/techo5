@@ -93,6 +93,9 @@ type microBackend struct {
 type microDetector interface {
 	ProcessFeatures(frames [][]int8) bool
 	SlidingAverage() float64
+	// Err is why the last inference failed, nil when none has: a model that loads but cannot run
+	// fails every inference and scores nothing, which is otherwise silence (#692).
+	Err() error
 }
 
 // featureFront is a microWakeWord feature front end: one window of audio in, a frame of 40 features
@@ -198,6 +201,10 @@ func (b *microBackend) run(id string, det microDetector, feat [][]int8) (ok bool
 		}
 	}()
 	det.ProcessFeatures(feat)
+	if err := det.Err(); err != nil {
+		slog.Error("wake word dropped: its model failed on live audio", "id", id, "err", err)
+		return false
+	}
 	return true
 }
 
