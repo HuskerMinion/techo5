@@ -22,11 +22,11 @@ func TestHeatFollowsFireOSsPolicy(t *testing.T) {
 		{map[string]int{"soc_max": 91000}, -1, 0}, // trips 1 and 2 ask for nothing of the speaker
 		{map[string]int{"soc_max": 92000}, -1, 1},
 		{map[string]int{"soc_max": 94500}, -1, 2},
-		{map[string]int{"soc_max": 92500}, -1, 2},  // inside 94.0's 1.9 degrees
-		{map[string]int{"soc_max": 92000}, -1, 1},  // out of them
-		{map[string]int{"soc_max": 90200}, -1, 1},  // inside 92.0's
-		{map[string]int{"soc_max": 90000}, -1, 0},  // out
-		{map[string]int{"soc_max": 97000}, -1, 3},  // straight up through every trip
+		{map[string]int{"soc_max": 92500}, -1, 2}, // inside 94.0's 1.9 degrees
+		{map[string]int{"soc_max": 92000}, -1, 1}, // out of them
+		{map[string]int{"soc_max": 90200}, -1, 1}, // inside 92.0's
+		{map[string]int{"soc_max": 90000}, -1, 0}, // out
+		{map[string]int{"soc_max": 97000}, -1, 3}, // straight up through every trip
 		{map[string]int{"soc_max": 50000, "skin_virtual": 58600}, -1, 2},
 		{map[string]int{"soc_max": 50000}, 3, 3}, // the kernel's own cooler, where it has one
 		{map[string]int{}, -1, 0},
