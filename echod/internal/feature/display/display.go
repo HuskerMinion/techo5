@@ -528,6 +528,12 @@ type Display struct {
 	// day, or that a touch released. A notification at night waits for the touch (mu).
 	notifyLit  string
 	notifySeen string
+	// crit is the panel's light in a critical notification's (relight, under mu). critSeen is the ring
+	// the frame last saw, and critWoke the critical notification that turned the panel on, to turn it
+	// off again (frame's alone).
+	crit     critLit
+	critSeen time.Time
+	critWoke string
 }
 
 var (
@@ -866,6 +872,14 @@ func (d *Display) relight(jump bool) {
 	// room would otherwise ask for and ends at the screen's own brightness.
 	if p := d.wakeLight(time.Now()); p > 0 && d.on {
 		target = float64(d.ceiling) * screen.BacklightMax / 100 * sunriseLevel(p)
+	}
+	// A critical notification takes the backlight over while it rings, night and auto-brightness or
+	// not: it is meant to be seen across a dark room (notify_buttons.go).
+	if d.on {
+		l, ringing := notify.Get().CriticalLight()
+		target = d.crit.target(l, ringing, d.level, target, time.Now(), func(pct int) float64 {
+			return float64(pct) * screen.BacklightMax / 100
+		})
 	}
 	target = watchedLight(target, d.on, watched(), float64(glowSteps[0]))
 	if jump || d.level == 0 {
@@ -1220,7 +1234,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			// own box; a camera view (a picture notification's, or one somebody asked for) as by day, where
 			// Talk and the sound's control keep the view up and anywhere else takes it down.
 			if n, up := notify.Get().Card(); up && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
-				go notify.Get().DismissID(n.ID)
+				d.r.tapNotifyCard(n, image.Pt(g.X, g.Y))
 				d.wake()
 				return
 			}
@@ -1378,7 +1392,7 @@ func (d *Display) gesture(g touch.Gesture) {
 	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
 	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
 	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
-		go notify.Get().DismissID(n.ID)
+		d.r.tapNotifyCard(n, image.Pt(g.X, g.Y))
 		d.wake()
 		return
 	}
@@ -3137,6 +3151,10 @@ func (d *Display) frame() (next time.Duration) {
 	s.reminder, s.showReminder = remind.Get().Showing()
 	s.notification, s.showNotification = notify.Get().Card()
 	d.gateNotice(&s, nightNow(now))
+	if s.showNotification {
+		s.notifyPulse = notifyPulse(s.notification, now)
+	}
+	d.followCriticalLight()
 	s.popup, s.popupWaiting = d.popupUp(), d.popupsWaiting()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
@@ -3286,6 +3304,9 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if ring.any() || call.Phase != phone.Idle {
 		return 500 * time.Millisecond
+	}
+	if s.notifyPulse > 0 {
+		return pulseFrame // a critical notification's card pulses while it rings
 	}
 	if s.bt.Pairing || s.showSheet || s.showWifi || s.showDrawer {
 		return 500 * time.Millisecond

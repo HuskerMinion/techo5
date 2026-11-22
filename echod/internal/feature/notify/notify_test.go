@@ -101,7 +101,9 @@ type rig struct {
 	pics   *fakePictures
 	now    time.Time
 	chimes atomic.Int32
-	hushed atomic.Bool
+	// chimeStep is the step the last chime was played at; 0 for its usual level.
+	chimeStep atomic.Int32
+	hushed    atomic.Bool
 
 	saidMu sync.Mutex
 	said   []string // what was asked to be said aloud, in order
@@ -141,7 +143,10 @@ func newRig(t *testing.T, screen bool) *rig {
 	r.f = newFeature(pics)
 	r.f.seq = 0 // numbered from 1, so the tests can name them
 	r.f.now = func() time.Time { return r.now }
-	r.f.chime = func() { r.chimes.Add(1) }
+	r.f.chime = func(step int) {
+		r.chimes.Add(1)
+		r.chimeStep.Store(int32(step))
+	}
 	r.f.say = func(words string) {
 		r.saidMu.Lock()
 		r.said = append(r.said, words)
@@ -515,6 +520,8 @@ func TestTheActionsAreTheOnesHomeAssistantKnows(t *testing.T) {
 		"notify_sized":         "message,title,icon,chime,speak,tag,seconds,size",
 		"notify_picture_sized": "message,title,picture,chime,speak,sound,tag,seconds,size",
 		"notify_clear":         "tag",
+		"notify_buttons":       "message,title,icon,chime,speak,tag,seconds,size,buttons,volume",
+		"notify_critical":      "message,title,icon,tag,seconds,size,buttons,volume,volume_rise,brightness,brightness_rise",
 	}
 	for _, a := range r.f.Actions() {
 		var args []string
@@ -636,7 +643,7 @@ func TestTheChimeComesBeforeTheWords(t *testing.T) {
 	r := newRig(t, true)
 	var order []string
 	var mu sync.Mutex
-	r.f.chime = func() {
+	r.f.chime = func(int) {
 		time.Sleep(20 * time.Millisecond) // a chime takes a moment to play
 		mu.Lock()
 		order = append(order, "chime")
@@ -759,7 +766,7 @@ func TestADotEndsAfterTheChimeAndTheWords(t *testing.T) {
 	var mu sync.Mutex
 	var order []string
 	note := func(s string) { mu.Lock(); order = append(order, s); mu.Unlock() }
-	r.f.chime = func() { time.Sleep(20 * time.Millisecond); note("chime") }
+	r.f.chime = func(int) { time.Sleep(20 * time.Millisecond); note("chime") }
 	r.f.say = func(string) { note("words") }
 	r.f.fire = func(e component.Event) { note(e.Data["event"]) }
 	_ = r.f.Notify("m", "", "", "", "on", "", 0)

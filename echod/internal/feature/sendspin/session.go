@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"math"
@@ -104,6 +105,9 @@ type session struct {
 	// moment is dropped once a newer one has arrived.
 	picture atomic.Uint64
 
+	// encrypted is a connection over the encrypted wire, to a server written to the 1.0 specification.
+	encrypted bool
+
 	// live is false once this connection is finished. The media player outlives the session and keeps
 	// the transport hook, so anything asked after that is dropped rather than written to a dead client.
 	live atomic.Bool
@@ -169,7 +173,7 @@ func (s *session) run(ctx context.Context) error {
 	defer s.finish()
 
 	if err := s.client.Start(); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", errNotStarted, err)
 	}
 	s.live.Store(true)
 
@@ -717,24 +721,39 @@ func (s *session) tell(ctx context.Context) {
 // state sends client/state with the level at step, of speaker.VolumeSteps.
 func (s *session) state(step int) {
 	available := s.converged.Load()
-	state := "synchronized"
-	if !available {
-		state = "error"
-	}
-	if err := s.client.Send("client/state", clientState{
-		Available: available,
-		Player: playerState{
-			State:              state,
-			Volume:             step * 100 / speaker.VolumeSteps,
-			Muted:              s.muted.Load(),
-			StaticDelayMs:      0,
-			OutputDelayMs:      0,
-			RequiredLeadTimeMs: requiredLeadTimeMs,
-			MinBufferMs:        minBufferMs,
-		},
-	}); err != nil {
+	if err := s.client.Send("client/state", s.stateFor(available, step)); err != nil {
 		slog.Debug("sendspin client state", "err", err)
 	}
+}
+
+// stateFor is client/state as the server's wire has it. An encrypted server is one written to the 1.0
+// specification: the commands and the artwork channels are said here rather than in the hello (the
+// bridge takes them out of it), and player.state and static_delay_ms are gone. A server from before
+// encryption still reads those.
+func (s *session) stateFor(available bool, step int) clientState {
+	p := playerState{
+		Volume:             step * 100 / speaker.VolumeSteps,
+		Muted:              s.muted.Load(),
+		OutputDelayMs:      0,
+		RequiredLeadTimeMs: requiredLeadTimeMs,
+		MinBufferMs:        minBufferMs,
+	}
+	if !s.encrypted {
+		zero := 0
+		p.State, p.StaticDelayMs = "error", &zero
+		if available {
+			p.State = "synchronized"
+		}
+		return clientState{Available: available, Player: p}
+	}
+	p.SupportedCommands = []string{"volume", "mute"}
+	st := clientState{Available: available, Player: p}
+	if home.HasScreen() {
+		st.Artwork = &artworkState{Channels: []artworkChannel{{
+			Source: "album", Format: "jpeg", Width: artworkSide, Height: artworkSide,
+		}}}
+	}
+	return st
 }
 
 // What the player asks the server for, in the spec's client/state terms. Not measured: the output
@@ -754,18 +773,31 @@ const (
 // the spec's replacement for player.state (state stays for a server that predates it), and the delay
 // and lead fields say where this player's audio really leaves the speaker.
 type clientState struct {
-	Available bool        `json:"available"`
-	Player    playerState `json:"player"`
+	Available bool          `json:"available"`
+	Player    playerState   `json:"player"`
+	Artwork   *artworkState `json:"artwork,omitempty"`
 }
 
 type playerState struct {
-	State              string `json:"state,omitempty"`
-	Volume             int    `json:"volume"`
-	Muted              bool   `json:"muted"`
-	StaticDelayMs      int    `json:"static_delay_ms"`
-	OutputDelayMs      int    `json:"output_delay_ms"`
-	RequiredLeadTimeMs int    `json:"required_lead_time_ms"`
-	MinBufferMs        int    `json:"min_buffer_ms"`
+	State              string   `json:"state,omitempty"`
+	Volume             int      `json:"volume"`
+	Muted              bool     `json:"muted"`
+	StaticDelayMs      *int     `json:"static_delay_ms,omitempty"`
+	OutputDelayMs      int      `json:"output_delay_ms"`
+	RequiredLeadTimeMs int      `json:"required_lead_time_ms"`
+	MinBufferMs        int      `json:"min_buffer_ms"`
+	SupportedCommands  []string `json:"supported_commands,omitempty"`
+}
+
+type artworkState struct {
+	Channels []artworkChannel `json:"channels"`
+}
+
+type artworkChannel struct {
+	Source string `json:"source"`
+	Format string `json:"format"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 // noteClock tells the server the player is available the first time the clock filter is past lost,
@@ -859,6 +891,9 @@ func (s *session) finish() {
 	// to this player's stream again.
 	media.Get().RemoteGone()
 }
+
+// errNotStarted is a session whose hello was never answered.
+var errNotStarted = errors.New("sendspin: the session did not start")
 
 // errSwitchedOff ends the sessions when the Sendspin switch is turned off (Player.switchOff): the
 // one stop the device does not come back from.

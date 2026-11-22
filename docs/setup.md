@@ -1012,8 +1012,8 @@ other Shows don't have the switches.
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
 - **Screen language** (Settings → General): the language of the screen. German, French, Galician,
-  Italian, Japanese, Romanian, Turkish and Valencian translate the whole screen, settings included; Spanish translates part
-  of it, and Dutch its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
+  Italian, Japanese, Romanian, Spanish, Turkish and Valencian translate the whole screen, settings included, and Dutch
+  its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
   picks which words the screen listens for. It

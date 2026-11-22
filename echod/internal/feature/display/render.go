@@ -43,6 +43,10 @@ var shade = color.RGBA{0x00, 0x00, 0x00, 0x90}
 
 // scene is one frame's worth of facts.
 type scene struct {
+	// notifyPulse is how strongly a ringing critical notification's card pulses red (notifyPulse), 0
+	// for none.
+	notifyPulse float64
+
 	streaming bool // the camera is being streamed (feature/camstream)
 	listening bool // the room is being listened to in a browser (feature/babymon)
 
@@ -488,6 +492,9 @@ type renderer struct {
 	// cardsUnder is how many cards wait under the one this frame draws (cardsUnder), for its heading
 	// row to say; set by the frame before it draws the card.
 	cardsUnder int
+	// hintOff leaves the card's "tap to dismiss" out, for a card a tap does not put away (a critical
+	// notification's).
+	hintOff bool
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu         sync.Mutex

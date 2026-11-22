@@ -1,3 +1,5 @@
+github.com/HuskerMinion/go-esphome-device v0.0.15-0.20261122102808-ff2b176b7e9d h1:CRrpxbewrU2dUpnfznRWu5pfxDMAGaTCRxyFhiZCF4A=
+github.com/HuskerMinion/go-esphome-device v0.0.15-0.20261122102808-ff2b176b7e9d/go.mod h1:wCDvFZ4VYe1sq+pOQz7NhbELA1HwvcNrCxdle+hjZcs=
 github.com/Sendspin/sendspin-go v1.8.2 h1:QmSCmtrbgPoxk/8xnD5E79v3+oVMoH18ohssAYriRvM=
 github.com/Sendspin/sendspin-go v1.8.2/go.mod h1:h+MBsD/sFDZ/BdUrSvs07WRD79VluRDzvOl5RymlXoA=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=

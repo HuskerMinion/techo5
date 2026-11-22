@@ -2,17 +2,15 @@ package wifi
 
 import (
 	"context"
-	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/redact"
 )
 
 // Evidence is what is worth keeping about the link at the moment something is done to it: the
 // supplicant's state and ciphers, and the kernel's lines about the security handshakes, where a
-// group-key rekey shows as a short handshake long after the first. It goes to the daemon's log, which
+// group-key rekey shows as a short handshake long after the first (kept as they are logged, kmsg.go). It goes to the daemon's log, which
 // is what a diagnostics download carries, so nothing that names the network or a device is kept:
 // no SSID, no BSSID, no addresses.
 func Evidence(ctx context.Context) []string {
@@ -20,12 +18,8 @@ func Evidence(ctx context.Context) []string {
 	if st, err := cli(ctx, "status"); err == nil {
 		out = append(out, "supplicant: "+statusEvidence(st))
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if k, err := exec.CommandContext(ctx, "dmesg").Output(); err == nil {
-		out = append(out, kernelEvidence(string(k), 8)...)
-	}
-	return out
+	FollowKernel()
+	return append(out, kernelLines()...)
 }
 
 // statusKeys are the lines of wpa_cli status worth keeping; everything else names something.

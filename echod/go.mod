@@ -68,3 +68,5 @@ require (
 )
 
 replace github.com/zserge/microwakeword => ./third_party/microwakeword
+
+replace github.com/ygelfand/go-esphome-device => github.com/HuskerMinion/go-esphome-device v0.0.15-0.20261122102808-ff2b176b7e9d

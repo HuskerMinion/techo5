@@ -129,7 +129,7 @@ func TestANotificationDoesNotWaitOnHomeAssistant(t *testing.T) {
 func TestTheFeatureSendsThroughAnOutbox(t *testing.T) {
 	r := newRig(t, true)
 	f := newFeature(r.pics)
-	f.now, f.chime, f.say, f.hushed = r.f.now, func() {}, func(string) {}, func() bool { return true }
+	f.now, f.chime, f.say, f.hushed = r.f.now, func(int) {}, func(string) {}, func() bool { return true }
 	hold := make(chan struct{})
 	var got atomic.Int32
 	stop := component.Fire.Listen(func(e component.Event) {
