@@ -46,8 +46,13 @@ func cardsUnder(s scene) int {
 // take, which the heading stops short of.
 func (r *renderer) cardHint(right, base int) int {
 	hint := dismissHint()
+	if r.hintOff {
+		hint = ""
+	}
 	w := r.width(r.tiny, hint)
-	r.rightText(r.tiny, hint, right, base, dim)
+	if hint != "" {
+		r.rightText(r.tiny, hint, right, base, dim)
+	}
 	if r.cardsUnder <= 0 {
 		return w
 	}
