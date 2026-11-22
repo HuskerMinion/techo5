@@ -2048,11 +2048,12 @@ In YAML, refer to this action as `esphome.<node>_notify_buttons`.
 on a phone. A tap on a button tells Home Assistant which one, and that ends the notification. A tap
 anywhere else on the card puts it away, as on any card.
 
-It takes every argument `notify_sized` takes, in the same order, and then `buttons`:
+It takes every argument `notify_sized` takes, in the same order, and then `buttons` and `volume`:
 
 | Argument | Type | Accepted values | Empty means |
 |---|---|---|---|
 | `buttons` | string | Up to three, split by commas or new lines. Each is `Label=id`, or `Label` alone for a button whose id is its label. A label is one line of up to 24 bytes; an id is up to 64 bytes of any text. A list with any bad button is refused whole, with the reason. | No buttons: the same as `notify_sized`. |
+| `volume` | integer | How loud the chime is, in percent of the speaker's range, 1 to 100, whatever the device's volume is set to. Night, quiet hours and `chime: "off"` still keep it quiet; only [`notify_critical`](#show-a-critical-notification) sounds through those. | The usual chime: the device's volume, and never quieter than a low floor. Not silent. |
 
 - **The tap.** It fires the [notification event](#the-event) with `event: action` and `action` set to
   the button's id. That is the notification's last event: no `dismissed` follows.
@@ -2076,7 +2077,11 @@ data:
   seconds: 0
   size: ""
   buttons: "Hang up later=later, Done=done"
+  volume: 0
 ```
+
+`notify` and `notify_sized` keep their arguments, so a card with a chime volume of its own and no buttons
+is `notify_buttons` with `buttons: ""`.
 
 ```yaml
 # What the tap does: wait for one of the two buttons on that card.

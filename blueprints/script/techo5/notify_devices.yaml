@@ -126,7 +126,9 @@ fields:
       boolean:
   volume:
     name: Volume
-    description: For a critical notification. 0 is the ring volume set on the device.
+    description: >-
+      How loud the chime is for a card, or the ring for a critical notification. 0 is the device's
+      usual chime volume, or the ring volume set on it for a critical one; never silent.
     default: 0
     selector:
       number:
@@ -239,12 +241,10 @@ sequence:
                     brightness_rise: "{{ brightness_rise | default(0) | int(0) }}"
                   continue_on_error: true
               else:
-                - if: "{{ pressable != '' }}"
-                  then:
-                    - action: "esphome.{{ repeat.item }}_notify_buttons"
-                      data: "{{ dict(words, icon=icon | default(''), size='', buttons=pressable) }}"
-                      continue_on_error: true
-                  else:
-                    - action: "esphome.{{ repeat.item }}_notify"
-                      data: "{{ dict(words, icon=icon | default('')) }}"
-                      continue_on_error: true
+                # Every card goes through notify_buttons, which with no buttons is notify_sized with a
+                # chime volume of its own.
+                - action: "esphome.{{ repeat.item }}_notify_buttons"
+                  data: >-
+                    {{ dict(words, icon=icon | default(''), size='', buttons=pressable,
+                            volume=volume | default(0) | int(0)) }}
+                  continue_on_error: true
