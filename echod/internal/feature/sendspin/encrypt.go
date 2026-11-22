@@ -56,6 +56,11 @@ var keyStore struct {
 	tried time.Time
 }
 
+// maxFrame is the most one WebSocket frame from a server may hold, as the player library allows on the
+// unencrypted wire. An encrypted frame is one Noise message, 64 KiB at most; a longer message comes in
+// fragments.
+const maxFrame = 1 << 20
+
 // unencryptedFor is how long a server that did not speak encrypted Sendspin is taken to be one from
 // before it. Music Assistant updated in the meantime is tried encrypted again after that.
 const unencryptedFor = 24 * time.Hour
@@ -90,8 +95,17 @@ var errTryUnencrypted = errors.New("sendspin: the server does not speak encrypte
 // WebSocket the session is to run over: conn itself when the server speaks only the unencrypted wire.
 // plain reports which it is.
 func secured(ctx context.Context, conn *websocket.Conn, peer string) (ws *websocket.Conn, plain bool, err error) {
+	// The library caps what it reads at maxFrame, but on an encrypted connection it reads a pipe: the
+	// socket itself is read here and by the bridge, and one frame of any size from any host on the
+	// network would be held whole in memory before anything checked it.
+	conn.SetReadLimit(maxFrame)
 	st, err := keys()
-	if err != nil || isUnencrypted(peer) {
+	if err != nil {
+		return conn, true, nil
+	}
+	// A paired device is not talked out of encryption: only an unpaired one plays to a server it took
+	// for one from before encryption.
+	if isUnencrypted(peer) && !st.Paired() {
 		return conn, true, nil
 	}
 	c, err := secure.Handshake(conn, st)
