@@ -78,7 +78,6 @@ func TestNoHomeAssistantEverIsNotALoss(t *testing.T) {
 
 // The pill says what is lost, alone or beside the microphone's line, and nothing on a good day.
 func TestTheHeaderSaysWhatIsLost(t *testing.T) {
-	noMuteLight(t)
 	if got := headerLine(scene{}); got != "" {
 		t.Errorf("nothing lost and not muted: the header says %q", got)
 	}

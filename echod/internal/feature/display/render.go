@@ -1460,10 +1460,20 @@ func (r *renderer) headerAt(s scene, y int) {
 	w := r.width(r.tiny, line)
 	pad := r.s(14)
 	x := (r.w - w) / 2
-	r.roundButton(image.Rect(x-pad, y, x+w+pad, y+r.s(28)), float64(r.s(14)), walnut)
-	r.text(r.tiny, line, x, y+r.s(21), amber)
+	fill, ink := walnut, amber
+	if s.muted {
+		// The microphone off is red with black words, the way a mute light is red: 5.7 to 1, readable
+		// at the pill's size over any page. The night clock has no header (redClockPage returns before
+		// it), so this never lights a dark bedroom.
+		fill, ink = muteRed, color.RGBA{0, 0, 0, 0xff}
+	}
+	r.roundButton(image.Rect(x-pad, y, x+w+pad, y+r.s(28)), float64(r.s(14)), fill)
+	r.text(r.tiny, line, x, y+r.s(21), ink)
 	r.marked = true
 }
+
+// muteRed is the header pill's fill while the microphone is off.
+var muteRed = color.RGBA{0xf4, 0x43, 0x36, 0xff}
 
 // playingWord is what the footer says about the music: empty when nothing is playing.
 func playingWord(s scene) string {

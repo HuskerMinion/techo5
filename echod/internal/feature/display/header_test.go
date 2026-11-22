@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"testing"
 	"time"
 
@@ -62,7 +63,6 @@ func showPanels() []struct {
 // on the camera or in setup — and the ringing page is the one where it matters most, because an
 // alarm that cannot hear "stop" looks exactly like one that can.
 func TestTheMicrophoneLineIsOnEveryPage(t *testing.T) {
-	noMuteLight(t)
 	at := time.Date(2026, 9, 16, 14, 7, 0, 0, time.Local)
 	sky := home.Weather{Condition: "partlycloudy", Temp: "72°"}
 
@@ -113,7 +113,6 @@ func TestTheSettingsSheetKeepsItsOwnTop(t *testing.T) {
 // The header goes over the page rather than under it, so a page that fills the panel to the top edge
 // cannot bury it.
 func TestTheHeaderIsDrawnOverAFullScreenPage(t *testing.T) {
-	noMuteLight(t)
 	at := time.Date(2026, 9, 16, 6, 40, 0, 0, time.Local)
 	sunrise := scene{now: at, phase: "idle", sunrise: 0.6, sunriseFace: true, muted: true}
 
@@ -121,15 +120,16 @@ func TestTheHeaderIsDrawnOverAFullScreenPage(t *testing.T) {
 	r := newRenderer(img)
 	r.draw(sunrise)
 
-	// The words are drawn in amber on a pill of background, so both have to be there: if the sunrise
-	// were still on top, neither would be.
+	// The microphone off is black words on a red pill, so both have to be there: if the sunrise were
+	// still on top, neither would be.
 	var bg, ink int
 	for y := range r.s(headerH) {
 		for x := range showWide {
-			switch img.RGBAAt(x, y) {
-			case walnut:
+			// The pill is lit from the top (roundButton), so its red is a shade of muteRed.
+			switch c := img.RGBAAt(x, y); {
+			case c.R > 0xc0 && c.G < 0x70 && c.B < 0x60:
 				bg++
-			case amber:
+			case c == color.RGBA{0, 0, 0, 0xff}:
 				ink++
 			}
 		}
