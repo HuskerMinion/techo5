@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/image/font"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/cast"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
@@ -20,7 +21,43 @@ import (
 // The cast page: what a phone is sending, over the whole screen. It takes the screen when a cast
 // starts and gives it back when the phone stops or a swipe in from the left edge ends it. It waits
 // behind whatever is more pressing (a ring, a call, a turn, the settings), as the dashboard does; the
-// cast carries on underneath and is there when the screen comes back to it.
+// cast carries on underneath and is there when the screen comes back to it. The question that comes
+// first, a phone waiting to be accepted, does not wait behind the settings: it takes them down, since
+// nobody can answer a page they cannot see, and the phone's wait is 20 seconds.
+
+// castAsked takes the settings down when a phone is waiting to be accepted, before the scene is
+// decided: a sheet over the question would hide it and keep its buttons from being pressed.
+func (d *Display) castAsked(s *scene) {
+	if s.showSheet && cast.Get().Asking() != "" {
+		d.closeSheet()
+		s.showSheet = false
+	}
+}
+
+// castLights lights a dark panel for a phone waiting to be accepted, as a video starting does: somebody
+// at the device has to see the question, and the phone gives up after 20 seconds. Once per question, so
+// a screen turned off while it is up stays off. At night it is at the night light's level and not the
+// room lit up. Not under a closed cover (the caller has already left it).
+func (d *Display) castLights(on, night bool) bool {
+	if cast.Get().Asking() == "" {
+		d.castAskLit = false
+		return on
+	}
+	if d.castAskLit {
+		return on
+	}
+	d.castAskLit = true
+	if !on {
+		if night && config.Get().Screen.NightLight {
+			d.mu.Lock()
+			d.nightGlow, d.nightDark = true, false
+			d.mu.Unlock()
+		}
+		d.apply(true, d.ceilingOrDefault(), false)
+		on = true
+	}
+	return on
+}
 
 // castScene decides whether the cast is the page.
 func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
@@ -39,13 +76,13 @@ func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
 // castGesture is a finger on the cast page. It has nothing to press: a swipe in from the left edge
 // ends the cast, and the rest is ignored rather than passed on to a page under it.
 func (d *Display) castGesture(g touch.Gesture) {
-	// A phone waiting to be accepted: the left half of the buttons sends it away, the right half lets
-	// it in. Nothing else on this page answers.
 	// The pairing code is up: a touch anywhere puts it away.
 	if f := cast.Get(); f.PairingShown() {
 		f.ShowPairing(false)
 		return
 	}
+	// A phone waiting to be accepted: the left half of the buttons sends it away, the right half lets
+	// it in. Nothing else on this page answers.
 	if cast.Get().Asking() != "" {
 		if g.Kind == touch.Tap && d.r != nil && d.r.actionDecided(g.Y) {
 			cast.Get().Decide(g.X >= d.r.w/2)

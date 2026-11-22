@@ -532,6 +532,7 @@ type Display struct {
 	vask          askLatch
 	pask          askLatch // the setup page's asking, drawn (pageAsk)
 	videoLit      uint64   // the last video that lit the panel (frame)
+	castAskLit    bool     // the question a phone is waiting behind has lit the panel (castLights)
 
 	// notifyLit is the last notification that lit the panel (frame), once per notification like
 	// videoLit. notifySeen is the notification the screen may show at night: the one that came up by
@@ -2740,6 +2741,7 @@ func (d *Display) lightForEvents(now time.Time, on, night bool, call phone.State
 		on = true
 	}
 	on = d.noticeLights(on, night)
+	on = d.castLights(on, night)
 	if vs := video.Get().State(); vs.Active() && vs.ID != d.videoLit && (vs.Phase != video.Asking || !nightNow(now)) {
 		// A video starting lights a dark panel, day or night: somebody asked for it to be watched. Once
 		// per video, so a screen turned off while one plays stays off. A DLNA video asking first lights it
@@ -3166,6 +3168,7 @@ func (d *Display) frame() (next time.Duration) {
 	// boring is the plain idle page — the same set of pages draw() checks before falling through to
 	// bigClock/nowPlaying. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
+	d.castAsked(&s)
 	d.castScene(&s, s.showSheet || ring.any() || s.callPageUp())
 	d.deckScene(&s, now)
 	d.customScene(&s, now)

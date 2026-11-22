@@ -3,9 +3,21 @@
 package cast
 
 import (
+	"context"
 	"testing"
 	"time"
 )
+
+// open is a feature with its port open, as settle leaves it; close shuts it.
+func open(t *testing.T) *Feature {
+	t.Helper()
+	f := build()
+	ctx, cancel := context.WithCancel(context.Background())
+	f.mu.Lock()
+	f.running, f.runCtx = cancel, ctx
+	f.mu.Unlock()
+	return f
+}
 
 // answer waits for the phone to be asked about, then answers it.
 func answer(t *testing.T, f *Feature, name string, accept bool) {
@@ -21,7 +33,7 @@ func answer(t *testing.T, f *Feature, name string, accept bool) {
 }
 
 func TestConsentAcceptThenTheSamePhoneIsAskedAgain(t *testing.T) {
-	f := build()
+	f := open(t)
 	done := make(chan error, 1)
 	go func() { done <- f.consent("Pixel 9") }()
 	answer(t, f, "Pixel 9", true)
@@ -40,7 +52,7 @@ func TestConsentAcceptThenTheSamePhoneIsAskedAgain(t *testing.T) {
 }
 
 func TestConsentDeclineRefuses(t *testing.T) {
-	f := build()
+	f := open(t)
 	done := make(chan error, 1)
 	go func() { done <- f.consent("Stranger") }()
 	answer(t, f, "Stranger", false)
@@ -56,7 +68,7 @@ func TestConsentDeclineRefuses(t *testing.T) {
 }
 
 func TestConsentOtherPhoneIsAsked(t *testing.T) {
-	f := build()
+	f := open(t)
 	done := make(chan error, 1)
 	go func() { done <- f.consent("A") }()
 	answer(t, f, "A", true)
@@ -65,5 +77,46 @@ func TestConsentOtherPhoneIsAsked(t *testing.T) {
 	answer(t, f, "B", false)
 	if err := <-done; err == nil {
 		t.Fatal("a phone that was never accepted got in on another's acceptance")
+	}
+}
+
+func TestConsentOnAClosedPortIsRefusedWithoutAsking(t *testing.T) {
+	f := build() // never opened, as after close()
+	if err := f.consent("Late"); err == nil {
+		t.Fatal("a hello that arrived after Cast was turned off was asked about")
+	}
+	if f.Asking() != "" {
+		t.Fatal("a question was put up with Cast off")
+	}
+	if got := f.state.Get(); got != "off" {
+		t.Fatalf("state %q with Cast off, want off", got)
+	}
+}
+
+func TestTurningCastOffEndsAQuestionAtOnce(t *testing.T) {
+	f := open(t)
+	done := make(chan error, 1)
+	go func() { done <- f.consent("Pixel") }()
+	deadline := time.Now().Add(time.Second)
+	for f.Asking() != "Pixel" {
+		if time.Now().After(deadline) {
+			t.Fatal("never asked")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	f.close()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a question was accepted after Cast was turned off")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the question outlived the port")
+	}
+	if f.Asking() != "" {
+		t.Fatal("still asking with Cast off")
+	}
+	if got := f.state.Get(); got != "off" {
+		t.Fatalf("state %q, want off", got)
 	}
 }

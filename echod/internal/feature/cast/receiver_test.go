@@ -312,3 +312,20 @@ func TestVideoMemoryIsBounded(t *testing.T) {
 		t.Fatal("nothing was pushed out of a full queue")
 	}
 }
+
+// Frames still queued when a cast ends are not decoded and painted after it.
+func TestQueuedFramesAreNotShownAfterTheCastEnds(t *testing.T) {
+	sink := &recSink{ended: make(chan struct{})}
+	p := &play{sink: sink, frames: make(chan frame, queued), w: Welcome{W: 64, H: 32}, h: Hello{Scale: 1}}
+	var jpg bytes.Buffer
+	_ = jpeg.Encode(&jpg, image.NewRGBA(image.Rect(0, 0, 8, 8)), nil)
+	for i := 0; i < 10; i++ {
+		p.frames <- frame{due: time.Now(), jpg: jpg.Bytes()}
+	}
+	p.over.Store(true)
+	close(p.frames)
+	p.show()
+	if n, _ := sink.count(); n != 0 {
+		t.Fatalf("%d frames were shown after the cast ended", n)
+	}
+}

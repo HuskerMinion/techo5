@@ -7,9 +7,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/cast"
 )
 
-// The Cast rows, at the end of Connections: turn receiving on, choose whether a phone has to be accepted
-// here, and show the code a phone scans to pair. Everything but the key is also a switch in Home
-// Assistant; the key is made when Cast is first turned on, so none of this needs Home Assistant at all.
+// The Cast rows, at the end of Connections: turn receiving on, and show the code a phone scans to pair.
+// Turning it on is also a switch in Home Assistant; the key is made when Cast is first turned on, so
+// none of this needs Home Assistant at all.
 
 func castRows() []settingRow {
 	c := config.Get().Cast

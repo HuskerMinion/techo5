@@ -207,7 +207,7 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() { defer wg.Done(); s.show() }()
-	defer func() { close(s.frames); wg.Wait() }()
+	defer func() { s.over.Store(true); close(s.frames); wg.Wait() }()
 
 	// How it is going, once a second, so the phone can ease off before the picture suffers. A phone that
 	// does not know the message ignores it. The writer stops with the connection, which closes when this
@@ -332,6 +332,7 @@ type play struct {
 	latency time.Duration
 	frames  chan frame
 	queuedB atomic.Int64 // bytes in frames, for queueBytes
+	over    atomic.Bool  // the cast has ended: what is still queued is not shown
 
 	// Why frames did not get shown, for the log: late on arrival, thrown out of a full queue, skipped
 	// undecoded behind a newer one, late once decoded, and not decodable.
@@ -414,6 +415,9 @@ func (p *play) show() {
 	var last [5]int64 // the counters at the last line in the log, which says what changed since
 	for f := range p.frames {
 		p.queuedB.Add(-int64(len(f.jpg)))
+		if p.over.Load() {
+			continue // the cast ended (a Stop, a Bye, a dropped connection): no more of it on the screen
+		}
 		if time.Since(report) >= 5*time.Second {
 			cur := [5]int64{p.lateIn.Load(), p.overflow.Load(), p.skipped.Load(), p.lateOut.Load(), p.bad.Load()}
 			slog.Info("cast frames", "late_on_arrival", cur[0]-last[0], "overflow", cur[1]-last[1],

@@ -61,6 +61,7 @@ type Feature struct {
 
 	mu      sync.Mutex
 	running context.CancelFunc
+	runCtx  context.Context // ends with running: a question waits no longer than the port is open
 	wake    chan struct{}
 
 	// The screen's size, told by the display; a cast is refused until it is known.
@@ -223,12 +224,32 @@ func (f *Feature) Decide(accept bool) {
 	}
 }
 
+// idle is the state with nothing casting and nobody asked: waiting for a phone while the port is open,
+// off when it is not (a cast or a question that ends after Cast was turned off must not say waiting).
+func (f *Feature) idle() {
+	f.mu.Lock()
+	open := f.runCtx != nil
+	f.mu.Unlock()
+	if open {
+		f.state.Set("waiting")
+		return
+	}
+	f.state.Set("off")
+}
+
 // consent waits for somebody at the device to accept the phone. It always asks: the name is the
 // phone's own word and every phone shares the key, so there is nothing to remember a phone by.
 func (f *Feature) consent(name string) error {
 	f.remember(name)
 	ch := make(chan bool, 1)
 	f.mu.Lock()
+	// Checked with the question set, under one lock: a hello that was read just before Cast was turned
+	// off finds the port closed here, rather than putting a question up that nobody is there to ask for.
+	ctx := f.runCtx
+	if ctx == nil {
+		f.mu.Unlock()
+		return errors.New("Cast is off")
+	}
 	f.asking, f.answer = name, ch
 	f.mu.Unlock()
 	f.state.Set("asking: " + name)
@@ -244,12 +265,15 @@ func (f *Feature) consent(name string) error {
 	select {
 	case yes := <-ch:
 		if !yes {
-			f.state.Set("waiting")
+			f.idle()
 			return errors.New("declined")
 		}
 	case <-time.After(askTimeout):
-		f.state.Set("waiting")
+		f.idle()
 		return errors.New("nobody accepted it on the device")
+	case <-ctx.Done():
+		f.idle()
+		return errors.New("Cast was turned off")
 	}
 	return nil
 }
@@ -377,7 +401,7 @@ func (f *Feature) settle(parent context.Context) {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	f.mu.Lock()
-	f.running = cancel
+	f.running, f.runCtx = cancel, ctx
 	f.mu.Unlock()
 
 	if err := firewall.Open(firewall.Cast, Port); err != nil {
@@ -401,13 +425,12 @@ func (f *Feature) settle(parent context.Context) {
 func (f *Feature) close() {
 	f.mu.Lock()
 	cancel := f.running
-	f.running, f.recv = nil, nil
+	f.running, f.runCtx, f.recv = nil, nil, nil
 	f.mu.Unlock()
 	if cancel == nil {
 		return
 	}
-	cancel()
-	f.Decide(false) // a question still on the screen goes with the port
+	cancel() // a question still on the screen goes with the port (consent watches the context)
 	if err := firewall.Close(firewall.Cast); err != nil {
 		slog.Warn("closing the cast port failed", "err", err)
 	}
@@ -528,7 +551,7 @@ func (s *sink) End() {
 	f.mu.Lock()
 	f.phone, f.frame = "", nil
 	f.mu.Unlock()
-	f.state.Set("waiting")
+	f.idle()
 	f.Changed.Emit(struct{}{})
 }
 
