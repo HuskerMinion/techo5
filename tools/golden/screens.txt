@@ -87,6 +87,7 @@ show/style-Overlap-show8.png
 show/style-Stack-show8.png
 show/style-Sun-show8.png
 show/style-Words-show8.png
+show/style-Words-es-show8.png
 show/style-World-show8.png
 show/dash-tiles-normal-show8.png
 show/dash-tiles-large-show8.png
@@ -160,6 +161,7 @@ spot/style-Analog.png
 spot/style-Binary.png
 spot/style-Nixie.png
 spot/style-Words.png
+spot/style-Words-es.png
 show/saver-small-weather.png
 show/saver-medium-show8.png
 show/saver-medium-weather-show8.png

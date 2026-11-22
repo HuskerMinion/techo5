@@ -111,15 +111,47 @@ func TestClockWordsFollowTheScreen(t *testing.T) {
 	for _, c := range []struct{ lang, said string }{
 		{"", "it's twenty-eight past six in the evening"},
 		{"de", "es ist kurz vor halb sieben abends"},
+		{"es", "son las seis y veintiocho de la tarde"},
 		{"ja", "it's twenty-eight past six in the evening"},
 	} {
 		if err := config.Set().Screen().Language(c.lang); err != nil {
 			t.Fatal(err)
 		}
 		w := clockWords(at)
-		if got := strings.Join([]string{w.Intro, w.Lead(), w.Hour, w.Period}, " "); got != c.said {
+		parts := []string{w.Intro, w.Lead(), w.Hour, w.Period}
+		if w.HourFirst {
+			parts = []string{w.Intro, w.Hour, w.Lead(), w.Period}
+		}
+		if got := strings.Join(parts, " "); got != c.said {
 			t.Errorf("%q: %q, want %q", c.lang, got, c.said)
 		}
+	}
+}
+
+// The Spanish hour-first layout at a long time - "son las / cuatro / y cuarenta y tres de la
+// madrugada" - which is what makes it shrink and split the part of the day; with SHOW_PREVIEW set,
+// each panel's is written there.
+func TestShowClockWordsSpanishPreview(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	previewFont(t)
+	t.Cleanup(func() {
+		_ = config.Set().Screen().ClockStyle("")
+		_ = config.Set().Screen().Language("")
+	})
+	if err := config.Set().Screen().ClockStyle("words"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Screen().Language("es"); err != nil {
+		t.Fatal(err)
+	}
+	s := scene{now: time.Date(2026, 9, 16, 4, 43, 0, 0, time.Local), phase: "idle"}
+	for _, panel := range []struct {
+		name       string
+		wide, high int
+	}{{"", showWide, showHigh}, {"-show8", show8Wide, show8High}} {
+		img := image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high))
+		newRenderer(img).draw(s)
+		goldenSave(t, "style-Words-es"+panel.name, img)
 	}
 }
 
