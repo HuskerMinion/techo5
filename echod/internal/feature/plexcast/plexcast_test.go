@@ -4,6 +4,7 @@ package plexcast
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -154,6 +155,27 @@ func TestWhereItIs(t *testing.T) {
 	p.base, p.started = time.Minute, now
 	if got := p.atLocked(now); got != time.Minute {
 		t.Errorf("past the end: %v, want the length", got)
+	}
+}
+
+// The code somebody types at plex.tv/link is the four-character one, which is what a plain pin is:
+// strong=true asks for the 25-odd character pin that goes in a link, and the screen showed that instead,
+// which nobody could type (pin.go).
+func TestThePinIsTheOnePeopleType(t *testing.T) {
+	if strings.Contains(pinCreateURL, "strong") {
+		t.Errorf("the pin asked for is the long one, which plex.tv/link will not take: %s", pinCreateURL)
+	}
+}
+
+// plex.tv no longer having the pin is the code running out; anything else is worth another poll (pin.go).
+func TestPinGone(t *testing.T) {
+	if !pinGone(statusError{code: 404, reason: "gone"}) {
+		t.Error("a 404 is not read as the pin having gone")
+	}
+	for _, err := range []error{statusError{code: 500, reason: "oops"}, errors.New("the network is down"), nil} {
+		if pinGone(err) {
+			t.Errorf("%v is read as the pin having gone", err)
+		}
 	}
 }
 

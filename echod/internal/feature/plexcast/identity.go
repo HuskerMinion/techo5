@@ -89,6 +89,16 @@ func identityHeaders() map[string]string {
 
 // request is a call to Plex with the identity on it. form, where given, is sent as a form body; the
 // answer's body is the caller's to close.
+// statusError is plex.tv answering something other than 2xx. The code is kept because a caller has to
+// tell an answer it can act on -- a pin that is gone, 404 -- from one it can only report, such as a 500
+// it should try again after.
+type statusError struct {
+	code   int
+	reason string
+}
+
+func (e statusError) Error() string { return e.reason }
+
 func request(ctx context.Context, method, u string, form url.Values) (*http.Response, error) {
 	var body io.Reader
 	if form != nil {
@@ -111,7 +121,8 @@ func request(ctx context.Context, method, u string, form url.Values) (*http.Resp
 	if resp.StatusCode/100 != 2 {
 		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("plex.tv answered %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return nil, statusError{resp.StatusCode,
+			fmt.Sprintf("plex.tv answered %s: %s", resp.Status, strings.TrimSpace(string(b)))}
 	}
 	return resp, nil
 }

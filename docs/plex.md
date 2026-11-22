@@ -20,7 +20,9 @@ Two places, the same code behind both:
 - **On the device:** Settings → Connections → **Plex** → *Link Account*. The screen shows four
   characters as large as it can, and *Go to plex.tv/link and type it in*. Type them at
   [plex.tv/link](https://plex.tv/link) on a phone or a computer; the screen notices within a few
-  seconds and says *Linked as your-name*. *Cancel* puts the card away and ends the link.
+  seconds and says *Linked as your-name*. *Cancel* puts the card away and ends the link. The code is
+  the short one Plex hands out to be typed, so it does not last long: if it goes before it is entered,
+  the card says the code expired and *Link Account* asks for another.
 - **On the setup page:** Sound → **Plex** → *Link Account*. The card shows the code with a link to
   plex.tv/link, and reloads itself once the account is linked.
 

@@ -83,11 +83,17 @@ func (f *Feature) startPin() (string, error) {
 	return reply.Code, nil
 }
 
+// pinCreateURL makes a code. It asks for the plain one, not strong=true: Plex's docs say the strong pin
+// "is useful in cases where the user is not expected to type in the pin themselves" -- it is a long
+// token that goes in a link (25-odd characters), and plex.tv/link will not take it. The plain pin is
+// the four characters somebody reads off this screen and types, at the cost of a shorter life.
+const pinCreateURL = apiURL + "/pins"
+
 // createPin is the POST that makes a code. It is not a PIN in the lock's sense: four characters, a
 // link on plex.tv's side, and nothing the device has to remember.
 func createPin(ctx context.Context) (pinReply, error) {
 	var out pinReply
-	resp, err := request(ctx, http.MethodPost, apiURL+"/pins?strong=true", nil)
+	resp, err := request(ctx, http.MethodPost, pinCreateURL, nil)
 	if err != nil {
 		return out, err
 	}
@@ -121,6 +127,12 @@ func (f *Feature) pollPin(ctx context.Context, id string) {
 			if ctx.Err() != nil {
 				return
 			}
+			if pinGone(err) {
+				// The short pin is kept for less time than a strong one, so it can go before the
+				// window does: waiting out the rest would only leave the card lying to the room.
+				f.finishPin("", errExpired)
+				return
+			}
 			slog.Debug("plex: the pin poll failed, trying again", "err", err)
 			continue
 		}
@@ -130,6 +142,13 @@ func (f *Feature) pollPin(ctx context.Context, id string) {
 		f.linked(ctx, reply.AuthToken)
 		return
 	}
+}
+
+// pinGone is plex.tv saying the pin is no longer there: expired, or already used. Anything else -- a
+// connection that dropped, an answer it could not read -- is worth another poll.
+func pinGone(err error) bool {
+	var se statusError
+	return errors.As(err, &se) && se.code == http.StatusNotFound
 }
 
 // linked is a token in hand: who it belongs to, stored, and the servers started (the Run loop is woken
