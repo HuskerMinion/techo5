@@ -15,6 +15,7 @@ type room struct {
 	chimes  int
 	byLen   map[int]int // chimes by how many notes they had, to tell rings apart
 	gains   []float64   // each chime's share of the full level, in order
+	steps   []int       // each chime's volume step, in order
 	ducks   []bool      // the music ducked and let up again, in order
 }
 
@@ -48,9 +49,10 @@ func quietBell(t *testing.T, rings time.Duration) *room {
 	rm := &room{}
 	wasFor, wasEvery, wasChime, wasAttend, wasDuck := ringFor, ringEvery, chime, attend, duck
 	ringFor, ringEvery = rings, 5*time.Millisecond
-	chime = func(n []speaker.Note, gain float64) {
+	chime = func(n []speaker.Note, gain float64, step int) {
 		rm.mu.Lock()
 		rm.chimes++
+		rm.steps = append(rm.steps, step)
 		rm.gains = append(rm.gains, gain)
 		if rm.byLen == nil {
 			rm.byLen = map[int]int{}

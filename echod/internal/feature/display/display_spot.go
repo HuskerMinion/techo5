@@ -372,6 +372,12 @@ type Display struct {
 	// released (notice_spot.go). Both under mu.
 	notifyLit  string
 	notifySeen string
+	// crit is the face's light in a critical notification's (relight, under mu). critSeen is the ring
+	// the frame last saw, and critWoke the critical notification that turned the face on, to turn it off
+	// again (frame's alone).
+	crit     critLit
+	critSeen time.Time
+	critWoke string
 }
 
 var (
@@ -636,6 +642,13 @@ func (d *Display) relight(jump bool) {
 		full := backlightMin + (screen.BacklightMax-backlightMin)*float64(min(max(d.ceiling, 0), 100))/100
 		target = backlightMin + (full-backlightMin)*sunriseLevel(p)
 	}
+	// A critical notification takes the backlight over while it rings, as on the Show.
+	if d.on {
+		l, ringing := notify.Get().CriticalLight()
+		target = d.crit.target(l, ringing, d.level, target, time.Now(), func(pct int) float64 {
+			return backlightMin + (screen.BacklightMax-backlightMin)*float64(pct)/100
+		})
+	}
 	target = watchedLight(target, d.on, watched(), backlightMin)
 	if jump || d.level == 0 {
 		d.level = target
@@ -795,8 +808,9 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && nightInfoOn() {
 			// Night clock shows Next up and notifications: the card on the night clock is tapped away,
-			// and the night light stays.
-			go notify.Get().DismissID(n.ID)
+			// and the night light stays. One with buttons is not drawn there (gateNotice), so this is a
+			// tap on the card alone.
+			go notify.Get().Tap(n.ID)
 			d.wake()
 			return
 		}
@@ -902,8 +916,8 @@ func (d *Display) gesture(g touch.Gesture) {
 	// over it (the card stays up underneath and shows when the view ends), so the view takes the taps.
 	if _, camera := home.Get().Camera(); !camera {
 		if n, up := notify.Get().Card(); up {
-			if g.Kind == touch.Tap {
-				go notify.Get().DismissID(n.ID)
+			if g.Kind == touch.Tap && d.r != nil {
+				d.r.tapNotifyFace(n, image.Pt(g.X, g.Y))
 			}
 			d.wake()
 			return
@@ -1773,6 +1787,10 @@ func (d *Display) frame() (next time.Duration) {
 	s.reminder, s.showReminder = remind.Get().Showing()
 	s.notification, s.showNotification = notify.Get().Card()
 	d.gateNotice(&s, nightNow(now))
+	if s.showNotification {
+		s.notifyPulse = notifyPulse(s.notification, now)
+	}
+	d.followCriticalLight()
 	if s.reminder.From != config.Get().Device.Name {
 		s.reminderFrom = s.reminder.From
 	}
@@ -1914,6 +1932,8 @@ func (d *Display) frame() (next time.Duration) {
 		return fxFrame
 	case s.sheetOpen:
 		return dialFrame // a finger dragging the page is followed smoothly
+	case s.notifyPulse > 0 && s.showNotification && !s.menuOpen:
+		return pulseFrame // a critical notification's face pulses while it rings
 	case s.firstRunUp:
 		return time.Second // Home Assistant connecting moves it on by itself
 	case s.showDash && !s.menuOpen:

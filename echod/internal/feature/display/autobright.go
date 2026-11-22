@@ -40,9 +40,11 @@ func (d *Display) settleStep() {
 	d.sunriseLit = rising
 	// Dim after idle fades down the same way, auto-brightness or not (idle_dim_show.go).
 	due := (d.autoOn || d.idleDimmed) && d.on && !d.settled
+	// A critical notification's light climbs and comes back the same way (notify_buttons.go).
+	critical := d.on && d.crit.moving()
 	d.mu.Unlock()
 	switch {
-	case rising || ended:
+	case rising || ended || critical:
 		d.relight(true)
 	case due:
 		d.relight(false)

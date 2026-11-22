@@ -27,6 +27,12 @@ func (r *renderer) sizedBox(s notify.Size) image.Rectangle {
 // sizedNoticeCard draws the card as noticeCard does, but with the heading larger and the message as large
 // as the box holds, across as many lines as it needs; huge words are centered.
 func (r *renderer) sizedNoticeCard(box image.Rectangle, s notify.Size, icon, heading, text string) {
+	r.sizedNoticeCardFoot(box, 0, s, icon, heading, text)
+}
+
+// sizedNoticeCardFoot is sizedNoticeCard with foot pixels kept free along the card's foot, for its
+// buttons: the words are fitted above them.
+func (r *renderer) sizedNoticeCardFoot(box image.Rectangle, foot int, s notify.Size, icon, heading, text string) {
 	r.roundShadow(box, r.cardRad(), float64(r.s(34)), r.s(12), shadowAlpha()*1.3)
 	r.roundFill(box, r.cardRad(), surface(4), surface(2))
 	r.roundHighlight(box, r.cardRad())
@@ -61,7 +67,7 @@ func (r *renderer) sizedNoticeCard(box image.Rectangle, s notify.Size, icon, hea
 	} else {
 		y += r.tiny.Metrics().Height.Ceil() + r.s(4)
 	}
-	area := image.Rect(box.Min.X+in, y, box.Max.X-in, box.Max.Y-r.s(16))
+	area := image.Rect(box.Min.X+in, y, box.Max.X-in, box.Max.Y-r.s(16)-foot)
 	lines, face, lineH := r.fitWords(true, text, area.Dx(), area.Dy(), popupSizes(s))
 	if face == nil {
 		return

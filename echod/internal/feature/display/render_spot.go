@@ -74,6 +74,8 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 const ampmEdge = 48
 
 type roundScene struct {
+	// notifyPulse is how strongly a ringing critical notification pulses red (notifyPulse), 0 for none.
+	notifyPulse float64
 	// firstRunUp is first run still to do (firstrun_spot.go), and firstRun the step it shows.
 	firstRunUp bool
 	firstRun   firstRunView
