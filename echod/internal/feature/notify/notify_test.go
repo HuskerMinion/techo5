@@ -515,6 +515,8 @@ func TestTheActionsAreTheOnesHomeAssistantKnows(t *testing.T) {
 		"notify_sized":         "message,title,icon,chime,speak,tag,seconds,size",
 		"notify_picture_sized": "message,title,picture,chime,speak,sound,tag,seconds,size",
 		"notify_clear":         "tag",
+		"notify_buttons":       "message,title,icon,chime,speak,tag,seconds,size,buttons",
+		"notify_critical":      "message,title,icon,tag,seconds,size,buttons,volume,volume_rise,brightness,brightness_rise",
 	}
 	for _, a := range r.f.Actions() {
 		var args []string
