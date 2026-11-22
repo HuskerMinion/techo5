@@ -213,8 +213,10 @@ grayed out, and a line at the top says so.
 - Tap an artist for its picture, its albums in a row you drag sideways, and its top tracks. Tap an
   album or a playlist for its cover, **Play** and **Shuffle**, and its tracks with their lengths.
   **Back** goes back to where you were, and **Done** closes the library.
-- A tap on a track or a radio station plays it, and **Play** and **Shuffle** play the whole album,
-  playlist or artist. Whatever plays replaces what was queued. What you tapped lights up, and then
+- A tap on a track plays it and then the tracks after it in the list you tapped it in (an album, a
+  playlist, an artist's top tracks), in order and up to 100 in all; a tap on a radio station plays
+  just that station. **Play** and **Shuffle** play the whole album, playlist or artist. Whatever plays
+  replaces what was queued. What you tapped lights up, and then
   the library closes: to this device's Now Playing screen when it plays here, or to the media sheet
   of the speaker it plays on when you opened the library from one.
 - Search opens the on-screen keyboard. It finds artists, albums, playlists, tracks and radio
