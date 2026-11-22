@@ -25,7 +25,6 @@ var uiEnglish = map[string]string{
 	// the call page's microphone off (not ui_muted, which some languages read as the sound off).
 	"popup_started":                 "Started",
 	"ui_alert_issued":               "Issued %s",
-	"alerts_source":                 "Alerts source",
 	"popup_in_a_minute":             "In a minute",
 	"popup_in_d_minutes":            "In %d minutes",
 	"popup_in_an_hour":              "In an hour",
@@ -132,7 +131,6 @@ var uiEnglish = map[string]string{
 	"drawer_unmute":              "Unmute",
 	"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normal; boosts can distort, especially with more bass",
 	"a_browser_is_asking":                                  "A BROWSER IS ASKING",
-	"automatic_uses_the_nws_or_meteoalarm":                 "Automatic: the NWS in the U.S., MeteoAlarm in Europe",
 	"a_camera_s_own_audio_while_its_view_is_up":            "A camera's own audio, while its view is up",
 	"a_tap_brings_the_screen_back_until_the_room_is_quiet": "A tap brings the screen back until the room is quiet",
 	"a_whole_look_over_the_theme_and_font":                 "A whole look over the theme and font",
@@ -1107,7 +1105,6 @@ var uiTranslations = map[string]map[string]string{
 		// spoken in Valencia), with tú: "toca" for the screen and "prem" for the buttons.
 		"popup_started":                 "Ha començat",
 		"ui_alert_issued":               "Emès %s",
-		"alerts_source":                 "Font dels avisos",
 		"popup_in_a_minute":             "D'ací a un minut",
 		"popup_in_d_minutes":            "D'ací a %d minuts",
 		"popup_in_an_hour":              "D'ací a una hora",
@@ -1211,7 +1208,6 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Activar el so",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB és el normal; pujar-ho pot distorsionar, sobretot amb més greus",
 		"a_browser_is_asking":                                  "UN NAVEGADOR DEMANA ACCÉS",
-		"automatic_uses_the_nws_or_meteoalarm":                 "Automàtic: el NWS als EUA, MeteoAlarm a Europa",
 		"a_camera_s_own_audio_while_its_view_is_up":            "El so de la càmera mentre es veu en pantalla",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Un toc torna a mostrar la pantalla fins que l'habitació queda en silenci",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspecte complet que s'aplica sobre el tema i la font",
@@ -2169,7 +2165,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Toca en cualquier lugar para empezar",
 		"ui_alert_issued":               "Emitido %s",
-		"alerts_source":                 "Fuente de los avisos",
 		"firstrun_tap_to_finish":        "Toca en cualquier lugar para terminar",
 		"firstrun_hello":                "Hola",
 		"firstrun_this_is_s":            "Este es %s.",
@@ -2521,7 +2516,6 @@ var uiTranslations = map[string]map[string]string{
 		"reset_for_someone_else":        "Restablecer para otra persona",
 		"clears_it_and_start_setting_it_up_again":             "Borra todo y permite volver a configurarlo",
 		"official_weather_alerts_for_home":                    "Avisos meteorológicos oficiales para tu zona",
-		"automatic_uses_the_nws_or_meteoalarm":                "Automático: el NWS en EE. UU., MeteoAlarm en Europa",
 		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nombre, Home Assistant, alarmas, todo: toca otra vez",
 		"restart":                       "Reiniciar",
 		"screen_language":               "Idioma de pantalla",
@@ -2763,7 +2757,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Touchez l'écran pour commencer",
 		"ui_alert_issued":               "Émise %s",
-		"alerts_source":                 "Source des alertes",
 		"firstrun_tap_to_finish":        "Touchez l'écran pour terminer",
 		"firstrun_hello":                "Bonjour",
 		"firstrun_this_is_s":            "Voici %s.",
@@ -3093,7 +3086,6 @@ var uiTranslations = map[string]map[string]string{
 		"reset_for_someone_else":        "Réinitialiser pour quelqu'un d'autre",
 		"clears_it_and_start_setting_it_up_again":             "Efface et recommence la configuration",
 		"official_weather_alerts_for_home":                    "Alertes météo officielles pour le domicile",
-		"automatic_uses_the_nws_or_meteoalarm":                "Automatique : NWS aux États-Unis, MeteoAlarm en Europe",
 		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nom, Home Assistant, alarmes, tout: appuyer à nouveau",
 		"restart":                    "Redémarrer",
 		"screen_language":            "Langue de l'écran",
@@ -3839,7 +3831,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Toca en calquera parte para comezar",
 		"ui_alert_issued":               "Emitido %s",
-		"alerts_source":                 "Fonte dos avisos",
 		"firstrun_tap_to_finish":        "Toca en calquera parte para rematar",
 		"firstrun_hello":                "Ola",
 		"firstrun_this_is_s":            "Este é %s.",
@@ -4049,7 +4040,6 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":              "Activar o son",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB é o normal; aumentalo pode distorsionar, sobre todo con máis graves",
 		"a_browser_is_asking":                                  "UN NAVEGADOR ESTÁ PEDINDO ACCESO",
-		"automatic_uses_the_nws_or_meteoalarm":                 "Automático: o NWS nos EUA, MeteoAlarm en Europa",
 		"a_camera_s_own_audio_while_its_view_is_up":            "O son da propia cámara, mentres se ve a súa imaxe",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Un toque volve acender a pantalla ata que o cuarto quede en silencio",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspecto completo por riba do tema e da fonte",
@@ -4911,7 +4901,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Tocca un punto qualsiasi per iniziare",
 		"ui_alert_issued":               "Emessa %s",
-		"alerts_source":                 "Fonte delle allerte",
 		"firstrun_tap_to_finish":        "Tocca un punto qualsiasi per finire",
 		"firstrun_hello":                "Ciao",
 		"firstrun_this_is_s":            "Questo è %s.",
@@ -5121,7 +5110,6 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":              "Riattiva audio",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB è il livello normale; aumentarlo può distorcere il suono, soprattutto con più bassi",
 		"a_browser_is_asking":                                  "RICHIESTA DAL BROWSER",
-		"automatic_uses_the_nws_or_meteoalarm":                 "Automatica: NWS negli USA, MeteoAlarm in Europa",
 		"a_camera_s_own_audio_while_its_view_is_up":            "L'audio della telecamera mentre è visualizzata",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Un tocco riattiva lo schermo finché nella stanza non torna il silenzio",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspetto complessivo per tema e carattere",
@@ -5987,7 +5975,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Tik ergens om te beginnen",
 		"ui_alert_issued":               "Uitgegeven %s",
-		"alerts_source":                 "Bron van waarschuwingen",
 		"firstrun_tap_to_finish":        "Tik ergens om af te ronden",
 		"firstrun_hello":                "Hallo",
 		"firstrun_this_is_s":            "Dit is %s.",
@@ -6153,7 +6140,6 @@ var uiTranslations = map[string]map[string]string{
 		// 0 dB is normal; boosts can distort, especially with more bass
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normaal; versterking kan vervormen, vooral met meer bas",
 		"official_weather_alerts_for_home":                            "Officiële weerwaarschuwingen voor thuis",
-		"automatic_uses_the_nws_or_meteoalarm":                        "Automatisch: de NWS in de VS, MeteoAlarm in Europa",
 		// A BROWSER IS ASKING
 		"a_browser_is_asking": "EEN BROWSER VRAAGT",
 		// A camera's own audio, while its view is up
@@ -7812,7 +7798,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "画面をタップして開始",
 		"ui_alert_issued":               "発表 %s",
-		"alerts_source":                 "警報の情報源",
 		"firstrun_tap_to_finish":        "画面をタップして完了",
 		"firstrun_hello":                "こんにちは",
 		"firstrun_this_is_s":            "%sです。",
@@ -8022,7 +8007,6 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":              "消音解除",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dBが標準。増幅すると音が歪む場合あり",
 		"a_browser_is_asking":                                  "ブラウザーからの確認",
-		"automatic_uses_the_nws_or_meteoalarm":                 "自動：米国ではNWS、ヨーロッパではMeteoAlarm",
 		"a_camera_s_own_audio_while_its_view_is_up":            "カメラ表示中に音声を再生",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "タップすると一定時間、通常の画面に戻る",
 		"a_whole_look_over_the_theme_and_font":                 "テーマとフォントを含む表示スタイル",
@@ -8892,7 +8876,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Zum Starten irgendwo tippen",
 		"ui_alert_issued":               "Ausgegeben %s",
-		"alerts_source":                 "Warnquelle",
 		"firstrun_tap_to_finish":        "Zum Abschließen irgendwo tippen",
 		"firstrun_hello":                "Hallo",
 		"firstrun_this_is_s":            "Das ist %s.",
@@ -9156,7 +9139,6 @@ var uiTranslations = map[string]map[string]string{
 		// 0 dB is normal; boosts can distort, especially with more bass
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB ist normal; Verstärkung kann verzerren, besonders mit mehr Bass",
 		"official_weather_alerts_for_home":                            "Amtliche Wetterwarnungen für zu Hause",
-		"automatic_uses_the_nws_or_meteoalarm":                        "Automatisch: NWS in den USA, MeteoAlarm in Europa",
 		// A BROWSER IS ASKING
 		"a_browser_is_asking": "EIN BROWSER FRAGT AN",
 		// A camera's own audio, while its view is up
@@ -10590,6 +10572,7 @@ var uiTranslations = map[string]map[string]string{
 		// Romanian, with tu (the informal you, as Android and Home Assistant write it): "atinge" for the
 		// screen and "apasă" for the buttons. Ș and ț with the comma below, which the Go font draws.
 		"popup_started":                 "A început",
+		"ui_alert_issued":               "Emisă %s",
 		"popup_in_a_minute":             "Peste un minut",
 		"popup_in_d_minutes":            "Peste %d min",
 		"popup_in_an_hour":              "Peste o oră",
@@ -10693,6 +10676,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Pornește sunetul",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB e normal; amplificarea poate distorsiona, mai ales cu mai mult bas",
 		"a_browser_is_asking":                                  "UN BROWSER CERE ACCES",
+		"official_weather_alerts_for_home":                     "Avertizări meteo oficiale pentru zona ta",
 		"a_camera_s_own_audio_while_its_view_is_up":            "Sunetul propriu al unei camere, cât timp e afișată",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "O atingere aprinde ecranul până se face liniște în cameră",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspect complet peste temă și font",
@@ -11080,7 +11064,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Atingere pe ceas",
 		"tap_to_go_back":                        "Atinge ca să revii",
 		"the_mute_button_does_this_too":         "Butonul de microfon face și asta",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Alertele NWS pentru casă, în SUA",
 		"the_words_in_time_looked_up_at_lrclib": "Versurile sincronizate, căutate pe LRCLIB",
 		"theme_personalize":                     "Personalizează tema",
 		"this_version":                          "Aceasta este %s",
@@ -11650,7 +11633,6 @@ var uiTranslations = map[string]map[string]string{
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Başlamak için herhangi bir yere dokunun",
 		"ui_alert_issued":               "Yayın %s",
-		"alerts_source":                 "Uyarı kaynağı",
 		"firstrun_tap_to_finish":        "Bitirmek için herhangi bir yere dokunun",
 		"firstrun_hello":                "Merhaba",
 		"firstrun_this_is_s":            "Bu cihaz: %s.",
@@ -11864,7 +11846,6 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":              "Sesi aç",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB normal; yükseltmeler özellikle fazla basta bozulmaya neden olabilir",
 		"a_browser_is_asking":                                  "BİR TARAYICI SORUYOR",
-		"automatic_uses_the_nws_or_meteoalarm":                 "Otomatik: ABD'de NWS, Avrupa'da MeteoAlarm",
 		"a_camera_s_own_audio_while_its_view_is_up":            "Kamera görüntüsü açıkken kameranın kendi sesi",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Bir dokunuş, oda sessizleşene kadar ekranı geri getirir",
 		"a_whole_look_over_the_theme_and_font":                 "Tema ve yazı tipi üzerinde bütünsel bir görünüm",

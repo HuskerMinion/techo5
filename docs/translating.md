@@ -13,17 +13,17 @@ can be complete and still never have been looked at on a real screen.
 <!-- status:begin -->
 | Language | Strings | Coverage | Translated by | Tried on a device |
 |---|---:|---:|---|---|
-| English | 1058 | source | | |
-| Dutch (nl) | 1039 | 98% | christianschmidt (#365) | Echo Show 5 1st gen, v1.6.36 (local build) |
-| French (fr) | 1058 | 100% | royto (#346) | Not yet |
-| Galician (gl) | 1058 | 100% | Xocko12 (#368) | Echo Show 5 2nd gen, v1.6.17 |
-| German (de) | 1058 | 100% | christianschmidt (#322) | Echo Show 5 1st gen, v1.6.12 (#322) |
-| Italian (it) | 1058 | 100% | angelor87 (#310, #353) | Echo Show 5 1st gen (#353) |
-| Japanese (ja) | 1058 | 100% | lem0njuice0 (#270) | Echo Show 5 2nd gen (#270) |
-| Romanian (ro) | 1054 | 99% |  | Echo Show 5 1st gen, v1.6.48 (local build) |
-| Spanish (es) | 578 | 54% | KOPYk4T (#327) | Echo Show 5 2nd gen, v1.6.12 (#327) |
-| Turkish (tr) | 1058 | 100% | senolsun (#349) | Not yet |
-| Valencian (ca) | 1058 | 100% | rubenzori86 | Echo Show 5 2nd gen, v1.6.47 (local build) |
+| English | 1056 | source | | |
+| Dutch (nl) | 1037 | 98% | christianschmidt (#365) | Echo Show 5 1st gen, v1.6.36 (local build) |
+| French (fr) | 1056 | 100% | royto (#346) | Not yet |
+| Galician (gl) | 1056 | 100% | Xocko12 (#368) | Echo Show 5 2nd gen, v1.6.17 |
+| German (de) | 1056 | 100% | christianschmidt (#322) | Echo Show 5 1st gen, v1.6.12 (#322) |
+| Italian (it) | 1056 | 100% | angelor87 (#310, #353) | Echo Show 5 1st gen (#353) |
+| Japanese (ja) | 1056 | 100% | lem0njuice0 (#270) | Echo Show 5 2nd gen (#270) |
+| Romanian (ro) | 1056 | 100% |  | Echo Show 5 1st gen, v1.6.48 (local build) |
+| Spanish (es) | 576 | 54% | KOPYk4T (#327) | Echo Show 5 2nd gen, v1.6.12 (#327) |
+| Turkish (tr) | 1056 | 100% | senolsun (#349) | Not yet |
+| Valencian (ca) | 1056 | 100% | rubenzori86 | Echo Show 5 2nd gen, v1.6.47 (local build) |
 <!-- status:end -->
 
 Portuguese and Russian write the clock's day and date, the forecast and the weather's words;
