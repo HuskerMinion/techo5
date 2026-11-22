@@ -106,6 +106,18 @@ var langs = map[string]*words{
 			"sunny": "Soleggiato", "windy": "Ventoso", "windy-variant": "Ventoso",
 		},
 	},
+	"ro": {
+		days:        [7]string{"duminică", "luni", "marți", "miercuri", "joi", "vineri", "sâmbătă"},
+		shortDays:   [7]string{"dum.", "lun.", "mar.", "mie.", "joi", "vin.", "sâm."},
+		months:      [12]string{"ianuarie", "februarie", "martie", "aprilie", "mai", "iunie", "iulie", "august", "septembrie", "octombrie", "noiembrie", "decembrie"},
+		shortMonths: [12]string{"ian.", "feb.", "mar.", "apr.", "mai", "iun.", "iul.", "aug.", "sept.", "oct.", "nov.", "dec."},
+		sky: map[string]string{
+			"clear-night": "Senin", "cloudy": "Înnorat", "exceptional": "Extrem", "fog": "Ceață", "hail": "Grindină",
+			"lightning": "Fulgere", "lightning-rainy": "Furtuni", "partlycloudy": "Parțial înnorat",
+			"pouring": "Ploaie torențială", "rainy": "Ploaie", "snowy": "Ninsoare", "snowy-rainy": "Lapoviță",
+			"sunny": "Însorit", "windy": "Vânt", "windy-variant": "Vânt",
+		},
+	},
 	"nl": {
 		days:        [7]string{"zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"},
 		shortDays:   [7]string{"zo", "ma", "di", "wo", "do", "vr", "za"},
@@ -180,6 +192,9 @@ var phrases = map[string]map[string]string{
 	"gl": {"here": "Aquí", "today": "Hoxe", "alarm": "Alarma", "snoozed": "Aprazada ata as", "tomorrow": "Mañá", "yesterday": "Onte",
 		"now": "Agora", "allday": "Todo o día", "nothing": "Nada no calendario", "nothingtoday": "Nada hoxe",
 		"nothingelse": "Nada máis hoxe", "upcoming": "PRÓXIMOS", "nothingsoon": "Nada próximo"},
+	"ro": {"here": "Aici", "today": "Azi", "alarm": "Alarmă", "snoozed": "Amânată până la", "tomorrow": "Mâine", "yesterday": "Ieri",
+		"now": "Acum", "allday": "Toată ziua", "nothing": "Nimic în calendar", "nothingtoday": "Nimic azi",
+		"nothingelse": "Nimic altceva azi", "upcoming": "URMEAZĂ", "nothingsoon": "Nimic programat"},
 	"it": {"here": "Qui", "today": "Oggi", "alarm": "Sveglia", "snoozed": "Posticipata alle", "tomorrow": "Domani", "yesterday": "Ieri",
 		"now": "Ora", "allday": "Tutto il giorno", "nothing": "Niente in calendario", "nothingtoday": "Niente oggi",
 		"nothingelse": "Nient'altro oggi", "upcoming": "PROSSIMI", "nothingsoon": "Niente in programma"},
@@ -291,7 +306,7 @@ func LongDate(t time.Time, lang string) string {
 		return up(d) + ", " + day(t) + " " + of(m)
 	case "es", "gl", "pt":
 		return up(d) + ", " + day(t) + " de " + m
-	case "ru", "tr":
+	case "ro", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -310,7 +325,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "ca", "es", "gl", "pt", "ru", "tr":
+	case "ca", "es", "gl", "pt", "ro", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m

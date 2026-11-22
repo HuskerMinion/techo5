@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -113,7 +112,7 @@ func (r *roundRenderer) ringFace(s roundScene) {
 		if st.timer != "" {
 			// A name that does not say it is a timer is said to be one: "Pasta timer done".
 			done := tr("timer_name_done")
-			if !strings.Contains(strings.ToLower(st.timer), "timer") {
+			if !namesTimer(st.timer) {
 				done = tr("timer_named_done")
 			}
 			title = upper(fmt.Sprintf(done, st.timer))
