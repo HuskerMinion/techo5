@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/image/font"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 )
 
@@ -27,6 +28,10 @@ const cardLineH = 58
 // over a notification over an event's pop-up, and putting one away uncovers the next: the card says
 // how many, so that is not a surprise. There is one reminder and one notification at most (a newer
 // one takes the older one's place), and as many pop-ups as there are events due.
+// criticalOnTop is whether a notification up goes over a reminder: a critical one, which rings until
+// it is answered, by its buttons or a tap.
+func criticalOnTop(up bool, n notify.Notification) bool { return up && n.Critical }
+
 func cardsUnder(s scene) int {
 	popups := s.popupWaiting
 	if s.popup != nil {
@@ -46,8 +51,13 @@ func cardsUnder(s scene) int {
 // take, which the heading stops short of.
 func (r *renderer) cardHint(right, base int) int {
 	hint := dismissHint()
+	if r.hintOff {
+		hint = ""
+	}
 	w := r.width(r.tiny, hint)
-	r.rightText(r.tiny, hint, right, base, dim)
+	if hint != "" {
+		r.rightText(r.tiny, hint, right, base, dim)
+	}
 	if r.cardsUnder <= 0 {
 		return w
 	}

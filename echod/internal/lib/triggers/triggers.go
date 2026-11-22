@@ -134,6 +134,22 @@ var Languages = map[string]Set{
 			"volta pro início", "volta pro inicio", "volta para o início", "volta para o inicio", "tela de início", "tela de inicio"},
 		Camera: []string{"mostra", "mostre", "mostrar", "câmera", "camera"},
 	},
+	"ro": {
+		// Each word with diacritics also without them: speech to text often leaves them off. Not "vreme"
+		// alone: it is inside "devreme" (early), said to alarms, and "în vreme ce". Not "ninge" alone: it
+		// is inside Dutch plurals (rekeningen, woningen), which Match all would take as the weather. Not
+		// "cate grade" alone: it is inside the English "duplicate grade", as "temperatur" is inside
+		// "temperature"; "temperatura" is not.
+		Weather: []string{"vremea", "ce vreme", "vremii", "meteo", "prognoz", "temperatura", "temperatură",
+			"câte grade", "cate grade sunt", "cate grade afara", "cate grade afară",
+			"ploaie", "plouă", "ploua", "harta ploilor", "va ninge", "ninge azi", "ninge mâine", "ninge maine",
+			"ninge afară", "ninge afara", "o să ningă", "o sa ninga", "ninsoare", "zăpadă", "zapada",
+			"furtun", "însorit", "insorit", "înnorat", "innorat", "radar"},
+		Radar:      []string{"radar", "harta ploilor", "harta meteo", "harta vremii"},
+		NotWeather: []string{"sunet de ploaie", "sunete de ploaie", "sunetul ploii", "zgomot de ploaie", "pune ploaie"},
+		GoHome:     []string{"înapoi la ceas", "inapoi la ceas", "arată ceasul", "arata ceasul", "ecranul principal"},
+		Camera:     []string{"arată", "arata", "afișează", "afiseaza", "camera"},
+	},
 	"ru": {
 		// Matched inside what was heard, so each form is listed where the stem is inside another word:
 		// "погод" is in "погоди" (wait), "облачн" in cloud storage. Thunderstorm is left out: every

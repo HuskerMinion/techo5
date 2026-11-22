@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 )
 
 // What the Show and the Spot share of holding a notification through the night (notice_show.go and
@@ -28,7 +29,7 @@ func (d *Display) noticeOut(id string, night bool) bool {
 // been released.
 func (d *Display) noticeHeld() bool {
 	id := noticeID()
-	if id == "" || !noticeNight(time.Now()) {
+	if id == "" || !noticeNight(time.Now()) || notify.Get().CriticalUp() {
 		return false
 	}
 	d.mu.Lock()

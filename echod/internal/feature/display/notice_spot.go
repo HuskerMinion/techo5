@@ -19,6 +19,7 @@ import (
 // does not, and the notification is not counted as having lit it. It reports whether the face is on.
 func (d *Display) noticeLights(on, night bool) bool {
 	n, up := notify.Get().Showing()
+	night = night && !n.Critical // a critical one lights the face at night too
 	if !up || night {
 		return on
 	}
@@ -31,6 +32,12 @@ func (d *Display) noticeLights(on, night bool) bool {
 	}
 	if !on {
 		d.apply(true, d.ceilingOrDefault(), false)
+		if n.Critical {
+			// Under d.mu: on the Spot this runs on notify's listener, and the frame loop reads it.
+			d.mu.Lock()
+			d.critWoke = n.ID // dark again once it is gone (followCriticalLight)
+			d.mu.Unlock()
+		}
 	}
 	return true
 }
@@ -53,6 +60,12 @@ func noticeID() string {
 
 // gateNotice holds back a notification's card at night until a touch has released it.
 func (d *Display) gateNotice(s *roundScene, night bool) {
+	// A critical notification is not held: it rings, and is drawn as by day (notify/buttons.go). One with
+	// buttons is not drawn on the night clock, which has no room for them.
+	night = night && !s.notification.Critical
+	if len(s.notification.Buttons) > 0 {
+		s.nightInfo = false
+	}
 	if night && s.nightInfo && s.showNotification {
 		// Night clock shows Next up and notifications: not held; the night clock shows it in the night's
 		// tone (render_night_spot.go), and a tap puts it away.

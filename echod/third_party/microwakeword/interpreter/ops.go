@@ -240,7 +240,7 @@ func opFullyConnected(interp *Interpreter, op model.Operator) error {
 
 	inData := interp.tensors[op.Inputs[0]].data
 	weightData := interp.tensors[op.Inputs[1]].data
-	biasData := interp.tensors[op.Inputs[2]].data
+	biasData := interp.optional(op.Inputs[2])
 	outData := interp.tensors[op.Outputs[0]].data
 
 	activation := 0
@@ -635,6 +635,16 @@ func activationBounds(activation int, outputZP int32) (int32, int32) {
 		// RELU is used, not RELU6.
 	}
 	return actMin, actMax
+}
+
+// optional is the data of an operator's optional input, nil when the model leaves it out (index -1):
+// a FULLY_CONNECTED or a convolution without a bias, which TFLite allows. getBias32 reads nil as a
+// zero bias.
+func (interp *Interpreter) optional(idx int) []byte {
+	if idx < 0 || idx >= len(interp.tensors) {
+		return nil
+	}
+	return interp.tensors[idx].data
 }
 
 func getBias32(data []byte, idx int) int32 {

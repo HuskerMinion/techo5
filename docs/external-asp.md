@@ -228,8 +228,11 @@ session.
 READY alone does not activate External. The first successful PCM exchange must also produce a valid
 output frame that TECHO5 accepts for downstream publication. Until then, Active remains Built-in.
 
-Each PCM exchange has a 5-second timeout covering the complete operation, including input writes and
-output reading.
+Each PCM exchange, covering the complete operation including input writes and output reading, must
+finish within 80 ms. Frames are 20 ms apart, so time spent past 20 ms on one exchange is carried as
+debt, and an exchange that finishes early pays it back. A helper whose debt reaches 100 ms, or whose
+single exchange takes 80 ms or more, is stopped, and Active returns to Built-in. Size the work per frame
+to finish well inside 20 ms on the slowest device the helper supports.
 
 Built-in processing continues even after Active changes to External. This preserves the internal audio
 measurements and processing state described in

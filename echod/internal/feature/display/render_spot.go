@@ -74,6 +74,8 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 const ampmEdge = 48
 
 type roundScene struct {
+	// notifyPulse is how strongly a ringing critical notification pulses red (notifyPulse), 0 for none.
+	notifyPulse float64
 	// firstRunUp is first run still to do (firstrun_spot.go), and firstRun the step it shows.
 	firstRunUp bool
 	firstRun   firstRunView
@@ -439,6 +441,12 @@ func (r *roundRenderer) draw(s roundScene) {
 	// has no corner to put them in. Under a call and under a ringing alarm, which wait on somebody.
 	if s.announceRecording {
 		r.recordingFace(s)
+		return
+	}
+	// A critical notification over a reminder and an announcement: it rings until it is answered, and
+	// its face is how. A camera view is still over it, as over any notification.
+	if s.showNotification && s.notification.Critical && !s.showCamera {
+		r.notifyFace(s)
 		return
 	}
 	// A reminder over an announcement: it was set for now, for somebody here, and it stays until it

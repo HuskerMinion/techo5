@@ -25,7 +25,7 @@ func remoteTest(t *testing.T) (*Feature, *[]string) {
 		return true, []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
 	}
 	var notices []string
-	letInNotice = func(from string) { notices = append(notices, from) }
+	letInNotice = func(from string, _ bool) { notices = append(notices, from) }
 	return build(), &notices
 }
 
@@ -92,20 +92,48 @@ func TestHomeAssistantLetsInABrowserFromAnotherHome(t *testing.T) {
 	}
 }
 
-// A browser in the device's own home is let in at the device, never from Home Assistant.
-func TestHomeAssistantDoesNotLetInABrowserInTheDevicesHome(t *testing.T) {
-	f, _ := remoteTest(t)
-	f.setRemote(true)
+// A browser in the device's own home is let in from Home Assistant as by a press on the device, with
+// Remote setup off: the page open is enough. The screen says so, and Remote setup has nothing of it to
+// let go of.
+func TestHomeAssistantLetsInABrowserInTheDevicesHome(t *testing.T) {
+	f, notices := remoteTest(t)
+	f.Open()
 	c := askFrom(t, f, "192.0.2.20:5000")
-	if got := f.remote.asking.Get(); !strings.Contains(got, "in the device's home") {
-		t.Errorf("Setup page asking = %q, want it to say the browser is in the device's home", got)
+	if got := f.remote.asking.Get(); got != "192.0.2.20 (in the device's home)" {
+		t.Errorf("Setup page asking = %q, want the address, in the device's home", got)
 	}
-	if f.letInFromHA() || letIn(f, c) {
-		t.Fatal("Home Assistant let in a browser in the device's own home")
+	if !f.letInFromHA() || !letIn(f, c) {
+		t.Fatal("Home Assistant did not let in the browser in the device's home")
 	}
-	f.button(buttons.Event{Name: buttons.Action, Kind: buttons.Tap})
+	if len(*notices) != 1 || (*notices)[0] != "192.0.2.20" {
+		t.Errorf("the screen said %v, want once, with the address", *notices)
+	}
+	if got := f.remote.asking.Get(); got != "" {
+		t.Errorf("Setup page asking = %q once nobody is asking", got)
+	}
+	f.setRemote(true)
+	f.setRemote(false)
 	if !letIn(f, c) {
-		t.Fatal("the press on the device did not let it in")
+		t.Error("Remote setup off let go of a browser in the device's home")
+	}
+}
+
+// With the page closed or the link unkeyed, the button lets nobody in, in the device's home or not.
+func TestHomeAssistantLetsNobodyInWithThePageClosedOrNoKey(t *testing.T) {
+	f, notices := remoteTest(t)
+	f.Open()
+	c := askFrom(t, f, "192.0.2.20:5000")
+	keyed = func() bool { return false }
+	if f.letInFromHA() || letIn(f, c) {
+		t.Fatal("let in from Home Assistant over a link with no key of its own")
+	}
+	keyed = func() bool { return true }
+	f.Close()
+	if f.letInFromHA() {
+		t.Fatal("let in from Home Assistant with the page closed")
+	}
+	if len(*notices) != 0 {
+		t.Errorf("the screen said %v, want nothing", *notices)
 	}
 }
 
@@ -263,15 +291,18 @@ func TestRemoteSetupOffDropsTheBrowserAskingFromAnotherHome(t *testing.T) {
 // The notice of a browser let in is in the screen's language, title and all.
 func TestTheLetInNoticeIsInTheScreensLanguage(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	message, title := letInText("100.64.0.7")
+	message, title := letInText("100.64.0.7", true)
 	if message != "Home Assistant let a browser at 100.64.0.7 into the setup page, from away." || title != "Setup page" {
 		t.Errorf("English: %q %q", message, title)
 	}
 	if err := config.Set().Screen().Language("de"); err != nil {
 		t.Fatal(err)
 	}
-	message, title = letInText("100.64.0.7")
+	message, title = letInText("100.64.0.7", true)
 	if message != "Home Assistant hat 100.64.0.7 aus der Ferne eingelassen." || title != "Einrichtung" {
 		t.Errorf("German: %q %q", message, title)
+	}
+	if message, _ = letInText("192.0.2.20", false); message != "Home Assistant hat 192.0.2.20 in die Einrichtung eingelassen." {
+		t.Errorf("German, in the device's home: %q", message)
 	}
 }

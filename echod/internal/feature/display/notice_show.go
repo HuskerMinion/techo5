@@ -21,12 +21,19 @@ import (
 // on. The frame loop's alone, like videoLit.
 func (d *Display) noticeLights(on, night bool) bool {
 	n, up := notify.Get().Showing()
+	night = night && !n.Critical // a critical one lights the panel at night too
 	if !up || night || n.ID == d.notifyLit {
 		return on
 	}
 	d.notifyLit = n.ID
 	if !on {
 		d.apply(true, d.ceilingOrDefault(), false)
+		if n.Critical {
+			// Under d.mu: as on the Spot, where it runs on notify's listener.
+			d.mu.Lock()
+			d.critWoke = n.ID // dark again once it is gone (followCriticalLight)
+			d.mu.Unlock()
+		}
 	}
 	return true
 }
@@ -53,6 +60,12 @@ func noticeID() string {
 func (d *Display) gateNotice(s *scene, night bool) {
 	if !s.showNotification {
 		return
+	}
+	// A critical notification is not held: it rings, and is drawn as by day (notify/buttons.go).
+	night = night && !s.notification.Critical
+	if len(s.notification.Buttons) > 0 {
+		// The night clock's card has no room for buttons: a card with them is held and drawn as by day.
+		s.nightInfo = false
 	}
 	if night && s.nightInfo {
 		// Night clock shows Next up and notifications: not held, and not given the day's page. It is

@@ -112,6 +112,12 @@ asked of it, or an hour after it opened. To let a browser in, choose **Ask to be
 then answer at the device within a minute: tap **Allow** on a device with a screen, or press the action
 button on one without. There's no password, the answer at the device is what proves you are there. If
 nobody answers, the page says so and offers to ask again.
+For a device out of reach, such as a Dot on a shelf, Home Assistant can answer instead: **Setup page
+asking** shows the address of the browser asking, and **Let in from Home Assistant** lets it in, the same
+as a press on the device. The device's screen says a browser was let in. This needs an API encryption
+key on the device. The **Visit** link on the device's page in Home Assistant opens the setup page while
+it's on (or a short list with it, if another of the device's pages is on too), so the whole thing can be done from Home Assistant: turn on **Setup page**, open it with
+**Visit**, choose **Ask to be let in**, then press **Let in from Home Assistant**.
 **Done**, at the top of the page, lets go of that browser at once, without waiting for the page to close.
 
 Passwords, keys and tokens all work one way on the page. A saved one is never shown: its field is
@@ -1019,8 +1025,8 @@ other Shows don't have the switches.
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
 - **Screen language** (Settings → General): the language of the screen. German, French, Galician,
-  Italian, Japanese, Turkish and Valencian translate the whole screen, settings included; Spanish translates part
-  of it, and Dutch its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
+  Italian, Japanese, Romanian, Spanish, Turkish and Valencian translate the whole screen, settings included, and Dutch
+  its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
   picks which words the screen listens for. It
@@ -2092,6 +2098,14 @@ device answers in time, for whatever reason, the device answers as it would with
 worst a fault can do is what happened before: two devices hear you and Home Assistant picks the
 faster. A wake word heard by Home Assistant's own engine (above) is settled by Home Assistant as
 before.
+
+A wake the device wasn't sure of and asks Home Assistant about (Confirm wake with Home Assistant,
+above) takes part too. As it asks, it tells the others how clearly it heard the word. A device that
+heard it for sure but less clearly waits for Home Assistant's answer, up to about two seconds,
+instead of answering at once. If Home Assistant hears the word, whichever device heard it more clearly
+answers; if not, the one that was sure answers. The log on the waiting device says "nearest device:
+waiting on a device asking home assistant". A device on a release before this one doesn't wait, and
+answers as it did before.
 
 **Nearest device window** (100 to 500 ms, 300 to start with) is how long a device waits to hear from
 the others. Every wake word waits this long. Raise it if two devices sometimes both answer, or a

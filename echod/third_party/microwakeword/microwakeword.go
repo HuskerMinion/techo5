@@ -213,6 +213,7 @@ func (d *Detector) runInference() bool {
 		return false
 	}
 
+	d.lastErr = nil // techo5: Err is the last inference's, so one that failed once and then ran is not failing
 	out := d.interp.OutputUint8()
 	prob := uint8(0)
 	if len(out) > 0 {
@@ -230,7 +231,7 @@ func (d *Detector) runInference() bool {
 	return d.isDetected()
 }
 
-// Err is why the last inference that failed did, or nil when none has. techo5: a model the engine
+// Err is why the last inference failed, or nil when it ran. techo5: a model the engine
 // loads but cannot run scores nothing, and the caller checking it has no other way to tell.
 func (d *Detector) Err() error { return d.lastErr }
 

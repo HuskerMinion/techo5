@@ -22,7 +22,7 @@ var germanFives = [12][2]string{
 // "kurz vor" or "kurz nach" the five ("kurz nach halb sieben", "kurz vor sieben Uhr"), unless that
 // says the same word twice ("kurz nach fünf nach sieben"), where the five alone does. Midnight is
 // "Mitternacht", noon "zwölf Uhr mittags".
-func sayGerman(t time.Time) SaidTime {
+func sayGerman(t time.Time, _ Sun) SaidTime {
 	s := SaidTime{Intro: "es ist"}
 	h, m := t.Hour(), t.Minute()
 	five, off := m/5, m%5

@@ -10,23 +10,42 @@ import (
 // hour Count and Link are empty; at noon and midnight Period is too.
 type SaidTime struct {
 	Intro, Count, Link, Hour, Period string
+	// HourFirst is whether the language says the hour before its minutes: Spanish puts "dos"
+	// above "y media", where English and German put their lead above the hour.
+	HourFirst bool
 }
 
 // Lead is what comes before the hour: "twenty past", "fünf vor halb"; empty on the hour.
 func (s SaidTime) Lead() string { return strings.TrimSpace(s.Count + " " + s.Link) }
 
-// sayers are the languages that say the time their own way, each with its rules in its own file
-// (clock_de.go). Any other language says it in English.
-var sayers = map[string]func(time.Time) SaidTime{
-	"de": sayGerman,
+// Sun is the day's sunrise and sunset at home, for the languages that count their parts of the day
+// by the sun (clock_es.go); OK is false until home's place is known, and on a day the sun neither
+// rises nor sets there.
+type Sun struct {
+	Rise, Set time.Time
+	OK        bool
 }
 
-// SayTime is the time t as it is said in lang.
-func SayTime(t time.Time, lang string) SaidTime {
+// sayers are the languages that say the time their own way, each with its rules in its own file
+// (clock_de.go, clock_es.go). Any other language says it in English.
+var sayers = map[string]func(time.Time, Sun) SaidTime{
+	"de": sayGerman,
+	"es": saySpanish,
+}
+
+// SayTime is the time t as it is said in lang, with no sun to go by.
+func SayTime(t time.Time, lang string) SaidTime { return SayTimeSun(t, lang, Sun{}) }
+
+// NeedsSun is whether lang counts its parts of the day by the sun, so a screen looks home's place
+// up for it only where it changes the saying (clock_es.go).
+func NeedsSun(lang string) bool { return lang == "es" }
+
+// SayTimeSun is the time t as it is said in lang, with today's sun at home.
+func SayTimeSun(t time.Time, lang string, sun Sun) SaidTime {
 	if say, ok := sayers[lang]; ok {
-		return say(t)
+		return say(t, sun)
 	}
-	return sayEnglish(t)
+	return sayEnglish(t, sun)
 }
 
 // englishNumbers are the numbers English says the time with.
@@ -42,7 +61,7 @@ func englishNumber(n int) string {
 
 // sayEnglish says every minute: "seven past", "quarter to", "a minute to"; the hour after half past
 // is the next one's; noon and midnight by name.
-func sayEnglish(t time.Time) SaidTime {
+func sayEnglish(t time.Time, _ Sun) SaidTime {
 	s := SaidTime{Intro: "it's"}
 	h, m := t.Hour(), t.Minute()
 	switch {

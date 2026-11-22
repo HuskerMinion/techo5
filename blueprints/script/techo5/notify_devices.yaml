@@ -8,7 +8,9 @@ blueprint:
     - <ha-icon icon="mdi:card-text-outline"></ha-icon> **A card** with an icon, a title and a message
     - <ha-icon icon="mdi:image-outline"></ha-icon> **A picture** full screen with the words over it; a camera's picture is its live view
     - <ha-icon icon="mdi:devices"></ha-icon> **Goes to** the devices the call names, or else the ones chosen here, or else every TECHO5 device in the house, found by their manufacturer so a new one is picked up by itself
-    - <ha-icon icon="mdi:bell-ring-outline"></ha-icon> **A Dot** has no screen: it chimes and says the words if asked
+    - <ha-icon icon="mdi:gesture-tap-button"></ha-icon> **Buttons** on the card, whose taps come back as a `esphome.techo5_notification` event with `event: action`
+    - <ha-icon icon="mdi:alarm-light-outline"></ha-icon> **Critical** rings through the night and quiet hours, at a volume of its own, and pulses the screen red at a brightness of its own, until a button answers it
+    - <ha-icon icon="mdi:bell-ring-outline"></ha-icon> **A Dot** has no screen: it chimes and says the words if asked, and rings a critical one until stopped
 
     Named `notify_techo5`, it is called with, for example:
 
@@ -105,6 +107,69 @@ fields:
         max: 86400
         unit_of_measurement: seconds
         mode: box
+  buttons:
+    name: Buttons
+    description: >-
+      Up to three, split by commas, each Label=id (or Label alone, whose id is the label). A tap on one
+      fires esphome.techo5_notification with event action and that id, and ends the notification. Not
+      with a picture.
+    example: Snooze=snooze, Turn off=off
+    selector:
+      text:
+  critical:
+    name: Critical
+    description: >-
+      Rings until a button answers it (an OK button when none are given), also at night and in quiet
+      hours. Chime and Say it aloud are not used. Not with a picture.
+    default: false
+    selector:
+      boolean:
+  volume:
+    name: Volume
+    description: >-
+      How loud the chime is for a card, or the ring for a critical notification. 0 is the device's
+      usual chime volume, or the ring volume set on it for a critical one; never silent.
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 100
+        unit_of_measurement: "%"
+        mode: slider
+  volume_rise:
+    name: Volume fade-in
+    description: >-
+      For a critical notification. Seconds over which the ring climbs from the device's volume to
+      Volume. 0 rings at Volume from the start.
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 900
+        unit_of_measurement: seconds
+        mode: box
+  brightness:
+    name: Screen brightness
+    description: For a critical notification, while it rings. 0 is full brightness.
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 100
+        unit_of_measurement: "%"
+        mode: slider
+  brightness_rise:
+    name: Brightness fade
+    description: >-
+      For a critical notification. Seconds over which the screen climbs to Screen brightness, and fades
+      back afterwards. 0 is at once.
+    default: 0
+    selector:
+      number:
+        min: 0
+        max: 900
+        unit_of_measurement: seconds
+        mode: box
   devices:
     name: Devices
     description: Only these. Leave empty for the script's own choice.
@@ -147,6 +212,7 @@ sequence:
         tag: "{{ tag | default('') }}"
         seconds: "{{ seconds | default(0) | int(0) }}"
       shown: "{{ picture | default('') | trim }}"
+      pressable: "{{ buttons | default('') | trim }}"
   - repeat:
       for_each: "{{ nodes }}"
       sequence:
@@ -158,6 +224,34 @@ sequence:
                         sound='' if (sound | default('device')) == 'device' else sound) }}
               continue_on_error: true
           else:
-            - action: "esphome.{{ repeat.item }}_notify"
-              data: "{{ dict(words, icon=icon | default('')) }}"
-              continue_on_error: true
+            - if: "{{ critical | default(false) }}"
+              then:
+                - action: "esphome.{{ repeat.item }}_notify_critical"
+                  data:
+                    message: "{{ words.message }}"
+                    title: "{{ words.title }}"
+                    icon: "{{ icon | default('') }}"
+                    tag: "{{ words.tag }}"
+                    seconds: "{{ words.seconds }}"
+                    size: ""
+                    buttons: "{{ pressable }}"
+                    volume: "{{ volume | default(0) | int(0) }}"
+                    volume_rise: "{{ volume_rise | default(0) | int(0) }}"
+                    brightness: "{{ brightness | default(0) | int(0) }}"
+                    brightness_rise: "{{ brightness_rise | default(0) | int(0) }}"
+                  continue_on_error: true
+              else:
+                # A card with buttons or a chime volume of its own goes through notify_buttons (v1.6.49
+                # and later); any other goes through notify, which every release has, so a plain card
+                # still reaches a device that has not updated yet.
+                - if: "{{ pressable != '' or (volume | default(0) | int(0)) > 0 }}"
+                  then:
+                    - action: "esphome.{{ repeat.item }}_notify_buttons"
+                      data: >-
+                        {{ dict(words, icon=icon | default(''), size='', buttons=pressable,
+                                volume=volume | default(0) | int(0)) }}
+                      continue_on_error: true
+                  else:
+                    - action: "esphome.{{ repeat.item }}_notify"
+                      data: "{{ dict(words, icon=icon | default('')) }}"
+                      continue_on_error: true

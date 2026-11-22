@@ -43,6 +43,10 @@ var shade = color.RGBA{0x00, 0x00, 0x00, 0x90}
 
 // scene is one frame's worth of facts.
 type scene struct {
+	// notifyPulse is how strongly a ringing critical notification's card pulses red (notifyPulse), 0
+	// for none.
+	notifyPulse float64
+
 	streaming bool // the camera is being streamed (feature/camstream)
 	listening bool // the room is being listened to in a browser (feature/babymon)
 
@@ -490,6 +494,9 @@ type renderer struct {
 	// cardsUnder is how many cards wait under the one this frame draws (cardsUnder), for its heading
 	// row to say; set by the frame before it draws the card.
 	cardsUnder int
+	// hintOff leaves the card's "tap to dismiss" out, for a card a tap does not put away (a critical
+	// notification's).
+	hintOff bool
 
 	// calHits are the calendar page's buttons, days and events as last drawn (render_calendar.go).
 	calMu         sync.Mutex
@@ -761,9 +768,10 @@ func (r *renderer) draw(s scene) {
 		}
 		// The card is in the middle and the strips along the bottom, so a reminder and an
 		// announcement can both be up at once. One card at a time: a reminder over a notification
-		// over an event's pop-up. The one drawn says how many wait under it.
+		// over an event's pop-up, but a critical notification over all of them, since it rings until
+		// it is answered and its buttons are how. The one drawn says how many wait under it.
 		r.cardsUnder = cardsUnder(s)
-		if s.showReminder {
+		if s.showReminder && !criticalOnTop(s.showNotification, s.notification) {
 			r.reminderCard(s)
 		} else if s.showNotification {
 			r.notifyCard(s)

@@ -104,6 +104,7 @@ var registered = []string{
 	"last_heard",
 	"last_reply",
 	"last_wake_score",
+	"wake_word_problem",
 	"last_wake_word",
 	"send_voice_text",
 	"load_average",

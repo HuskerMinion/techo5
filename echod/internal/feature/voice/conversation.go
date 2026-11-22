@@ -75,37 +75,39 @@ func (p phase) String() string {
 type eventKind int
 
 const (
-	evStart       eventKind = iota // a wake word fired, or something asked for a turn
-	evHeard                        // Home Assistant has heard enough
-	evReplyText                    // a reply is coming
-	evReplyURL                     // the reply can be fetched whole
-	evStreamStart                  // reply audio is about to arrive over the API
-	evStreamAudio                  // a chunk of it
-	evStreamEnd                    // all of it has been sent
-	evPlayed                       // the reply has finished playing
-	evRunEnd                       // Home Assistant closed the run
-	evError                        // the pipeline failed
-	evCancel                       // the user gave up on it
-	evTimeout                      // Home Assistant never closed the run
-	evPending                      // a turn held back for the last one to close has waited long enough
-	evPlaying                      // the reply (event.reply) has audio, so the pipeline owes nothing more
-	evContinue                     // Home Assistant wants the answer to a question it just asked
-	evSpeaking                     // VAD detected speech has started
-	evSpokeEnd                     // the device heard the speaker finish; text is the turn's id
-	evLookHere                     // the answer put something on the screen: no listening again after it
-	evCutOff                       // another sound took the speaker from the reply (event.reply)
-	evEffect                       // an effect asked for the step the turn is in (c.effect, askEffect)
-	evWakeStart                    // Home Assistant's wake word engine is listening (hawake.go)
-	evWakeEnd                      // and has heard the word
-	evUnconfirmed                  // a wake asked about was not heard in time
-	evCandidate                    // a wake the device was not sure of (event.slot, event.peak)
-	evFaint                        // a wake won with a low nearest-device score (event.slot, event.at, event.then)
-	evWatch                        // something a stream to Home Assistant depends on may have changed
-	evRunStart                     // Home Assistant opened a run (event.url: where its reply will be)
-	evEarlyReply                   // the reply can be fetched while the agent is still writing it
-	evAnnouncing                   // an announcement that asks for an answer is being said (event.text)
-	evAnnounced                    // and was cut off, so no answer follows
-	evScored                       // the peak a wake word reached (event.slot, event.peak)
+	evStart          eventKind = iota // a wake word fired, or something asked for a turn
+	evHeard                           // Home Assistant has heard enough
+	evReplyText                       // a reply is coming
+	evReplyURL                        // the reply can be fetched whole
+	evStreamStart                     // reply audio is about to arrive over the API
+	evStreamAudio                     // a chunk of it
+	evStreamEnd                       // all of it has been sent
+	evPlayed                          // the reply has finished playing
+	evRunEnd                          // Home Assistant closed the run
+	evError                           // the pipeline failed
+	evCancel                          // the user gave up on it
+	evTimeout                         // Home Assistant never closed the run
+	evPending                         // a turn held back for the last one to close has waited long enough
+	evPlaying                         // the reply (event.reply) has audio, so the pipeline owes nothing more
+	evContinue                        // Home Assistant wants the answer to a question it just asked
+	evSpeaking                        // VAD detected speech has started
+	evSpokeEnd                        // the device heard the speaker finish; text is the turn's id
+	evLookHere                        // the answer put something on the screen: no listening again after it
+	evCutOff                          // another sound took the speaker from the reply (event.reply)
+	evEffect                          // an effect asked for the step the turn is in (c.effect, askEffect)
+	evWakeStart                       // Home Assistant's wake word engine is listening (hawake.go)
+	evWakeEnd                         // and has heard the word
+	evUnconfirmed                     // a wake asked about was not heard in time
+	evCandidate                       // a wake the device was not sure of (event.slot, event.peak)
+	evCandidateStart                  // the score of one going over the confirm threshold, before it is known (event.slot)
+	evFaint                           // a wake won with a low nearest-device score (event.slot, event.at, event.then)
+	evWatch                           // something a stream to Home Assistant depends on may have changed
+	evRunStart                        // Home Assistant opened a run (event.url: where its reply will be)
+	evEarlyReply                      // the reply can be fetched while the agent is still writing it
+	evAnnouncing                      // an announcement that asks for an answer is being said (event.text)
+	evAnnounced                       // and was cut off, so no answer follows
+	evScored                          // the peak a wake word reached (event.slot, event.peak)
+	evContested                       // the devices decided on a wake Home Assistant confirmed (event.gen, event.answer)
 )
 
 type event struct {
@@ -135,6 +137,10 @@ type event struct {
 
 	// peak is an evCandidate's or an evScored's score.
 	peak float64
+
+	// gen and answer are an evContested's: which decision (deciding.gen), and whether this device answers.
+	gen    uint64
+	answer bool
 
 	// spoken is an evReplyText whose words have already been said: realtime voice has them only once
 	// the answer is over.
@@ -282,6 +288,15 @@ type conversation struct {
 	// watch is a run open at Home Assistant's wake word stage, nil when there is none (hawake.go).
 	// While one is, the conversation is idle.
 	watch *watching
+
+	// early is the unsure claim made as a candidate's score first went over the confirm threshold
+	// (#685), for the question asked about it once it is known to stay unsure.
+	early *earlyClaim
+
+	// deciding is a wake Home Assistant confirmed, waiting on the devices to decide which answers it
+	// (#685); decided numbers them, so a late decision is told from the current one.
+	deciding *deciding
+	decided  uint64
 
 	// runOpen is a run Home Assistant has yet to close, and stoppedAt when it was last told to stop.
 	// A run at the wake word stage waits for the last one to close: its RUN_END would end it.
@@ -972,6 +987,14 @@ func (c *conversation) start(n nextTurn) (started bool) {
 			c.grace = time.NewTimer(graceStart)
 		}
 		return false
+	}
+
+	// A wake Home Assistant confirmed is waiting on the devices' decision: a turn asked for here
+	// meanwhile, by a button or the device's own engine, takes over, and waits for that run to close.
+	if c.phase == phaseIdle && c.deciding != nil {
+		slog.Info("a turn asked for while the devices decide on a confirmed wake", "slot", slot+1)
+		c.deciding = nil
+		c.closeRun()
 	}
 
 	// A turn ended as a mistake is still being closed by Home Assistant (draining): this one waits for

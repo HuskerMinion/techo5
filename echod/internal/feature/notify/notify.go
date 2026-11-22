@@ -4,7 +4,8 @@
 //
 // One is up at a time, and a new one replaces it. It chimes as it comes up, except at night and in
 // quiet hours, and it tells Home Assistant when it is shown and how it went (esphome.techo5_notification),
-// so an automation can follow up on one nobody saw.
+// so an automation can follow up on one nobody saw. One can carry buttons, and a critical one rings
+// until it is answered (buttons.go).
 package notify
 
 import (
@@ -25,6 +26,8 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -80,6 +83,17 @@ type Notification struct {
 
 	// Own is a note of this device's own (Note), which Home Assistant did not send and hears nothing of.
 	Own bool
+
+	// Buttons are what can be tapped on it (buttons.go); none for a plain card.
+	Buttons []Button
+	// Critical is a notification that rings until it is answered, through the night and quiet hours.
+	Critical bool
+	step     int // a critical one's volume, in steps; 0 for the device's ring volume
+	// Brightness is how bright a critical one lights the screen while it rings, in percent, and
+	// BrightnessRise how long the screen takes to climb there; 0 for at once.
+	Brightness     int
+	BrightnessRise time.Duration
+	volumeRise     time.Duration // how long a critical one's ring takes to climb to its volume; 0 for none
 }
 
 // pictures is the camera page, as a picture notification uses it (home.Feature).
@@ -100,6 +114,10 @@ type Feature struct {
 	mu  sync.Mutex
 	up  *Notification
 	seq int
+	// waiting is a notification that came while a critical one was up, shown once it goes (park);
+	// ringing is the critical one's bell while it rings.
+	waiting *parked
+	ringing *criticalRing
 
 	// order keeps one notification's showing and putting from interleaving with another's. It is held
 	// across the call to the camera page, which mu never is.
@@ -112,10 +130,13 @@ type Feature struct {
 	// quiet, and Home Assistant's event bus.
 	now    func() time.Time
 	pics   pictures
-	chime  func()
+	chime  func(step int)
 	say    func(words string)
 	hushed func() bool
 	fire   func(component.Event)
+	// ring rings the bell for a critical notification, at step (climbing to it over rise from the
+	// speaker's volume now), until the stop it returns is called; ended is called if it ends by itself.
+	ring func(label string, step int, rise time.Duration, ended func()) (stop func())
 }
 
 var (
@@ -140,6 +161,9 @@ func Get() *Feature {
 			pics = home.Get()
 		}
 		shared = newFeature(pics)
+		// The stop word, Stop in Home Assistant and the action button reach a critical notification's
+		// bell as they reach an alarm's.
+		ring.Silences(shared.silence)
 		if hasScreen {
 			// The notes home has for the screen (home.Hint), put up one after another in the order they
 			// came: a note and the word that takes it down must not pass each other. The hook's listener
@@ -185,9 +209,12 @@ func newFeature(pics pictures) *Feature {
 		seq:    rand.IntN(1_000_000_000),
 		now:    time.Now,
 		pics:   pics,
-		chime:  Chime,
+		chime:  ChimeAt,
 		say:    remind.Say,
 		hushed: hushedNow,
+		ring: func(label string, step int, rise time.Duration, ended func()) func() {
+			return ring.StartAt("notification", label, criticalTone, step, speaker.Get().Step(), rise, ended)
+		},
 		// Events go out through an outbox (outbox.go), so nothing here waits on Home Assistant.
 		fire: newOutbox(func(e component.Event) { component.Fire.Emit(e) }, outboxSize).post,
 	}
@@ -272,6 +299,7 @@ func newFeature(pics pictures) *Feature {
 			},
 		},
 	}
+	f.actions = append(f.actions, f.buttonActions()...)
 	return f
 }
 
@@ -323,6 +351,12 @@ func (f *Feature) NotifyPictureSized(message, title, picture, chime, speak, soun
 	// notification, so the whole sequence goes one at a time.
 	f.order.Lock()
 	defer f.order.Unlock()
+	// A picture takes the camera page at once and cannot wait behind a critical notification as words
+	// do (park), so it is refused while one rings, rather than covering it. One that has been quieted
+	// is replaced like any card.
+	if f.criticalRinging() {
+		return errors.New("notify: a critical notification is ringing; the picture is not shown over it")
+	}
 	h := how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0}
 	if h.hushed {
 		sound = "off"
@@ -388,6 +422,7 @@ func (f *Feature) Alert(title, message string, d time.Duration, silent bool) {
 // how is what a notification is put up with.
 type how struct {
 	silent bool // the caller asked for no chime
+	step   int  // the chime's own volume, in steps (notify_buttons); 0 for its usual level
 	aloud  bool // the caller asked for the words said
 	hushed bool // night or quiet hours: no chime, no words, no camera sound
 	// untilDone ends a notification on a device with no screen once its chime and words are done, when
@@ -422,12 +457,31 @@ func (f *Feature) put(n Notification, h how) {
 	// reported after n was shown. Posting never waits (outbox.go).
 	f.mu.Lock()
 	old := f.up
+	// While a critical notification rings only another critical one takes its place; anything else
+	// waits for it to be answered or quieted (holdsBack).
+	if f.holdsBack(old, n) {
+		f.park(n, h)
+		f.mu.Unlock()
+		return
+	}
 	f.up = &n
+	if !n.Critical && f.waiting != nil {
+		// What waited is older news than n, which takes the place it waited for.
+		f.report(f.waiting.n, "replaced")
+		f.waiting = nil
+	}
 	if old != nil {
 		f.report(*old, "replaced")
+		if r := f.ringing; r != nil && r.id == old.ID {
+			f.ringing = nil
+			r.stop()
+		}
 	}
 	f.report(n, "shown")
 	f.mu.Unlock()
+	if n.Critical {
+		f.startRing(n)
+	}
 	// Words replacing a picture take the picture's view down, if it is still that picture's; a picture
 	// replacing a picture has already replaced the view.
 	if old != nil && old.Kind == Picture && n.Kind == Text && f.pics != nil {
@@ -441,15 +495,16 @@ func (f *Feature) put(n Notification, h how) {
 	}
 	// Its words only at Debug: logs go into diagnostics bundles, which get pasted into public issues.
 	slog.Info("notification", "id", n.ID, "kind", n.Kind, "until", n.Until.Format(time.Kitchen),
-		"chime", chime, "spoken", words != "", "hushed", h.hushed)
+		"chime", chime, "spoken", words != "", "hushed", h.hushed, "buttons", len(n.Buttons), "critical", n.Critical)
 	slog.Debug("notification words", "id", n.ID, "title", n.Title, "message", n.Message)
-	ends := h.untilDone && f.pics == nil
+	// A critical one on a Dot ends with its bell (rang), not with its chime.
+	ends := h.untilDone && f.pics == nil && !n.Critical
 	if chime || words != "" {
 		// One after the other in one goroutine: the chime has the speaker until it is done, and words
 		// over it would be lost under it.
 		safe.Go("notification", func() {
 			if chime {
-				f.chime()
+				f.chime(h.step)
 			}
 			if words != "" {
 				f.say(words)
@@ -475,6 +530,7 @@ func (f *Feature) finish(id string) {
 	}
 	f.up = nil
 	f.report(*n, "expired")
+	f.leftUp(*n)
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
@@ -523,7 +579,11 @@ func (f *Feature) Clear(tag string) bool {
 	// As tick, not between a picture's view going up and its notification being put.
 	f.order.Lock()
 	defer f.order.Unlock()
-	return f.end("cleared", func(n *Notification) bool { return !n.Own && (tag == "" || n.Tag == tag) })
+	ended := f.end("cleared", func(n *Notification) bool { return !n.Own && (tag == "" || n.Tag == tag) })
+	f.mu.Lock()
+	waited := f.clearWaiting(tag)
+	f.mu.Unlock()
+	return ended || waited
 }
 
 // end takes the notification up down if it is the one wanted, and reports why.
@@ -536,6 +596,7 @@ func (f *Feature) end(why string, wanted func(*Notification) bool) bool {
 	}
 	f.up = nil
 	f.report(*n, why)
+	f.leftUp(*n)
 	f.mu.Unlock()
 	if n.Kind == Picture && f.pics != nil {
 		f.pics.HidePicture(n.ID)
@@ -585,6 +646,7 @@ func (f *Feature) tick(now time.Time) {
 	}
 	f.up = nil
 	f.report(*n, why)
+	f.leftUp(*n)
 	f.mu.Unlock()
 	f.Changed.Emit(struct{}{})
 }
@@ -592,13 +654,17 @@ func (f *Feature) tick(now time.Time) {
 // report posts an event about n. Callers hold f.mu, so events are posted in the order the changes
 // happen; fire never waits (the outbox), so holding the lock for it costs nothing. A note of the
 // device's own (Note) is reported to nobody.
-func (f *Feature) report(n Notification, what string) {
+func (f *Feature) report(n Notification, what string) { f.reportAction(n, what, "") }
+
+// reportAction is report with the id of the button that was tapped, "" for none. Every event carries
+// action, so a trigger on it never meets a missing field.
+func (f *Feature) reportAction(n Notification, what, action string) {
 	if n.Own {
 		return
 	}
 	f.fire(component.Event{Name: Event, Data: map[string]string{
 		"event": what, "id": n.ID, "tag": n.Tag, "title": n.Title, "message": n.Message, "kind": string(n.Kind),
-		"device": config.Get().Device.Name,
+		"action": action, "device": config.Get().Device.Name,
 	}})
 }
 

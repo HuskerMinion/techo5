@@ -36,7 +36,32 @@ func (r *renderer) notifyBoxFor(n notify.Notification) image.Rectangle {
 	if !n.Own && n.Size != notify.SizeNormal {
 		return r.sizedBox(n.Size)
 	}
-	return r.notifyBox()
+	box := r.notifyBox()
+	if len(n.Buttons) > 0 {
+		// The usual card grows by a row for its buttons, as much up as down.
+		grow := r.notifyFoot() / 2
+		box.Min.Y, box.Max.Y = box.Min.Y-grow, box.Max.Y+r.notifyFoot()-grow
+	}
+	return box
+}
+
+// notifyFoot is the room a card's row of buttons takes along its foot, with the space under it.
+func (r *renderer) notifyFoot() int { return r.s(notifyButtonH + 24) }
+
+// notifyButtons is where n's buttons are on its card: a row along the foot of notifyBoxFor, inside
+// the card's margins. None for a card without them.
+func (r *renderer) notifyButtons(n notify.Notification) []image.Rectangle {
+	if len(n.Buttons) == 0 || n.Own {
+		return nil
+	}
+	box, in := r.notifyBoxFor(n), r.rowIn()
+	row := image.Rect(box.Min.X+in, box.Max.Y-r.s(24)-r.s(notifyButtonH), box.Max.X-in, box.Max.Y-r.s(24))
+	return r.notifyButtonRow(row, len(n.Buttons))
+}
+
+// tapNotifyCard is a tap at p on the card of notification n, which p is on (notifyBoxFor).
+func (r *renderer) tapNotifyCard(n notify.Notification, p image.Point) {
+	tapNotifyButtons(n, r.notifyButtons(n), p)
 }
 
 // cardAt is whether p is on the card that is up: a reminder's, a notification's or an event's pop-up.
@@ -60,11 +85,26 @@ func (r *renderer) notifyCard(s scene) {
 		r.noticeCardIn(r.notifyBox(), 56, 120, n.Icon, n.Title, n.Message, noteLines, r.small, noteLineH)
 		return
 	}
-	if n.Size != notify.SizeNormal {
-		r.sizedNoticeCard(r.notifyBoxFor(n), n.Size, n.Icon, n.Title, n.Message)
-		return
+	// A critical card has no way out but its buttons, so it does not say a tap puts it away.
+	r.hintOff = n.Critical
+	defer func() { r.hintOff = false }()
+	foot := 0
+	if len(n.Buttons) > 0 {
+		foot = r.notifyFoot()
 	}
-	r.noticeCard(r.notifyBox(), 56, 126, n.Icon, n.Title, n.Message, notifyLines)
+	box := r.notifyBoxFor(n)
+	if s.notifyPulse > 0 {
+		r.criticalScreen(s.notifyPulse)
+	}
+	if n.Size != notify.SizeNormal {
+		r.sizedNoticeCardFoot(box, foot, n.Size, n.Icon, n.Title, n.Message)
+	} else {
+		r.noticeCard(box, 56, 126, n.Icon, n.Title, n.Message, notifyLines)
+	}
+	r.drawNotifyButtons(n, r.notifyButtons(n))
+	if s.notifyPulse > 0 {
+		r.criticalEdge(box)
+	}
 }
 
 // The caption's own colors, which the camera page's top strip shares. The bar's shade is black
@@ -133,4 +173,13 @@ func (r *renderer) captionBar(c home.Caption) {
 		y += m.Height.Ceil()
 	}
 	r.text(r.small, clipText(r, r.small, c.Message, width), r.margin, y+r.small.Metrics().Ascent.Ceil(), captionText)
+}
+
+// criticalScreen is the pulse behind a card, drawn before it: the whole screen around the card in red
+// at strength a, so it is seen from across the room. One fill, cheap enough to redraw every pulseFrame.
+func (r *paint) criticalScreen(a float64) { fillCanvas(r.dst, pulseColor(a)) }
+
+// criticalEdge is the card's red edge while it pulses, drawn over the card.
+func (r *paint) criticalEdge(box image.Rectangle) {
+	r.roundStroke(box, r.cardRad(), float64(r.s(8)), danger)
 }

@@ -15,6 +15,7 @@ func TestDates(t *testing.T) {
 		{"de", "Montag, 5. Januar", "Mo., 5. Jan.", "5. Januar", "Mo 5"},
 		{"ca", "Dilluns, 5 de gener", "Dl., 5 gen.", "5 de gener", "Dl. 5"},
 		{"es", "Lunes, 5 de enero", "Lun, 5 ene", "5 de enero", "Lun 5"},
+		{"ro", "Luni, 5 ianuarie", "Lun., 5 ian.", "5 ianuarie", "Lun. 5"},
 		{"fr", "Lundi 5 janvier", "Lun. 5 janv.", "5 janvier", "Lun. 5"},
 		{"it", "Lunedì 5 gennaio", "Lun 5 gen", "5 gennaio", "Lun 5"},
 		{"nl", "Maandag 5 januari", "Ma 5 jan", "5 januari", "Ma 5"},
@@ -133,6 +134,7 @@ func TestPhotoDate(t *testing.T) {
 		"de": "2. Januar 2019",
 		"es": "2 de enero de 2019",
 		"ca": "2 de gener de 2019",
+		"ro": "2 ianuarie 2019",
 	} {
 		if got := PhotoDate(d, lang); got != want {
 			t.Errorf("PhotoDate(%q) = %q, want %q", lang, got, want)

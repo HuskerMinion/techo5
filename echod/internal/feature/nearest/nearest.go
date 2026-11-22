@@ -8,6 +8,15 @@
 // How well is how far the word stood out from the device's own room (hardware/mic's Standout), plus an
 // offset of the device's own for hardware that hears louder or quieter than the rest.
 //
+// A device that is not sure it heard its wake word asks Home Assistant, which takes most of a second
+// (#685). It says so to the others as it asks, with how well it heard it: an unsure claim. A device that
+// heard the word for sure, but less well than that, waits for the answer before it opens its turn: the
+// unsure device's claim once Home Assistant has heard the word too, which it then loses to, or the unsure
+// claim withdrawn, or unsureFor gone by, after which it answers. An unsure claim never makes a device
+// stand down by itself, so a wake Home Assistant turns down costs the device somebody is talking to a
+// moment's wait at most, never the answer. Its word is unsurePrefix and the wake word, which a device on
+// an older release takes for another word and ignores.
+//
 // A device that has already answered keeps the turn. A claim that arrives after that, however much better,
 // is told so, and the device that sent it stands down: taking the turn away would leave nobody answering,
 // since Home Assistant refuses the same wake word from a second device for a moment after the first.
@@ -67,15 +76,32 @@ const (
 
 	// maxPeers bounds the devices one wake word is told to, which mDNS alone decides.
 	maxPeers = 16
+
+	// unsurePrefix makes an unsure claim's word: the wake word asked about, behind it.
+	unsurePrefix = "unsure:"
+
+	// unsureFor is how long an unsure claim is waited on. It is made as the unsure device's score
+	// first goes over its confirm threshold, and the question goes once the score has fallen away, up
+	// to 600 ms later (detect's CandidateFor); then Home Assistant has 1.5 s to hear the word (voice's
+	// confirmFor), and the claim that follows crosses the network. The microphones' history
+	// (mic.Held) still reaches back to the word after it.
+	unsureFor = 2200 * time.Millisecond
+
+	// heldPoll is how often a device waiting on an unsure claim looks again.
+	heldPoll = 50 * time.Millisecond
 )
 
 // claim is what a device says when it hears its wake word. Word is which wake word, so two people
 // saying different ones to different devices at once are not taken for one person saying one.
+//
+// Withdrawn is an unsure claim taken back: Home Assistant did not hear the word, or the device gave up
+// asking.
 type claim struct {
-	From  string  `json:"from"`
-	Turn  string  `json:"turn"`
-	Word  string  `json:"word,omitempty"`
-	Score float64 `json:"score"`
+	From      string  `json:"from"`
+	Turn      string  `json:"turn"`
+	Word      string  `json:"word,omitempty"`
+	Score     float64 `json:"score"`
+	Withdrawn bool    `json:"withdrawn,omitempty"`
 }
 
 // arrived is a claim from another device and when it came.
@@ -97,6 +123,14 @@ type pending struct {
 
 	// answered is set once the turn opened here; elsewhere when a device that already answered said so.
 	answered, elsewhere bool
+
+	// held is when this claim began waiting on an unsure one that beat it, zero while it has not.
+	held time.Time
+
+	// lost runs when another device has the word instead (Confirmed): beaten, already answered, or a
+	// newer claim of this device's own took this one's place. Nil for a wake word heard here, which
+	// simply does not open.
+	lost func()
 }
 
 // Nearest is the switch, its two settings and the claims.
@@ -121,6 +155,7 @@ type Nearest struct {
 	onCall func() bool
 	peers  func() []announce.Peer
 	fanout func(peers []announce.Peer, mine *pending)
+	tell   func(peers []announce.Peer, c claim) // an unsure claim, or its withdrawal: nothing comes back
 	now    func() time.Time
 	after  func(d time.Duration, f func())
 
@@ -209,7 +244,17 @@ func build() *Nearest {
 			slog.Error("saving the nearest device offset failed", "err", err)
 		}
 	}
+	n.tell = func(peers []announce.Peer, c claim) {
+		if len(peers) > maxPeers {
+			peers = peers[:maxPeers]
+		}
+		for _, p := range peers {
+			safe.Go("nearest unsure claim", func() { post(p, c) })
+		}
+	}
 	web.Handle(path, "", n.open, n.receive)
+	voice.SetConfirmedContest(n.Confirmed)
+	voice.SetAskingClaim(n.Asking)
 	return n
 }
 
@@ -302,6 +347,44 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 	n.woke(slot, at)
 }
 
+// Confirmed is a wake this device was not sure of that Home Assistant then heard too (#685), heard at at
+// with clarity, measured then. It takes part in the decision as a wake over the threshold does, claimed
+// only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
+// is talking to stand down. decide is told whether this device answers. Home Assistant has already
+// confirmed it, so a faint one is not asked about again (#503).
+func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, decide func(answer bool)) {
+	n.contendHeard(n.wakeWord(slot), at, clarity,
+		func() bool { return n.canAnswer(slot) },
+		func(time.Time, float64) { decide(true) },
+		func() { decide(true) },
+		func() { decide(false) })
+}
+
+// Asking is a wake this device was not sure of, being asked about now (#685), heard with clarity. The
+// others are told with an unsure claim, so one that heard it for sure but less well waits for Home
+// Assistant's answer; settled, run when the question ends, takes the claim back unless Home Assistant
+// heard the word (confirmed), when the claim Confirmed makes stands in for it. Nil when nobody is told.
+func (n *Nearest) Asking(slot int, clarity float64) (settled func(confirmed bool)) {
+	if !n.open() || !n.canAnswer(slot) {
+		return nil
+	}
+	peers := hearing(n.peers())
+	if len(peers) == 0 {
+		return nil
+	}
+	c := config.Get()
+	u := claim{From: c.Device.Name, Turn: newTurn(), Word: unsurePrefix + n.wakeWord(slot),
+		Score: clarity + float64(c.Nearest.Offset) + n.callBonus()}
+	n.tell(peers, u)
+	return func(confirmed bool) {
+		if confirmed {
+			return
+		}
+		u.Withdrawn = true
+		n.tell(peers, u)
+	}
+}
+
 // Answer is the same question for something other than a wake word, the next song word: of the devices
 // that heard word, only the one that heard it best acts. It acts at once when this device does not take
 // part, cannot act, or has nobody to ask, and only the nearest does otherwise. What it does is act, run
@@ -319,6 +402,16 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 		now()
 		return
 	}
+	n.contendHeard(word, at, n.score(), can, open, now, nil)
+}
+
+// contendHeard is contend with how clearly this device heard the word already measured, and lost, if
+// not nil, run when another device has it instead.
+func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, can func() bool, open func(time.Time, float64), now, lost func()) {
+	if !n.open() || n.busy() || !can() {
+		now()
+		return
+	}
 	peers := hearing(n.peers())
 	if len(peers) == 0 {
 		now()
@@ -327,13 +420,13 @@ func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(
 
 	c := config.Get()
 	window := c.Nearest.Window()
-	clarity := n.score()
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: word,
 			Score: clarity + float64(c.Nearest.Offset) + n.callBonus()},
 		at:      at,
 		window:  window,
 		clarity: clarity,
+		lost:    lost,
 	}
 	n.mu.Lock()
 	n.mine = mine
@@ -359,8 +452,9 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 	}()
 
 	able := can()
-	var best arrived
-	var beaten, elsewhere, current bool
+	now := n.now()
+	var best, unsure arrived
+	var beaten, elsewhere, current, hold, first bool
 	func() {
 		n.mu.Lock()
 		defer n.mu.Unlock()
@@ -369,24 +463,50 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		}
 		best, beaten = n.bestSince(mine.at.Add(-mine.window), mine.claim)
 		elsewhere = mine.elsewhere
-		mine.answered = !beaten && !elsewhere && able
+		if !beaten && !elsewhere && able {
+			unsure, hold = n.unsureSince(mine.at.Add(-mine.window), mine.claim, now)
+			if hold {
+				first = mine.held.IsZero()
+				if first {
+					mine.held = now
+				}
+			}
+		}
+		mine.answered = !beaten && !elsewhere && able && !hold
 	}()
+	if current && hold {
+		if first {
+			slog.Info("nearest device: waiting on a device asking home assistant", "word", word,
+				"mine", round(mine.Score), "theirs", round(unsure.Score), "by", unsure.From)
+		}
+		n.after(heldPoll, func() { n.decide(word, mine, can, open) })
+		return
+	}
 	if !current {
+		if mine.lost != nil {
+			mine.lost()
+		}
 		return
 	}
 
 	switch {
 	case elsewhere:
 		slog.Info("nearest device: another had already answered", "word", word, "score", round(mine.Score))
+		if mine.lost != nil {
+			mine.lost()
+		}
 	case beaten:
 		slog.Info("nearest device: another heard it better", "word", word, "mine", round(mine.Score),
 			"theirs", round(best.Score), "by", best.From)
+		if mine.lost != nil {
+			mine.lost()
+		}
 	case !able:
 		slog.Info("nearest device: could not answer after all, passing it on", "word", word)
 		open(mine.at, mine.clarity)
 	default:
 		slog.Info("nearest device: answering", "word", word, "score", round(mine.Score), "clarity", round(mine.clarity),
-			"waited", n.now().Sub(mine.at).Round(time.Millisecond))
+			"waited", now.Sub(mine.at).Round(time.Millisecond), "held", !mine.held.IsZero())
 		open(mine.at, mine.clarity)
 	}
 }
@@ -418,6 +538,36 @@ func (n *Nearest) bestSince(from time.Time, mine claim) (arrived, bool) {
 		}
 	}
 	return best, found && better(best.claim, mine)
+}
+
+// unsureSince is the best unsure claim from another device since from that beats mine and is still
+// waited on: neither withdrawn nor followed by that device's claim for the word itself, and younger
+// than unsureFor. Called with the lock held.
+func (n *Nearest) unsureSince(from time.Time, mine claim, now time.Time) (arrived, bool) {
+	want := unsurePrefix + mine.Word
+	var best arrived
+	found := false
+	for i, a := range n.others {
+		if a.at.Before(from) || a.Word != want || a.Withdrawn || now.Sub(a.at) >= unsureFor {
+			continue
+		}
+		settled := false
+		for _, b := range n.others[i+1:] {
+			if b.From == a.From && (b.Word == mine.Word || b.Word == want && b.Withdrawn && b.Turn == a.Turn) {
+				settled = true
+				break
+			}
+		}
+		if settled {
+			continue
+		}
+		c := a.claim
+		c.Word = mine.Word
+		if better(c, mine) && (!found || better(a.claim, best.claim)) {
+			best, found = a, true
+		}
+	}
+	return best, found
 }
 
 // better is whether a heard the word better than b. A tie goes to the name that sorts first, so two

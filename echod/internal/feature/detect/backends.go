@@ -84,8 +84,9 @@ type microBackend struct {
 	step   map[string]frontKey // each model's front end
 	fronts map[frontKey]*microFront
 	scores map[string]float64
-	gone   []string // dropped by feed, for failed
-	exact  bool     // mwwfront rather than zserge's audiofrontend for every model; see ExactFrontEnd
+	gone   []string       // dropped by feed, for failed
+	fails  map[string]int // inferences each model has failed in a row
+	exact  bool           // mwwfront rather than zserge's audiofrontend for every model; see ExactFrontEnd
 }
 
 // microDetector is what the backend asks of a loaded model: microwakeword.Detector, or a stand-in in
@@ -93,6 +94,9 @@ type microBackend struct {
 type microDetector interface {
 	ProcessFeatures(frames [][]int8) bool
 	SlidingAverage() float64
+	// Err is why the last inference failed, nil when none has: a model that loads but cannot run
+	// fails every inference and scores nothing, which is otherwise silence (#692).
+	Err() error
 }
 
 // featureFront is a microWakeWord feature front end: one window of audio in, a frame of 40 features
@@ -198,10 +202,29 @@ func (b *microBackend) run(id string, det microDetector, feat [][]int8) (ok bool
 		}
 	}()
 	det.ProcessFeatures(feat)
+	if err := det.Err(); err != nil {
+		// A model that cannot run fails every inference; one bad frame is not that. Only a run of them
+		// drops it (failsToDrop, about half a second of audio).
+		if b.fails == nil {
+			b.fails = map[string]int{}
+		}
+		b.fails[id]++
+		if b.fails[id] < failsToDrop {
+			return true
+		}
+		delete(b.fails, id)
+		slog.Error("wake word dropped: its model failed on live audio", "id", id, "err", err)
+		return false
+	}
+	delete(b.fails, id)
 	return true
 }
 
+// failsToDrop is how many inferences in a row a model must fail before it is dropped.
+const failsToDrop = 25
+
 func (b *microBackend) unload(id string) {
+	delete(b.fails, id) // a model chosen again starts with a clean count
 	step := b.step[id]
 	delete(b.dets, id)
 	delete(b.step, id)
@@ -243,6 +266,7 @@ func (b *microBackend) failed() []string {
 }
 
 func (b *microBackend) close() {
+	clear(b.fails)
 	clear(b.dets)
 	clear(b.step)
 	clear(b.fronts)

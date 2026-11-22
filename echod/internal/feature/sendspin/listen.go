@@ -74,8 +74,17 @@ func (l *listener) serve(ctx context.Context, name string) error {
 		l.report(stateJoined)
 		defer l.report(stateWaiting)
 
-		s := newSession(conn, l.out, l.bg, name, l.report)
-		if err := s.run(ctx); err != nil {
+		peer, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ws, plain, err := secured(ctx, conn, peer)
+		if err != nil {
+			slog.Warn("sendspin handshake", "from", r.RemoteAddr, "err", err)
+			return
+		}
+		s := newSession(ws, l.out, l.bg, name, l.report)
+		s.encrypted = !plain
+		err = s.run(ctx)
+		unstarted(plain, peer, err)
+		if err != nil {
 			slog.Warn("sendspin session ended", "from", r.RemoteAddr, "err", err)
 		} else {
 			slog.Info("sendspin server disconnected", "from", r.RemoteAddr)

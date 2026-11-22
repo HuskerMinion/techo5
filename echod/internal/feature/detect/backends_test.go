@@ -268,6 +268,7 @@ type panics struct{}
 
 func (panics) ProcessFeatures([][]int8) bool { panic("index out of range [7] with length 3") }
 func (panics) SlidingAverage() float64       { return 0 }
+func (panics) Err() error                    { return nil }
 
 // A model that loads and then panics on real audio is dropped from the backend with the panic caught,
 // and the other words on the same front end go on scoring. Without the guard the panic took the wake
