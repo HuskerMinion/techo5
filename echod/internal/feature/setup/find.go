@@ -112,6 +112,7 @@ var findKeywords = map[string][]string{
 
 	"name":         {"rename", "hostname"},
 	"place":        {"location", "weather", "city"},
+	"alerts":       {"alert", "warning", "meteoalarm", "nws", "region"},
 	"timezone":     {"zone", "timezone", "time", "clock", "dst"},
 	"calendar":     {"calendar", "ical", "ics"},
 	"updates":      {"update", "upgrade", "firmware", "version", "software"},

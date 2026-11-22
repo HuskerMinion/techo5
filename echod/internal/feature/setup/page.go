@@ -380,6 +380,8 @@ func (f *Feature) save(w http.ResponseWriter, r *http.Request) {
 		problem = saveLock(r)
 	case "place":
 		problem = savePlace(r)
+	case "alerts":
+		problem = saveAlerts(r)
 	case "calendar":
 		problem = saveCalendarLink(r)
 	case "calendar-remove":
@@ -702,6 +704,9 @@ func (f *Feature) drawTab(ctx context.Context, w http.ResponseWriter, token, tab
 	case "system":
 		nameSection(w, token)
 		placeSection(w, token)
+		if hasScreen {
+			alertsSection(w, token)
+		}
 		timezoneSection(w, token)
 		calendarLinksSection(w, token)
 		updatesSection(w, token)

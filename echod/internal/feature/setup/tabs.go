@@ -249,7 +249,7 @@ var tabFor = map[string]string{
 
 	"lock": "privacy", "screenpage": "privacy", "screenkey": "privacy", "baby": "privacy", "babylink": "privacy", "babylight": "privacy", "remote": "privacy", "thispage": "privacy",
 
-	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
+	"name": "system", "place": "system", "alerts": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",
 	"ringwait": "system", "settingsfile": "system", "share": "system", "devices": "system", "giftreset": "system",
 }
