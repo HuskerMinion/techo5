@@ -36,7 +36,7 @@ Videos are off on a new device. On the device's setup page, **Screen → Video**
 2. For DLNA apps too, tick **DLNA video** as well. DLNA itself has to be on
    (**Sound → Play to this device → DLNA**).
 3. For films cast from Plex, link the account (**Sound → Plex**): a cast film plays when **Play
-   videos** is on, and the server scales it to 720p itself.
+   videos** is on, and the server scales it to 720p itself (1080p on the Skylight Calendar).
 
 Home Assistant has the same two switches: **Video** and **DLNA video**.
 

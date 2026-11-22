@@ -83,10 +83,10 @@ The bigger changes of September to November 2026. Every release lists the rest.
 - 📺 **Casting from Plex.** The Show and the Spot can be a player a Plex app casts to: link an
   account with a four-character code from plex.tv/link, on the device or the setup page, and Plex,
   Plexamp and Plex for Android TV list it beside the house's other players. Music plays with its
-  cover on Now Playing, films play full screen at what the hardware decodes (H.264, 720p, subtitles
-  burned in), and pause, seek, skip and the volume go both ways -- the server is told what is
-  playing, so a film can be finished on a phone. Discovery is Plex's own, on the home network and
-  through the account, and nothing of it runs until an account is linked
+  cover on Now Playing, films play full screen at what the hardware decodes (H.264, 720p, 1080p on
+  the Skylight Calendar, subtitles burned in), and pause, seek, skip and the volume go both ways --
+  the server is told what is playing, so a film can be finished on a phone. Discovery is Plex's own,
+  on the home network and through the account, and nothing of it runs until an account is linked
   ([docs/plex.md](docs/plex.md)).
 
 - 📞 **Call by wake word, Hang up bar, repeating alarms** (v1.6.28). A wake word can call a phone book

@@ -39,9 +39,9 @@ else of plex.tv's is kept, and the token is never shown on a screen, on the page
   ALAC, Ogg -- is asked for as MP3 from the server, which is what the device's decoder plays, rather
   than leaving a library of AAC silent. Cover art is fetched for Now Playing at the same time.
 - **Films and episodes**: the server is asked for a stream this hardware decodes -- H.264 at up to
-  720p, with AAC, MP3 or AC-3 sound, in an MPEG-TS over HLS -- and the film plays full screen, with
-  its sound and with subtitles burned into the picture when the app has them on. A 1080p film is
-  sent downscaled rather than in frames the Show would drop.
+  720p, or 1080p on the Skylight Calendar, with AAC, MP3 or AC-3 sound, in an MPEG-TS over HLS -- and
+  the film plays full screen, with its sound and with subtitles burned into the picture when the app
+  has them on. A 1080p film on a Show is sent downscaled rather than in frames the device would drop.
 - **Pause, resume, stop, seek, skip.** Pausing on the screen pauses the phone's transport too, and the
   other way round: the timeline is read from the device's own player every second, so a pause from a
   voice turn or an alarm shows up in Plex. A seek restarts the stream at the new second (audio) or
@@ -80,8 +80,10 @@ account linked.
 - **One thing at a time**, as a player has: a second cast replaces the first.
 - **Photos** are not shown. The timeline advertises video and music; a photo cast is accepted and
   does nothing.
-- **720p** is the cap, and the device does not do the transcoding: the Plex server does. A server too
-  slow to transcode will stutter a film, which is the server's doing and not the Show's.
+- **720p** is the cap on the Show and the Spot, and 1080p on the Skylight Calendar: the panel decides
+  it, and a board with a faster decoder and a bigger screen asks for more (`transcode_board.go`). The
+  device does not do the transcoding: the Plex server does. A server too slow to transcode will
+  stutter a film, which is the server's doing and not the Show's.
 - **Plex's Companion protocol is not a published API.** What is implemented is what Plex's own
   players answer (see the notes at the top of `echod/internal/feature/plexcast`), verified against
   them. A future Plex client that expects something else would need this code changed; it is written

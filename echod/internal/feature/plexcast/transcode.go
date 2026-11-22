@@ -12,18 +12,25 @@ import (
 	"time"
 )
 
-// What this hardware can decode, said to the Plex server as a profile it may add to its own: H.264 at
-// up to 720p, with AAC, MP3 or AC-3 sound, in an MPEG-TS for HLS. The server then chooses a stream
-// that fits -- a 1080p film is sent downscaled rather than in frames the Show would drop.
+// capProfile is what this device's decoder takes, said to the Plex server as a profile it may add to its
+// own. The server then chooses a stream that fits -- a film bigger than this is sent downscaled rather
+// than in frames the device would drop. It is 720p, and 1080p on the Skylight Calendar, whose screen is
+// its full size and whose cores are faster (transcode_board.go); what a decoder of a given size takes
+// is written once, in capProfileAt.
+var capProfile = capProfileAt(1280, 720)
+
+// capProfileAt is that profile for a decoder that takes pictures up to w by h: H.264, with AAC, MP3 or
+// AC-3 sound, in an MPEG-TS for HLS.
 //
 // The syntax is Plex's own ("profile augmentations"): directives joined by "+", each a verb with
-// parenthesised arguments. It is the one place the hardware's limits are written down, so a future
-// board with a better decoder changes this string and nothing else.
-const capProfile = "add-transcode-target(type=videoProfile&context=streaming&protocol=hls" +
-	"&container=mpegts&videoCodec=h264&audioCodec=aac,mp3,ac3&subtitleCodec=srt&replace=true)" +
-	"+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.width&value=1280&replace=true)" +
-	"+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.height&value=720&replace=true)" +
-	"+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.bitDepth&value=8&replace=true)"
+// parenthesised arguments.
+func capProfileAt(w, h int) string {
+	return "add-transcode-target(type=videoProfile&context=streaming&protocol=hls" +
+		"&container=mpegts&videoCodec=h264&audioCodec=aac,mp3,ac3&subtitleCodec=srt&replace=true)" +
+		fmt.Sprintf("+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.width&value=%d&replace=true)", w) +
+		fmt.Sprintf("+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.height&value=%d&replace=true)", h) +
+		"+add-limitation(scope=videoCodec&scopeName=*&type=upperBound&name=video.bitDepth&value=8&replace=true)"
+}
 
 // videoURL is a film's stream: the server decides what to send, then it is asked for it. Both calls use
 // one session id, because a start without a decision for the same session is refused by current Plex

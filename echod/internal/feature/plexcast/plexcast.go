@@ -14,7 +14,7 @@
 // into requests against the same handlers, so the two can never drift apart. The device plays what it
 // is told with its own player: music as a received track (feature/media), named on Now Playing, and a
 // film full screen (feature/video), with Plex asked for a stream this hardware decodes -- H.264 at
-// 720p, with subtitles burned in when they are on. What it is playing is reported back to the Plex
+// 720p, or 1080p on the Skylight Calendar, with subtitles burned in when they are on. What it is playing is reported back to the Plex
 // server every ten seconds, so the server's Now Playing page and the phone's transport stay in step.
 //
 // Only a device with a screen is a player, so this package is not built for the Dot (here.go,
