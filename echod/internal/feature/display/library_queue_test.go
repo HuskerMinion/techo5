@@ -247,7 +247,7 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	const target = "media_player.ma_kitchen"
 
 	d := &Display{poke: make(chan struct{}, 1)}
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	if libUp(d) == nil || libUp(d).tab != libArtists || !d.dash {
 		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
 	}
@@ -266,7 +266,7 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 		t.Fatal("the play did not put the library away")
 	}
 	before := len(sent())
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	l := libUp(d)
 	if l == nil || !d.dash {
 		t.Fatal("the button did not bring the library back")
@@ -288,8 +288,71 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	setLibUp(d, &queue)
 	d.libLeave(target, "")
 	before = len(sent())
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
+}
+
+// The Now Playing page's Queue button opens the library on the queue tab, read afresh, whether a library
+// was left behind with another tab and an album opened, or there is none.
+func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
+	noLibrary(t)
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	_ = config.Set().Dashboard().Mode(config.DashboardDrawn)
+	t.Cleanup(func() { _ = config.Set().Dashboard().Mode(config.DashboardOff); libLast.Store(nil) })
+	libLast.Store(nil)
+	sent := libFakeMA(t)
+	libIsOwn = func(string) bool { return true }
+	libQueueOf = func(string) string { return "up0a1b2c3d" }
+	const target = "media_player.ma_kitchen"
+
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.reopenLibrary(true)
+	if l := libUp(d); l == nil || l.tab != libQueue || !d.dash {
+		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
+	}
+	waitUntil(t, "the queue asked for", func() bool { return asked(sent(), "player_queues/get", "player_queues/items") })
+
+	sheet := libSheetWith(libAlbums, libEntries("album", 30), target)
+	opened := newLibPage(libAlbum, libEntries("album", 4)[3])
+	opened.loaded = true
+	sheet.stack = []libPage{opened}
+	setLibUp(d, &sheet)
+	d.libLeave(target, "")
+	before := len(sent())
+	d.reopenLibrary(true)
+	l := libUp(d)
+	if l == nil || l.tab != libQueue || len(l.stack) != 0 || l.target != target {
+		t.Fatalf("came back to %+v, want the queue tab with no page opened", l)
+	}
+	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
+}
+
+// The Queue button sits clear of the other buttons on the foot of the page, on every panel and in both
+// layouts, and only with the Library button and not for a book.
+func TestTheQueueButtonHasItsOwnPlace(t *testing.T) {
+	if queueOn("", false) || queueOn("Library", true) || !queueOn("Library", false) {
+		t.Error("the Queue button shows without the Library button, or for a book")
+	}
+	for _, panel := range []struct{ wide, high int }{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
+		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
+		for lang, words := range libWords { // the Library button's word in every language there is
+			word := words[libWordLibrary]
+			for _, modern := range []bool{false, true} {
+				q := r.queueButton(word, modern)
+				back, play, next := r.musicButtons(modern)
+				others := map[string]image.Rectangle{"done": r.doneButton(), "star": r.favButton(),
+					"library": r.libraryButton(word, modern), "back": back, "play": play, "next": next}
+				if !q.In(image.Rect(0, 0, r.w, r.h)) || q.Empty() {
+					t.Errorf("%dx%d %s (%q) modern %v: the Queue button %v is off the screen", panel.wide, panel.high, word, lang, modern, q)
+				}
+				for name, b := range others {
+					if q.Overlaps(b) {
+						t.Errorf("%dx%d %s (%q) modern %v: the Queue button %v meets %s %v", panel.wide, panel.high, word, lang, modern, q, name, b)
+					}
+				}
+			}
+		}
+	}
 }
 
 // Add to favorites marks the item at the server and on the page, so its sheet then offers to remove it,

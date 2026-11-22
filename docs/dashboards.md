@@ -217,6 +217,8 @@ grayed out, and a line at the top says so.
   playlist or artist. Whatever plays replaces what was queued. What you tapped lights up, and then
   the library closes: to this device's Now Playing screen when it plays here, or to the media sheet
   of the speaker it plays on when you opened the library from one.
+  Now Playing has a **Library** button back to the library, and beside it a round queue button that
+  opens the library on its queue tab, what plays next (not for an audiobook or a podcast episode).
 - Search opens the on-screen keyboard. It finds artists, albums, playlists, tracks and radio
   stations, in the library and in your music services, each kind in a row of its own.
 - A second row of tabs has **Podcasts** and **Audiobooks**, with icon tabs for favorites, recently

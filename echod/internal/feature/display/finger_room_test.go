@@ -39,7 +39,7 @@ func TestNowPlayingButtonsHaveAFingersRoom(t *testing.T) {
 			back, play, next := r.musicButtons(modern)
 			all := map[string]image.Rectangle{
 				"done": r.doneButton(), "star": r.favButton(), "library": r.libraryButton("Library", modern),
-				"back": back, "play": play, "next": next,
+				"back": back, "play": play, "next": next, "queue": r.queueButton("Library", modern),
 			}
 			for a, ra := range all {
 				if got := r.buttonReach(ra); !ra.In(got) || got.Dy() < ra.Dy()+r.s(20) {

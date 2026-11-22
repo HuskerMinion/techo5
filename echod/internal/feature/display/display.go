@@ -1687,7 +1687,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			case at.In(d.r.stripCloseHit()):
 				go d.endMusic()
 			case libraryWord != "" && at.In(d.r.stripLibrary()):
-				d.reopenLibrary()
+				d.reopenLibrary(false)
 			case spokenOn && at.In(back):
 				spokenSkipBy(-spokenSkip)
 			case spokenOn && at.In(next):
@@ -1722,7 +1722,9 @@ func (d *Display) gesture(g touch.Gesture) {
 				case at.In(d.r.buttonReach(d.r.favButton())):
 					go d.favorite()
 				case libraryWord != "" && at.In(d.r.buttonReach(d.r.libraryButton(libraryWord, modernMusic))):
-					d.reopenLibrary()
+					d.reopenLibrary(false)
+				case queueOn(libraryWord, spokenOn) && at.In(d.r.buttonReach(d.r.queueButton(libraryWord, modernMusic))):
+					d.reopenLibrary(true)
 				case spokenOn && at.In(d.r.buttonReach(d.r.speedButton(speedShown, libraryWord, modernMusic))):
 					d.spokenSpeedUp()
 				case spokenOn && at.In(back):

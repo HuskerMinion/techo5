@@ -125,6 +125,11 @@ func (r *renderer) modernNowPlaying(s scene) {
 	r.iconIn(back, backIcon, transportIcon, ink)
 	r.iconIn(play, toggle, transportIcon, ground)
 	r.iconIn(next, nextIcon, transportIcon, ink)
+	if queueOn(s.libraryWord, s.spoken) {
+		q := r.queueButton(s.libraryWord, true)
+		r.roundRect(q, q.Dy()/2, r.pressFill(q, surface, ink))
+		r.mdiIconIn("playlist-play", q, 32, ink)
+	}
 	r.footControls(r.doneButton().Min.Y - r.s(10))
 	onPhoto(func() {
 		r.cornerClockDated(s)
