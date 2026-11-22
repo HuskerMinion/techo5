@@ -411,3 +411,19 @@ func TestAQuietedCriticalNotificationNoLongerHoldsOthersBack(t *testing.T) {
 		t.Errorf("a picture was refused over a quieted critical card: %v", err)
 	}
 }
+
+// A card that waited while a critical notification rang comes up once the bell is quieted, as one sent
+// after the quieting does.
+func TestAParkedCardComesUpWhenTheCriticalBellIsQuieted(t *testing.T) {
+	r := newRig(t, true)
+	_ = bellFor(r)
+	_ = r.f.NotifyCritical("Water under the sink", "Leak", "", "leak", 0, "", "", 0, 0, 0, 0)
+	_ = r.f.Notify("Washer done", "Washer", "", "", "", "washer", 0)
+	if n, _ := r.f.Card(); n.Title != "Leak" {
+		t.Fatalf("the card is %q while the bell rings", n.Title)
+	}
+	if !r.f.silence() {
+		t.Fatal("not silenced")
+	}
+	waitFor(t, "the waiting card", func() bool { n, up := r.f.Card(); return up && n.Title == "Washer" })
+}

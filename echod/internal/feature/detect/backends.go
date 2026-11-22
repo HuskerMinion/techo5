@@ -224,6 +224,7 @@ func (b *microBackend) run(id string, det microDetector, feat [][]int8) (ok bool
 const failsToDrop = 25
 
 func (b *microBackend) unload(id string) {
+	delete(b.fails, id) // a model chosen again starts with a clean count
 	step := b.step[id]
 	delete(b.dets, id)
 	delete(b.step, id)
@@ -265,6 +266,7 @@ func (b *microBackend) failed() []string {
 }
 
 func (b *microBackend) close() {
+	clear(b.fails)
 	clear(b.dets)
 	clear(b.step)
 	clear(b.fronts)

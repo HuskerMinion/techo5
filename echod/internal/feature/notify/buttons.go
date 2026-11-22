@@ -301,6 +301,10 @@ func (f *Feature) rang(id string, started time.Time) {
 	}
 	f.ringing = nil
 	f.mu.Unlock()
+	if f.pics != nil {
+		// Rung out, the card stays, and what waited behind the bell comes up over it.
+		safe.Go("notify unpark", f.unpark)
+	}
 	if f.pics == nil {
 		why := "dismissed"
 		if time.Since(started) >= ring.RingFor-2*time.Second {
@@ -335,6 +339,11 @@ func (f *Feature) quiet(id string) bool {
 	f.mu.Unlock()
 	r.stop()
 	slog.Info("critical notification quieted", "id", id)
+	if f.pics != nil {
+		// Quieted, the card stays, and what waited behind the bell comes up over it, as anything sent
+		// from now on would (holdsBack).
+		safe.Go("notify unpark", f.unpark)
+	}
 	if f.pics == nil {
 		f.end("dismissed", func(n *Notification) bool { return n.ID == id })
 	}
@@ -408,9 +417,9 @@ func (f *Feature) unpark() {
 		return
 	}
 	now := f.now()
-	if up := f.up; up != nil && up.Critical && now.Before(up.Until) {
+	if f.holdsBack(f.up, w.n) {
 		f.mu.Unlock()
-		return // another critical one: it waits on
+		return // a critical one still rings: it waits on
 	}
 	f.waiting = nil
 	if !now.Before(w.n.Until) {

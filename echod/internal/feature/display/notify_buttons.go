@@ -124,9 +124,12 @@ func (d *Display) followCriticalLight() {
 		return
 	}
 	d.mu.Lock()
-	if d.critWoke == woke {
-		d.critWoke = ""
+	if d.critWoke != woke {
+		// Another critical notification lit the face in between, and keeps it lit.
+		d.mu.Unlock()
+		return
 	}
+	d.critWoke = ""
 	on := d.on
 	d.mu.Unlock()
 	if on {
