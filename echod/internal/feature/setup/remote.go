@@ -11,10 +11,10 @@ package setup
 //     opening of the page it was turned on in: off at every start, off with that page however it
 //     closes, and on only while the link has a key of its own.
 //   - Let in from Home Assistant (a button) lets in the browser asking now, as a press on the device
-//     would, but only one asking over the tailnet: a browser in the device's own home is let in at the
-//     device. Setup page asking (a sensor) is where the browser asking is asking from, so that whoever
-//     presses knows whom they let in. The screen says so too, so whoever is in the room knows
-//     somebody else is on the page.
+//     would: one in the device's own home whenever the page is open, for a Dot on a shelf or a device
+//     out of reach, and one asking over the tailnet only while Remote setup is on. Setup page asking (a
+//     sensor) is where the browser asking is asking from, so that whoever presses knows whom they let
+//     in. The screen says so too, so whoever is in the room knows somebody else is on the page.
 //   - Turning it off, or the page closing, lets go of every browser it let in over the tailnet.
 
 import (
@@ -52,7 +52,8 @@ type remoteSetup struct {
 	sessions map[string]bool
 }
 
-// byHA is admit's by for a browser let in from Home Assistant: only while Remote setup is on.
+// byHA is admit's by for a browser let in from Home Assistant: one from away only while Remote setup
+// is on.
 const byHA = "Home Assistant"
 
 // keyed is whether the Home Assistant link has a key of its own rather than the reserved all-zeros one
@@ -67,17 +68,22 @@ var keyed = func() bool {
 }
 
 // letInNotice puts up on the screen that Home Assistant let a browser in; a variable for tests.
-var letInNotice = func(from string) {
-	message, title := letInText(from)
+var letInNotice = func(from string, away bool) {
+	message, title := letInText(from, away)
 	if err := notify.Get().Notify(message, title, "mdi:tools", "", "", "", 60); err != nil {
 		slog.Warn("setup page: the notice of a browser let in was not shown", "err", err)
 	}
 }
 
-// letInText is the notice's message and title in the screen's language, read when it goes up.
-func letInText(from string) (message, title string) {
+// letInText is the notice's message and title in the screen's language, read when it goes up: away
+// says the browser asked over the tailnet.
+func letInText(from string, away bool) (message, title string) {
 	lang := config.Get().Screen.Language
-	return fmt.Sprintf(locale.Text(lang, "ui_setup_let_in_s"), from), locale.Text(lang, "ui_setup_notice_title")
+	key := "ui_setup_let_in_home_s"
+	if away {
+		key = "ui_setup_let_in_s"
+	}
+	return fmt.Sprintf(locale.Text(lang, key), from), locale.Text(lang, "ui_setup_notice_title")
 }
 
 // buildRemote makes Remote setup's entities.
@@ -208,17 +214,13 @@ func (f *Feature) showAsking() {
 	}
 }
 
-// letInFromHA lets in the browser asking now, as a press on the device would: only while Remote setup
-// is on, the link keyed, and the browser asking over the tailnet.
+// letInFromHA lets in the browser asking now, as a press on the device would: only with the link
+// keyed, and for a browser asking over the tailnet only while Remote setup is on.
 func (f *Feature) letInFromHA() bool {
 	defer f.showAsking()
 	if !keyed() {
 		slog.Warn("setup page: let in from Home Assistant refused; the link has no key of its own")
 		f.remoteOff()
-		return false
-	}
-	if !f.Remote() {
-		slog.Warn("setup page: let in from Home Assistant refused; Remote setup is off")
 		return false
 	}
 	now := time.Now()
@@ -230,17 +232,21 @@ func (f *Feature) letInFromHA() bool {
 	case !ok:
 		slog.Info("setup page: let in from Home Assistant, but no browser is asking")
 		return false
-	case !away:
-		slog.Warn("setup page: let in from Home Assistant refused; the browser asking is in the device's home",
+	case away && !f.Remote():
+		slog.Warn("setup page: let in from Home Assistant refused; the browser asks from away and Remote setup is off",
 			"from", from)
 		return false
 	}
 	if !f.admit(token, byHA) {
 		return false
 	}
-	slog.Warn("setup page: a browser from away let in from Home Assistant", "from", from)
+	if away {
+		slog.Warn("setup page: a browser from away let in from Home Assistant", "from", from)
+	} else {
+		slog.Warn("setup page: a browser in the device's home let in from Home Assistant", "from", from)
+	}
 	f.Changed.Emit(struct{}{})
-	letInNotice(from)
+	letInNotice(from, away)
 	return true
 }
 
