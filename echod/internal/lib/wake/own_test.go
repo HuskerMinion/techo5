@@ -89,6 +89,26 @@ func TestAWakeWordFromTheSetupPage(t *testing.T) {
 	}
 }
 
+// A .json that says the model is a stop word keeps saying so in the manifest the page writes.
+func TestAStopWordFromTheSetupPage(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "models")
+	l := NewLibrary(dir)
+	m, err := l.AddOwn([]byte(`{"type":"micro","wake_word":"Stopp","trained_languages":["de"],"stop_word":true,"micro":{}}`), realModel(t), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.StopWord {
+		t.Errorf("kept as %+v", m)
+	}
+	if got := load(dir, m.ID); !got.StopWord || got.Languages[0] != "de" {
+		t.Errorf("read back as %+v", got)
+	}
+	m, err = l.AddOwn([]byte(goodManifest), realModel(t), nil)
+	if err != nil || m.StopWord {
+		t.Errorf("a wake word kept as %+v (%v)", m, err)
+	}
+}
+
 // What the engine could not use, or that is not a microWakeWord model at all, is refused with a
 // reason, and nothing is left on disk.
 func TestAWakeWordThatWillNotRunIsRefused(t *testing.T) {

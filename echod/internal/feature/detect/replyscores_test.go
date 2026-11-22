@@ -42,7 +42,7 @@ func TestTheStopWordsPeakIsSaidAsAReplyEnds(t *testing.T) {
 	if len(*lines) != 1 {
 		t.Fatalf("said %d lines as the reply ended, want 1", len(*lines))
 	}
-	want := "stop word over the reply " + fmt.Sprint("peak", 0.41, "at_s", 5.2, "cutoff", 0.5, "canceling", true,
+	want := "stop word over the reply " + fmt.Sprint("id", "stop", "peak", 0.41, "at_s", 5.2, "cutoff", 0.5, "canceling", true,
 		"held", false, "heard", false, "window_s", 20.5, "ended", "spoken", "frames_dropped", uint64(2),
 		"slot1_okay_nabu", "0.12@3s")
 	if (*lines)[0] != want {
@@ -67,7 +67,7 @@ func TestAReplysLineSaysHeardHeldAndNotScored(t *testing.T) {
 	r.follow(voice.Reply{Began: at})
 	f.peaks = []Peak{{Slot: StopSlot, ID: "stop", Peak: 0.58, At: at.Add(2 * time.Second), Cutoff: 0.5, Canceling: true, Fired: true}}
 	r.follow(voice.Reply{Began: at, Ended: at.Add(2100 * time.Millisecond), Why: "canceled"})
-	want := "stop word over the reply " + fmt.Sprint("peak", 0.58, "at_s", 2.0, "cutoff", 0.5, "canceling", true,
+	want := "stop word over the reply " + fmt.Sprint("id", "stop", "peak", 0.58, "at_s", 2.0, "cutoff", 0.5, "canceling", true,
 		"held", false, "heard", true, "window_s", 2.1, "ended", "canceled", "frames_dropped", uint64(0))
 	if len(*lines) != 1 || (*lines)[0] != want {
 		t.Fatalf("said %q, want %q", *lines, want)
@@ -77,7 +77,7 @@ func TestAReplysLineSaysHeardHeldAndNotScored(t *testing.T) {
 	r.follow(voice.Reply{Began: at})
 	f.peaks = []Peak{{Slot: StopSlot, ID: "stop", Peak: 0.8, At: at.Add(time.Second), Cutoff: 0.5, Held: true}}
 	r.follow(voice.Reply{Began: at, Ended: at.Add(3 * time.Second), Why: "spoken"})
-	want = "stop word over the reply " + fmt.Sprint("peak", 0.8, "at_s", 1.0, "cutoff", 0.5, "canceling", false,
+	want = "stop word over the reply " + fmt.Sprint("id", "stop", "peak", 0.8, "at_s", 1.0, "cutoff", 0.5, "canceling", false,
 		"held", true, "heard", false, "window_s", 3.0, "ended", "spoken", "frames_dropped", uint64(0))
 	if len(*lines) != 2 || (*lines)[1] != want {
 		t.Fatalf("said %q, want %q", *lines, want)
@@ -116,7 +116,7 @@ func TestAReplySpokenAgainStartsTheScoresOver(t *testing.T) {
 	}
 	f.peaks = []Peak{{Slot: StopSlot, ID: "stop", Peak: 0.2, At: at.Add(3 * time.Second), Cutoff: 0.5}}
 	r.follow(voice.Reply{Began: at.Add(2 * time.Second), Ended: at.Add(6 * time.Second), Why: "spoken"})
-	want := "stop word over the reply " + fmt.Sprint("peak", 0.2, "at_s", 1.0, "cutoff", 0.5, "canceling", false,
+	want := "stop word over the reply " + fmt.Sprint("id", "stop", "peak", 0.2, "at_s", 1.0, "cutoff", 0.5, "canceling", false,
 		"held", false, "heard", false, "window_s", 4.0, "ended", "spoken", "frames_dropped", uint64(0))
 	if len(*lines) != 1 || (*lines)[0] != want {
 		t.Fatalf("said %q, want %q", *lines, want)
@@ -155,7 +155,7 @@ func TestARepliesStopWordScoresReachTheLog(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("said %q, want one line", lines)
 	}
-	if want := "stop word over the reply " + fmt.Sprint("peak", 0.31); !strings.HasPrefix(lines[0], want) {
+	if want := "stop word over the reply " + fmt.Sprint("id", "stop", "peak", 0.31); !strings.HasPrefix(lines[0], want) {
 		t.Errorf("said %q, want the stop word's 0.31 from the reply alone", lines[0])
 	}
 }

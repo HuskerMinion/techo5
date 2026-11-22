@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/zserge/microwakeword"
@@ -61,6 +62,10 @@ type Model struct {
 	// FromHomeAssistant is whether it came from Home Assistant's custom_wake_words (Adopt), which is
 	// nearly always somebody's own trained model and so runs on the exact front end, like an upload.
 	FromHomeAssistant bool
+
+	// StopWord is whether its manifest says it is a stop word for its languages ("stop_word": true):
+	// heard in place of the built-in "Stop" on a device set to one of them (StopWordFor).
+	StopWord bool
 }
 
 // manifest is the JSON that ships beside a model, as Home Assistant serves it from
@@ -85,6 +90,11 @@ type manifest struct {
 	// FromHomeAssistant marks a manifest Adopt wrote for a model Home Assistant offered. Ours too, and
 	// likewise never taken from the config Home Assistant serves.
 	FromHomeAssistant bool `json:"techo5_home_assistant,omitempty"`
+
+	// StopWord marks the model as a stop word for the languages it was trained on (StopWordFor). Ours
+	// too: kept for a model sent from the setup page whose .json said so, or read from one copied on by
+	// hand.
+	StopWord bool `json:"stop_word,omitempty"`
 }
 
 // Installed lists the models in dir, one per .tflite, reading a sidecar JSON of the same name when
@@ -171,6 +181,7 @@ func load(dir, id string) Model {
 
 	m.Uploaded = man.Uploaded
 	m.FromHomeAssistant = man.FromHomeAssistant
+	m.StopWord = man.StopWord
 	if man.WakeWord != "" {
 		m.Phrase = man.WakeWord
 	}
@@ -232,6 +243,41 @@ func Find(models []Model, id string) (Model, bool) {
 		}
 	}
 	return Model{}, false
+}
+
+// StopWordFor is the model heard in place of the built-in stop word on a device set to lang: one marked
+// as a stop word, trained on that language, and not one of wakeWords, which as the stop word would
+// interrupt and open a turn at once. An empty lang (the screen set to match all languages) is a device
+// taken as English, and keeps the built-in word. Of two that would do, the first by id, so the choice is
+// the same at every start. None is false, and the built-in word is heard.
+func StopWordFor(models []Model, lang string, wakeWords []string) (Model, bool) {
+	var best Model
+	var found bool
+	for _, m := range models {
+		if !m.StopWord || slices.Contains(wakeWords, m.ID) || !speaks(m, lang) {
+			continue
+		}
+		if !found || m.ID < best.ID {
+			best, found = m, true
+		}
+	}
+	return best, found
+}
+
+// speaks is whether a model was trained on lang, by the language alone: "de" is heard in a model trained
+// on "de-AT", and "de-AT" in one trained on "de".
+func speaks(m Model, lang string) bool {
+	if lang == "" {
+		return false
+	}
+	want := primary(lang)
+	return slices.ContainsFunc(m.Languages, func(l string) bool { return primary(l) == want })
+}
+
+func primary(tag string) string {
+	tag, _, _ = strings.Cut(tag, "-")
+	tag, _, _ = strings.Cut(tag, "_")
+	return strings.ToLower(tag)
 }
 
 // OfKind is the models one engine runs.

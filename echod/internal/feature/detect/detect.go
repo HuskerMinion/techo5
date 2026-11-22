@@ -72,6 +72,9 @@ type Detect struct {
 	// hangup is the hang-up word's select and threshold, and its loading with the call: see hangup.go.
 	hangup *hangup
 
+	// stopWord is which model the stop word listens with: see stopword.go.
+	stopWord *stopWord
+
 	// score is the last wake's peak, for setting the threshold by: see newScoreEntity.
 	score *esphome.Sensor
 
@@ -324,6 +327,7 @@ func newDetect() *Detect {
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.stopWord = newStopWord(d)
 	d.hangup = newHangup(d)
 	// What the words scored during each call, said as it ends (#484). Read as it runs, as the hang-up
 	// word's loading is: two changes close together may run out of order.
@@ -432,6 +436,8 @@ func (d *Detect) selected() {
 	for _, c := range d.commands {
 		c.follow()
 	}
+	// Decided already as the selection loaded; looked at again once saved, as the command words are.
+	d.reloadStop()
 }
 
 func (d *Detect) Name() string { return "wake" }
@@ -621,6 +627,9 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 		d.hangup.refreshOptions()
 		d.hangup.follow(hangupListens(phone.Get().State()))
 	}
+	// A stop word just chosen as a wake word gives the stop word back to the built-in one, and one no
+	// longer a wake word may be the stop word again.
+	d.reloadStop()
 
 	// Only the slots that took a wake word are waited on. A selection that loaded nothing has nothing to
 	// warm up, so the ring goes back to what it was showing rather than animating for a device that is

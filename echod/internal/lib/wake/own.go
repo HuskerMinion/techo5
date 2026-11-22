@@ -61,6 +61,7 @@ type ownManifest struct {
 	Type             string   `json:"type"`
 	WakeWord         string   `json:"wake_word"`
 	TrainedLanguages []string `json:"trained_languages"`
+	StopWord         bool     `json:"stop_word"`
 	Micro            *struct {
 		SlidingWindowSize int `json:"sliding_window_size"`
 		FeatureStepSize   int `json:"feature_step_size"`
@@ -140,6 +141,7 @@ func CheckOwn(manifestJSON, model []byte) (Model, error) {
 		Languages: slices.Clone(langs),
 		Kind:      KindMicroWakeWord,
 		Uploaded:  true,
+		StopWord:  man.StopWord,
 		Config: microwakeword.Config{
 			SlidingWindowSize: window,
 			FeaturesStepMs:    step,
@@ -473,6 +475,7 @@ func (l *Library) AddOwn(manifestJSON, model []byte, listening func(id string) b
 		Model:            m.ID + ".tflite",
 		TrainedLanguages: m.Languages,
 		Uploaded:         true,
+		StopWord:         m.StopWord,
 	}
 	man.Micro.SlidingWindowSize = m.Config.SlidingWindowSize
 	man.Micro.FeatureStepSize = m.Config.FeaturesStepMs

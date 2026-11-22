@@ -89,3 +89,32 @@ func TestKindOfAnswersForAnyFile(t *testing.T) {
 		t.Errorf("a missing model is %v, want %v", got, KindMicroWakeWord)
 	}
 }
+
+// A stop word is chosen by the device's language, by the language alone, never one that is a wake word,
+// and of two the first by id; a device set to no language keeps the built-in word.
+func TestStopWordFor(t *testing.T) {
+	stop := func(id string, langs ...string) Model { return Model{ID: id, Languages: langs, StopWord: true} }
+	models := []Model{
+		{ID: "hey_computer", Languages: []string{"de"}},
+		stop("stopp_b", "de-AT"),
+		stop("stopp_a", "de"),
+		stop("arret", "fr"),
+	}
+	for _, c := range []struct {
+		lang      string
+		wakeWords []string
+		want      string
+	}{
+		{"de", nil, "stopp_a"},
+		{"de-CH", nil, "stopp_a"},
+		{"de", []string{"stopp_a"}, "stopp_b"},
+		{"fr", nil, "arret"},
+		{"", nil, ""},
+		{"en", nil, ""},
+	} {
+		m, ok := StopWordFor(models, c.lang, c.wakeWords)
+		if got := m.ID; got != c.want || ok != (c.want != "") {
+			t.Errorf("%q, wake words %v: %q (%v), want %q", c.lang, c.wakeWords, got, ok, c.want)
+		}
+	}
+}

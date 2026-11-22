@@ -90,6 +90,7 @@ func Adopt(ctx context.Context, dir string, o esphome.ExternalWakeWord) (Model, 
 	m.Model = filepath.Base(modelPath(dir, o.ID))
 	m.Uploaded = false // Home Assistant's config does not get to say it came from the setup page
 	m.FromHomeAssistant = true
+	m.StopWord = false // nor that it is a stop word: only a model sent from the setup page is (StopWordFor)
 
 	if err := write(dir, o.ID, model, m); err != nil {
 		return Model{}, err

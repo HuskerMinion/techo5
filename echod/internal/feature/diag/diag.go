@@ -906,7 +906,7 @@ func set(s *esphome.Sensor, r metrics.Reading) {
 	}
 }
 
-// inUse is what the slots are set to, the hang-up word and the command words, which is what a purge has
+// inUse is what the slots are set to, the hang-up word, the stop word and the command words, which is what a purge has
 // to leave alone.
 func inUse() []string {
 	saved := config.Get().Wake
@@ -915,6 +915,13 @@ func inUse() []string {
 	for slot := range wakeword.Slots {
 		if id := saved.Slot(slot).ID; id != "" {
 			ids = append(ids, id)
+		}
+	}
+	// The stop word, if one of the library's stands in for the built-in one: never a wake word, so
+	// only the slots' ids are what it is chosen against.
+	if saved.Stop.Listening() {
+		if m, ok := wake.StopWordFor(wake.Lib().Ours(), config.Get().Screen.Language, ids); ok {
+			ids = append(ids, m.ID)
 		}
 	}
 	if id := saved.Hangup.ModelID(); id != "" {

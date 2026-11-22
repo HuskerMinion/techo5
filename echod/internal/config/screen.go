@@ -1,6 +1,14 @@
 package config
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+)
+
+// LanguageChanged fires after the screen's language is saved as a different one, with the new one. The
+// stop word follows it (feature/detect, stopword.go).
+var LanguageChanged hook.Hook[string]
 
 // Screen is the panel: whether it is lit, how brightly in percent, and whether the room's light
 // is allowed to dim it below that. Only the Echo Show has one; on the Dot nothing reads this.
@@ -580,7 +588,14 @@ func (w ScreenWriter) ModernNowPlaying(on bool) error {
 }
 
 func (w ScreenWriter) Language(v string) error {
-	return w.st.Update(func(c *Config) { c.Screen.Language = v })
+	was := w.st.Get().Screen.Language
+	if err := w.st.Update(func(c *Config) { c.Screen.Language = v }); err != nil {
+		return err
+	}
+	if v != was {
+		LanguageChanged.Emit(v)
+	}
+	return nil
 }
 
 func (w ScreenWriter) LanguageMoved(v bool) error {

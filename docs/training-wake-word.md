@@ -392,6 +392,9 @@ it out as `my_word.tflite` and write `my_word.json` beside it:
 - `wake_word` is the name Home Assistant shows.
 - `trained_languages` is the language you trained it in.
 - `feature_step_size` matches `window_step_ms` in the training YAML.
+- `"stop_word": true`, added for a stop word such as German "Stopp", makes it the stop word on a device
+  set to one of its `trained_languages`, in place of the built-in English "Stop". Send it from the
+  device's setup page rather than through Home Assistant: see **The stop word** in [Two wake words, two assistants](setup.md#two-wake-words-two-assistants).
 
 Then load it as [A wake word of your own](setup.md#a-wake-word-of-your-own) describes:
 

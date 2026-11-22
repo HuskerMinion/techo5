@@ -1486,6 +1486,16 @@ close it came there is what says whether to lower the threshold. How close a "st
 answer came is also in the log, one line an answer (see
 [Watching the wake word scores](#watching-the-wake-word-scores)).
 
+The built-in stop word is trained on English "stop", and other languages say it differently: a German
+"Stopp" hardly reaches the threshold. A wake word sent from the setup page whose `.json` says
+`"stop_word": true` is heard in its place when the **Screen language** is one of the model's
+`trained_languages` ([Training a wake word of your own](training-wake-word.md)). With the screen set to
+match all languages, the device counts as English and keeps the built-in "Stop". There is nothing to choose: it is heard at
+the same threshold and does everything the built-in one does. If it is taken off the device, won't load
+or fails on live audio (**Wake word problem** says so), the screen is set to another language, or it is
+chosen as a wake word, the device listens for the built-in "Stop" again. To send it again while it
+is listened for, turn the stop word off first; one that failed can be sent again or removed as it is.
+
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
 for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history, as plain text

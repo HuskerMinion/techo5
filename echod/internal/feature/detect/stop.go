@@ -21,6 +21,9 @@ import (
 // would be in the way of it.
 const StopSlot = 100
 
+// stopID is the built-in stop word's id.
+const stopID = "stop"
+
 // While the speaker's allowance is off its threshold, the stop word's near miss floor follows its
 // cutoff, stopNearMissBelow under it and never under stopNearMissLeast (stopNearMissFloor).
 const (
@@ -71,7 +74,7 @@ func stopModel() (wake.Model, error) {
 	}
 
 	m := wake.Model{
-		ID:     "stop",
+		ID:     stopID,
 		Phrase: assets.StopPhrase,
 		Kind:   wake.KindMicroWakeWord,
 		Path:   path,
@@ -89,24 +92,46 @@ func stopModel() (wake.Model, error) {
 // is only another classifier over a front end already running. Leaving it loaded and never acting on it
 // would be paying for the feature while it is turned off.
 func (d *Detect) loadStop() {
+	d.stopWord.load.Lock()
+	defer d.stopWord.load.Unlock()
+	d.loadStopLocked()
+}
+
+// loadStopLocked is loadStop with the stop word's load lock held. A library model that will not load is
+// left out, and the built-in word loaded in its place, so the device can always be interrupted.
+func (d *Detect) loadStopLocked() {
 	if !config.Get().Wake.Stop.Listening() {
 		d.engine.Clear(StopSlot)
 		slog.Info("stop word off", "threshold", config.Get().Wake.Stop.Threshold)
 		return
 	}
 
-	m, err := stopModel()
+	m, err := d.stopWord.model()
 	if err != nil {
 		slog.Error("the stop word is unavailable", "err", err)
 		d.engine.Clear(StopSlot)
 		return
 	}
-	if err := d.engine.Use(StopSlot, m); err != nil {
+	// Loaded already, by the wake words' loading that came just before (loadFrom), and the engine
+	// would keep it as it is.
+	if d.stopWord.loaded() == m.ID {
+		return
+	}
+	err = d.engine.Use(StopSlot, m)
+	if err != nil && m.ID != stopID {
+		slog.Error("loading the stop word failed; listening for the built-in one", "id", m.ID, "err", err)
+		d.addWakeProblem(fmt.Sprintf("Stop word (%s): %s; listening for the built-in Stop", m.ID, wakeProblemText(err)))
+		d.stopWord.fail(m)
+		if m, err = d.stopWord.builtin(); err == nil {
+			err = d.engine.Use(StopSlot, m)
+		}
+	}
+	if err != nil {
 		slog.Error("loading the stop word failed", "err", err)
 		d.engine.Clear(StopSlot)
 		return
 	}
-	slog.Info("stop word listening", "threshold", config.Get().Wake.Stop.Threshold)
+	slog.Info("stop word listening", "id", m.ID, "threshold", config.Get().Wake.Stop.Threshold)
 }
 
 // newStopEntity is the one control the stop word has. There is no switch beside it: the top of the range

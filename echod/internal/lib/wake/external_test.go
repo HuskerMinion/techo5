@@ -78,15 +78,15 @@ func TestAdoptWritesTheModelAndItsManifest(t *testing.T) {
 // not get to say either thing about itself.
 func TestAdoptMarksTheModelAsHomeAssistants(t *testing.T) {
 	dir := t.TempDir()
-	_, offer := served(t, `{"type":"micro","wake_word":"x","model":"test_model.tflite","techo5_home_assistant":false,"techo5_uploaded":true,"micro":{}}`,
+	_, offer := served(t, `{"type":"micro","wake_word":"x","model":"test_model.tflite","techo5_home_assistant":false,"techo5_uploaded":true,"stop_word":true,"micro":{}}`,
 		[]byte("this is not really a model"))
 
 	m, err := Adopt(context.Background(), dir, offer)
 	if err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
-	if !m.FromHomeAssistant || m.Uploaded {
-		t.Errorf("FromHomeAssistant %v, Uploaded %v; want true, false", m.FromHomeAssistant, m.Uploaded)
+	if !m.FromHomeAssistant || m.Uploaded || m.StopWord {
+		t.Errorf("FromHomeAssistant %v, Uploaded %v, StopWord %v; want true, false, false", m.FromHomeAssistant, m.Uploaded, m.StopWord)
 	}
 	if again := load(dir, "test"); !again.FromHomeAssistant {
 		t.Error("the mark was not kept in the manifest")

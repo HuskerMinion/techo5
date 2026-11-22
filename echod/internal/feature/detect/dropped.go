@@ -23,9 +23,13 @@ var (
 	later = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
 )
 
-// dropped is the engine having taken a model out for failing on the audio: a command word's, or a wake
-// word's.
+// dropped is the engine having taken a model out for failing on the audio: the stop word's, a command
+// word's, or a wake word's.
 func (d *Detect) dropped(slot int, id string) {
+	if slot == StopSlot {
+		d.stopDropped(id)
+		return
+	}
 	if c := d.commandAt(slot); c != nil {
 		c.dropped(id)
 		return

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/detect"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 )
@@ -24,6 +25,9 @@ import (
 
 // models is the device's wake word library; a test has one of its own.
 var models = wake.Lib
+
+// stopWordLoaded is the library model in the stop word's slot now (detect.StopModelID).
+var stopWordLoaded = func() string { return detect.Get().StopModelID() }
 
 // wakeWordsSection lists the wake words on the device, with Remove for the ones sent from here, and
 // takes a new one.
@@ -94,19 +98,30 @@ func tooLarge(err error) bool {
 }
 
 // listening is whether a slot is listening for the model, as the selection was last saved, or it is the
-// hang-up word or a command word: a model any of them has loaded would go on running whatever replaced
+// hang-up word, the stop word or a command word: a model any of them has loaded would go on running whatever replaced
 // it on disk.
 func listening(id string) bool {
-	wake := config.Get().Wake
-	for _, s := range wake.Slots(wakeword.Slots) {
+	saved := config.Get().Wake
+	var words []string
+	for _, s := range saved.Slots(wakeword.Slots) {
 		if s.ID == id {
 			return true
+		}
+		if s.ID != "" {
+			words = append(words, s.ID)
 		}
 	}
 	if id == "" {
 		return false
 	}
-	return wake.Hangup.ModelID() == id || slices.ContainsFunc(wake.CommandWords(), func(w config.CommandWord) bool {
+	// The stop word, if it fits as one and is in the stop word's slot: one that failed is not, and the
+	// built-in word listens in its place.
+	if saved.Stop.Listening() {
+		if m, ok := wake.StopWordFor(models().Ours(), config.Get().Screen.Language, words); ok && m.ID == id && stopWordLoaded() == id {
+			return true
+		}
+	}
+	return saved.Hangup.ModelID() == id || slices.ContainsFunc(saved.CommandWords(), func(w config.CommandWord) bool {
 		return w.ID == id
 	})
 }

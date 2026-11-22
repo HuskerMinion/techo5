@@ -85,7 +85,8 @@ func (r *replyScores) follow(v voice.Reply) {
 			continue
 		}
 		scored = true
-		args = append([]any{"peak", hundredths(p.Peak), "at_s", tenths(p.At.Sub(began)), "cutoff", hundredths(p.Cutoff),
+		// The model by id: the built-in "stop", or the library's stop word for the language (stopword.go).
+		args = append([]any{"id", p.ID, "peak", hundredths(p.Peak), "at_s", tenths(p.At.Sub(began)), "cutoff", hundredths(p.Cutoff),
 			"canceling", p.Canceling, "held", p.Held, "heard", p.Fired}, args...)
 	}
 	if !scored {
