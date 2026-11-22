@@ -132,9 +132,13 @@ func setBoardGain(m *alsa.Mixer, db int) bool {
 // LineageOS that is the vendor audio HAL, which opens the microphone path at its own start.
 const MediaService = "vendor.audio-hal"
 
-// VendorBeamformer is off: the coefficient sets the daemon reads (lib/subband) are the Dot's, and
-// the Echo Show 5's vendor partition holds a different one. The Show 8 carries its own set in
-// /vendor/etc/audio-algorithms, which is worth reading one day but is not the Dot's either.
+// VendorBeamformer is off. The Echo Show 5's vendor partition holds a coefficient set lib/subband
+// does not know, and the 1st gen Show 8's has not been read. The 2nd gen Show 8 (athena) has one
+// lib/subband reads correctly (its "Athena" front end), but it stays off there too: measured on
+// recordings from a unit (2026-11-22), a beam pointed at the talker hears speech 3 to 5 dB further
+// over the room than all four microphones averaged, while the steering in lib/subband, which follows
+// the loudest beam, turns to a radio in the room between words and ends up 2 dB under the average.
+// It is worth offering once the beam is chosen for speech rather than loudness.
 const VendorBeamformer = false
 
 // vendorBeamformerSkipped is false: no Show was ever offered it, so there is nothing to say.

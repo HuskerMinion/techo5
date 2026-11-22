@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // geometry is the shape of one vendor front end. Fire OS 5 and Fire OS 6 ship different ones, and a
@@ -58,10 +60,46 @@ type geometry struct {
 
 	windowFile  string
 	weightsFile string
+
+	// hardware is the name the vendor's AFE.cfg gives the device ("Hardware Definition", "Name"), for a
+	// front end whose files are named like another device's: the 2nd gen Echo Show 8 ships the Dot's
+	// Fire OS 6 file names with weights generated for its own array. Empty matches any device that has
+	// the files.
+	hardware string
 }
 
-// The two front ends, from each firmware's own AFE.cfg.
+// The front ends, from each firmware's own AFE.cfg. One that names its hardware comes before the one
+// whose file names it shares, so the device it was made for never reads the other's.
 var known = []geometry{
+	{
+		// The 2nd gen Echo Show 8 (athena): "ASR FilterBank" and "ASR FixedBeamFormerV2" as on the Dot's
+		// Fire OS 6, 8 beams of 4 taps, EVD disabled, but over its own four microphones and with no
+		// Channel Map: every channel of the array reaches the beamformer.
+		//
+		// The file is laid out beam outermost, then microphone, band and tap, which is not the Dot's
+		// order: read as the Dot's, every direction comes out of the same beam. The weights go round
+		// the array in the order ch0, ch3, ch2, ch1 (back left, front left, front right, back right on
+		// TECHO5's kernel: tools/linux/athena/kernel/README.md, "Microphones"). Both were found on a
+		// unit (2026-11-22) by running every layout and map over recordings of speech and claps from
+		// known directions: with these, the winning beam moves one step for every 45 degrees the
+		// talker does, beam 6 in front, 0 to the left, 4 to the right. The map is fixed only up to a
+		// quarter turn of the array, which moves which beam faces where and nothing else.
+		name:      "Athena FilterBank_768cvxGLow + FBFV2 8 beams",
+		hardware:  "Athena",
+		Bands:     128,
+		FFTLen:    256,
+		Hop:       128,
+		WindowLen: 768,
+		Beams:     8,
+		Taps:      4,
+		order:     "emat",
+		perGroup:  1,
+		mics:      []int{0, 3, 2, 1},
+		// "ASR Output Gain" in athena's AFE.cfg.
+		boostDB:     6.0236,
+		windowFile:  "coefs_FilterBank_AnalysisSynthesis_768cvxGLow.cfg",
+		weightsFile: "coefs_FBFV2_LowLatency_8beams.cfg",
+	},
 	{
 		name:        "FilterBank_640 + FBF",
 		Bands:       64,
@@ -154,13 +192,39 @@ func (w *Weights) Inputs() int  { return w.g.Inputs() }
 // Load reads the coefficients out of a directory, normally VendorDir. Which front end a device has is
 // decided by which weights are there.
 func Load(dir string) (*Weights, error) {
+	hardware := hardwareName(filepath.Join(dir, "AFE.cfg"))
 	for _, g := range known {
+		if g.hardware != "" && g.hardware != hardware {
+			continue
+		}
 		if _, err := os.Stat(filepath.Join(dir, g.weightsFile)); err != nil {
 			continue
 		}
 		return g.load(dir)
 	}
 	return nil, fmt.Errorf("%s holds none of the coefficient sets we know", dir)
+}
+
+// hardwareNamePattern is the device's name in AFE.cfg's "Hardware Definition": the first "Name" after
+// it. The file is JSON with C comments, which encoding/json does not take, and the name is all that is
+// wanted from it.
+var hardwareNamePattern = regexp.MustCompile(`"Name"\s*:\s*"([^"]*)"`)
+
+// hardwareName is the name AFE.cfg gives the device, or empty without one.
+func hardwareName(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	_, after, ok := strings.Cut(string(b), `"Hardware Definition"`)
+	if !ok {
+		return ""
+	}
+	m := hardwareNamePattern.FindStringSubmatch(after)
+	if m == nil {
+		return ""
+	}
+	return m[1]
 }
 
 func (g geometry) load(dir string) (*Weights, error) {
