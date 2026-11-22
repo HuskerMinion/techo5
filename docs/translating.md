@@ -22,7 +22,7 @@ can be complete and still never have been looked at on a real screen.
 | Italian (it) | 1071 | 100% | angelor87 (#310, #353) | Echo Show 5 1st gen (#353) |
 | Japanese (ja) | 1071 | 100% | lem0njuice0 (#270) | Echo Show 5 2nd gen (#270) |
 | Polish (pl) | 1056 | 98% | Szaman | Echo Show 8 1st gen, v1.6.50 |
-| Romanian (ro) | 1056 | 98% |  | Echo Show 5 1st gen, v1.6.48 (local build) |
+| Romanian (ro) | 1071 | 100% |  | Echo Show 5 1st gen, v1.6.48 (local build) |
 | Spanish (es) | 1056 | 98% | KOPYk4T (#327), mactron254 (#608) | Echo Show 5 2nd gen, v1.6.12 (#327) |
 | Turkish (tr) | 1071 | 100% | senolsun (#349) | Not yet |
 | Valencian (ca-valencia) | 1071 | 100% | rubenzori86 | Echo Show 5 2nd gen, v1.6.47 (local build) |
