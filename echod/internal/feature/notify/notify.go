@@ -352,9 +352,10 @@ func (f *Feature) NotifyPictureSized(message, title, picture, chime, speak, soun
 	f.order.Lock()
 	defer f.order.Unlock()
 	// A picture takes the camera page at once and cannot wait behind a critical notification as words
-	// do (park), so it is refused while one is up, rather than covering it.
-	if f.CriticalUp() {
-		return errors.New("notify: a critical notification is up; the picture is not shown over it")
+	// do (park), so it is refused while one rings, rather than covering it. One that has been quieted
+	// is replaced like any card.
+	if f.criticalRinging() {
+		return errors.New("notify: a critical notification is ringing; the picture is not shown over it")
 	}
 	h := how{silent: !home.ParseOnOff(chime, true), aloud: home.ParseOnOff(speak, false), hushed: f.hushed(), untilDone: seconds <= 0}
 	if h.hushed {
@@ -456,9 +457,9 @@ func (f *Feature) put(n Notification, h how) {
 	// reported after n was shown. Posting never waits (outbox.go).
 	f.mu.Lock()
 	old := f.up
-	// While a critical notification is up only another critical one takes its place; anything else
-	// waits for it to go.
-	if old != nil && old.Critical && !n.Critical && f.now().Before(old.Until) {
+	// While a critical notification rings only another critical one takes its place; anything else
+	// waits for it to be answered or quieted (holdsBack).
+	if f.holdsBack(old, n) {
 		f.park(n, h)
 		f.mu.Unlock()
 		return
