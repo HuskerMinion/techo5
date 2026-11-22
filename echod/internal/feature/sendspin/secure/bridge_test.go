@@ -1,6 +1,7 @@
 package secure
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -209,5 +210,27 @@ func TestPairingByTokenEndsPairedAfterTheRehandshake(t *testing.T) {
 	}
 	if got, ok := st.resolve(pskID(lt), LongTerm); !ok || got.serverID != s.id {
 		t.Fatalf("record %+v %v", got, ok)
+	}
+}
+
+// A 1.0 server's audio chunk carries send_ahead after its timestamp; the library takes the header without
+// it, so the audio starts where the library looks for it (a FLAC frame's sync code first).
+func TestA10AudioChunkLosesSendAheadOnTheWayToTheLibrary(t *testing.T) {
+	ts := []byte{0, 0, 0, 0, 0, 0x12, 0x34, 0x56}
+	ahead := []byte{0, 3, 0xd7, 0x46}
+	flac := []byte{0xff, 0xf8, 0x5a, 0xa8}
+	in := append(append(append([]byte{audioChunkType}, ts...), ahead...), flac...)
+	want := append(append([]byte{audioChunkType}, ts...), flac...)
+	if got := playerAudio(in); !bytes.Equal(got, want) {
+		t.Errorf("got % x, want % x", got, want)
+	}
+	// Anything else, artwork included, keeps its 9-byte header; a short message is left as it is.
+	for _, other := range [][]byte{
+		append([]byte{8}, append(ts, flac...)...),
+		{audioChunkType, 1, 2},
+	} {
+		if got := playerAudio(other); !bytes.Equal(got, other) {
+			t.Errorf("changed % x to % x", other, got)
+		}
 	}
 }

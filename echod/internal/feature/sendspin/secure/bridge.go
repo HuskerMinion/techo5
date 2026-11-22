@@ -146,7 +146,7 @@ func (b *bridge) fromServer() {
 			return
 		}
 		if kind == websocket.BinaryMessage {
-			if err := b.plain.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			if err := b.plain.WriteMessage(websocket.BinaryMessage, playerAudio(data)); err != nil {
 				b.end(err)
 				return
 			}
@@ -559,3 +559,23 @@ func (l *oneConn) Close() error {
 }
 
 func (l *oneConn) Addr() net.Addr { return l.c.LocalAddr() }
+
+// The player's audio chunk is the one binary message whose header the 1.0 specification lengthened: its
+// type and timestamp are followed by send_ahead, a uint32 of how far ahead of its timestamp the server
+// sent it. The library takes the 9-byte header a server before 1.0 sends, so on an encrypted connection
+// (always a 1.0 server) those 4 bytes would be read as the start of the audio: every FLAC frame then
+// begins 4 bytes early, and the decoder finds no sync code in any of them.
+const (
+	audioChunkType = 4
+	audioHeaderOld = 1 + 8
+	audioHeader10  = audioHeaderOld + 4
+)
+
+// playerAudio is a binary message from a 1.0 server as the library takes it: a player audio chunk
+// without send_ahead, and any other message as it came.
+func playerAudio(data []byte) []byte {
+	if len(data) < audioHeader10 || data[0] != audioChunkType {
+		return data
+	}
+	return append(data[:audioHeaderOld:audioHeaderOld], data[audioHeader10:]...)
+}
