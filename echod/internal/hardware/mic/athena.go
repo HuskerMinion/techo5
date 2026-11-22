@@ -628,6 +628,10 @@ func (c *pairedCapture) readWithNative(buf []byte, policy func() bool, visit fun
 	}
 	// The single SoftwareCut decision now sees the complete native capture block.
 	cut := policy()
+	if c.micRate > Rate {
+		emitRaw(RawBlock{PCM: mics, Rate: c.micRate, Channels: c.k.micChannels, Mics: c.k.mics(),
+			Width: c.k.bits() / 8, Full: c.k.micFull, Cut: cut})
+	}
 	if cut || visit != nil {
 		shift := uint8(0)
 		if c.k.micFull == 1<<31 {

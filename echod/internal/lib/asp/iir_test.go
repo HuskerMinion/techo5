@@ -433,3 +433,34 @@ func TestTheCannoliSetRefusesAMissingThrottlingTable(t *testing.T) {
 		t.Error("a chain naming USPD FBL Throttling loaded without the table")
 	}
 }
+
+// The ultrasound gets what the volume table keeps under the full-band ceiling: 10^(-0.1/20) less
+// 10^(-2.23/20) to 80 %, and less at the top.
+func TestTheCannoliKeepsHeadroomForUltrasound(t *testing.T) {
+	dir := cannoliDir(t, []iirSection{flat}, nil)
+	both := `
+        "USPDFBLThrottling"      :"USPD FBL Throttling",`
+	if err := os.WriteFile(filepath.Join(dir, Cannoli.Limits), []byte(throttledAFE(both)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tun, err := LoadSet(dir, Cannoli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ of, db float64 }{{0.5, -13.36}, {0.9, -16.64}, {1, -20.21}} {
+		a, ok := tun.UltrasoundLevel(c.of)
+		if got := 20 * math.Log10(a); !ok || math.Abs(got-c.db) > 0.05 {
+			t.Errorf("at %g of full volume: %.2f dBFS (%v), want %.2f", c.of, got, ok, c.db)
+		}
+	}
+	if _, ok := tun.Chain(1024); ok != nil {
+		t.Fatal(ok)
+	}
+	plain := cannoliDir(t, []iirSection{flat}, nil)
+	if tun, err = LoadSet(plain, Cannoli); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tun.UltrasoundLevel(0.5); ok {
+		t.Error("a tuning without the table says it keeps headroom")
+	}
+}

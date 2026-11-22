@@ -361,6 +361,20 @@ func (c *Chain) Volume(of float64) {
 	c.fir.use(c.tuning.Bucket(of))
 }
 
+// UltrasoundLevel is how loud, as a linear peak, a tone may go under what this tuning plays at a
+// fraction of full volume without the sum passing the full-band limiter's own ceiling: the headroom
+// the Echo Dot 5th gen's USPD FBL Throttling table keeps for presence detection's ultrasound (limits,
+// iir.go). -13.4 dBFS up to 80 %, -16.6 at 90 % and -20.2 at the top. False for a tuning without the
+// table.
+func (t *Tuning) UltrasoundLevel(of float64) (float64, bool) {
+	u := t.limits.USPD
+	if len(u) == 0 {
+		return 0, false
+	}
+	b := max(0, min(t.volBucket(of), len(u)-1))
+	return max(0, dbToLinear(t.limits.Fullband.ThresholdDB)-dbToLinear(u[b])), true
+}
+
 // Throttle tells the chain how hot the unit is, as the kernel's audio_cooler state: 0 for not at all,
 // up to 3. On the Echo Dot 5th gen that lowers the limiters as Fire OS does (limits, iir.go); the other
 // sets have no table for it, and nothing changes. It is called between blocks, from whoever owns the

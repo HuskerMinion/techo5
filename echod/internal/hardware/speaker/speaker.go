@@ -161,6 +161,8 @@ type Player struct {
 	// heat is how hard the unit's thermal policy says to throttle the speaker, as the kernel's
 	// audio_cooler state, 0 to 3 (heat_cannoli.go); the write loop hands it to the chains.
 	heat atomic.Int32
+	// usHz is presence detection's ultrasound tone, 0 for none (ultrasound.go).
+	usHz atomic.Int32
 	// first is the volume curve to apply in front of the tuning, where this tuning has one
 	// (firstCurves); nil turns down what the tuning produced instead.
 	first *[VolumeSteps + 1]float64
@@ -822,6 +824,7 @@ func (p *Player) Run(ctx context.Context) error {
 		}
 	}
 	upFor(cur)
+	var tone ultraTone
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -862,6 +865,9 @@ func (p *Player) Run(ctx context.Context) error {
 		if up != nil {
 			hw = up.S16LE(to, hw[:0])
 			to = hw
+			// Over the card's rate, above everything Rate can carry, and only into the copy the
+			// upsampler made: the sink and the echo reference never hear it.
+			tone.mix(hw, Channels, cur.rate, p.Ultrasound(), p.ultraLevel())
 		}
 		if cur.bits == 32 {
 			wide = widenS16(to, wide[:0])
