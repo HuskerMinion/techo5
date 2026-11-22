@@ -29,6 +29,9 @@ type Store struct {
 	mu   sync.Mutex
 	file storeFile
 	pub  []byte
+
+	// gone is a store Discard removed: nothing is written back to its file.
+	gone bool
 }
 
 type storeFile struct {
@@ -176,9 +179,26 @@ func (s *Store) forget(serverID string) error {
 	return s.save()
 }
 
+// Discard removes the store's file for good: the identity, the pairing token and every server paired
+// with, for a device leaving its owner (feature/api's Leave Home Assistant). The store goes on
+// answering until the restart that follows, but writes nothing back, so a pairing meanwhile cannot put
+// the old identity back; the next Open makes a new one.
+func (s *Store) Discard() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.gone = true
+	if err := os.Remove(s.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 // save writes the file whole and renames it into place, so a power cut leaves the old one or the new
 // one and never half of either. Only the owner may read it: it holds the device's private key.
 func (s *Store) save() error {
+	if s.gone {
+		return nil
+	}
 	b, err := json.Marshal(s.file)
 	if err != nil {
 		return err

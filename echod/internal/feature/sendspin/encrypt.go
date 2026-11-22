@@ -3,7 +3,9 @@ package sendspin
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +31,9 @@ var keysPath = layout.StateDir + "/sendspin-keys.json"
 func keys() (*secure.Store, error) {
 	keyStore.Lock()
 	defer keyStore.Unlock()
+	if keyStore.discarded {
+		return nil, errDiscarded
+	}
 	if keyStore.st != nil {
 		return keyStore.st, nil
 	}
@@ -54,7 +59,13 @@ var keyStore struct {
 	st    *secure.Store
 	err   error
 	tried time.Time
+
+	// discarded is the identity forgotten (Discard): until the restart there is none, so no token
+	// goes out, not even to the Home Assistant connection still open.
+	discarded bool
 }
+
+var errDiscarded = errors.New("sendspin keys: forgotten, a new identity comes with the restart")
 
 // maxFrame is the most one WebSocket frame from a server may hold, as the player library allows on the
 // unencrypted wire. An encrypted frame is one Noise message, 64 KiB at most; a longer message comes in
@@ -138,6 +149,25 @@ func unstarted(plain bool, peer string, err error) {
 // approved the device there. A device in a house is set up by the house: what pairing adds is that
 // no one else on the network can pass for that house's Music Assistant.
 const unpairedAccess = true
+
+// Discard forgets the device's Sendspin identity, its pairing token and the servers paired with it, for
+// a device leaving its owner (feature/api's Leave Home Assistant): the token went to the old owner's
+// Home Assistant and Music Assistant, and with it they could pair again. The next start makes a new
+// identity, so the device comes up as a new player to whatever Music Assistant it meets next.
+func Discard() error {
+	keyStore.Lock()
+	defer keyStore.Unlock()
+	keyStore.discarded = true
+	if st := keyStore.st; st != nil {
+		keyStore.st = nil
+		return st.Discard() // stops a pairing in a session still open from writing it back
+	}
+	// Never opened, or not openable: the file alone goes.
+	if err := os.Remove(keysPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
 
 // PairingToken is the token that pairs a server with this device, for the setup page, or empty when
 // the device has no keys.

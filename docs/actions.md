@@ -82,7 +82,9 @@ In YAML, refer to this action as `esphome.<node>_leave_home_assistant`.
 For a device you're giving to someone else. The device forgets the URL and token set with
 `home_assistant`, and realtime voice's key and Home Assistant token, replaces the encryption key Home
 Assistant connects with by a new random one, and restarts. Your Home Assistant can't connect to it again, and the device no longer calls your Home
-Assistant. Alarms, radio stations, Wi-Fi and its other settings stay.
+Assistant. It also makes a new Sendspin identity and pairing token, so your Music Assistant can't pair
+with it again and the next Music Assistant it meets sees a new player; delete the old one from yours.
+Alarms, radio stations, Wi-Fi and its other settings stay.
 
 A device that was given access to your Home Assistant with an administrator's token deletes its own
 ESPHome entry there first. Otherwise, delete the device from **Settings → Devices & services → ESPHome**
