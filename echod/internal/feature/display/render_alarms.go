@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
-	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 )
@@ -29,7 +28,7 @@ func (r *renderer) ringingPage(s scene) {
 		title = tr("timer_and_alarm")
 	case st.timer != "":
 		title = st.timer
-		if !strings.Contains(strings.ToLower(title), "timer") {
+		if !namesTimer(title) {
 			title += tr("timer_suffix")
 		}
 		title += tr("is_done")

@@ -128,6 +128,18 @@ var updateTranslations = map[string]map[string]string{
 		UpdatePowerHint:    "Mantenha o aparelho ligado",
 		UpdateRetryHint:    "Tente de novo em Settings > General > Updates",
 	},
+	"ro": {
+		UpdateSystemTitle:  "Actualizare de sistem",
+		UpdateFailedTitle:  "Actualizarea a eșuat",
+		UpdateDownloading:  "Se descarcă actualizarea · %d%%",
+		UpdateInstalling:   "Se instalează…",
+		UpdateRestartingIn: "Aplicația repornește în %d…",
+		UpdateRestarting:   "Aplicația repornește…",
+		UpdateRebootingIn:  "Repornire în %d…",
+		UpdateRebooting:    "Se repornește…",
+		UpdatePowerHint:    "Ține dispozitivul pornit",
+		UpdateRetryHint:    "Încearcă din nou în Setări > General > Actualizări",
+	},
 	"ru": {
 		UpdateSystemTitle:  "Обновление системы",
 		UpdateFailedTitle:  "Ошибка обновления",
