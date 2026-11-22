@@ -56,15 +56,43 @@ func fakeMA(t *testing.T) (port int, dialed *atomic.Int32) {
 	return port, dialed
 }
 
-// The device dials Music Assistant when it is set up, and only then, and not while a server that
-// dialed in holds the room.
+// fakeAdvertise stands in for mDNS: it reports whether the device is advertised, and fails the test
+// if the device dials while it is.
+func fakeAdvertise(t *testing.T) (advertised *atomic.Bool) {
+	advertised = &atomic.Bool{}
+	was, wasFor, wasDial, wasLook := advertiseFn, advertiseFor, dialFor, lookEvery
+	advertiseFn = func(ctx context.Context, _ string, _ int) {
+		advertised.Store(true)
+		<-ctx.Done()
+		advertised.Store(false)
+	}
+	advertiseFor, dialFor, lookEvery = 300*time.Millisecond, 2*time.Second, 20*time.Millisecond
+	t.Cleanup(func() { advertiseFn, advertiseFor, dialFor, lookEvery = was, wasFor, wasDial, wasLook })
+	return advertised
+}
+
+// connectFor runs connect until the test ends, and is done with it before the test's variables are put
+// back.
+func connectFor(t *testing.T, l *listener) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { l.connect(ctx, "Test", Port); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+}
+
+// The device is advertised, and dials Music Assistant only once it is set up and no server has dialed
+// in for a while, and never while it is advertised.
 func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	advertised := fakeAdvertise(t)
 	port, dialed := fakeMA(t)
 	wasPort, wasRun := maPort, runSession
 	maPort = port
 	ran := make(chan struct{}, 4)
 	runSession = func(ctx context.Context, l *listener, conn *websocket.Conn, name string) error {
+		if advertised.Load() {
+			t.Error("dialed while advertised")
+		}
 		ran <- struct{}{}
 		<-ctx.Done()
 		return nil
@@ -73,34 +101,39 @@ func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 
 	l := newListener(nil, nil, func(string) {})
 
-	// Not set up: nothing is dialed.
+	// Not set up: advertised, and nothing is dialed.
 	ctx, cancel := context.WithCancel(context.Background())
-	go l.dial(ctx, "Test")
-	time.Sleep(300 * time.Millisecond)
+	done := make(chan struct{})
+	go func() { l.connect(ctx, "Test", Port); close(done) }()
+	time.Sleep(time.Second)
+	if !advertised.Load() || dialed.Load() != 0 {
+		t.Fatalf("not set up: advertised %v, dialed %d", advertised.Load(), dialed.Load())
+	}
 	cancel()
-	if dialed.Load() != 0 {
-		t.Fatal("dialed with no Music Assistant set up")
+	<-done
+	if advertised.Load() {
+		t.Fatal("still advertised after the switch went off")
 	}
 
-	// A server already in the room: nothing is dialed.
+	// A server in the room: still advertised, and nothing is dialed.
 	tok := "t"
 	if err := config.Set().MusicAssistant().Server("http://127.0.0.1:8095", &tok); err != nil {
 		t.Fatal(err)
 	}
 	l.take()
 	ctx, cancel = context.WithCancel(context.Background())
-	go l.dial(ctx, "Test")
-	time.Sleep(300 * time.Millisecond)
-	cancel()
-	if dialed.Load() != 0 {
-		t.Fatal("dialed while a server held the room")
+	done = make(chan struct{})
+	go func() { l.connect(ctx, "Test", Port); close(done) }()
+	time.Sleep(time.Second)
+	if !advertised.Load() || dialed.Load() != 0 {
+		t.Fatalf("held: advertised %v, dialed %d", advertised.Load(), dialed.Load())
 	}
+	cancel()
+	<-done
 	l.give()
 
-	// Set up and free: dialed, and the session runs on it.
-	ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-	go l.dial(ctx, "Test")
+	// Set up and free: the advertisement goes, then Music Assistant is dialed and the session runs.
+	connectFor(t, l)
 	select {
 	case <-ran:
 	case <-time.After(5 * time.Second):
@@ -112,4 +145,33 @@ func TestTheDeviceDialsMusicAssistant(t *testing.T) {
 	if l.take() {
 		t.Error("the room was free while the dialed session ran")
 	}
+}
+
+// A Music Assistant that cannot be reached is dialed for a while, and then the device is advertised
+// again.
+func TestTheDeviceAdvertisesAgainWhenMusicAssistantIsAway(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	advertised := fakeAdvertise(t)
+	wasPort := maPort
+	maPort = 1 // nothing listens there
+	t.Cleanup(func() { maPort = wasPort })
+	tok := "t"
+	if err := config.Set().MusicAssistant().Server("http://127.0.0.1:8095", &tok); err != nil {
+		t.Fatal(err)
+	}
+
+	connectFor(t, newListener(nil, nil, func(string) {}))
+
+	saw := func(want bool, within time.Duration) {
+		t.Helper()
+		for end := time.Now().Add(within); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+			if advertised.Load() == want {
+				return
+			}
+		}
+		t.Fatalf("advertised never became %v", want)
+	}
+	saw(true, time.Second)
+	saw(false, 2*time.Second) // gave up on servers dialing in
+	saw(true, 15*time.Second) // gave up on Music Assistant
 }

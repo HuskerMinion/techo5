@@ -23,7 +23,8 @@ import (
 // unreachable it can stop coming back at all, and the device then has music only in name. So the
 // device also dials Music Assistant's Sendspin server, and keeps dialing, for as long as it has none.
 //
-// It shares the room with the listener: whichever connects first plays, and the other waits.
+// It shares the room with the listener: whichever connects first plays, and the other waits. The
+// device dials only while it is not advertised (connect).
 
 // maPort is Music Assistant's Sendspin server, on the host its API is on. A variable for the tests.
 var maPort = 8927
@@ -52,30 +53,82 @@ func maSendspinURL(api string) string {
 	return (&url.URL{Scheme: scheme, Host: net.JoinHostPort(u.Hostname(), strconv.Itoa(maPort)), Path: path}).String()
 }
 
-// dialUnset is how often a device with no Music Assistant looks again, so that one set up on the
-// setup page is dialed soon after.
-const dialUnset = 15 * time.Second
+// The device is found one way at a time, as the spec has it: a client does not dial servers while it
+// advertises itself, nor advertise while it dials. It advertises, for the servers on its network to
+// dial in, and with Music Assistant set up and no server having dialed in for advertiseFor it stops
+// advertising and dials Music Assistant instead. Once dialing has failed for dialFor it advertises
+// again. Variables for the tests.
+var (
+	advertiseFor = 2 * time.Minute
+	dialFor      = 5 * time.Minute
+	// lookEvery is how often the advertising side looks at the room and the setting.
+	lookEvery = 5 * time.Second
+	// advertiseFn is advertise; a test stands in for mDNS.
+	advertiseFn = advertise
+)
 
-// dial keeps a session with Music Assistant, dialed from here, until ctx ends.
-func (l *listener) dial(ctx context.Context, name string) {
-	wait := dialFirst
+// connect keeps the device findable until ctx ends: advertised, or dialing Music Assistant.
+func (l *listener) connect(ctx context.Context, name string, port int) {
+	for ctx.Err() == nil {
+		l.advertiseUntilIdle(ctx, name, port)
+		l.dialUntilAway(ctx, name)
+	}
+}
+
+// advertiseUntilIdle advertises the device until Music Assistant is set up and no server has held the
+// room for advertiseFor, and is back once the advertisement has been withdrawn.
+func (l *listener) advertiseUntilIdle(ctx context.Context, name string, port int) {
+	actx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		advertiseFn(actx, name, port)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	idle := time.Now()
 	for {
-		target := ""
-		if m := config.Get().MusicAssistant; m.Set() {
-			target = maSendspinURL(m.URL)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(lookEvery):
 		}
+		if l.held() || maTarget() == "" {
+			idle = time.Now()
+			continue
+		}
+		if time.Since(idle) >= advertiseFor {
+			slog.Info("sendspin: no server dialed in; dialing music assistant instead of advertising")
+			return
+		}
+	}
+}
+
+// dialUntilAway dials Music Assistant, and keeps dialing, until it has not been reached for dialFor
+// or is no longer set up.
+func (l *listener) dialUntilAway(ctx context.Context, name string) {
+	wait := dialFirst
+	reached := time.Now()
+	for {
+		target := maTarget()
 		switch {
 		case target == "":
-			wait = dialUnset
+			return
 		case l.held():
-			// A server already dialed in and holds the room.
+			// A server that still had the address dialed in and holds the room.
 			wait = dialFirst
+			reached = time.Now()
+		case l.dialOnce(ctx, target, name):
+			wait = dialFirst // a session that ran: try again soon after it ends
+			reached = time.Now()
 		default:
-			if l.dialOnce(ctx, target, name) {
-				wait = dialFirst // a session that ran: try again soon after it ends
-			} else {
-				wait = min(wait*2, dialMost)
-			}
+			wait = min(wait*2, dialMost)
+		}
+		if time.Since(reached) >= dialFor {
+			slog.Info("sendspin: music assistant not reached; advertising again", "url", target)
+			return
 		}
 		select {
 		case <-ctx.Done():
@@ -83,6 +136,14 @@ func (l *listener) dial(ctx context.Context, name string) {
 		case <-time.After(wait):
 		}
 	}
+}
+
+// maTarget is Music Assistant's Sendspin server, or empty when it is not set up.
+func maTarget() string {
+	if m := config.Get().MusicAssistant; m.Set() {
+		return maSendspinURL(m.URL)
+	}
+	return ""
 }
 
 // held is whether a session holds the room now.

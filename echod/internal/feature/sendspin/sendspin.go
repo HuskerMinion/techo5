@@ -196,8 +196,7 @@ func (p *Player) settle(parent context.Context) {
 			slog.Error("sendspin listener stopped", "err", err)
 		}
 	})
-	safe.Go("sendspin advertise", func() { advertise(ctx, name, Port) })
-	safe.Go("sendspin dial", func() { l.dial(ctx, name) })
+	safe.Go("sendspin connect", func() { l.connect(ctx, name, Port) })
 
 	p.state.Set(stateWaiting)
 	slog.Info("sendspin waiting for a server", "name", name, "port", Port)
