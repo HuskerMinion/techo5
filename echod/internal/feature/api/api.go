@@ -469,8 +469,12 @@ func writePSK(path string, k esphome.PSK) error {
 	return os.Rename(tmp, path)
 }
 
-// sendspinPairing is the Sendspin client as the library hands it to Home Assistant.
+// sendspinPairing is the Sendspin client as the library hands it to Home Assistant: a client switched
+// off hands out no token, only that it is off.
 func sendspinPairing() esphome.SendspinPairing {
 	id, token, on := sendspin.Pairing()
-	return esphome.SendspinPairing{ClientID: id, Token: token, Disabled: !on}
+	if !on {
+		return esphome.SendspinPairing{ClientID: id, Status: api.SendspinPairingTokenStatus_SENDSPIN_PAIRING_TOKEN_STATUS_DISABLED}
+	}
+	return esphome.SendspinPairing{ClientID: id, Token: token}
 }
