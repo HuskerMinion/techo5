@@ -94,11 +94,18 @@ func (l *listener) advertiseUntilIdle(ctx context.Context, name string, port int
 		<-done
 	}()
 	idle := time.Now()
+	// Music Assistant set up, or moved, while the device advertises is dialed at once, as it would be at
+	// a start: dialing first is what a device that is reached only that way needs.
+	was := maTarget()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(lookEvery):
+		}
+		if t := maTarget(); t != "" && t != was && !l.held() {
+			slog.Info("sendspin: music assistant set up; dialing it instead of advertising")
+			return
 		}
 		if l.held() || maTarget() == "" {
 			idle = time.Now()
