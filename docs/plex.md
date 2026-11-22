@@ -72,10 +72,19 @@ Two ways, and both are used by Plex's own clients:
   from the account's side, and the commands a phone sends down it are run against the same handlers
   the network's commands use.
 
-The control server is on **TCP 32500**, discovery on **UDP 32412-32413**. All three are opened in the
-device's firewall only while an account is linked (`feature/plexcast` opens them by name, and the
-Alpine image's `techo5-firewall` opens the same ports at boot). Nothing listens on any of them with no
+The control server is on **TCP 32500**, discovery on **UDP 32412-32413**. An Echo's vendor firewall gets
+these from the daemon itself, by name, only while an account is linked; on the Alpine image
+`techo5-firewall` opens them at boot, from its own list. Nothing listens on any of them with no
 account linked.
+
+That last part matters when trying a test daemon on an image older than the change: the image's
+firewall script is on the root, not in the daemon, so the ports stay shut until the image is updated.
+Two rules open them by hand until the next reboot (the chain `techo5-firewall` builds):
+
+```
+iptables-legacy -I TECHO5-IN 2 -p tcp --dport 32500 -j ACCEPT
+iptables-legacy -I TECHO5-IN 2 -p udp --dport 32412:32413 -j ACCEPT
+```
 
 ## Limits
 

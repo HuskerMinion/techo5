@@ -213,8 +213,10 @@ var (
 )
 
 func iptablesRun(args ...string) error {
-	// No vendor firewall means no DROP policy to open a hole in: the Linux image has no iptables at
-	// all, and every port is reachable already.
+	// No vendor firewall: the Linux image has no /system/bin/iptables, and its filtering is
+	// techo5-firewall's own chain (tools/linux/rootfs/usr/local/sbin/techo5-firewall), which opens
+	// each feature's ports at boot from a list of its own. Nothing here can add to that chain, so a
+	// port this opens on an Echo is one the image's script must already open there.
 	if _, err := os.Stat(iptables); err != nil {
 		return nil
 	}
