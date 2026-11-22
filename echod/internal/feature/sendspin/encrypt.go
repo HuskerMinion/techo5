@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin/secure"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 )
@@ -109,4 +110,17 @@ func PairingToken() string {
 		return ""
 	}
 	return st.Token()
+}
+
+// Pairing is what Home Assistant hands Music Assistant so that it pairs with the device on its own:
+// the client id and the pairing token, both empty when the device has no keys, and whether the player
+// is switched on. Home Assistant reads it over the native API (feature/api), which hands the token
+// out only over a connection encrypted with the device's key.
+func Pairing() (clientID, token string, on bool) {
+	on = config.Get().Sendspin.Enabled
+	st, err := keys()
+	if err != nil {
+		return "", "", on
+	}
+	return st.ClientID(), st.Token(), on
 }

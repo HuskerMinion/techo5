@@ -25,6 +25,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/bluetooth"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
@@ -236,6 +237,10 @@ func (a *API) Start(ctx context.Context) error {
 		WebserverPort: web.Port,
 
 		Devices: subDevices(device.Name),
+
+		// Home Assistant hands the Sendspin pairing token to Music Assistant, which pairs with the
+		// device without anyone typing it in (#679).
+		Sendspin: sendspinPairing,
 	}
 	// The handlers components answer for themselves rather than through an entity: the voice
 	// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
@@ -462,4 +467,10 @@ func writePSK(path string, k esphome.PSK) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// sendspinPairing is the Sendspin client as the library hands it to Home Assistant.
+func sendspinPairing() esphome.SendspinPairing {
+	id, token, on := sendspin.Pairing()
+	return esphome.SendspinPairing{ClientID: id, Token: token, Disabled: !on}
 }
