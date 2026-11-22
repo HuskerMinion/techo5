@@ -139,9 +139,27 @@ type Home struct {
 	// automatic, which is the NWS when home is in the lower 48 and RainViewer anywhere else.
 	RadarSource string `json:"radar_source,omitempty"`
 
-	// AlertsOff turns the National Weather Service's alerts off (they are on for a device with a
-	// screen in the U.S.): no badge, no pills, no fetching.
+	// AlertsOff turns the weather alerts off (they are on for a device with a screen in the U.S. and
+	// in Europe): no badge, no pills, no fetching.
 	AlertsOff bool `json:"alerts_off,omitempty"`
+
+	// AlertsSource is where the weather alerts come from: AlertsNWS (the U.S. National Weather
+	// Service), AlertsMeteoAlarm (MeteoAlarm, the national weather services of Europe), or empty for
+	// automatic, which is the NWS in the U.S. and MeteoAlarm in a country MeteoAlarm covers.
+	AlertsSource string `json:"alerts_source,omitempty"`
+
+	// AlertRegions are the MeteoAlarm regions home's alerts are for, by EMMA_ID ("ES842"), when they
+	// are not to be found from home's location. Empty, they are the regions home lies in.
+	AlertRegions []string `json:"alert_regions,omitempty"`
+
+	// AlertsNearKm also counts the MeteoAlarm regions within this many kilometers of home as home's.
+	// 0 counts only the regions home lies in (and the coastal waters off it).
+	AlertsNearKm int `json:"alerts_near_km,omitempty"`
+
+	// AlertsEveryMinutes is how often MeteoAlarm's feed is read, in minutes; 0 is every 10, the longest
+	// MeteoAlarm's terms allow what is shown to lag behind meteoalarm.org. A country's feed runs to a
+	// few megabytes on a stormy day and cannot say it has not changed, so a longer wait may be chosen.
+	AlertsEveryMinutes int `json:"alerts_every_minutes,omitempty"`
 
 	// CameraSound plays a camera's own audio on this device while its view is up: the yard or the
 	// street, in the room. Off unless somebody asks for it — a device that starts making the
@@ -330,6 +348,12 @@ const (
 	RadarRainViewer = "rainviewer"
 )
 
+// Where the weather alerts come from; empty is automatic.
+const (
+	AlertsNWS        = "nws"
+	AlertsMeteoAlarm = "meteoalarm"
+)
+
 // The slideshow's display modes.
 const (
 	SlideshowBackground  = "background"  // behind the ordinary idle page, always on
@@ -481,6 +505,22 @@ func (w HomeWriter) WeatherSources(ids []string) error {
 
 func (w HomeWriter) AlertsOff(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.AlertsOff = v })
+}
+
+func (w HomeWriter) AlertsSource(source string) error {
+	return w.st.Update(func(c *Config) { c.Home.AlertsSource = source })
+}
+
+func (w HomeWriter) AlertRegions(codes []string) error {
+	return w.st.Update(func(c *Config) { c.Home.AlertRegions = slices.Clone(codes) })
+}
+
+func (w HomeWriter) AlertsNearKm(km int) error {
+	return w.st.Update(func(c *Config) { c.Home.AlertsNearKm = km })
+}
+
+func (w HomeWriter) AlertsEveryMinutes(m int) error {
+	return w.st.Update(func(c *Config) { c.Home.AlertsEveryMinutes = m })
 }
 
 func (w HomeWriter) CameraSound(v bool) error {

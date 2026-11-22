@@ -103,11 +103,16 @@ type Feature struct {
 	weatherOpts *component.Options // weatherSel's options
 	radarSel    *esphome.Select    // where the rain map's radar comes from (radar_setting.go)
 
-	// alerts are the NWS's weather alerts at home and nearby (alerts.go); alertsSw turns them on and off.
-	alerts     alertState
-	alertsSw   *esphome.Switch
-	weathers   []hass.Entity
-	weathersAt time.Time
+	// alerts are the weather alerts at home and nearby (alerts.go); alertsSw turns them on and off, and
+	// the rest say where they come from and how MeteoAlarm's are found (alerts_source.go).
+	alerts          alertState
+	alertsSw        *esphome.Switch
+	alertsSrcSel    *esphome.Select
+	alertRegionsTxt *esphome.Text
+	alertsNearSel   *esphome.Select
+	alertsEverySel  *esphome.Select
+	weathers        []hass.Entity
+	weathersAt      time.Time
 
 	// followSel picks another media player for Now Playing to follow; players is Home Assistant's list of
 	// them, fetched at playersAt (follow.go).
@@ -330,6 +335,7 @@ func Get() *Feature {
 		shared.buildLyricsSwitch()
 		shared.buildRadarSelect()
 		shared.buildAlertsSwitch()
+		shared.buildAlertSettings()
 		shared.buildCameraSoundSwitch()
 		shared.buildCameraLiveSwitch()
 		shared.buildSlideshowSelect()
@@ -476,6 +482,7 @@ func (f *Feature) Restore(c config.Config) {
 	}
 	f.radarSel.Set(radarChoices[RadarSourceIndex()].label)
 	f.alertsSw.Set(!c.Home.AlertsOff)
+	f.restoreAlertSettings()
 	f.showRadio(meta{}) // nothing plays at a start; the poller fills them in
 	// Nor is anything played to it. All of them are written, though the four names hold "" already, so
 	// none of them starts out unknown in Home Assistant.

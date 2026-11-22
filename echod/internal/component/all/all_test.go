@@ -22,6 +22,10 @@ func init() { speaker.GainPossible = func() bool { return false } }
 // costs nothing at build time and shows up as an entity quietly missing from Home Assistant.
 var registered = []string{
 	"alarm_snooze",
+	"alert_regions",
+	"alerts_nearby",
+	"alerts_refresh",
+	"alerts_source",
 	"alarm_snooze_length",
 	"alarm_sound",
 	"alarm_sounding",
