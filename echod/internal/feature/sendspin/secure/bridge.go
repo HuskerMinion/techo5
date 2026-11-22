@@ -41,7 +41,11 @@ type Options struct {
 	Unpaired bool
 
 	// MAC is the device's MAC address, lowercase and colon-separated, for device_info.mac_address:
-	// a server that knew the device by it before encryption keeps the player it had.
+	// a server that knew the device by it before encryption keeps the player it had. It goes to a
+	// server on unpaired access too, which has proved nothing: on purpose. The unencrypted wire, still
+	// spoken to older servers, has always sent it as client_id to any server, anything on the network
+	// sees it anyway, and without it an unpaired Music Assistant would make a second player for the
+	// device in place of the one it had.
 	MAC string
 }
 
