@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,7 +79,8 @@ func secured(ctx context.Context, conn *websocket.Conn, peer string) (ws *websoc
 		return nil, false, err
 	}
 	slog.Info("sendspin encrypted", "psk", c.Category, "credential_mismatch", c.Mismatch)
-	lib, _, err := secure.Bridge(ctx, c, conn, secure.Options{Unpaired: unpairedAccess})
+	mac, _ := layout.FactoryMAC()
+	lib, _, err := secure.Bridge(ctx, c, conn, secure.Options{Unpaired: unpairedAccess, MAC: strings.ToLower(mac)})
 	if err != nil {
 		return nil, false, err
 	}

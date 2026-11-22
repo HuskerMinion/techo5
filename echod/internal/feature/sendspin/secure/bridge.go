@@ -39,6 +39,10 @@ const (
 type Options struct {
 	// Unpaired says whether a server with no pairing record may play: unpaired_access.enabled.
 	Unpaired bool
+
+	// MAC is the device's MAC address, lowercase and colon-separated, for device_info.mac_address:
+	// a server that knew the device by it before encryption keeps the player it had.
+	MAC string
 }
 
 type bridge struct {
@@ -63,6 +67,11 @@ type bridge struct {
 
 	// roles is the active_roles last declared, which an activation that omits them keeps.
 	roles []string
+
+	// state is the player's newest client/state, under gate. An activation that turns roles on
+	// asks for the state of each, which the player only sends when something changes: the bridge
+	// sends this one again.
+	state []byte
 
 	// pairing state, read and written on the encrypted side's reader only, except for the timer.
 	pairingIndex int
@@ -302,11 +311,12 @@ func (b *bridge) activated(payload json.RawMessage) error {
 		b.goodbye(reason)
 		return fmt.Errorf("server/activate refused: %s", reason)
 	}
+	turnedOn := len(roles) > 0 && !slices.Equal(roles, b.roles)
 	b.roles = roles
 	slog.Info("sendspin activated", "activities", a.Activities, "roles", roles, "psk", cat)
 
 	// The gate opens before any pairing message, which is the player's like any other.
-	b.open()
+	b.open(turnedOn)
 
 	if slices.Contains(a.Activities, "pairing") {
 		b.pairingIndex++
@@ -360,17 +370,31 @@ func (b *bridge) goodbye(reason string) {
 	_ = b.send(map[string]any{"type": "client/goodbye", "payload": map[string]string{"reason": reason}})
 }
 
-// open admits the player's messages, the held ones first.
-func (b *bridge) open() {
+// open admits the player's messages, the held ones first. restate sends the player's newest state
+// again when nothing held already carries it.
+func (b *bridge) open(restate bool) {
 	b.gate.Lock()
 	defer b.gate.Unlock()
 	for _, m := range b.held {
+		if isState(m) {
+			restate = false
+		}
 		if err := b.c.WriteText(m); err != nil {
 			go b.end(err)
 			return
 		}
 	}
 	b.held, b.active = nil, true
+	if restate && b.state != nil {
+		if err := b.c.WriteText(b.state); err != nil {
+			go b.end(err)
+		}
+	}
+}
+
+func isState(m []byte) bool {
+	var env envelope
+	return json.Unmarshal(m, &env) == nil && env.Type == "client/state"
 }
 
 // fromPlayer reads what the library sends and passes it on encrypted.
@@ -415,6 +439,18 @@ func (b *bridge) player(data []byte) error {
 		return b.c.WriteText(hello)
 	case "client/goodbye":
 		return b.c.WriteText(data)
+	case "client/state":
+		// The library sends a state of its own as it starts, in the fields from before 1.0 and
+		// without available; the player's own follows it, in this wire's.
+		var p map[string]json.RawMessage
+		if json.Unmarshal(env.Payload, &p) == nil {
+			if _, ok := p["available"]; !ok {
+				return nil
+			}
+		}
+		b.gate.Lock()
+		b.state = data
+		b.gate.Unlock()
 	}
 	return b.forward(data, false)
 }
@@ -435,6 +471,14 @@ func (b *bridge) rewriteHello(payload json.RawMessage) ([]byte, error) {
 	}
 	p["supported_pair_methods"] = map[string]any{"pairing_psk": map[string]any{}}
 	p["unpaired_access"] = map[string]bool{"enabled": b.opts.Unpaired}
+	if b.opts.MAC != "" {
+		info, _ := p["device_info"].(map[string]any)
+		if info == nil {
+			info = map[string]any{}
+		}
+		info["mac_address"] = b.opts.MAC
+		p["device_info"] = info
+	}
 	return json.Marshal(map[string]any{"type": "client/hello", "payload": p})
 }
 

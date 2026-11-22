@@ -96,12 +96,14 @@ func lib(t *testing.T, libc chan *websocket.Conn) *websocket.Conn {
 
 func TestTheHelloWaitsForTheServersAndThePlayerWaitsForActivation(t *testing.T) {
 	st := store(t)
-	s, _, libc := setup(t, st, Options{Unpaired: true}, sentinelPSK, Sentinel)
+	s, _, libc := setup(t, st, Options{Unpaired: true, MAC: "aa:bb:cc:dd:ee:ff"}, sentinelPSK, Sentinel)
 	l := lib(t, libc)
 
-	// The library sends its hello first, and something more straight after, as it does.
+	// The library sends its hello first, then a state of its own without available, which is
+	// dropped, then the player's.
 	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/hello","payload":{"client_id":"x","version":1,"name":"Kitchen"}}`))
-	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/state","payload":{}}`))
+	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/state","payload":{"player":{"state":"synchronized"}}}`))
+	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/state","payload":{"available":false}}`))
 
 	s.writeJSON([]byte(`{"type":"server/hello","payload":{"name":"MA"}}`))
 	if typ, _ := libRead(t, l); typ != "server/hello" {
@@ -124,6 +126,9 @@ func TestTheHelloWaitsForTheServersAndThePlayerWaitsForActivation(t *testing.T) 
 	}
 	if m, _ := p["supported_pair_methods"].(map[string]any); m["pairing_psk"] == nil {
 		t.Errorf("supported_pair_methods = %v", p["supported_pair_methods"])
+	}
+	if di, _ := p["device_info"].(map[string]any); di["mac_address"] != "aa:bb:cc:dd:ee:ff" {
+		t.Errorf("device_info = %v", p["device_info"])
 	}
 
 	// Nothing more until server/activate; then the held state, then the rest as it comes.
@@ -189,12 +194,16 @@ func TestPairingByTokenEndsPairedAfterTheRehandshake(t *testing.T) {
 	if fin.Type != "client/pair-finalize" || err != nil || len(lt) != 32 {
 		t.Fatalf("server got %s %s", fin.Type, fin.Payload)
 	}
+	// The player's state, sent while pairing, before any roles are on.
+	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/state","payload":{"available":true}}`))
+	if e := s.readJSON(); e.Type != "client/state" {
+		t.Fatalf("server got %s", e.Type)
+	}
 	s.writeJSON([]byte(`{"type":"server/pair-finalize","payload":{}}`))
 	s.rehandshake(clientKey, lt, LongTerm)
 	s.writeJSON([]byte(`{"type":"server/activate","payload":{"activities":["playback"],"active_roles":["player@v1"]}}`))
 
-	// The new keys carry the session on, and the device now holds the record.
-	_ = l.WriteMessage(websocket.TextMessage, []byte(`{"type":"client/state","payload":{}}`))
+	// The roles are on under the new keys, so the state goes again unasked.
 	if e := s.readJSON(); e.Type != "client/state" {
 		t.Fatalf("server got %s", e.Type)
 	}
