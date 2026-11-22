@@ -130,7 +130,7 @@ func newConvGeom(interp *Interpreter, op model.Operator, depthwise bool) (*convG
 	for i, v := range fd {
 		g.filt[i] = int32(int8(v))
 	}
-	bd := interp.tensors[op.Inputs[2]].data
+	bd := interp.optional(op.Inputs[2])
 	g.bias = make([]int32, g.outC)
 	for c := range g.bias {
 		g.bias[c] = getBias32(bd, c)
