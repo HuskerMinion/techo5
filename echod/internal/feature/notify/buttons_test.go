@@ -264,7 +264,7 @@ func TestTheStopWordQuietsACriticalNotification(t *testing.T) {
 	}
 
 	r = newRig(t, false)
-	b = bellFor(r)
+	_ = bellFor(r)
 	_ = r.f.NotifyCritical("Smoke in the hall", "Smoke", "", "", 0, "", "", 0, 0, 0, 0)
 	if !r.f.silence() {
 		t.Fatal("not silenced on a Dot")

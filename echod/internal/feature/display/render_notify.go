@@ -174,3 +174,12 @@ func (r *renderer) captionBar(c home.Caption) {
 	}
 	r.text(r.small, clipText(r, r.small, c.Message, width), r.margin, y+r.small.Metrics().Ascent.Ceil(), captionText)
 }
+
+// criticalScreen is the pulse behind a card, drawn before it: the whole screen around the card in red
+// at strength a, so it is seen from across the room. One fill, cheap enough to redraw every pulseFrame.
+func (r *paint) criticalScreen(a float64) { fillCanvas(r.dst, pulseColor(a)) }
+
+// criticalEdge is the card's red edge while it pulses, drawn over the card.
+func (r *paint) criticalEdge(box image.Rectangle) {
+	r.roundStroke(box, r.cardRad(), float64(r.s(8)), danger)
+}
