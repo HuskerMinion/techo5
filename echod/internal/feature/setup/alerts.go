@@ -13,22 +13,19 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 )
 
-// alertsSection is where the weather alerts come from (home/alerts_source.go), and for MeteoAlarm's,
-// which regions are home's, how far around it a region still counts and how often the feed is read.
-// The same settings are Home Assistant's "Alerts source", "Alert regions", "Alerts nearby" and
-// "MeteoAlarm refresh".
+// alertsSection is, for MeteoAlarm's weather alerts (home/alerts_source.go), which regions are home's,
+// how far around it a region still counts and how often the feed is read. Where the alerts come from
+// is not a setting: Home Assistant's country picks it. The same settings are Home Assistant's "Alert
+// regions", "Alerts nearby" and "MeteoAlarm refresh".
 func alertsSection(w http.ResponseWriter, token string) {
 	h := config.Get().Home
 	sectionOpen(w, "alerts", "Weather alerts", alertsSummary(h)...)
 	fmt.Fprint(w, `<form method="post" action="/setup/save">`)
 	hidden(w, token, "alerts")
-	fmt.Fprint(w, `<label for="alertsrc">Alerts from</label><select id="alertsrc" name="source">`)
-	for i, label := range home.AlertsSourceOptions() {
-		fmt.Fprintf(w, `<option value="%d"%s>%s</option>`, i, selected(i == home.AlertsSourceIndex()), html.EscapeString(label))
-	}
-	fmt.Fprint(w, `</select>
-	 <p class="note">Automatic uses the U.S. National Weather Service in the U.S. and MeteoAlarm, the
-	  official warnings of Europe's national weather services, in a country it covers.</p>`)
+	fmt.Fprint(w, `<p class="note" style="margin-top:0">Alerts come from the U.S. National Weather Service
+	 in the U.S. and from MeteoAlarm, the official warnings of Europe's national weather services, in a
+	 country it covers, by Home Assistant's country. The Weather alerts switch on the device's settings
+	 turns them off.</p>`)
 	fmt.Fprintf(w, `<label for="alertregions">MeteoAlarm regions</label>
 	 <input id="alertregions" name="regions" value="%s" placeholder="Found from where home is" autocomplete="off">
 	 <p class="note">Leave empty to use the regions home lies in. Or list them by their EMMA_ID, separated
@@ -66,24 +63,20 @@ func alertsSection(w http.ResponseWriter, token string) {
 	sectionClose(w)
 }
 
-// alertsSummary is the line on the shut card: the source, and the regions when set by hand.
+// alertsSummary is the line on the shut card: off, the regions when set by hand, or that they are
+// found from where home is.
 func alertsSummary(h config.Home) []string {
-	if h.AlertsOff {
+	switch {
+	case h.AlertsOff:
 		return []string{"Off"}
+	case len(h.AlertRegions) > 0:
+		return []string{strings.Join(h.AlertRegions, ", ")}
 	}
-	out := []string{home.AlertsSourceOptions()[home.AlertsSourceIndex()]}
-	if len(h.AlertRegions) > 0 {
-		out = append(out, strings.Join(h.AlertRegions, ", "))
-	}
-	return out
+	return []string{"Regions from where home is"}
 }
 
 // saveAlerts keeps the alert settings; nothing is kept when one of them is not one this device knows.
 func saveAlerts(r *http.Request) string {
-	src, err := strconv.Atoi(r.PostFormValue("source"))
-	if err != nil || src < 0 || src >= len(home.AlertsSourceOptions()) {
-		return "that is not an alerts source this device knows"
-	}
 	near, err := strconv.Atoi(r.PostFormValue("near"))
 	if err != nil || !slices.Contains(home.AlertsNearChoices, near) {
 		return "that is not a distance this device knows"
@@ -100,6 +93,5 @@ func saveAlerts(r *http.Request) string {
 	f.SetAlertsEvery(every)
 	f.SetAlertsNearKm(near)
 	f.SetAlertRegions(regions)
-	f.SetAlertsSource(src)
 	return ""
 }

@@ -143,11 +143,6 @@ type Home struct {
 	// in Europe): no badge, no pills, no fetching.
 	AlertsOff bool `json:"alerts_off,omitempty"`
 
-	// AlertsSource is where the weather alerts come from: AlertsNWS (the U.S. National Weather
-	// Service), AlertsMeteoAlarm (MeteoAlarm, the national weather services of Europe), or empty for
-	// automatic, which is the NWS in the U.S. and MeteoAlarm in a country MeteoAlarm covers.
-	AlertsSource string `json:"alerts_source,omitempty"`
-
 	// AlertRegions are the MeteoAlarm regions home's alerts are for, by EMMA_ID ("ES842"), when they
 	// are not to be found from home's location. Empty, they are the regions home lies in.
 	AlertRegions []string `json:"alert_regions,omitempty"`
@@ -348,12 +343,6 @@ const (
 	RadarRainViewer = "rainviewer"
 )
 
-// Where the weather alerts come from; empty is automatic.
-const (
-	AlertsNWS        = "nws"
-	AlertsMeteoAlarm = "meteoalarm"
-)
-
 // The slideshow's display modes.
 const (
 	SlideshowBackground  = "background"  // behind the ordinary idle page, always on
@@ -505,10 +494,6 @@ func (w HomeWriter) WeatherSources(ids []string) error {
 
 func (w HomeWriter) AlertsOff(v bool) error {
 	return w.st.Update(func(c *Config) { c.Home.AlertsOff = v })
-}
-
-func (w HomeWriter) AlertsSource(source string) error {
-	return w.st.Update(func(c *Config) { c.Home.AlertsSource = source })
 }
 
 func (w HomeWriter) AlertRegions(codes []string) error {

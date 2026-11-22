@@ -58,18 +58,19 @@ project started on:
   `radar_show` actions open the forecast and the rain map, for a dashboard button or an automation.
 - **Weather alerts** (U.S. and Europe): the official alerts in force at home put a badge on the
   clock (a pill on the Spot) and pills over the rain map; a tap opens the alert's whole text, swiped
-  sideways to the next. In the U.S. they are the National Weather Service's, with their storm polygons
-  and counties outlined on the map. In Europe they are [MeteoAlarm](https://meteoalarm.org)'s, the
+  sideways to the next. Home Assistant's country picks where they come from. In the U.S. they are the
+  National Weather Service's, with their storm polygons and counties outlined on the map. In a country
+  MeteoAlarm covers they are [MeteoAlarm](https://meteoalarm.org)'s, the
   national weather services' own warnings, yellow, orange or red, in the words the service issued them
   in: in the screen's language where the service issues that language, else in English. MeteoAlarm's
   regions for home are found from its location (the regions it lies in, and the coastal waters off
   it), or set by hand by their EMMA_ID; "Alerts nearby" also counts the regions within 10, 25 or 50 km.
   Its feed is read every 10 minutes while the screen is drawing (5, 15, 30 or 60 if chosen; MeteoAlarm's
   [terms](https://meteoalarm.org/en/live/page/terms-and-conditions) ask that warnings be shown no more
-  than ten minutes after meteoalarm.org has them, so a longer wait is one's own choice to make). "Alerts source"
-  picks automatic (the NWS in the U.S., MeteoAlarm in a country it covers), or one of them always. All
-  of it is on the setup page (System, Weather alerts) and as Home Assistant's `alerts_source`,
-  `alert_regions`, `alerts_nearby` and `alerts_refresh`; the source is on the settings screen too. On
+  than ten minutes after meteoalarm.org has them, so a longer wait is one's own choice to make). With
+  no country set in Home Assistant, MeteoAlarm is used for a home in one of its regions or with regions
+  set by hand. All of it is on the setup page (System, Weather alerts) and as Home Assistant's
+  `alert_regions`, `alerts_nearby` and `alerts_refresh`. On
   unless turned off ("Weather alerts" on the settings screen, or the `weather_alerts` switch). They are
   a convenience, not an alert device: they make no sound, and a device that is off, offline or dark at
   night can miss one. For warnings that must wake you, keep a weather radio or your phone's emergency

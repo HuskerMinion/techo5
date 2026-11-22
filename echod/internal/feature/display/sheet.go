@@ -178,7 +178,6 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 			settingRow{label: tr("weather"), kind: ctlHeading},
 			settingRow{id: "weatherfx", label: tr("weather_animation"), sub: tr("rain_snow_and_storms_move_on_the_forecast"), kind: ctlToggle, on: weatherAnimation.Load()},
 			settingRow{id: "alerts", label: tr("weather_alerts"), sub: tr("official_weather_alerts_for_home"), kind: ctlToggle, on: home.AlertsOn()},
-			settingRow{id: "alertsrc", label: tr("alerts_source"), sub: tr("automatic_uses_the_nws_or_meteoalarm"), kind: ctlChoice, value: home.AlertsSourceOptions()[home.AlertsSourceIndex()]},
 			settingRow{id: "radarsrc", label: tr("radar_source"), sub: tr("automatic_uses_the_nws_in_the_lower_48"), kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
 		)
 		// How the calendar looks, on a screen with a calendar page and once it shows a calendar.
@@ -812,8 +811,6 @@ func pickerForRaw(id string, sv sheetView) (pickerView, bool) {
 		return pickerView{title: tr("call_screen"), opts: callScreenOptions(), cur: callScreenIndex()}, true
 	case "radarsrc":
 		return pickerView{title: tr("radar_source"), opts: home.RadarSourceOptions(), cur: home.RadarSourceIndex()}, true
-	case "alertsrc":
-		return pickerView{title: tr("alerts_source"), opts: home.AlertsSourceOptions(), cur: home.AlertsSourceIndex()}, true
 	case "calendars":
 		return calendarsPicker(), true
 	case "calpopwhen":
@@ -983,8 +980,6 @@ func (d *Display) choose(id string, i int) {
 		d.chooseCallScreen(i)
 	case "radarsrc":
 		go home.Get().SetRadarSource(i)
-	case "alertsrc":
-		go home.Get().SetAlertsSource(i)
 	case "calendars":
 		if toggleCalendar(i) {
 			d.openPicker("calendars") // stays open, for ticking another
@@ -1465,7 +1460,7 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		home.Get().SetSlideshowCountdown(!home.Get().SlideshowCountdown())
 	case "immichfav":
 		home.Get().SetImmichFavorites(!home.Get().ImmichFavorites())
-	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "alertsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
+	case "night", "atnight", "nightstyle", "clock", "clockstyle", "font", "textsize", "skin", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "camtime", "camfit", "cambands", "camshade", "answertime", "idledim", "callring", "turnstyle", "timerstyle", "radarsrc", "calendars", "calpopwhen", "calpopallday", "calpopcals", "musicstrip", "follow", "awayoff", "slideshow", "photoevery", "screenlang", "newtimer", "sleep", "sunrise",
 		"timezone", "wakeword", "waketone", "ttsvoice", "quiet", "output", "clocktap", "callscreen", "musiclayout":
 		d.openPicker(id)
 	}

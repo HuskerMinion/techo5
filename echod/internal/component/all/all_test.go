@@ -25,7 +25,6 @@ var registered = []string{
 	"alert_regions",
 	"alerts_nearby",
 	"alerts_refresh",
-	"alerts_source",
 	"alarm_snooze_length",
 	"alarm_sound",
 	"alarm_sounding",

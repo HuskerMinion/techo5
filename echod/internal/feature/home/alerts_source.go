@@ -13,11 +13,11 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// Where the weather alerts come from, and how MeteoAlarm's are matched to home: automatic (the NWS in
-// the U.S., MeteoAlarm in a country it covers) or one of them always; the MeteoAlarm regions, found
-// from home's location or set by hand; how far around home a region still counts; and how often
-// MeteoAlarm's feed is read. Offered on the device's settings (the source), the setup page and as
-// Home Assistant's "Alerts source", "Alert regions", "Alerts nearby" and "MeteoAlarm refresh".
+// Where the weather alerts come from, and how MeteoAlarm's are matched to home. The source is picked
+// by Home Assistant's country, with no setting for it: the NWS in the U.S., MeteoAlarm in a country it
+// covers. MeteoAlarm's regions are found from home's location or set by hand; how far around home a
+// region still counts and how often MeteoAlarm's feed is read can be chosen. Offered on the setup
+// page and as Home Assistant's "Alert regions", "Alerts nearby" and "MeteoAlarm refresh".
 
 type alertSource int
 
@@ -45,15 +45,9 @@ func (s alertSource) every() time.Duration {
 	return alertsEvery
 }
 
-// alertSourceFor is the source the setting and home's place pick. Automatic goes by Home Assistant's
-// country; with none, by the place: the U.S., or one of MeteoAlarm's regions.
+// alertSourceFor is the source home's country picks; with no country known, home's place: the U.S.,
+// or one of MeteoAlarm's regions, or MeteoAlarm's regions set by hand.
 func alertSourceFor(lat, lon float64) alertSource {
-	switch config.Get().Home.AlertsSource {
-	case config.AlertsNWS:
-		return alertsFromNWS
-	case config.AlertsMeteoAlarm:
-		return alertsFromMeteoAlarm
-	}
 	c := homeCountry()
 	if _, ok := meteoAlarmCountries[c]; ok {
 		return alertsFromMeteoAlarm
@@ -61,38 +55,10 @@ func alertSourceFor(lat, lon float64) alertSource {
 	if inUS(lat, lon) {
 		return alertsFromNWS
 	}
-	if c == "" && len(regionsNear(loadRegions(), lat, lon, 0)) > 0 {
+	if c == "" && (len(config.Get().Home.AlertRegions) > 0 || len(regionsNear(loadRegions(), lat, lon, 0)) > 0) {
 		return alertsFromMeteoAlarm
 	}
 	return alertsFromNone
-}
-
-// alertSourceChoices are the source's options, in the order every place offers them; value is what
-// config keeps.
-var alertSourceChoices = []struct{ label, value string }{
-	{"Automatic", ""},
-	{"NWS (U.S.)", config.AlertsNWS},
-	{"MeteoAlarm (Europe)", config.AlertsMeteoAlarm},
-}
-
-// AlertsSourceOptions are the source choices' labels.
-func AlertsSourceOptions() []string {
-	out := make([]string, len(alertSourceChoices))
-	for i, c := range alertSourceChoices {
-		out[i] = c.label
-	}
-	return out
-}
-
-// AlertsSourceIndex is the saved source's place among them; a value none has reads as automatic.
-func AlertsSourceIndex() int {
-	v := config.Get().Home.AlertsSource
-	for i, c := range alertSourceChoices {
-		if c.value == v {
-			return i
-		}
-	}
-	return 0
 }
 
 // AlertsNearChoices are how far around home a MeteoAlarm region still counts, in kilometers; 0 is
@@ -158,11 +124,6 @@ func AlertRegionsNow() []string {
 }
 
 func (f *Feature) buildAlertSettings() {
-	f.alertsSrcSel = &esphome.Select{
-		Base:      esphome.Base{ObjectID: "alerts_source", Name: "Alerts source", Icon: "mdi:alert-circle-outline", Category: esphome.CategoryConfig},
-		Options:   AlertsSourceOptions(),
-		OnCommand: func(v string) { f.SetAlertsSource(slices.Index(AlertsSourceOptions(), v)) },
-	}
 	f.alertRegionsTxt = &esphome.Text{
 		Base:      esphome.Base{ObjectID: "alert_regions", Name: "Alert regions", Icon: "mdi:map-marker-radius", Category: esphome.CategoryConfig},
 		MaxLength: 255,
@@ -203,7 +164,6 @@ func (f *Feature) buildAlertSettings() {
 
 // restoreAlertSettings shows the saved settings in Home Assistant.
 func (f *Feature) restoreAlertSettings() {
-	f.alertsSrcSel.Set(alertSourceChoices[AlertsSourceIndex()].label)
 	f.alertRegionsTxt.Set(strings.Join(config.Get().Home.AlertRegions, ", "))
 	f.alertsNearSel.Set(nearLabel(AlertsNearKm()))
 	f.alertsEverySel.Set(everyLabel(int(MeteoAlarmEvery() / time.Minute)))
@@ -216,19 +176,6 @@ func (f *Feature) refetchAlerts() {
 	a.view, a.fetched = AlertView{}, time.Time{}
 	a.mu.Unlock()
 	f.Changed.Emit(struct{}{})
-}
-
-// SetAlertsSource saves the source at i and has the alerts fetched again from it.
-func (f *Feature) SetAlertsSource(i int) {
-	if i < 0 || i >= len(alertSourceChoices) {
-		return
-	}
-	if err := config.Set().Home().AlertsSource(alertSourceChoices[i].value); err != nil {
-		slog.Error("saving the alerts source failed", "err", err)
-		return
-	}
-	f.alertsSrcSel.Set(alertSourceChoices[i].label)
-	f.refetchAlerts()
 }
 
 // SetAlertRegions saves the MeteoAlarm regions set by hand (empty: found from home's location); what

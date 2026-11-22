@@ -300,23 +300,26 @@ func TestMeteoAlarmNotAFeed(t *testing.T) {
 func TestAlertSourceFor(t *testing.T) {
 	for _, c := range []struct {
 		place   config.Place
-		setting string
+		regions []string
 		want    alertSource
 	}{
-		{config.Place{Lat: 43.46, Lon: -3.80, Country: "ES"}, "", alertsFromMeteoAlarm},
-		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, "", alertsFromNWS},
-		{config.Place{Lat: 35.68, Lon: 139.69, Country: "JP"}, "", alertsFromNone},
-		{config.Place{Lat: 53.08, Lon: 8.80}, "", alertsFromMeteoAlarm}, // no country: one of MeteoAlarm's regions
-		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, config.AlertsMeteoAlarm, alertsFromMeteoAlarm},
-		{config.Place{Lat: 43.46, Lon: -3.80, Country: "ES"}, config.AlertsNWS, alertsFromNWS},
+		{config.Place{Lat: 43.46, Lon: -3.80, Country: "ES"}, nil, alertsFromMeteoAlarm},
+		{config.Place{Lat: 51.51, Lon: -0.13, Country: "GB"}, nil, alertsFromMeteoAlarm}, // outlines, no regions
+		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, nil, alertsFromNWS},
+		{config.Place{Lat: 35.68, Lon: 139.69, Country: "JP"}, nil, alertsFromNone},
+		{config.Place{Lat: 53.08, Lon: 8.80}, nil, alertsFromMeteoAlarm}, // no country: one of MeteoAlarm's regions
+		{config.Place{Lat: 41.26, Lon: -95.94}, nil, alertsFromNWS},      // no country: the U.S.
+		// No country, in a country MeteoAlarm has no regions for: nothing, unless regions are set by hand.
+		{config.Place{Lat: 51.51, Lon: -0.13}, nil, alertsFromNone},
+		{config.Place{Lat: 51.51, Lon: -0.13}, []string{"UK012"}, alertsFromMeteoAlarm},
 	} {
 		c.place.Name = "Home"
 		useConfig(t, c.place)
-		if err := config.Set().Home().AlertsSource(c.setting); err != nil {
+		if err := config.Set().Home().AlertRegions(c.regions); err != nil {
 			t.Fatal(err)
 		}
 		if got := alertSourceFor(c.place.Lat, c.place.Lon); got != c.want {
-			t.Errorf("%+v with %q: %v, want %v", c.place, c.setting, got, c.want)
+			t.Errorf("%+v with regions %v: %v, want %v", c.place, c.regions, got, c.want)
 		}
 	}
 	if (alertsFromMeteoAlarm).every() != meteoAlarmEvery || alertsFromNWS.every() != alertsEvery {

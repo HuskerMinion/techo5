@@ -21,8 +21,8 @@ import (
 
 // Weather alerts: the ones in force at home, for the clock's badge and the pills over the rain map, and
 // the ones nearby with their shapes, outlined on the map. Only on a device with a screen. They come
-// from one of two sources (alerts_source.go): the U.S. National Weather Service, here, or MeteoAlarm
-// in Europe (alerts_meteoalarm.go).
+// from one of two sources, picked by Home Assistant's country (alerts_source.go): the U.S. National
+// Weather Service, here, or MeteoAlarm in Europe (alerts_meteoalarm.go).
 //
 // The NWS's (api.weather.gov, public domain) are for a home in the U.S.
 //

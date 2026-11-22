@@ -104,10 +104,9 @@ type Feature struct {
 	radarSel    *esphome.Select    // where the rain map's radar comes from (radar_setting.go)
 
 	// alerts are the weather alerts at home and nearby (alerts.go); alertsSw turns them on and off, and
-	// the rest say where they come from and how MeteoAlarm's are found (alerts_source.go).
+	// the rest say how MeteoAlarm's are found (alerts_source.go).
 	alerts          alertState
 	alertsSw        *esphome.Switch
-	alertsSrcSel    *esphome.Select
 	alertRegionsTxt *esphome.Text
 	alertsNearSel   *esphome.Select
 	alertsEverySel  *esphome.Select
