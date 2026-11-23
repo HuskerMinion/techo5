@@ -735,9 +735,11 @@ func (c *conversation) turnEvent(e event) {
 
 	case evEarlyReply:
 		if c.phase == phaseIdle || c.phase == phaseReplying || c.runURL == "" ||
-			wakeword.Delivery(c.slot) != config.DeliveryEarly || replyPlayer() != "" {
+			wakeword.Delivery(c.slot) != config.DeliveryEarly {
 			return
 		}
+		// A player chosen for replies is handed the url now too, rather than once the reply is written
+		// and downloaded (#707): playElsewhere sees the reply is early.
 		slog.Info("reply fetched early", "slot", c.slot+1)
 		c.speakEarly(c.runURL)
 
@@ -756,13 +758,18 @@ func (c *conversation) turnEvent(e event) {
 		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
 			return
 		}
-		// Already playing as it is written; without the offer (an agent that does not stream), it is
-		// still fetched as it arrives rather than whole.
-		if wakeword.Delivery(c.slot) == config.DeliveryEarly && replyPlayer() == "" {
-			if c.phase != phaseReplying || !c.reply.early {
-				c.speakEarly(e.url)
+		// Already playing as it is written, here or on the chosen player: this is the same reply, and
+		// sending it again would have the player say it twice. Without the offer (an agent that does
+		// not stream), it is still fetched here as it arrives rather than whole; a player is sent it
+		// whole, as it always was.
+		if wakeword.Delivery(c.slot) == config.DeliveryEarly {
+			if c.phase == phaseReplying && c.reply.early {
+				return
 			}
-			return
+			if replyPlayer() == "" {
+				c.speakEarly(e.url)
+				return
+			}
 		}
 		c.speak(e.url)
 
@@ -1261,7 +1268,7 @@ func (c *conversation) speakReply(url string, early bool) {
 	// audio, and the limit it was given when the device stopped listening goes on running until some
 	// of that audio turns up.
 	errand := func(ctx context.Context, p *speaker.Player) error {
-		if c.playElsewhere(ctx, url, playing) {
+		if c.playElsewhere(ctx, url, playing, false) {
 			return nil
 		}
 		return c.play(ctx, url, playing, phone.RepliesIntoCall())
@@ -1271,6 +1278,9 @@ func (c *conversation) speakReply(url string, early bool) {
 		s := newStream(c.speaker.Splices(), c.speaker.Underruns(), wakeword.Buffer(c.slot))
 		c.reply.stream = s
 		errand = func(ctx context.Context, p *speaker.Player) error {
+			if c.playElsewhere(ctx, url, playing, true) {
+				return nil
+			}
 			return s.fetch(ctx, p, url, playing)
 		}
 	case url == "":

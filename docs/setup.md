@@ -1549,6 +1549,9 @@ What goes and what stays:
 - This device's own sounds stay on it too: the wake sound, timers, alarms and announcements.
 - If Home Assistant or the player does not take a reply, that reply plays on this device, and the log
   says so once until it works again.
+- With Reply delivery set to *Early*, the player is handed the reply as soon as Home Assistant starts
+  making its speech, so a long answer starts there while the agent is still writing it, as it does on
+  this device. Otherwise the reply is sent once it is written.
 
 Listening again after a reply: this device cannot hear when another speaker finishes. It waits for the
 length of the reply plus two seconds, then listens, so a question gets its answer without the wake

@@ -61,7 +61,17 @@ func replyPlayer() string { return config.Get().Brain.ReplyPlayer }
 // playElsewhere plays the reply at url on the chosen player, and returns once it should have been
 // heard. It reports false when the reply is to play here instead: no player chosen, no url, or the
 // player did not take it, which the caller then plays on this device so the reply is not lost.
-func (c *conversation) playElsewhere(ctx context.Context, url string, playing func()) bool {
+//
+// early is a reply Home Assistant is still writing (Reply delivery: Early, #707). The player is handed
+// its url at once, as this device's own speaker would start on it, and fetches it as it is written, so
+// a long answer starts with its first sentence rather than once the agent has finished and the whole
+// reply has been downloaded. The turn still needs the reply's length, to know when it has been heard
+// and the follow-up can listen, so this device fetches the same url alongside the player and counts
+// the audio as it comes in: Home Assistant serves a reply still being written to more than one reader.
+// Otherwise the reply is fetched whole first, as it always was: a reply that cannot be fetched here
+// fails the same way on the speaker, which reports it, rather than being handed to a player that
+// would play nothing.
+func (c *conversation) playElsewhere(ctx context.Context, url string, playing func(), early bool) bool {
 	entity := replyPlayer()
 	if entity == "" || url == "" {
 		return false
@@ -72,11 +82,13 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 		}
 		return false
 	}
-	// The length is what the turn waits for. A reply that cannot be fetched here fails the same way on
-	// the speaker, which reports it.
-	samples, err := media.Fetch(ctx, url)
-	if err != nil {
-		return false
+	var samples int
+	if !early {
+		whole, err := media.Fetch(ctx, url)
+		if err != nil {
+			return false
+		}
+		samples = len(whole)
 	}
 	if err := callPlayer(entity, url); err != nil {
 		if ctx.Err() != nil {
@@ -87,12 +99,39 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 		}
 		return false
 	}
+	// The player starts about now, so the reply's length is counted from here, not from when this
+	// device's own fetch of an early reply finishes: that ends as the agent stops writing, which is
+	// well before the player has said it all when the agent writes faster than it is spoken.
+	started := time.Now()
 	failedElsewhere.Store(false)
-	slog.Info("reply sent to another player", "player", entity, "samples", len(samples))
+	if early {
+		slog.Info("reply sent to another player as it is written", "player", entity)
+	} else {
+		slog.Info("reply sent to another player", "player", entity, "samples", samples)
+	}
 	if playing != nil {
 		playing()
 	}
-	wait := time.Duration(len(samples))*time.Second/speaker.VoiceRate + elsewhereMargin
+	if early {
+		// FetchVoice hands on 16-bit samples, two bytes each, at speaker.VoiceRate, the same as the
+		// whole fetch, and has the patience for an agent still writing that a whole fetch does not.
+		// The player already has the reply, so a fetch that fails here does not send it here as
+		// well: the turn waits for what did arrive and goes on.
+		var bytes int
+		err := media.FetchVoice(ctx, url, func(b []byte) { bytes += len(b) })
+		if ctx.Err() != nil {
+			return true
+		}
+		if err != nil {
+			slog.Warn("replies: could not follow the reply's length, listening again sooner", "player", entity, "err", err)
+		}
+		samples = bytes / 2
+		slog.Info("reply on another player written", "player", entity, "samples", samples)
+	}
+	wait := time.Until(started.Add(time.Duration(samples)*time.Second/speaker.VoiceRate + elsewhereMargin))
+	if wait <= 0 {
+		return true
+	}
 	t := time.NewTimer(wait)
 	defer t.Stop()
 	select {
