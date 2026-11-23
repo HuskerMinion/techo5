@@ -16,6 +16,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -45,8 +46,17 @@ const (
 // connection that died with its socket open looked the same, the last picture left up and taking taps
 // that went nowhere. A server that sends kindAlive sends it every few seconds, so three of them missed
 // is a connection gone. One from before it knew kindAlive never sends it, and is waited on as it always
-// was. A variable for the tests.
-var aliveWithin = 15 * time.Second
+// was. Held atomically so a test can set it while a stream from an earlier test is still reading it
+// (setAliveWithin).
+var aliveFor atomic.Int64
+
+func init() { aliveFor.Store(int64(15 * time.Second)) }
+
+// aliveWithin is the time aliveFor holds.
+func aliveWithin() time.Duration { return time.Duration(aliveFor.Load()) }
+
+// setAliveWithin sets it, for a test, and says what it was.
+func setAliveWithin(d time.Duration) time.Duration { return time.Duration(aliveFor.Swap(int64(d))) }
 
 // Field is the text field on the streamed page that has focus, for the screen's own keyboard (#493):
 // the page is a picture here, so the dashcast server says when a field is tapped. Up while one has
@@ -347,7 +357,7 @@ func (s *stream) once() error {
 		if alive {
 			// Anything it sends counts, a picture as much as kindAlive. A read that runs out ends the
 			// connection as a drop does, and run makes another.
-			_ = raw.SetReadDeadline(time.Now().Add(aliveWithin))
+			_ = raw.SetReadDeadline(time.Now().Add(aliveWithin()))
 		}
 		if _, err := io.ReadFull(r, hdr[:]); err != nil {
 			return err

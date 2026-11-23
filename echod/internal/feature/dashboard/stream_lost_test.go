@@ -50,9 +50,8 @@ func streamTo(t *testing.T) (f *Feature, send chan<- []byte, until func(what str
 // A server that says it is there and then says nothing at all is a connection lost: the picture stays
 // up, and the view says since when it has had nothing behind it.
 func TestAStalledStreamIsLost(t *testing.T) {
-	was := aliveWithin
-	aliveWithin = 150 * time.Millisecond
-	t.Cleanup(func() { aliveWithin = was })
+	was := setAliveWithin(150 * time.Millisecond)
+	t.Cleanup(func() { setAliveWithin(was) })
 	_, send, until := streamTo(t)
 
 	send <- pictureMessage(t, 480, 320)
@@ -65,22 +64,21 @@ func TestAStalledStreamIsLost(t *testing.T) {
 	if !v.Ready {
 		t.Error("the last picture went with the connection")
 	}
-	if waited := time.Since(began); waited < aliveWithin {
-		t.Errorf("lost after %v, sooner than the %v a server may be silent", waited, aliveWithin)
+	if waited := time.Since(began); waited < aliveWithin() {
+		t.Errorf("lost after %v, sooner than the %v a server may be silent", waited, aliveWithin())
 	}
 }
 
 // A server from before it said it was there is waited on as it always was: a page that does not change
 // sends nothing, and that is not a connection lost.
 func TestASilentOldServerIsNotLost(t *testing.T) {
-	was := aliveWithin
-	aliveWithin = 50 * time.Millisecond
-	t.Cleanup(func() { aliveWithin = was })
+	was := setAliveWithin(50 * time.Millisecond)
+	t.Cleanup(func() { setAliveWithin(was) })
 	f, send, until := streamTo(t)
 
 	send <- pictureMessage(t, 480, 320)
 	until("the first picture", func(v View) bool { return v.Ready })
-	time.Sleep(6 * aliveWithin)
+	time.Sleep(6 * aliveWithin())
 	if v := f.Stream(480, 320); !v.Lost.IsZero() || v.Problem != "" {
 		t.Errorf("a still page from a server that never said it was there: %+v", v)
 	}
@@ -88,16 +86,15 @@ func TestASilentOldServerIsNotLost(t *testing.T) {
 
 // What keeps arriving keeps the connection: pictures count as much as the server saying it is there.
 func TestAStreamThatKeepsTalkingIsNotLost(t *testing.T) {
-	was := aliveWithin
-	aliveWithin = 200 * time.Millisecond
-	t.Cleanup(func() { aliveWithin = was })
+	was := setAliveWithin(200 * time.Millisecond)
+	t.Cleanup(func() { setAliveWithin(was) })
 	f, send, until := streamTo(t)
 
 	send <- pictureMessage(t, 480, 320)
 	send <- []byte{kindAlive}
 	until("the first picture", func(v View) bool { return v.Ready })
 	for i := 0; i < 8; i++ {
-		time.Sleep(aliveWithin / 4)
+		time.Sleep(aliveWithin() / 4)
 		if i%2 == 0 {
 			send <- []byte{kindAlive}
 		} else {
@@ -105,7 +102,7 @@ func TestAStreamThatKeepsTalkingIsNotLost(t *testing.T) {
 		}
 	}
 	if v := f.Stream(480, 320); !v.Lost.IsZero() {
-		t.Errorf("a server heard from every %v was lost at %v", aliveWithin/4, v.Lost)
+		t.Errorf("a server heard from every %v was lost at %v", aliveWithin()/4, v.Lost)
 	}
 }
 
