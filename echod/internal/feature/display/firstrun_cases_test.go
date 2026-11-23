@@ -13,7 +13,7 @@ import (
 )
 
 // firstRunLanguages are the screen's languages first run is drawn in.
-var firstRunLanguages = []string{"", "es", "fr", "gl", "it", "nl", "ja", "de", "tr"}
+var firstRunLanguages = []string{"", "es", "fr", "gl", "it", "nl", "ja", "de", "pl", "tr"}
 
 // previewLang is whether lang's first run is written out with a preview: English, a long language and
 // one without spaces.
