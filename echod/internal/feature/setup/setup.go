@@ -348,8 +348,8 @@ func (f *Feature) admit(asking, by string) bool {
 	if !f.on(now) || f.waiting == "" || now.After(f.waitingEnd) || (asking != "" && f.waiting != asking) {
 		return false
 	}
-	if by == byHA && !f.remote.on.Load() {
-		return false // Remote setup went off on the way here (remote.go)
+	if by == byHA && f.remote.away && f.waiting == f.remote.token && !f.remote.on.Load() {
+		return false // a browser from away, and Remote setup went off on the way here (remote.go)
 	}
 	if len(f.live) >= sessions {
 		// Forget the oldest rather than refuse: the newest press is the one somebody just made.

@@ -461,3 +461,23 @@ func TestAPairedDeviceDoesNotTakeAHangUpForAServerFromBeforeEncryption(t *testin
 		}
 	}
 }
+
+func TestAPairedDeviceDoesNotTakeJunkForAServerFromBeforeEncryption(t *testing.T) {
+	st := store(t)
+	if err := st.remember(strings.Repeat("a", 43), bytes.Repeat([]byte{1}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	for _, reply := range [][]byte{[]byte("not json"), []byte(`{"type":"server/hello","payload":{}}`)} {
+		dev, srv := pipes()
+		errc := make(chan error, 1)
+		go func() {
+			_, err := Handshake(dev, st)
+			errc <- err
+		}()
+		_, _, _ = srv.ReadMessage()
+		_ = srv.WriteMessage(websocket.TextMessage, reply)
+		if err := <-errc; err == nil || errors.Is(err, ErrNotEncrypted) {
+			t.Errorf("%s: err = %v", reply, err)
+		}
+	}
+}

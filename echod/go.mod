@@ -19,7 +19,7 @@ require (
 	github.com/pion/opus v0.1.1-0.20260806214105-56fe97fcac80
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	github.com/ygelfand/go-esphome-device v0.0.18
+	github.com/ygelfand/go-esphome-device v0.0.21
 	github.com/zserge/microwakeword v0.0.0-20260330234603-bfaf3840114e
 	golang.org/x/image v0.46.0
 	golang.org/x/net v0.58.0
@@ -68,5 +68,3 @@ require (
 )
 
 replace github.com/zserge/microwakeword => ./third_party/microwakeword
-
-replace github.com/ygelfand/go-esphome-device => github.com/HuskerMinion/go-esphome-device v0.0.15-0.20261122102808-ff2b176b7e9d

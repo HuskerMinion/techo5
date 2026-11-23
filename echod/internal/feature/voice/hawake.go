@@ -148,6 +148,18 @@ type watching struct {
 
 	// byHA is a run Home Assistant ended (with an error) rather than one told to stop.
 	byHA bool
+
+	// settled ends the unsure claim the other devices were told of as this wake was asked about (#685):
+	// told whether Home Assistant heard it. Nil when none was made, and once it has run.
+	settled func(confirmed bool)
+}
+
+// settle ends w's unsure claim, once.
+func (w *watching) settle(confirmed bool) {
+	if f := w.settled; f != nil {
+		w.settled = nil
+		f(confirmed)
+	}
 }
 
 // Confirmation is a wake the device was not sure of that Home Assistant heard too.
@@ -164,6 +176,55 @@ var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64
 // SetConfirmedContest is feature/nearest putting a confirmed wake through its decision.
 func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, decide func(answer bool))) {
 	confirmedContest.Store(&f)
+}
+
+// The unsure claim for a wake being asked about (#685): feature/nearest sets it, and tells the other
+// devices, so one that heard the word for sure but less well waits on Home Assistant's answer. What it
+// returns is run once the question ends, with whether Home Assistant heard the word; nil for no claim.
+var askingClaim atomic.Pointer[func(slot int, clarity float64) func(confirmed bool)]
+
+// SetAskingClaim is feature/nearest telling the others of a wake being asked about.
+func SetAskingClaim(f func(slot int, clarity float64) func(confirmed bool)) {
+	askingClaim.Store(&f)
+}
+
+// earlyClaim is an unsure claim made as a candidate's score first went over the confirm threshold, at
+// at with clarity, before it is known whether it stays unsure and is asked about. The question takes
+// it over (confirm); one that never comes takes it back after earlyFor.
+type earlyClaim struct {
+	slot    int
+	at      time.Time
+	clarity float64
+	settled func(confirmed bool)
+}
+
+// earlyFor is how long an early unsure claim waits for its question: the longest a candidate is
+// followed before it is reported (detect's CandidateFor, 600 ms), and a little more.
+const earlyFor = 900 * time.Millisecond
+
+// claimEarly is a candidate's score going over the confirm threshold: the others are told at once,
+// as a device sure of the word tells them as its score crosses, so one that heard it less well holds
+// its decision for this one's question. Only when the question could be asked now.
+func (c *conversation) claimEarly(slot int) {
+	f := askingClaim.Load()
+	if f == nil || c.early != nil || !c.mayConfirm(slot) {
+		return
+	}
+	clarity := 0.0
+	if c.source != nil {
+		clarity = c.source.Standout(claimSpan)
+	}
+	if settled := (*f)(slot, clarity); settled != nil {
+		c.early = &earlyClaim{slot: slot, at: c.now(), clarity: clarity, settled: settled}
+	}
+}
+
+// dropEarly takes back an early unsure claim no question took over.
+func (c *conversation) dropEarly() {
+	if e := c.early; e != nil {
+		c.early = nil
+		e.settled(false)
+	}
 }
 
 // claimSpan is how far back a candidate's clarity is measured: the span feature/nearest measures a wake
@@ -268,6 +329,11 @@ func (c *conversation) watchEvent(e event) bool {
 
 	case evCandidate:
 		c.confirm(e.slot, e.peak)
+		c.dropEarly() // a question that went ahead took it over
+		return true
+
+	case evCandidateStart:
+		c.claimEarly(e.slot)
 		return true
 
 	case evFaint:
@@ -394,7 +460,16 @@ func (c *conversation) heardOnHA() {
 	if w == nil || w.closing {
 		return
 	}
+	// Heard: the claim the devices' decision makes stands in for the unsure one, unless nothing is
+	// claimed after all (no decision to put it through, or the microphones taken since).
+	settled := w.settled
+	w.settled = nil
 	c.dropWatch()
+	if confirmedContest.Load() == nil || c.micBusy() || w.mode != watchConfirm || w.faint {
+		if settled != nil {
+			settled(false)
+		}
+	}
 
 	// A call or a talk through a camera began after the run did: whatever was heard was not somebody
 	// in the room asking.
@@ -516,9 +591,37 @@ func (c *conversation) confirm(slot int, peak float64) {
 	}
 	c.nextConfirm = c.now().Add(c.confirmGap)
 	c.openWatch(watchConfirm, slot, peak)
+	if e := c.early; e != nil && e.slot == slot {
+		// Told of as its score went over: the question keeps that claim, and the clarity it was made with.
+		c.early = nil
+		c.watch.clarity, c.watch.settled = e.clarity, e.settled
+		return
+	}
 	if c.source != nil {
 		c.watch.clarity = c.source.Standout(claimSpan)
 	}
+	if f := askingClaim.Load(); f != nil {
+		c.watch.settled = (*f)(slot, c.watch.clarity)
+	}
+}
+
+// mayConfirm is whether a candidate could be asked about now, as confirm would: what claimEarly asks
+// before telling the others of one.
+func (c *conversation) mayConfirm(slot int) bool {
+	on := config.Get().Wake.OnHA
+	switch {
+	case !on.Confirm || slot != 0:
+		return false
+	case c.phase != phaseIdle || c.watch != nil || c.deciding != nil || c.pending != nil || c.draining || c.grace != nil:
+		return false
+	case !c.ha.Ready() || !haAnswers(slot) || c.micBusy():
+		return false
+	case c.now().Before(c.retryAt), c.now().Before(c.nextConfirm):
+		return false
+	case !c.busyAt.IsZero() && c.now().Sub(c.busyAt) < mic.Confirming+time.Second:
+		return false
+	}
+	return true
 }
 
 // confirmFaint asks Home Assistant about a wake over the threshold that this device won with a low
@@ -549,6 +652,11 @@ func (c *conversation) confirmFaint(slot int, at time.Time) bool {
 // second, so a mute, a call or a change of setting reaches the stream without needing an event of its
 // own.
 func (c *conversation) consider() {
+	if e := c.early; e != nil && (c.now().Sub(e.at) > earlyFor || c.phase != phaseIdle) {
+		// No question came: the word went over the threshold after all, and its own claim stands in,
+		// or it fell away too low or was not asked about.
+		c.dropEarly()
+	}
 	defer func() {
 		w := c.watch
 		c.hears.Store(w != nil && w.mode == watchStream && !w.closing && c.proven)
@@ -683,6 +791,7 @@ func (c *conversation) endWatch() {
 		return
 	}
 	w.closing = true
+	w.settle(false)
 	w.stop()
 	if w.timeout != nil {
 		w.timeout.Stop()
@@ -698,6 +807,7 @@ func (c *conversation) dropWatch() {
 	if w == nil {
 		return
 	}
+	w.settle(false)
 	w.stop()
 	if w.timeout != nil {
 		w.timeout.Stop()
@@ -748,6 +858,15 @@ func (c *conversation) watchAudio(ctx context.Context, pre []int16, frames <-cha
 			send(frame)
 		}
 	}
+}
+
+// CandidateStarting is a wake's score going over the confirm threshold, before it is known whether it
+// stays under the word's own: the other devices are told of it at once (#685).
+func (v *Voice) CandidateStarting(slot int) {
+	if micTaken() {
+		return
+	}
+	v.turn.post(event{kind: evCandidateStart, slot: slot})
 }
 
 // Candidate is a wake the device's own engine was not sure of, to be asked about when confirming is on.

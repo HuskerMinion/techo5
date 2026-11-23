@@ -57,6 +57,10 @@ type Sensor struct {
 	last float64
 	at   time.Time
 
+	// live is Run reading: a sensor that reports by itself sends nothing while the room stays as it
+	// is, so its last reading stands for as long as it is still being read (Live).
+	live bool
+
 	dev  *input.Device
 	poll poller // athena on mainline and the Skylight instead of dev
 
@@ -89,6 +93,14 @@ func (s *Sensor) Current() (lux float64, at time.Time, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.last, s.at, !s.at.IsZero()
+}
+
+// Live is whether the sensor is being read now: while it is, the last reading is the room as it is,
+// however long ago it came, since a steady room sends nothing.
+func (s *Sensor) Live() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.live
 }
 
 // Start switches the sensor on and opens its input node.
@@ -187,6 +199,14 @@ func (s *Sensor) Run(ctx context.Context) error {
 		defer stop()
 		done = make(chan struct{})
 		s.pollStop, s.pollDone = stop, done
+	}
+	if p != nil || dev != nil {
+		s.live = true
+		defer func() {
+			s.mu.Lock()
+			s.live = false
+			s.mu.Unlock()
+		}()
 	}
 	s.mu.Unlock()
 	if p != nil {

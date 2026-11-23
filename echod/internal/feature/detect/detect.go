@@ -305,6 +305,12 @@ func newDetect() *Detect {
 		}
 		voice.Get().Candidate(slot, peak)
 	}
+	e.OnCandidateStart = func(slot int) {
+		if phone.Get().Busy() || talkback.Get().Busy() || voice.Get().HomeAssistantHears(slot) {
+			return
+		}
+		voice.Get().CandidateStarting(slot)
+	}
 
 	d = &Detect{engine: e, busy: newWakeBusy(led.Get().Busy(), e.Ready), base: base}
 	d.ducker = newDucker()

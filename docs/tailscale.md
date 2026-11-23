@@ -95,7 +95,8 @@ page also names the Headscale the device is on.
 
 ## Remote setup
 
-The setup page normally needs a press on the device. For a device nobody can stand at:
+The setup page normally needs a press on the device, or **Let in from Home Assistant** for a browser on
+the device's home network ([setup.md](setup.md#the-setup-page)). For a device in another home:
 
 1. Turn on **Remote setup** in Home Assistant. It opens the setup page and lets the tailnet reach it,
    for this opening of the page only. It needs an API encryption key.

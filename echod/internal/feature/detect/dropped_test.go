@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // failing is a model that loads and then fails every inference, as one using an operator the engine
@@ -17,8 +18,46 @@ func (failing) Err() error                    { return errors.New("unsupported M
 
 func TestAModelThatFailsEveryInferenceIsDropped(t *testing.T) {
 	b := &microBackend{}
-	if b.run("w", failing{}, [][]int8{make([]int8, 40)}) {
+	feat := [][]int8{make([]int8, 40)}
+	for i := 1; i < failsToDrop; i++ {
+		if !b.run("w", failing{}, feat) {
+			t.Fatalf("dropped after %d failed inferences, before %d", i, failsToDrop)
+		}
+	}
+	if b.run("w", failing{}, feat) {
 		t.Error("a model whose every inference fails was kept, scoring nothing")
+	}
+}
+
+// flaky fails when told to, and runs otherwise, as a detector's Err reports only the last inference.
+type flaky struct{ fail *bool }
+
+func (flaky) ProcessFeatures([][]int8) bool { return false }
+func (flaky) SlidingAverage() float64       { return 0 }
+func (f flaky) Err() error {
+	if *f.fail {
+		return errors.New("a bad frame")
+	}
+	return nil
+}
+
+func TestAModelThatFailsNowAndThenIsKept(t *testing.T) {
+	b := &microBackend{}
+	feat := [][]int8{make([]int8, 40)}
+	fail := false
+	for i := range 10 * failsToDrop {
+		fail = i%(failsToDrop/2) == 0 // a bad frame now and then, never a run of them
+		if !b.run("w", flaky{&fail}, feat) {
+			t.Fatalf("dropped at inference %d for failing now and then", i)
+		}
+	}
+}
+
+func TestWakeWordProblemCutsOnACharacter(t *testing.T) {
+	d := &Detect{wakeProblem: newWakeProblemEntity()}
+	d.setWakeProblem([]string{strings.Repeat("é", 200)}) // two bytes each: byte 252 can split one
+	if got := d.wakeProblem.Get(); !utf8.ValidString(got) || !strings.HasSuffix(got, "...") {
+		t.Errorf("not valid UTF-8 or not cut: %q", got[len(got)-8:])
 	}
 }
 

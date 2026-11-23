@@ -1382,7 +1382,8 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 
-	if _, showing := remind.Get().Showing(); showing && g.Kind == touch.Tap &&
+	n, noticeUp := notify.Get().Card()
+	if _, showing := remind.Get().Showing(); showing && !criticalOnTop(noticeUp, n) && g.Kind == touch.Tap &&
 		d.r != nil && image.Pt(g.X, g.Y).In(d.r.reminderBox()) {
 		go remind.Get().Stop()
 		d.wake()
@@ -1390,8 +1391,9 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 
 	// A notification's card, the same way: a tap on the card puts it away and tells Home Assistant;
-	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it.
-	if n, up := notify.Get().Card(); up && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
+	// anywhere else is a tap on what is behind it. Under the reminder, which is drawn over it, but for a
+	// critical one, which is drawn over the reminder (criticalOnTop).
+	if noticeUp && g.Kind == touch.Tap && d.r != nil && image.Pt(g.X, g.Y).In(d.r.notifyBoxFor(n)) {
 		d.r.tapNotifyCard(n, image.Pt(g.X, g.Y))
 		d.wake()
 		return
@@ -2863,30 +2865,22 @@ func (d *Display) frame() (next time.Duration) {
 
 	d.mu.Lock()
 	booting, started := d.booting, d.started
-	if booting && now.Sub(started) >= splashMin && homeAssistantHere() {
-		d.booting, booting = false, false
-		slog.Info("splash done", "after", now.Sub(started).Round(time.Millisecond))
-	}
-	// A ring ends the splash whatever else is or is not ready. Waiting on Home Assistant's voice
-	// pipeline has no timeout, so a device that never reaches it stays on the logo forever — and an
-	// alarm going off behind a logo is a screen that will not say what is making the noise or where
-	// to press to stop it. Nothing the splash is waiting for is needed to draw a ringing page.
-	if booting && ring.any() {
-		d.booting, booting = false, false
-		slog.Info("splash cut short: something is ringing", "after", now.Sub(started).Round(time.Millisecond))
-	}
-	// So does the Wi-Fi page: it opens by itself on a device with no address, which is a device whose
-	// splash would otherwise wait for a Home Assistant it cannot reach, over the one page that fixes it.
-	if booting && d.wifiOpen {
-		d.booting, booting = false, false
-		slog.Info("splash cut short: Wi-Fi setup", "after", now.Sub(started).Round(time.Millisecond))
-	}
-	// And a device with no Home Assistant access: one that left the Home Assistant it had, or never
-	// had one. Home Assistant may still add it, but nothing says it will, and the clock, the alarms
-	// and the settings - the way to the setup page among them - were all behind the logo.
-	if booting && now.Sub(started) >= noHomeAssistantWait && !hass.Get().Ready() {
-		d.booting, booting = false, false
-		slog.Info("splash cut short: no Home Assistant access", "after", now.Sub(started).Round(time.Millisecond))
+	// The splash ends once Home Assistant is listening. A ring ends it whatever else is or is not
+	// ready: an alarm going off behind a logo is a screen that will not say what is making the noise or
+	// where to press to stop it. So does the Wi-Fi page, which opens by itself on a device with no
+	// address, over a splash that would otherwise wait for a Home Assistant it cannot reach. And so does
+	// a Home Assistant that does not come, with access to one or without: the clock, the alarms and the
+	// settings, the way to the setup page among them, were all behind the logo (splashGivesWay).
+	if booting {
+		if ends, why := splashGivesWay(now.Sub(started), homeAssistantHere(), ring.any(), d.wifiOpen,
+			hass.Get().Ready()); ends {
+			d.booting, booting = false, false
+			if why == "done" {
+				slog.Info("splash done", "after", now.Sub(started).Round(time.Millisecond))
+			} else {
+				slog.Info("splash cut short: "+why, "after", now.Sub(started).Round(time.Millisecond))
+			}
+		}
 	}
 	d.mu.Unlock()
 	if booting {

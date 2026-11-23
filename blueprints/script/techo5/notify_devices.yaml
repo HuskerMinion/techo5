@@ -241,10 +241,17 @@ sequence:
                     brightness_rise: "{{ brightness_rise | default(0) | int(0) }}"
                   continue_on_error: true
               else:
-                # Every card goes through notify_buttons, which with no buttons is notify_sized with a
-                # chime volume of its own.
-                - action: "esphome.{{ repeat.item }}_notify_buttons"
-                  data: >-
-                    {{ dict(words, icon=icon | default(''), size='', buttons=pressable,
-                            volume=volume | default(0) | int(0)) }}
-                  continue_on_error: true
+                # A card with buttons or a chime volume of its own goes through notify_buttons (v1.6.49
+                # and later); any other goes through notify, which every release has, so a plain card
+                # still reaches a device that has not updated yet.
+                - if: "{{ pressable != '' or (volume | default(0) | int(0)) > 0 }}"
+                  then:
+                    - action: "esphome.{{ repeat.item }}_notify_buttons"
+                      data: >-
+                        {{ dict(words, icon=icon | default(''), size='', buttons=pressable,
+                                volume=volume | default(0) | int(0)) }}
+                      continue_on_error: true
+                  else:
+                    - action: "esphome.{{ repeat.item }}_notify"
+                      data: "{{ dict(words, icon=icon | default('')) }}"
+                      continue_on_error: true

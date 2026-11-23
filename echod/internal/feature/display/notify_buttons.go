@@ -40,15 +40,6 @@ func pulseColor(a float64) color.RGBA {
 	return color.RGBA{uint8(float64(danger.R) * a), uint8(float64(danger.G) * a), uint8(float64(danger.B) * a), 0xff}
 }
 
-// criticalScreen is the pulse behind a card, drawn before it: the whole screen around the card in red
-// at strength a, so it is seen from across the room. One fill, cheap enough to redraw every pulseFrame.
-func (r *paint) criticalScreen(a float64) { fillCanvas(r.dst, pulseColor(a)) }
-
-// criticalEdge is the card's red edge while it pulses, drawn over the card.
-func (r *paint) criticalEdge(box image.Rectangle) {
-	r.roundStroke(box, r.cardRad(), float64(r.s(8)), danger)
-}
-
 const (
 	// notifyButtonH is a button's height, and notifyButtonGap the room between two, in the Show 5's
 	// pixels (paint.s).
@@ -123,14 +114,22 @@ func (d *Display) followCriticalLight() {
 		d.critSeen = l.Since
 		go d.relight(true)
 	}
-	if d.critWoke == "" {
+	d.mu.Lock()
+	woke := d.critWoke
+	d.mu.Unlock()
+	if woke == "" {
 		return
 	}
-	if n, up := notify.Get().Showing(); up && n.ID == d.critWoke {
+	if n, up := notify.Get().Showing(); up && n.ID == woke {
+		return
+	}
+	d.mu.Lock()
+	if d.critWoke != woke {
+		// Another critical notification lit the face in between, and keeps it lit.
+		d.mu.Unlock()
 		return
 	}
 	d.critWoke = ""
-	d.mu.Lock()
 	on := d.on
 	d.mu.Unlock()
 	if on {

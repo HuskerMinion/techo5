@@ -438,6 +438,12 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.recordingFace(s)
 		return
 	}
+	// A critical notification over a reminder and an announcement: it rings until it is answered, and
+	// its face is how. A camera view is still over it, as over any notification.
+	if s.showNotification && s.notification.Critical && !s.showCamera {
+		r.notifyFace(s)
+		return
+	}
 	// A reminder over an announcement: it was set for now, for somebody here, and it stays until it
 	// is dealt with, where an announcement goes by itself.
 	if s.showReminder {

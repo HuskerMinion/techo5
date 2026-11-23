@@ -264,7 +264,7 @@ func TestTheStopWordQuietsACriticalNotification(t *testing.T) {
 	}
 
 	r = newRig(t, false)
-	b = bellFor(r)
+	_ = bellFor(r)
 	_ = r.f.NotifyCritical("Smoke in the hall", "Smoke", "", "", 0, "", "", 0, 0, 0, 0)
 	if !r.f.silence() {
 		t.Fatal("not silenced on a Dot")
@@ -383,4 +383,47 @@ func TestClearingACriticalNotificationStopsItsBell(t *testing.T) {
 	if b.stopped() != 1 || r.last().Data["event"] != "expired" {
 		t.Errorf("stops %d, last %v", b.stopped(), r.last().Data)
 	}
+}
+
+// A critical notification holds others back only while it rings. Quieted (the stop word, Stop, a button
+// that leaves it up), it is a card like any other: a picture is shown over it rather than refused, and
+// words replace it rather than waiting up to its twelve hours.
+func TestAQuietedCriticalNotificationNoLongerHoldsOthersBack(t *testing.T) {
+	r := newRig(t, true)
+	_ = bellFor(r)
+	_ = r.f.NotifyCritical("Water under the sink", "Leak", "", "leak", 0, "", "", 0, 0, 0, 0)
+	if !r.f.silence() {
+		t.Fatal("not silenced")
+	}
+	_ = r.f.Notify("Washer done", "Washer", "", "", "", "washer", 0)
+	if n, _ := r.f.Card(); n.Title != "Washer" {
+		t.Errorf("the card is %q, want the washer's: the quieted critical one held it back", n.Title)
+	}
+	if got := r.fired(); !same(got, []string{"shown", "replaced", "shown"}) {
+		t.Errorf("events %v", got)
+	}
+
+	r = newRig(t, true)
+	_ = bellFor(r)
+	_ = r.f.NotifyCritical("Water under the sink", "Leak", "", "leak", 0, "", "", 0, 0, 0, 0)
+	_ = r.f.silence()
+	if err := r.f.NotifyPicture("Doorbell", "", "/local/door.png", "", "", "", "", 0); err != nil && strings.Contains(err.Error(), "critical") {
+		t.Errorf("a picture was refused over a quieted critical card: %v", err)
+	}
+}
+
+// A card that waited while a critical notification rang comes up once the bell is quieted, as one sent
+// after the quieting does.
+func TestAParkedCardComesUpWhenTheCriticalBellIsQuieted(t *testing.T) {
+	r := newRig(t, true)
+	_ = bellFor(r)
+	_ = r.f.NotifyCritical("Water under the sink", "Leak", "", "leak", 0, "", "", 0, 0, 0, 0)
+	_ = r.f.Notify("Washer done", "Washer", "", "", "", "washer", 0)
+	if n, _ := r.f.Card(); n.Title != "Leak" {
+		t.Fatalf("the card is %q while the bell rings", n.Title)
+	}
+	if !r.f.silence() {
+		t.Fatal("not silenced")
+	}
+	waitFor(t, "the waiting card", func() bool { n, up := r.f.Card(); return up && n.Title == "Washer" })
 }

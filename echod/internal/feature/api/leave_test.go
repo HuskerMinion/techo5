@@ -27,8 +27,16 @@ func TestLeaveForgetsTheAccessAndChangesTheKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	discarded := 0
+	wasDiscard := discardSendspin
+	discardSendspin = func() error { discarded++; return nil }
+	t.Cleanup(func() { discardSendspin = wasDiscard })
+
 	if err := leave(keyPath, hassPath); err != nil {
 		t.Fatal(err)
+	}
+	if discarded != 1 {
+		t.Errorf("the Sendspin identity was discarded %d times, want once", discarded)
 	}
 	if _, err := os.Stat(hassPath); !os.IsNotExist(err) {
 		t.Errorf("the Home Assistant access is still there (%v)", err)

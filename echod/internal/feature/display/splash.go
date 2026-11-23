@@ -62,7 +62,33 @@ const (
 	// Home Assistant to add it before showing the clock: a device already in a Home Assistant is
 	// usually listening well inside it.
 	noHomeAssistantWait = 60 * time.Second
+
+	// unreachableWait is how long a device with Home Assistant access waits on the splash for a Home
+	// Assistant that does not come (#695): one that moved to a new address, or is down. Well past a
+	// Home Assistant restarting, which a device already in it rides out; then the clock, the alarms
+	// and the settings, the way to the setup page among them, which the splash had kept from reach.
+	unreachableWait = 3 * time.Minute
 )
+
+// splashGivesWay is whether the splash ends now, elapsed since the start, and why, for the log: Home
+// Assistant listening (after splashMin), or, while it is not, something ringing, the Wi-Fi page, no
+// Home Assistant access after noHomeAssistantWait, or access to one that has not come after
+// unreachableWait.
+func splashGivesWay(elapsed time.Duration, here, ringing, wifi, access bool) (bool, string) {
+	switch {
+	case here && elapsed >= splashMin:
+		return true, "done"
+	case ringing:
+		return true, "something is ringing"
+	case wifi:
+		return true, "Wi-Fi setup"
+	case !access && elapsed >= noHomeAssistantWait:
+		return true, "no Home Assistant access"
+	case access && elapsed >= unreachableWait:
+		return true, "Home Assistant has not come"
+	}
+	return false, ""
+}
 
 // splashInProportion is whether the mark is drawn in proportion to the panel (splashScale): on the
 // Skylight. A variable, which a board of this build sets.

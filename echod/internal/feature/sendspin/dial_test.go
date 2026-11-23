@@ -182,3 +182,35 @@ func TestTheDeviceAdvertisesAgainWhenMusicAssistantIsAway(t *testing.T) {
 	saw(true, 15*time.Second) // gave up on Music Assistant
 	saw(false, 2*time.Second) // gave up on servers dialing in, dialing again
 }
+
+// Music Assistant set up while the device advertises is dialed at once, not after advertiseFor.
+func TestMusicAssistantSetUpLaterIsDialedAtOnce(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	advertised := fakeAdvertise(t)
+	advertiseFor = time.Hour // only the new setting can end the advertising
+	port, dialed := fakeMA(t)
+	wasPort, wasRun := maPort, runSession
+	maPort = port
+	runSession = func(ctx context.Context, l *listener, conn *websocket.Conn, name string) error {
+		<-ctx.Done()
+		return nil
+	}
+	t.Cleanup(func() { maPort, runSession = wasPort, wasRun })
+
+	connectFor(t, newListener(nil, nil, func(string) {}))
+	for end := time.Now().Add(time.Second); time.Now().Before(end) && !advertised.Load(); time.Sleep(10 * time.Millisecond) {
+	}
+	if !advertised.Load() {
+		t.Fatal("not advertised before Music Assistant was set up")
+	}
+	tok := "t"
+	if err := config.Set().MusicAssistant().Server("http://127.0.0.1:8095", &tok); err != nil {
+		t.Fatal(err)
+	}
+	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if dialed.Load() > 0 {
+			return
+		}
+	}
+	t.Fatal("Music Assistant set up later was not dialed")
+}

@@ -161,3 +161,100 @@ func TestAFaintWakeIsNotClaimedAgain(t *testing.T) {
 	default:
 	}
 }
+
+// asking stands in for feature/nearest's unsure claim (#685): what it was told as each question ended.
+func withAsking(t *testing.T) *[]bool {
+	t.Helper()
+	var settled []bool
+	SetAskingClaim(func(int, float64) func(bool) {
+		return func(confirmed bool) { settled = append(settled, confirmed) }
+	})
+	t.Cleanup(func() { askingClaim.Store(nil) })
+	return &settled
+}
+
+// A candidate Home Assistant does not hear takes its unsure claim back, once.
+func TestAnUnheardCandidateTakesItsUnsureClaimBack(t *testing.T) {
+	settled := withAsking(t)
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.handle(event{kind: evCandidate, slot: 0, peak: 0.8})
+	if w.watch == nil || w.watch.settled == nil {
+		t.Fatal("no unsure claim made for the candidate asked about")
+	}
+	w.handle(event{kind: evUnconfirmed})
+	w.handle(event{kind: evRunEnd})
+	if len(*settled) != 1 || (*settled)[0] {
+		t.Fatalf("settled %v, want taken back once", *settled)
+	}
+}
+
+// One Home Assistant heard leaves its claim to the devices' decision, which stands in for it.
+func TestAHeardCandidateLeavesItsUnsureClaimToTheDecision(t *testing.T) {
+	settled := withAsking(t)
+	ct := withContest(t)
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.confirmedWake()
+	w.decision(ct, true)
+	if len(*settled) != 0 {
+		t.Fatalf("settled %v, want nothing: the decision's claim stands in", *settled)
+	}
+}
+
+// Without a decision to put it through, a heard one takes its claim back, so nobody waits on it.
+func TestAHeardCandidateWithNoDecisionTakesItsClaimBack(t *testing.T) {
+	settled := withAsking(t)
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.confirmedWake()
+	if len(*settled) != 1 || (*settled)[0] {
+		t.Fatalf("settled %v, want taken back once", *settled)
+	}
+}
+
+// The unsure claim goes out as the candidate's score first goes over (#685), and the question asked
+// about it once it falls away keeps that claim rather than making another.
+func TestAnEarlyUnsureClaimIsTheQuestionsOwn(t *testing.T) {
+	var made int
+	var settled []bool
+	SetAskingClaim(func(int, float64) func(bool) {
+		made++
+		return func(confirmed bool) { settled = append(settled, confirmed) }
+	})
+	t.Cleanup(func() { askingClaim.Store(nil) })
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.handle(event{kind: evCandidateStart, slot: 0})
+	if made != 1 || w.early == nil {
+		t.Fatalf("made %d claims, early %+v: want one as the score went over", made, w.early)
+	}
+	w.at = w.at.Add(400 * time.Millisecond)
+	w.handle(event{kind: evCandidate, slot: 0, peak: 0.8})
+	if made != 1 || w.early != nil || w.watch == nil || w.watch.settled == nil {
+		t.Fatalf("made %d claims, early %+v, watch %+v: want the question to keep the first", made, w.early, w.watch)
+	}
+	w.handle(event{kind: evUnconfirmed})
+	if len(settled) != 1 || settled[0] {
+		t.Fatalf("settled %v, want it taken back once", settled)
+	}
+}
+
+// An early claim no question takes over, the word having gone over the threshold or fallen away
+// unasked, is taken back.
+func TestAnEarlyUnsureClaimWithNoQuestionIsTakenBack(t *testing.T) {
+	settled := withAsking(t)
+	w := newWatcher(t, config.OnHA{Confirm: true})
+	w.handle(event{kind: evCandidateStart, slot: 0})
+	w.at = w.at.Add(earlyFor + 100*time.Millisecond)
+	w.consider()
+	if w.early != nil || len(*settled) != 1 || (*settled)[0] {
+		t.Fatalf("early %+v, settled %v: want it taken back", w.early, *settled)
+	}
+}
+
+// With confirming off, nothing is claimed early.
+func TestNoEarlyUnsureClaimWithConfirmOff(t *testing.T) {
+	withAsking(t)
+	w := newWatcher(t, config.OnHA{})
+	w.handle(event{kind: evCandidateStart, slot: 0})
+	if w.early != nil {
+		t.Fatal("an early unsure claim with confirming off")
+	}
+}

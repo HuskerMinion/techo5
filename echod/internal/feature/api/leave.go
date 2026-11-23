@@ -14,6 +14,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/talkback"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
@@ -25,7 +26,8 @@ import (
 // reach Home Assistant (the address and the token) is forgotten, and the key Home Assistant connects
 // with is replaced by a random one nobody holds, so that Home Assistant cannot connect again. Then a
 // restart, to serve the new key. Realtime voice's key and its token for Home Assistant go too: both are
-// the old owner's. Alarms, radio stations, the Wi-Fi and the rest stay as they are.
+// the old owner's. So do the Sendspin identity and pairing token, which Home Assistant handed to the old
+// owner's Music Assistant: the device comes back as a new player. Alarms, radio stations, the Wi-Fi and the rest stay as they are.
 //
 // Never a key of zeros: that is the library's "not provisioned yet", which lets whichever Home
 // Assistant adds the device first set its own key.
@@ -67,6 +69,9 @@ func (a *API) Actions() []*esphome.Action {
 // does not cut one off (a variable for the tests).
 var inCall = func() bool { return phone.Get().Busy() || talkback.Get().Busy() }
 
+// discardSendspin forgets the Sendspin identity and pairing token (a variable for the tests).
+var discardSendspin = sendspin.Discard
+
 // leaveEntry deletes Home Assistant's entry for this device, which holds a key the device no longer
 // has, when the access just forgotten was an administrator's (the client still holds it until the
 // restart). Without one it stays, for deleting by hand, as the docs say.
@@ -105,6 +110,9 @@ func leave(keyPath, hassPath string) error {
 		return err
 	}
 	if err := config.Set().Realtime().SetMCPToken(""); err != nil {
+		return err
+	}
+	if err := discardSendspin(); err != nil {
 		return err
 	}
 	if err := os.Remove(hassPath); err != nil && !errors.Is(err, fs.ErrNotExist) {

@@ -141,9 +141,17 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 		}
 		return nil, fmt.Errorf("waiting for server/init: %w", err)
 	}
+	// A paired device never takes a reply for a server from before encryption: whoever answered with
+	// something else, junk included, could otherwise turn its encryption off for a day.
+	notEncrypted := func(what string) error {
+		if st.Paired() {
+			return fmt.Errorf("waiting for server/init: %s, and this device is paired", what)
+		}
+		return ErrNotEncrypted
+	}
 	var env envelope
 	if kind != websocket.TextMessage || json.Unmarshal(reply, &env) != nil {
-		return nil, ErrNotEncrypted
+		return nil, notEncrypted("a reply that is not JSON")
 	}
 	switch env.Type {
 	case "server/init":
@@ -154,7 +162,7 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 		_ = json.Unmarshal(env.Payload, &p)
 		return nil, &RefusedError{Reason: p.Reason}
 	default:
-		return nil, ErrNotEncrypted
+		return nil, notEncrypted(fmt.Sprintf("%q", env.Type))
 	}
 	var si struct {
 		ServerID string `json:"server_id"`
