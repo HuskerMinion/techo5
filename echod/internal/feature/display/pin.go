@@ -86,19 +86,34 @@ func pinNow(now time.Time) pinView {
 func pinIsOpen() bool { return pinNow(time.Now()).open }
 
 // everyday is whether the settings row id is part of using the device rather than setting it up, and
-// so open to everyone while the lock is on: the alarms and timers, the alarm editor, the volume, the
-// tone, the headphones, the microphone, the wake sound, the sleep timer, and the brightness. Everything
-// else is behind the PIN, including rows added later: a row is open only by being named here.
+// so open to everyone while the lock is on. The line: how the device looks, sounds and is used here is
+// open (the alarms and timers, the volume and tone, the wake word, the speaking voice, quiet hours and
+// do not disturb, the brightness and the night, the skin, theme, colors, font and clock, what the clock,
+// the calendar and the photos look like); what the device connects to, shares, or takes from other
+// systems is behind the PIN (Wi-Fi, Bluetooth, streaming, Music Assistant, SSH, cameras and the screen
+// on the network, which calendars and photo folders it reads, the weather's place, the time zone,
+// updates), and so is what sends sound away from it unasked: the wake word's threshold, and the
+// presence camera. The voice assistant itself is chosen in Home Assistant, not here. Everything not
+// named is behind the PIN, including rows added later: a row is open only by being named here.
 func everyday(id string) bool {
-	for _, prefix := range []string{"alarm:", "timer:", "e."} {
+	// "cal_" is the calendar look rows' lookRowPrefix (calendar_look.go, not in the Spot's build).
+	for _, prefix := range []string{"alarm:", "timer:", "e.", "role:", "cal_"} {
 		if strings.HasPrefix(id, prefix) {
 			return true
 		}
 	}
 	switch id {
 	case "snoozed", "snooze", "ringvol", "alarmsound", "alarmwords", "alarmrise", "sunrise", "sunface", "allalarms", "newtimer", // Alarms & Timers
-		"volume", "voicevol", "callvol", "bass", "treble", "output", "mic", "waketone", "sleep", // Sound
-		"brightness", "auto", "dimmest": // Display
+		"volume", "voicevol", "callvol", "bass", "treble", "output", "mic", "sleep", // Sound
+		"wakeword", "waketone", "ttsvoice", "hasounds", "louder", "quiet", "dnd", "camerasound",
+		"brightness", "auto", "dimmest", "idledim", "roomlights", "awayoff", // Display
+		"night", "atnight", "nightstyle", "nightglow", "nightinfo", "nightalarm", "nighttap",
+		"skin", "theme", "colors", "colorsdone", "font", "textsize",
+		"clock", "clockstyle", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "clocktap",
+		"musicstrip", "musiclayout", "follow", "lyrics", "callbutton", "callscreen", "answertime", "timerstyle", "turnstyle",
+		"weatherfx", "alerts", "radarsrc", "camtime", "camfit", "cambands", "camshade",
+		"slideshow", "weatherart", "photoevery", "shuffle", "wholephoto", "photopairs", "photocaption", "photocountdown", // Photos
+		"calpop", "calpopwhen", "calpopsound", "calpopallday": // Calendar (its look rows by their prefix)
 		return true
 	}
 	return false
