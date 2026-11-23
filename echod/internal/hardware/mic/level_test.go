@@ -2,7 +2,10 @@ package mic
 
 import (
 	"math"
+	"math/rand"
 	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // speech is a frame at a given level, as a tone: the leveler only looks at how loud a frame is.
@@ -408,5 +411,72 @@ func TestFloorIsPublishedForOtherGoroutines(t *testing.T) {
 	l.forget()
 	if back := s.Floor(); back != 0 {
 		t.Errorf("after forgetting the floor is %.1f dB, want full scale", back)
+	}
+}
+
+// A quiet room on a Dot, an Echo 2 or a Spot is around one sample step in the level's band, or under it
+// (#377), so the published floor has to go that low to show it, while the level, which is measured against
+// the same floor, must not start reading the rounding of that room as something happening.
+func TestTheRoomFloorShowsARoomUnderTheLevelsLeast(t *testing.T) {
+	l := newLeveler()
+	l.atGain(config.DefaultMicGain)
+	l.atSensitivity(config.DefaultSensitivity)
+	s := &Source{leveler: l}
+	gate := 20 * math.Log10(float64(quietest(config.DefaultMicGain))/fullScale)
+	room := 20 * math.Log10(float64(roomQuietest(config.DefaultMicGain))/fullScale)
+
+	// Ten seconds of a room under one sample step, rounded to whole steps as the frames are.
+	rng := rand.New(rand.NewSource(377))
+	frame := make([]int16, FrameSamples)
+	most := 0.0
+	for range 500 {
+		for i := range frame {
+			frame[i] = int16(math.Round(0.6 * rng.NormFloat64()))
+		}
+		l.observe(frame)
+		most = max(most, float64(math.Float32frombits(l.level.Load())))
+	}
+	floor := s.Floor()
+	t.Logf("a room of 0.6 steps: floor %.1f dBFS, least for the level %.1f, for the floor %.1f, level at most %.3f",
+		floor, gate, room, most)
+	if floor > gate-10 {
+		t.Errorf("the floor reads %.1f dBFS on a room under one step; want well under the level's least, %.1f", floor, gate)
+	}
+	if floor < room {
+		t.Errorf("the floor reads %.1f dBFS, under its own least of %.1f", floor, room)
+	}
+	if most > 0 {
+		t.Errorf("the rounding of a quiet room read as a level of %.3f; want 0", most)
+	}
+
+	// Something a little over the level's least, but under the sensitivity above it, is still nothing,
+	// even though it is far over the room's floor: the level counts from the higher of the two.
+	if got := levelAfter(l, gate+float64(config.DefaultSensitivity)/2, 5); got > 0 {
+		t.Errorf("a sound %d dB over the level's least read %.3f; want 0", config.DefaultSensitivity/2, got)
+	}
+
+	// Digital silence takes the floor to its least and no further, and it stays a number.
+	l.forget()
+	clear(frame)
+	for range 500 {
+		l.observe(frame)
+	}
+	if got := s.Floor(); math.IsInf(got, 0) || math.IsNaN(got) || math.Abs(got-room) > 0.1 {
+		t.Errorf("on digital silence the floor reads %.1f dBFS, want its least, %.1f", got, room)
+	}
+}
+
+// The room's least sits a fixed distance under the level's at every gain, so both move with the gain the
+// same way.
+func TestTheRoomsLeastFollowsTheGain(t *testing.T) {
+	for _, db := range []int{0, config.DefaultMicGain, 40, 59} {
+		under := 20 * math.Log10(float64(quietest(db)/roomQuietest(db)))
+		if math.Abs(under-roomUnderQuietestDB) > 0.01 {
+			t.Errorf("at %d dB of gain the room's least is %.2f dB under the level's, want %.0f", db, under, roomUnderQuietestDB)
+		}
+	}
+	if roomQuietest(0) >= roomQuietest(config.DefaultMicGain) {
+		t.Errorf("the room's least does not come down with the gain: %.4f at 0 dB, %.4f at %d",
+			roomQuietest(0), roomQuietest(config.DefaultMicGain), config.DefaultMicGain)
 	}
 }
