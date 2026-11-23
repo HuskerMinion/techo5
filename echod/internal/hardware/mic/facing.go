@@ -68,3 +68,7 @@ func (s *Source) findFacing(raw []byte, mics [][]int16) {
 	s.finder.Look(mics)
 	s.facing.Store(int32(s.finder.Beam()))
 }
+
+// HasDirection is whether this board's array was measured, so that Facing is a bearing on the ring
+// worth showing anyone: only then is a direction offered outside the daemon.
+func HasDirection() bool { return arrayGeometry != nil }

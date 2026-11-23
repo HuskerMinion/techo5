@@ -92,6 +92,9 @@ type Detect struct {
 	// frames is how the wake word loop keeps up: see newFrameEntities.
 	frames frameEntities
 
+	// direction is Wake word direction, nil on a board that cannot tell (newDirectionEntity).
+	direction *esphome.Sensor
+
 	// clipsTotal and clipsKinds are how many wake clips the device keeps, and keepClips is Keep wake
 	// clips, which turns the recorder on: see clips.go.
 	clipsTotal *esphome.Sensor
@@ -294,6 +297,8 @@ func newDetect() *Detect {
 			// The other devices that heard it may be asked first which of them heard it best
 			// (feature/nearest); with that off, or nobody to ask, the turn opens at once as it always
 			// has.
+			// Before the turn opens, so that whatever the turn sets off already reads where it came from.
+			setDirection(d.direction)
 			d.wakeHeard(slot)
 		default:
 			slog.Debug("wake word ignored during a call or a talk through a camera", "slot", slot+1)
@@ -350,6 +355,7 @@ func newDetect() *Detect {
 	d.onHA = newOnHAEntities()
 	e.OnScored = func(slot int, peak, _ float64) { d.scored(slot, peak) }
 	d.frames = newFrameEntities()
+	d.direction = newDirectionEntity()
 	e.OnFrames = d.frames.set
 	// A wake Home Assistant confirmed is a wake, and its score is what says how far under the threshold
 	// the word is landing. One it did not confirm is not shown: it opened nothing.

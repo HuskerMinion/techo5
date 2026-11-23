@@ -43,10 +43,11 @@ func audioOutput() []string {
 }
 
 // presence, presence_detection and presence_sensitivity are put up where the speaker and the microphones
-// can see motion by ultrasound (feature/ultrasound): the Echo Dot 5th gen.
+// can see motion by ultrasound (feature/ultrasound): the Echo Dot 5th gen. So is wake_direction, which
+// needs the array's measured geometry (feature/detect/direction.go).
 func presence() []string {
 	if layout.Cannoli() {
-		return []string{"presence", "presence_detection", "presence_sensitivity"}
+		return []string{"presence", "presence_detection", "presence_sensitivity", "wake_direction"}
 	}
 	return nil
 }
