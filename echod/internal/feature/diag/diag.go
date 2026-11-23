@@ -28,6 +28,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
@@ -276,6 +277,7 @@ func (d *Diag) soon() {
 // until Home Assistant asks, so a device that waited would report nothing at all until then — and a
 // restart is exactly when somebody is looking.
 func (d *Diag) Run(ctx context.Context) error {
+	safe.Go("lux as it changes", func() { d.followLux(ctx) })
 	for {
 		d.Sample()
 

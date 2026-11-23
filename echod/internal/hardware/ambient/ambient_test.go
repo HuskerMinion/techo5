@@ -65,3 +65,31 @@ func TestIIOReportsScaledLuxAndCancels(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Live says the sensor is being read: while it is, a reading of any age is the room as it is, since
+// a steady room sends nothing (techo5-dot#54); once Run ends, it is not.
+func TestLiveWhileRunReads(t *testing.T) {
+	dir := t.TempDir()
+	for name, value := range map[string]string{"in_illuminance_raw": "90", "in_illuminance_scale": "0.5"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s := &Sensor{poll: metricsLux(filepath.Join(dir, "in_illuminance_raw"))}
+	if s.Live() {
+		t.Fatal("live before Run")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	var during bool
+	s.Lux.Listen(func(float64) { during = s.Live(); cancel() })
+	if err := s.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !during {
+		t.Error("not live while Run read")
+	}
+	if s.Live() {
+		t.Error("still live after Run ended")
+	}
+	_ = s.Close()
+}
