@@ -118,6 +118,11 @@ type leveler struct {
 	hp                 float32
 	lpA, hpA           float32
 	bandRMS, bandFloor float32
+	// levelFloor is bandFloor held at least, followed on its own: the floor the published level is
+	// measured against. Taken from bandFloor it would sit at least while bandFloor climbed back up
+	// from far under it, so a fan starting after a long quiet spell would read as loud for most of a
+	// minute rather than becoming the room as it did before #377.
+	levelFloor float32
 
 	// unclamped follows the band the way bandFloor does without the least it may go to, and lowest is the
 	// least it reached since the last log line, unclampedFrames frames ago: how quiet the room really is,
@@ -140,7 +145,7 @@ type leveler struct {
 // a room it has adapted badly to.
 func (l *leveler) forget() {
 	l.gain = float32(math.Pow(10, startGainDB/20))
-	l.floor, l.bandFloor = fullScale, fullScale
+	l.floor, l.bandFloor, l.levelFloor = fullScale, fullScale, fullScale
 	l.publish()
 }
 
@@ -167,11 +172,12 @@ func newLeveler() *leveler {
 		levelUp:   float32(1 - math.Exp(-frame/levelAttack.Seconds())),
 		levelDown: float32(1 - math.Exp(-frame/levelRelease.Seconds())),
 
-		bandFloor: fullScale,
-		unclamped: fullScale,
-		lowest:    fullScale,
-		lpA:       float32(1 - math.Exp(-2*math.Pi*levelHighHz/Rate)),
-		hpA:       float32(1 - math.Exp(-2*math.Pi*levelLowHz/Rate)),
+		bandFloor:  fullScale,
+		levelFloor: fullScale,
+		unclamped:  fullScale,
+		lowest:     fullScale,
+		lpA:        float32(1 - math.Exp(-2*math.Pi*levelHighHz/Rate)),
+		hpA:        float32(1 - math.Exp(-2*math.Pi*levelLowHz/Rate)),
 	}
 
 	l.atGain(config.Get().Microphone.Gain)
@@ -232,7 +238,8 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 	l.bandPublished.Store(math.Float32bits(l.bandFloor))
 	l.logUnclamped(least)
 
-	l.publishLevel(l.bandRMS, max(l.bandFloor, least))
+	l.levelFloor = follow(l.levelFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	l.publishLevel(l.bandRMS, l.levelFloor)
 	return rms, peak
 }
 
