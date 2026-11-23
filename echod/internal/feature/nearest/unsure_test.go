@@ -119,3 +119,17 @@ func TestAskingTellsTheOthersAndTakesItBack(t *testing.T) {
 		t.Error("an unsure claim with nearest device answers off")
 	}
 }
+
+// A device that keeps sending fresh unsure claims holds the wake word unsureFor at most in all, not
+// unsureFor from each one.
+func TestFreshUnsureClaimsDoNotHoldForever(t *testing.T) {
+	h := newHouse(t)
+	h.n.Woke(0)
+	for i := range 8 {
+		h.unsureFrom("Lounge", "u"+string(rune('a'+i)), 30)
+		h.until(500 * time.Millisecond)
+	}
+	if len(h.opened) != 1 {
+		t.Fatalf("opened %d turns after 4 s of fresh unsure claims, want it answered once", len(h.opened))
+	}
+}

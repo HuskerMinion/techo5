@@ -465,6 +465,12 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		elsewhere = mine.elsewhere
 		if !beaten && !elsewhere && able {
 			unsure, hold = n.unsureSince(mine.at.Add(-mine.window), mine.claim, now)
+			// However many unsure claims come, the wake word is held unsureFor at most in all: each new
+			// one would otherwise start the wait again, and a device that kept sending them (a broken
+			// one, or one that has lost track of its turns) would keep this one from ever answering.
+			if hold && !mine.held.IsZero() && now.Sub(mine.held) >= unsureFor {
+				hold = false
+			}
 			if hold {
 				first = mine.held.IsZero()
 				if first {
