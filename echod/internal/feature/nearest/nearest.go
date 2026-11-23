@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"sync"
@@ -102,6 +103,11 @@ type claim struct {
 	Word      string  `json:"word,omitempty"`
 	Score     float64 `json:"score"`
 	Withdrawn bool    `json:"withdrawn,omitempty"`
+
+	// Confidence is the wake-word model's score and Energy the speech-band level in dB. They break
+	// near-ties in better. A claim has both or neither, and an older device sends neither.
+	Confidence *float64 `json:"confidence,omitempty"`
+	Energy     *float64 `json:"energy,omitempty"`
 }
 
 // arrived is a claim from another device and when it came.
@@ -141,14 +147,16 @@ type Nearest struct {
 
 	// The device, replaced in tests: which wakes open a turn, whether one could, how well this device
 	// heard the word, whether it hears at all, the others, how a claim reaches them, and the clock.
-	woke      func(slot int, at time.Time)
-	wokeNow   func(slot int)
-	faint     func(slot int, at time.Time) // a faint win (won): asked about first, else woke's (#503)
-	busy      func() bool
-	canAnswer func(slot int) bool
-	wakeWord  func(slot int) string
-	score     func() float64
-	hears     func() bool
+	woke       func(slot int, at time.Time)
+	wokeNow    func(slot int)
+	faint      func(slot int, at time.Time) // a faint win (won): asked about first, else woke's (#503)
+	busy       func() bool
+	canAnswer  func(slot int) bool
+	wakeWord   func(slot int) string
+	score      func() float64
+	energy     func() float64
+	confidence func(slot int) float64 // set by the detector (SetConfidence)
+	hears      func() bool
 	// onCall is whether a call is up here and lets the wake word through (phone.WakeAllowed): a wake word
 	// heard during one is most likely for this device, the one somebody wants to hang up, so its claim
 	// leads by onCallLead. Only then: a device on a call that does not take wake words claims as any other.
@@ -206,6 +214,7 @@ func build() *Nearest {
 			return ""
 		},
 		score:  func() float64 { return mic.Get().Standout(heard) },
+		energy: func() float64 { return mic.Get().Energy(heard) },
 		hears:  layout.HasMicrophone,
 		onCall: func() bool { return phone.Get().Busy() && phone.Get().WakeAllowed() },
 		peers:  announce.Peers,
@@ -317,7 +326,7 @@ func hearing(peers []announce.Peer) []announce.Peer {
 // takes part, could answer, and has somebody to ask who could hear it too; otherwise it claims the word, and opens the turn
 // after the window only if no device claimed it better or had already answered it.
 func (n *Nearest) Woke(slot int) {
-	n.contend(n.wakeWord(slot), n.now(),
+	n.contend(n.wakeWord(slot), n.confidenceOf(slot), n.now(),
 		func() bool { return n.canAnswer(slot) },
 		func(at time.Time, score float64) { n.won(slot, at, score) },
 		func() { n.wokeNow(slot) })
@@ -327,7 +336,7 @@ func (n *Nearest) Woke(slot int) {
 // word): the claim goes out at once, as Woke's does, and gate decides whether the turn opens once this
 // device has won it, sending what was said since at from the history.
 func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
-	n.contend(n.wakeWord(slot), at,
+	n.contend(n.wakeWord(slot), n.confidenceOf(slot), at,
 		func() bool { return n.canAnswer(slot) },
 		func(at time.Time, score float64) { gate(func() { n.won(slot, at, score) }) },
 		func() { gate(func() { n.woke(slot, at) }) })
@@ -353,7 +362,7 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
 // confirmed it, so a faint one is not asked about again (#503).
 func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
-	n.contendHeard(n.wakeWord(slot), at, clarity,
+	n.contendHeard(n.wakeWord(slot), n.confidenceOf(slot), at, clarity,
 		func() bool { return n.canAnswer(slot) },
 		func(time.Time, float64) { decide(true) },
 		func() {
@@ -398,23 +407,53 @@ func (n *Nearest) Asking(slot int, clarity float64) (settled func(confirmed bool
 // after the window, and the others hear nothing of it. Word names what was said, so it is not taken for
 // a wake word or for another word.
 func (n *Nearest) Answer(word string, can func() bool, act func()) {
-	n.contend(word, n.now(), can, func(time.Time, float64) { act() }, act)
+	n.contend(word, 0, n.now(), can, func(time.Time, float64) { act() }, act)
+}
+
+// SetConfidence tells nearest where to read the wake-word model's score for a slot's latest detection.
+func (n *Nearest) SetConfidence(f func(slot int) float64) {
+	n.mu.Lock()
+	n.confidence = f
+	n.mu.Unlock()
+}
+
+func (n *Nearest) confidenceOf(slot int) float64 {
+	n.mu.Lock()
+	f := n.confidence
+	n.mu.Unlock()
+	if f == nil {
+		return 0
+	}
+	return f(slot)
+}
+
+// measured returns the confidence and energy for a claim, or nil for both when confidence is zero (a
+// word that is not a wake word) or either value is not finite.
+func (n *Nearest) measured(confidence float64) (*float64, *float64) {
+	if confidence <= 0 || n.energy == nil {
+		return nil, nil
+	}
+	e := n.energy()
+	if math.IsNaN(confidence) || math.IsInf(confidence, 0) || math.IsNaN(e) || math.IsInf(e, 0) {
+		return nil, nil
+	}
+	return &confidence, &e
 }
 
 // contend is the claim every word goes through. open runs after the window, with the time the word was
 // heard and this device's score for it, if this device is the nearest; now runs in its place when there
 // is nobody to ask. A turn that is already open is not claimed over.
-func (n *Nearest) contend(word string, at time.Time, can func() bool, open func(time.Time, float64), now func()) {
+func (n *Nearest) contend(word string, confidence float64, at time.Time, can func() bool, open func(time.Time, float64), now func()) {
 	if !n.open() || n.busy() || !can() {
 		now()
 		return
 	}
-	n.contendHeard(word, at, n.score(), can, open, now, nil)
+	n.contendHeard(word, confidence, at, n.score(), can, open, now, nil)
 }
 
 // contendHeard is contend with how clearly this device heard the word already measured, and lost, if
 // not nil, run when another device has it instead.
-func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, can func() bool, open func(time.Time, float64), now, lost func()) {
+func (n *Nearest) contendHeard(word string, confidence float64, at time.Time, clarity float64, can func() bool, open func(time.Time, float64), now, lost func()) {
 	if !n.open() || n.busy() || !can() {
 		now()
 		return
@@ -427,9 +466,11 @@ func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, can f
 
 	c := config.Get()
 	window := c.Nearest.Window()
+	conf, energy := n.measured(confidence)
 	mine := &pending{
 		claim: claim{From: c.Device.Name, Turn: newTurn(), Word: word,
-			Score: clarity + float64(c.Nearest.Offset) + n.callBonus()},
+			Score:      clarity + float64(c.Nearest.Offset) + n.callBonus(),
+			Confidence: conf, Energy: energy},
 		at:      at,
 		window:  window,
 		clarity: clarity,
@@ -583,13 +624,31 @@ func (n *Nearest) unsureSince(from time.Time, mine claim, now time.Time) (arrive
 	return best, found
 }
 
-// better is whether a heard the word better than b. A tie goes to the name that sorts first, so two
-// devices that tie still agree on one.
+// better is whether a heard the word better than b. Scores within the same 1 dB are a tie, broken by
+// energy, then confidence, then the exact score, then the name, so every device picks the same winner. A
+// claim without the measurements sorts below a measured one with the same rounded score, which keeps the
+// order consistent when older devices take part.
 func better(a, b claim) bool {
+	if ra, rb := math.Round(a.Score), math.Round(b.Score); ra != rb {
+		return ra > rb
+	}
+	if ea, eb := orLowest(a.Energy), orLowest(b.Energy); ea != eb {
+		return ea > eb
+	}
+	if ca, cb := orLowest(a.Confidence), orLowest(b.Confidence); ca != cb {
+		return ca > cb
+	}
 	if a.Score != b.Score {
 		return a.Score > b.Score
 	}
 	return a.From < b.From
+}
+
+func orLowest(p *float64) float64 {
+	if p == nil {
+		return math.Inf(-1)
+	}
+	return *p
 }
 
 // answeredElsewhere is a device that had already answered telling this one so, for the claim mine.

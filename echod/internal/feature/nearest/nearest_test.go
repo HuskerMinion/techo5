@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -229,6 +230,46 @@ func TestATieGoesToTheNameThatSortsFirst(t *testing.T) {
 	}
 	if better(claim{From: "Office", Score: 20}, claim{From: "Den", Score: 20}) {
 		t.Error("Office should lose a tie with Den")
+	}
+}
+
+// Each claim is better than every claim after it, whichever pair is compared.
+func TestNearTiesAndOlderDevices(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	m := func(name string, score, conf, energy float64) claim {
+		return claim{From: name, Score: score, Confidence: f(conf), Energy: f(energy)}
+	}
+	order := []claim{
+		m("d", 20, 0.1, 10),   // more than 1 dB closer beats louder and more confident
+		m("c", 10, 0.1, 60),   // within 1 dB, energy decides
+		m("b", 10.4, 0.9, 50), // then confidence
+		m("a", 10, 0.8, 50),
+		m("y", 10, 0.7, 50), // then name
+		m("z", 10, 0.7, 50),
+		{From: "old", Score: 10.4}, // an older device sorts below measured claims with the same rounded score
+		{From: "older", Score: 9.6},
+		m("far", 5, 1, 99),
+	}
+	for i := range order {
+		for j := range order {
+			if got, want := better(order[i], order[j]), i < j; got != want {
+				t.Fatalf("better(%s, %s) = %v, want %v", order[i].From, order[j].From, got, want)
+			}
+		}
+	}
+}
+
+func TestAnOlderClaimHasNoMeasurementsOnTheWire(t *testing.T) {
+	b, err := json.Marshal(claim{From: "A", Turn: "t", Score: 3})
+	if err != nil || strings.Contains(string(b), "confidence") || strings.Contains(string(b), "energy") {
+		t.Fatalf("an unmeasured claim sends measurements: %s, %v", b, err)
+	}
+	n := &Nearest{energy: func() float64 { return 40 }}
+	if c, e := n.measured(0); c != nil || e != nil {
+		t.Fatal("a word with no confidence should not be measured")
+	}
+	if c, e := n.measured(0.8); c == nil || e == nil || *e != 40 {
+		t.Fatal("a wake word should be measured")
 	}
 }
 

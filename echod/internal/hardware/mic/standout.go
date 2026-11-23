@@ -35,6 +35,7 @@ type standout struct {
 
 	mu     sync.Mutex
 	blocks [standoutBlocks]float32 // dB over the floor, newest at at-1
+	energy [standoutBlocks]float32 // the same blocks' band level in dB, not against the floor
 	at     int
 	filled bool
 }
@@ -96,10 +97,15 @@ func (s *standout) add(frame []int16, least float32) {
 	if mean := math.Sqrt(s.sum / float64(s.n)); s.floor > 0 && mean > float64(s.floor) {
 		over = float32(min(20*math.Log10(mean/float64(s.floor)), standoutMax))
 	}
+	level := float32(0)
+	if mean := math.Sqrt(s.sum / float64(s.n)); mean > 1 {
+		level = float32(20 * math.Log10(mean))
+	}
 	s.sum, s.n = 0, 0
 
 	s.mu.Lock()
 	s.blocks[s.at] = over
+	s.energy[s.at] = level
 	s.at = (s.at + 1) % len(s.blocks)
 	s.filled = s.filled || s.at == 0
 	s.mu.Unlock()
@@ -109,7 +115,12 @@ func (s *standout) add(frame []int16, least float32) {
 func (l *leveler) leastNow() float32 { return math.Float32frombits(l.least.Load()) }
 
 // best is the most any reading in the last d stood over the floor, in dB.
-func (s *standout) best(d time.Duration) float64 {
+func (s *standout) best(d time.Duration) float64 { return s.top(d, &s.blocks) }
+
+// loudest is the most any block in the last d reached in the band, in dB, for the energy of a word.
+func (s *standout) loudest(d time.Duration) float64 { return s.top(d, &s.energy) }
+
+func (s *standout) top(d time.Duration, blocks *[standoutBlocks]float32) float64 {
 	want := int(d / (standoutBlock * FrameSamples * time.Second / Rate))
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -120,7 +131,7 @@ func (s *standout) best(d time.Duration) float64 {
 	want = min(max(want, 1), have)
 	var top float32
 	for i := 1; i <= want; i++ {
-		top = max(top, s.blocks[(s.at-i+len(s.blocks))%len(s.blocks)])
+		top = max(top, blocks[(s.at-i+len(blocks))%len(blocks)])
 	}
 	return float64(top)
 }
@@ -131,7 +142,8 @@ func (s *standout) best(d time.Duration) float64 {
 func (s *Source) SetStandout(on bool) {
 	if on && !s.standout.on.Load() {
 		s.standout.mu.Lock()
-		s.standout.blocks, s.standout.at, s.standout.filled = [standoutBlocks]float32{}, 0, false
+		s.standout.blocks, s.standout.energy = [standoutBlocks]float32{}, [standoutBlocks]float32{}
+		s.standout.at, s.standout.filled = 0, false
 		s.standout.mu.Unlock()
 		s.standout.fresh.Store(true)
 	}
@@ -145,4 +157,13 @@ func (s *Source) Standout(d time.Duration) float64 {
 		return 0
 	}
 	return s.standout.best(d)
+}
+
+// Energy is the loudest the speech band was in the last d, in dB (20 log10 of its RMS in sample units,
+// so it compares between devices with the same microphones and gain); zero while it is not measured.
+func (s *Source) Energy(d time.Duration) float64 {
+	if !s.standout.on.Load() {
+		return 0
+	}
+	return s.standout.loudest(d)
 }
