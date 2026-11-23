@@ -30,8 +30,19 @@ func TestMain(m *testing.M) {
 
 func fakeFFmpeg() {
 	args := os.Args[1:]
+	if p := os.Getenv("TECHO5_FAKE_ARGS"); p != "" {
+		// Each run's arguments, a line each, for a test to see how it was started.
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+			_, _ = f.WriteString(strings.Join(args, " ") + "\n")
+			f.Close()
+		}
+	}
 	if !slices.Contains(args, "pipe:3") {
-		os.Stderr.WriteString(probeMP4)
+		probe := probeMP4
+		if os.Getenv("TECHO5_FAKE_LIVE") != "" {
+			probe = strings.Replace(probe, "Duration: 00:10:34.53", "Duration: N/A", 1)
+		}
+		os.Stderr.WriteString(probe)
 		os.Exit(1)
 	}
 	size, _ := strconv.Atoi(os.Getenv("TECHO5_FAKE_FRAME"))

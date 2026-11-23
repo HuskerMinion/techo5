@@ -35,6 +35,15 @@ func (r *renderer) videoButtons() (play, stop, quieter, louder image.Rectangle) 
 	return play, stop, quieter, louder
 }
 
+// videoSkipButtons are the back and forward a DLNA video has while its controller listens
+// (videoSkip): after stop, in the left group.
+func (r *renderer) videoSkipButtons() (back, next image.Rectangle) {
+	_, stop, _, _ := r.videoButtons()
+	step := image.Pt(r.s(videoButtonW)+r.s(videoGap), 0)
+	back = stop.Add(step)
+	return back, back.Add(step)
+}
+
 // videoPage draws the video page and says what of it goes over the picture.
 func (r *renderer) videoPage(s scene) (over image.Rectangle) {
 	r.zmu.Lock()
@@ -106,10 +115,20 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	if s.video.Phase == video.Paused {
 		mark = "play"
 	}
-	for _, b := range []struct {
+	type button struct {
 		rect image.Rectangle
 		icon string
-	}{{play, mark}, {stop, "stop"}, {quieter, "volume-minus"}, {louder, "volume-plus"}} {
+	}
+	buttons := []button{{play, mark}, {stop, "stop"}, {quieter, "volume-minus"}, {louder, "volume-plus"}}
+	zones := []image.Rectangle{play, stop, quieter, louder}
+	lastLeft := stop
+	if s.videoSkip {
+		back, next := r.videoSkipButtons()
+		buttons = append(buttons, button{back, "skip-previous"}, button{next, "skip-next"})
+		zones = append(zones, back, next) // videoTapBack, videoTapNext, in videoTap's order
+		lastLeft = next
+	}
+	for _, b := range buttons {
 		style := btnSecondary
 		if b.rect == play {
 			style = btnPrimary
@@ -118,7 +137,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 		r.mdiIcon(b.icon, b.rect.Min.X+(b.rect.Dx()-r.s(videoIcon))/2, b.rect.Min.Y+(b.rect.Dy()-r.s(videoIcon))/2, videoIcon, fg)
 	}
 	// The name and where it is, between the two groups.
-	left, right := stop.Max.X+r.s(28), quieter.Min.X-r.s(28)
+	left, right := lastLeft.Max.X+r.s(28), quieter.Min.X-r.s(28)
 	name := s.video.Title
 	if name == "" {
 		name = s.video.Host
@@ -138,7 +157,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	r.text(r.tiny, at, left, mid+r.s(32), dim)
 
 	r.zmu.Lock()
-	r.videoZones = []image.Rectangle{play, stop, quieter, louder}
+	r.videoZones = zones
 	r.zmu.Unlock()
 	return strip
 }

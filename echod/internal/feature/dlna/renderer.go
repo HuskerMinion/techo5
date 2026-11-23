@@ -66,6 +66,22 @@ type renderer struct {
 	pausedFor time.Duration
 	ended     bool // the song played to its end (not stopped, not replaced)
 	endedGen  int  // the start whose stream ran out on its own (the source saw the end of it)
+	// playingGen is the start whose song the speaker has: a seek's start is a new one, and the song it
+	// moves on from keeps the speaker (and can still run out) until the new place has come.
+	playingGen int
+
+	// Moving through the song (seek.go): how, once found out (smap; mapping while it is being, which
+	// mapCancel ends and mapGen tells from one ended), and a seek asked for and not yet landed, whose
+	// target the position reads as meanwhile.
+	smap       *seekMap
+	mapping    string
+	mapCancel  context.CancelFunc
+	mapGen     int
+	seeking    bool
+	seekTo     time.Duration
+	seekTimer  *time.Timer        // the settle before a burst's last seek is carried out
+	seekOnPlay bool               // a seek while paused, carried out on Play
+	seekFetch  context.CancelFunc // ends a seek's fetch, when another takes its place
 
 	// videoID is the video feature/video is playing for the current song, when it is a video.
 	videoID uint64
@@ -135,7 +151,7 @@ func (r *renderer) avTransport(name string, args map[string]string, from string)
 		r.stop()
 		return nil, nil
 	case "Seek":
-		return nil, errNotSupported
+		return nil, r.seek(args["Unit"], args["Target"])
 	case "Next", "Previous":
 		return nil, errNoContents
 	case "GetTransportInfo":
@@ -155,8 +171,11 @@ func (r *renderer) avTransport(name string, args map[string]string, from string)
 			if dur == 0 {
 				dur = vdur
 			}
+			if r.seeking {
+				pos = r.seekTo
+			}
 		}
-		return []kv{{"Track", track}, {"TrackDuration", hms(dur)}, {"TrackMetaData", r.cur.meta}, {"TrackURI", r.cur.uri},
+		return []kv{{"Track", track}, {"TrackDuration", hms(dur)}, {"TrackMetaData", r.cur.meta}, {"TrackURI", shownURI(r.cur, from)},
 			{"RelTime", hms(pos)}, {"AbsTime", "NOT_IMPLEMENTED"}, {"RelCount", "2147483647"}, {"AbsCount", "2147483647"}}, nil
 	case "GetMediaInfo":
 		r.sync()
@@ -166,22 +185,15 @@ func (r *renderer) avTransport(name string, args map[string]string, from string)
 		if r.cur.uri != "" {
 			n = "1"
 		}
-		return []kv{{"NrTracks", n}, {"MediaDuration", hms(r.cur.dur)}, {"CurrentURI", r.cur.uri}, {"CurrentURIMetaData", r.cur.meta},
-			{"NextURI", r.next.uri}, {"NextURIMetaData", r.next.meta}, {"PlayMedium", "NETWORK"},
+		return []kv{{"NrTracks", n}, {"MediaDuration", hms(r.cur.dur)}, {"CurrentURI", shownURI(r.cur, from)}, {"CurrentURIMetaData", r.cur.meta},
+			{"NextURI", shownURI(r.next, from)}, {"NextURIMetaData", r.next.meta}, {"PlayMedium", "NETWORK"},
 			{"RecordMedium", "NOT_IMPLEMENTED"}, {"WriteStatus", "NOT_IMPLEMENTED"}}, nil
 	case "GetDeviceCapabilities":
 		return []kv{{"PlayMedia", "NETWORK"}, {"RecMedia", "NOT_IMPLEMENTED"}, {"RecQualityModes", "NOT_IMPLEMENTED"}}, nil
 	case "GetTransportSettings":
 		return []kv{{"PlayMode", "NORMAL"}, {"RecQualityMode", "NOT_IMPLEMENTED"}}, nil
 	case "GetCurrentTransportActions":
-		actions := "Play"
-		switch r.sync() {
-		case stPlaying:
-			actions = "Pause,Stop"
-		case stPaused:
-			actions = "Play,Stop"
-		}
-		return []kv{{"Actions", actions}}, nil
+		return []kv{{"Actions", r.actions()}}, nil
 	}
 	return nil, errInvalidAction
 }
@@ -203,6 +215,8 @@ func (r *renderer) set(uri, meta, from string) error {
 	paused := r.state == stPaused
 	r.cur, r.next, r.ended = s, song{}, false
 	r.state = stStopped // a song set while another plays or waits paused is started afresh below
+	r.clearSeekLocked()
+	r.clearMapLocked()
 	r.mu.Unlock()
 	slog.Info("dlna: song set", "from", from, "title", s.title, "video", s.video)
 	if paused && media.Get().Receiving() == home.DLNAName {
@@ -258,6 +272,14 @@ func (r *renderer) play() error {
 		r.mu.Unlock()
 		return errNoContents
 	}
+	if r.state == stPaused && r.seekOnPlay && !r.cur.video {
+		// Moved while paused: the song is fetched from the new place, in place of carrying on from the
+		// old one.
+		r.startSeekLocked(r.seekTo)
+		r.mu.Unlock()
+		r.f.e.changed()
+		return nil
+	}
 	if r.state == stPaused {
 		r.pausedFor += time.Since(r.pausedAt)
 		r.pausedAt = time.Time{}
@@ -273,13 +295,16 @@ func (r *renderer) play() error {
 		r.f.e.changed()
 		return nil
 	}
-	if r.state == stPlaying {
+	if r.state == stPlaying || (r.state == stLoading && r.seekFetch != nil) || (r.cur.video && r.state == stLoading && r.videoID != 0) {
+		// Playing, or moving to a new place to play from (a video the player has is TRANSITIONING
+		// while it starts, and again while a seek starts its decoder there): a Play after a Seek, as
+		// many controllers send, is not a start from the beginning.
 		r.mu.Unlock()
 		return nil
 	}
 	r.gen++
 	gen, s := r.gen, r.cur
-	r.state, r.ended = stLoading, false
+	r.state, r.ended, r.playingGen = stLoading, false, 0
 	if r.fetching != nil {
 		r.fetching() // a start still connecting, overtaken: it goes, rather than run to its timeout
 	}
@@ -291,7 +316,7 @@ func (r *renderer) play() error {
 		return r.startVideo(gen, s)
 	}
 	r.f.e.changed()
-	safe.Go("dlna song", func() { r.start(ctx, gen, s) })
+	safe.Go("dlna song", func() { r.start(ctx, gen, s, nil) })
 	return nil
 }
 
@@ -347,73 +372,210 @@ func (r *renderer) stopVideo() {
 	}
 }
 
-// start fetches the song and hands it to the speaker.
-func (r *renderer) start(ctx context.Context, gen int, s song) {
+// start fetches the song and hands it to the speaker: from its start, or for a seek (sk) from the
+// place sk asks for, in place of the same song from where it was.
+func (r *renderer) start(ctx context.Context, gen int, s song, sk *seekReq) {
 	// A server that answers and then sends nothing is given up on, rather than left TRANSITIONING.
 	ctx, giveUp := context.WithCancel(ctx)
 	slow := time.AfterFunc(firstBytes, giveUp)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.uri, nil)
-	if err != nil {
-		slow.Stop()
-		giveUp()
-		return
-	}
-	resp, err := fetchClient.Do(req)
-	if err == nil && resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		err = fmt.Errorf("the server answered %s", resp.Status)
-	}
-	var pcm io.Reader
-	if err == nil {
-		pcm, err = media.DecodeStream(bufio.NewReaderSize(resp.Body, 64<<10), resp.Header.Get("Content-Type"))
-		if err != nil {
-			resp.Body.Close()
-		}
+	var (
+		pcm    io.Reader
+		body   io.ReadCloser
+		at     time.Duration
+		length int64
+		ranges bool
+		err    error
+	)
+	if sk == nil {
+		pcm, body, length, ranges, err = fetchSong(ctx, s.uri)
+	} else {
+		pcm, body, at, err = sk.m.open(ctx, fetchClient, sk.to)
 	}
 	slow.Stop() // the song is coming (or has failed): no more waiting on its first bytes
+	ours, _ := speakerState()
 	r.mu.Lock()
 	if r.gen != gen {
 		r.mu.Unlock()
 		if err == nil {
-			resp.Body.Close()
+			body.Close()
 		}
 		return
 	}
-	if err != nil {
+	if err == nil && sk != nil && !ours {
+		// Something else took the speaker while the place was being fetched: the seek does not take it
+		// back.
+		body.Close()
 		r.state = stStopped
+		r.clearSeekLocked()
 		r.mu.Unlock()
-		slog.Warn("dlna: the song could not be played", "title", s.title, "err", err)
 		r.f.e.changed()
 		return
 	}
+	if err != nil {
+		resume := false
+		if sk != nil {
+			// The song plays on from where it was (paused, it is carried on: Play was what asked, and the
+			// time it was paused is not counted in where it is).
+			slog.Warn("dlna: the song could not be moved", "title", s.title, "to", sk.to.Round(time.Second), "err", err)
+			r.state, r.seekFetch = stPlaying, nil
+			if !r.pausedAt.IsZero() {
+				r.pausedFor += time.Since(r.pausedAt)
+				r.pausedAt = time.Time{}
+			}
+			if r.seekTimer == nil {
+				r.seeking = false
+			}
+			r.publishPositionLocked(1)
+			resume = true
+		} else {
+			r.state = stStopped
+			r.clearSeekLocked()
+			slog.Warn("dlna: the song could not be played", "title", s.title, "err", err)
+		}
+		r.mu.Unlock()
+		if resume && media.Get().Receiving() == home.DLNAName {
+			media.Get().Resume()
+		}
+		r.f.e.changed()
+		return
+	}
+	// From here the speaker is the new start's: the song it replaces running out now is not this
+	// one's end.
+	r.playingGen = gen
+	if sk != nil {
+		// The fetch is about to be the speaker's: a seek that overtakes this one from now on must not
+		// end it, or the sound would end with it. It is handed on below, with the source it goes into.
+		r.seekFetch = handedOver
+	}
 	r.mu.Unlock()
 
-	// The song's picture is cleared until the new one arrives, so the last song's is not left on it.
-	home.ReceivedPicture(home.DLNAName, nil)
-	src := newSource(pcm, resp.Body, func() {
+	if sk == nil {
+		// The song's picture is cleared until the new one arrives, so the last song's is not left on it.
+		// A seek is the same song, and keeps it.
+		home.ReceivedPicture(home.DLNAName, nil)
+	}
+	src := newSource(pcm, body, func() {
 		r.mu.Lock()
-		if r.gen == gen {
-			r.endedGen = gen
+		if r.playingGen == gen {
+			r.endedGen = r.gen
 		}
 		r.mu.Unlock()
 	})
-	media.Get().PlayReceived(home.DLNAName, src, speaker.Rate, 2)
-	media.Get().SetReceivedTrack(home.DLNAName, s.title, s.artist, s.album)
+	playOnSpeaker(src, s)
 
 	r.mu.Lock()
 	if r.gen != gen {
-		// Stopped or replaced while it was being started: it does not get to keep the speaker.
+		// Stopped or replaced while it was being started: it does not get to keep the speaker. A seek
+		// overtaken by another seek of the same song does: the next takes over from it.
+		keep := sk != nil && r.cur.uri == s.uri && (r.state == stPlaying || r.state == stPaused || r.state == stLoading)
+		var old context.CancelFunc
+		if keep {
+			// Its fetch is the song's now, until the next lands and replaces it (or fails, and this one
+			// plays on); the one before it went with the source this replaced.
+			old, r.fetching = r.fetching, sk.cancel
+		}
 		r.mu.Unlock()
-		if media.Get().Receiving() == home.DLNAName {
-			media.Get().Stop()
+		if old != nil {
+			old()
+		}
+		if !keep {
+			if sk != nil {
+				sk.cancel()
+			}
+			if media.Get().Receiving() == home.DLNAName {
+				media.Get().Stop()
+			}
 		}
 		return
 	}
-	r.state, r.started, r.pausedAt, r.pausedFor = stPlaying, time.Now(), time.Time{}, 0
+	r.state, r.started, r.pausedAt, r.pausedFor = stPlaying, time.Now().Add(-at), time.Time{}, 0
+	var old context.CancelFunc
+	if sk != nil {
+		// The fetch is the song's now; the old one's is closed with the source it replaced.
+		old, r.fetching, r.seekFetch = r.fetching, sk.cancel, nil
+		if r.seekTimer == nil {
+			r.seeking = false
+		}
+	}
 	r.publishPositionLocked(1)
+	mapped := r.smap != nil && r.smap.uri == s.uri
+	mapIt := sk == nil && length > 0 && ranges && !mapped && r.mapping != s.uri
+	var (
+		mapCtx    context.Context
+		mapCancel context.CancelFunc
+		mapGen    int
+	)
+	if mapIt {
+		// Found out once, however often the song is started meanwhile, and ended with the song.
+		r.stopMappingLocked()
+		mapCtx, mapCancel = context.WithTimeout(context.Background(), 20*time.Second)
+		r.mapping, r.mapCancel, mapGen = s.uri, mapCancel, r.mapGen
+	}
+	// A seek asked for while the song was starting: carried out now if the song is mapped, once it is
+	// if it is being, and forgotten if it cannot be (no length, or a server that sends no parts).
+	seekNow := false
+	if sk == nil && r.seeking && r.seekTimer == nil {
+		switch {
+		case mapped:
+			seekNow = true
+		case r.mapping != s.uri:
+			r.seeking = false
+		}
+	}
 	r.mu.Unlock()
-	safe.Go("dlna cover", func() { r.cover(gen, s.art) })
+	if old != nil {
+		old()
+	}
+	if sk == nil {
+		safe.Go("dlna cover", func() { r.cover(gen, s.art) })
+	}
+	if mapIt {
+		safe.Go("dlna seek map", func() { r.mapSong(mapCtx, mapCancel, mapGen, s, length) })
+	}
+	if seekNow {
+		r.seekNow()
+	}
 	r.f.e.changed()
+}
+
+// fetchSong fetches the song from its start, decoded: the speaker's samples and the body to close,
+// with the song's length in bytes and whether the server says it sends parts of it (a seek's Range
+// request), which is found out for sure after (mapSong).
+func fetchSong(ctx context.Context, uri string) (io.Reader, io.ReadCloser, int64, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, nil, 0, false, err
+	}
+	resp, err := fetchClient.Do(req)
+	if err != nil {
+		return nil, nil, 0, false, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, nil, 0, false, fmt.Errorf("the server answered %s", resp.Status)
+	}
+	pcm, err := media.DecodeStream(bufio.NewReaderSize(resp.Body, 64<<10), resp.Header.Get("Content-Type"))
+	if err != nil {
+		resp.Body.Close()
+		return nil, nil, 0, false, err
+	}
+	// A server that says nothing of ranges may still send them: asked, it says (mapSong). One that
+	// says it does not is believed.
+	ranges := !strings.EqualFold(strings.TrimSpace(resp.Header.Get("Accept-Ranges")), "none")
+	return pcm, resp.Body, resp.ContentLength, ranges, nil
+}
+
+// speakerState is whether the speaker has the renderer's song, and whether it is paused there; tests
+// put their own in.
+var speakerState = func() (ours, paused bool) {
+	_, paused = media.Get().ScreenState()
+	return media.Get().Receiving() == home.DLNAName, paused
+}
+
+// playOnSpeaker hands the song to the speaker as the renderer's received track; tests put their own in.
+var playOnSpeaker = func(src *source, s song) {
+	media.Get().PlayReceived(home.DLNAName, src, speaker.Rate, 2)
+	media.Get().SetReceivedTrack(home.DLNAName, s.title, s.artist, s.album)
 }
 
 // publishPositionLocked tells what is shown with the music (the lyrics) where the song is, moving at
@@ -457,7 +619,22 @@ func (r *renderer) cover(gen int, u string) {
 }
 
 func (r *renderer) pause() error {
-	if r.sync() != stPlaying {
+	st := r.sync()
+	r.mu.Lock()
+	if st == stLoading && r.seekFetch != nil && !r.cur.video {
+		// Paused while moving: the fetch goes, the song is held where it was, and the new place is
+		// fetched on Play, as a seek while paused is.
+		r.seekFetch()
+		r.seekFetch = nil
+		r.gen++
+		r.state, r.pausedAt, r.seeking, r.seekOnPlay = stPaused, time.Now(), true, true
+		r.mu.Unlock()
+		media.Get().Pause()
+		r.f.e.changed()
+		return nil
+	}
+	r.mu.Unlock()
+	if st != stPlaying {
 		return errNoContents
 	}
 	r.mu.Lock()
@@ -477,7 +654,8 @@ func (r *renderer) pause() error {
 func (r *renderer) stop() {
 	r.mu.Lock()
 	r.gen++
-	r.ended = false
+	r.ended, r.playingGen = false, 0
+	r.clearSeekLocked()
 	if r.fetching != nil {
 		r.fetching()
 		r.fetching = nil
@@ -504,6 +682,7 @@ func (r *renderer) off() {
 	r.stop()
 	r.mu.Lock()
 	r.cur, r.next, r.state = song{}, song{}, stNoMedia
+	r.clearMapLocked()
 	r.mu.Unlock()
 }
 
@@ -511,9 +690,8 @@ func (r *renderer) off() {
 // was replaced; one paused or resumed on the device's own screen is paused or playing. It returns the
 // state.
 func (r *renderer) sync() string {
-	ours := media.Get().Receiving() == home.DLNAName
-	_, paused := media.Get().ScreenState()
-	vs := video.Current()
+	ours, paused := speakerState()
+	vs := currentVideo()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.state == "" {
@@ -537,6 +715,18 @@ func (r *renderer) sync() string {
 		r.pausedFor += time.Since(r.pausedAt)
 		r.state, r.pausedAt = stPlaying, time.Time{}
 		r.publishPositionLocked(1)
+		if r.seekOnPlay {
+			// Carried on from the screen after a seek while paused: it goes to the new place now.
+			r.startSeekLocked(r.seekTo)
+		}
+	case r.state == stLoading && r.seekFetch != nil && !ours:
+		// Moving through the song when something else took the speaker: the song is over, by itself
+		// only if the song the seek moves on from ran out. The seek's start is overtaken (gen), so its
+		// fetch failing now does not carry the song on, nor its landing take the speaker back.
+		r.ended = r.endedGen == r.gen
+		r.gen++
+		r.state = stStopped
+		r.clearSeekLocked()
 	}
 	return r.state
 }
@@ -583,7 +773,7 @@ func (r *renderer) videoPosition() (pos, dur time.Duration, ok bool) {
 	if !isVideo || id == 0 {
 		return 0, 0, false
 	}
-	vs := video.Current()
+	vs := currentVideo()
 	if vs.ID != id {
 		return 0, 0, false
 	}
@@ -604,6 +794,7 @@ func (r *renderer) watch(ctx context.Context) {
 		advance := st == stStopped && r.ended && r.next.uri != ""
 		if advance {
 			r.cur, r.next, r.ended = r.next, song{}, false
+			r.clearMapLocked()
 		}
 		r.mu.Unlock()
 		if advance {
@@ -617,8 +808,12 @@ func (r *renderer) watch(ctx context.Context) {
 	}
 }
 
-// positionLocked is how far into the song it is, wants r.mu.
+// positionLocked is how far into the song it is, wants r.mu. A seek not yet landed reads as where it
+// is going.
 func (r *renderer) positionLocked() time.Duration {
+	if r.seeking && (r.state == stPlaying || r.state == stPaused || r.state == stLoading) {
+		return r.seekTo
+	}
 	if r.started.IsZero() || (r.state != stPlaying && r.state != stPaused) {
 		return 0
 	}

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 )
@@ -37,7 +39,27 @@ const (
 	videoTapStop
 	videoTapQuieter
 	videoTapLouder
+	// The back and forward a DLNA video has while its controller listens (videoSkip), drawn after
+	// the rest. The Spot's video screen has no skip buttons, so its build never names them.
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapBack
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapNext
 )
+
+// videoSkippable is whether the video the player has is a DLNA video whose controller hears a next or
+// a previous from the device (dlna.VideoSkippable): only then are they offered, never as buttons that
+// do nothing.
+func videoSkippable(st video.State) bool {
+	return st.Origin == video.FromDLNA && st.Active() && dlna.Get().VideoSkippable(st.ID)
+}
+
+// videoSkip passes a back or a forward on the video page to the DLNA controller (dlna.Skip).
+func videoSkip(t media.Transport) {
+	if !dlna.Get().Skip(t) {
+		slog.Info("screen: a skip on a video with nobody to hear it", "transport", t)
+	}
+}
 
 // videoAsk is the question about a DLNA video, as drawn.
 type videoAsk struct {

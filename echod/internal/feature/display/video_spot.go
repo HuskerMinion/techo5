@@ -99,6 +99,16 @@ func (d *Display) videoGestureSpot(g touch.Gesture) {
 		go video.Get().Stop()
 	case touch.SwipeUp:
 		show()
+	case touch.SwipeLeft, touch.SwipeRight:
+		// A DLNA video whose controller listens: the next or the one before, as a swipe on the music
+		// face is (stepStation). Nothing otherwise: a video has no stations to step through.
+		if st := video.Get().State(); videoSkippable(st) {
+			t := media.TransportNext
+			if g.Kind == touch.SwipeRight {
+				t = media.TransportPrevious
+			}
+			go videoSkip(t)
+		}
 	case touch.Tap:
 		d.mu.Lock()
 		shown := time.Now().Before(d.videoUntil)

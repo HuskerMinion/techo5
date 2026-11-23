@@ -58,6 +58,7 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	}
 	controls := now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
 	s.videoControls = controls
+	s.videoSkip = up && videoSkippable(st)
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
 	d.videoLive = s.videoLive
@@ -121,6 +122,12 @@ func (d *Display) videoGesture(g touch.Gesture) {
 			d.showVideoControls()
 		case videoTapLouder:
 			go media.Get().Adjust(+1)
+			d.showVideoControls()
+		case videoTapBack:
+			go videoSkip(media.TransportPrevious)
+			d.showVideoControls()
+		case videoTapNext:
+			go videoSkip(media.TransportNext)
 			d.showVideoControls()
 		default:
 			// Off the controls: they go, and the picture is the whole screen again.

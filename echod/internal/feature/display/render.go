@@ -331,11 +331,13 @@ type scene struct {
 	// video is the video player (feature/video); showVideo is its page, over everything but what covers
 	// it (videoCovered), and videoLive that page with its picture coming, when only its controls are
 	// drawn on the canvas; videoControls is the controls being up. showVideoAsk is the question about a
-	// DLNA video, videoAsk what it asks (render_video.go).
+	// DLNA video, videoAsk what it asks (render_video.go). videoSkip is a back and a forward on the
+	// controls, for a DLNA video whose controller is listening for them (dlna.VideoSkippable).
 	video         video.State
 	showVideo     bool
 	videoLive     bool
 	videoControls bool
+	videoSkip     bool
 	showVideoAsk  bool
 	videoAsk      videoAsk
 

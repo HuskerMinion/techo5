@@ -35,6 +35,7 @@ func TestTheVideoPage(t *testing.T) {
 		scenes := map[string]scene{
 			"video-picture":  {video: playing, showVideo: true, videoLive: true},
 			"video-controls": {video: playing, showVideo: true, videoLive: true, videoControls: true},
+			"video-skip":     {video: playing, showVideo: true, videoLive: true, videoControls: true, videoSkip: true},
 			"video-paused":   {video: paused, showVideo: true, videoLive: true, videoControls: true},
 			"video-volume":   {video: playing, showVideo: true, videoLive: true, volume: 9, showVolume: true},
 			"video-loading":  {video: loading, showVideo: true, videoControls: true},
@@ -70,6 +71,21 @@ func TestTheVideoPage(t *testing.T) {
 				}
 				if got := r.videoTapped(image.Pt(panel.wide/2, panel.high/3)); got != videoTapNone {
 					t.Errorf("%s%s: a tap on the picture gave %v", name, panel.name, got)
+				}
+				// Back and forward only for a DLNA video whose controller listens (videoSkip): otherwise
+				// where they would be is nothing, not a dead button.
+				back, next := r.videoSkipButtons()
+				for want, b := range map[videoTap]image.Rectangle{videoTapBack: back, videoTapNext: next} {
+					if !s.videoSkip {
+						want = videoTapNone
+					}
+					mid := b.Min.Add(image.Pt(b.Dx()/2, b.Dy()/2))
+					if got := r.videoTapped(mid); got != want {
+						t.Errorf("%s%s: a tap on %v gave %v, want %v (skip %v)", name, panel.name, mid, got, want, s.videoSkip)
+					}
+				}
+				if next.Max.X+r.s(28) >= quieter.Min.X {
+					t.Errorf("%s%s: forward %v runs into quieter %v", name, panel.name, next, quieter)
 				}
 			}
 			if dir == "" {

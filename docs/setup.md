@@ -612,11 +612,50 @@ HTTP.
   Jellyfin, Plex or Emby, a NAS's music app, foobar2000, Windows' Cast to device. It plays MP3, FLAC
   and WAV; most apps and servers convert anything else when asked. The song's name, artist and cover
   show as now playing, the app's volume slider sets the device's volume, and play, pause and stop go
-  both ways. Skipping within a song is not supported yet. It is off until turned on: anyone on the
+  both ways. Moving within a song (the app's slider, DLNA's Seek) works for an MP3 or WAV file, and
+  a FLAC that has a seek table (most do), when the server sends parts of a file, as Jellyfin, Plex,
+  Emby, MiniDLNA and BubbleUPnP do: the device fetches the song again from the new place. A FLAC
+  without a seek table, a live stream, and a server that only sends whole files can't be moved
+  through, and the app is told so (it can ask the renderer which it can do, and Seek is listed only
+  when it works). An MP3's new place is worked out from the file's length, or from its own table of
+  contents when it has one, so in a variable bit rate file without one it can land a second or two
+  off. It is off until turned on: anyone on the
   same network can play to it while it is on, as with any DLNA speaker, and can also ask what it is
   playing, including the song's address (some servers put a login token in it, as with any DLNA
   speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
-  ([Video](video.md)).
+  ([Video](video.md)). A program of your own on the device (one started from `rc.local`, see
+  [Running something of your own at boot](#running-something-of-your-own-at-boot)) can use it as
+  well, at `http://127.0.0.1:8181/dlna/device.xml`, while the DLNA switch is on: a video sent from
+  the device itself plays without the question on the screen, since only someone with a root shell
+  on the device could have put the program there. A program that passes on requests from other
+  devices on the network has to check them itself: the question is not asked for them. The device fetches the song or video from the address it is given, which
+  cannot be the device itself.
+
+  <a id="dlna-next-and-previous"></a>**Next and previous.** A DLNA renderer has no queue: the app
+  or program that sends it songs does. So next and previous pressed on the device, for a song or
+  video the renderer is playing (the Now Playing buttons on the Show, a swipe on the Spot, the
+  video's back and forward, the next song word for a song), are passed on to whoever subscribed to
+  the renderer's AVTransport events, to skip in its own queue and send the next song with
+  `SetAVTransportURI` as it would at a song's end. UPnP has no word for this, so it is one of TECHO5's own state variables in a
+  `LastChange` event of its own (listed in the AVTransport description):
+
+  ```xml
+  <Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/">
+    <InstanceID val="0">
+      <X_TECHO5_Request val="next:3"/>
+    </InstanceID>
+  </Event>
+  ```
+
+  `val` is `next` or `previous`, a colon and the press's number: `next:3`, then `previous:4`. The
+  number goes up by one with each press, from 1 when the daemon starts, and never repeats while it
+  runs, so two presses of next in a row are `next:5` and `next:6`: a controller can take a value
+  that differs from the last one it saw as a new press. The events that follow (the state changing)
+  don't carry the request again, and the state sent on subscribing never has one. Only AVTransport
+  subscribers are told, and only while one is subscribed: with none, the device offers no back and
+  forward on a DLNA video, the next song word only fires its event (`asked: false`), and the
+  buttons on the Now Playing page do nothing for DLNA, as for a station. The song here plays on until the controller sends another. Controllers
+  that don't know the variable ignore it, as UPnP says to.
 - **A phone over Bluetooth.** On the Show, the Spot and the Dot, the **Bluetooth phone**
   switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
   minutes the device can be found and paired with, with no scan for speakers, and a phone connects
@@ -1725,9 +1764,10 @@ music plays, never during a call, a talk through a camera, a request or a ring, 
 speaker muted, no allowance while the speaker plays), and is off until you choose a word.
 
 - **Next song word** asks whoever is sending the music for the next song when the device can ask:
-  Music Assistant, or a phone playing over AirPlay or Bluetooth. With nobody to ask (a client that
-  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect or DLNA that
-  can't be asked) it only fires the [command word event](actions.md#command-word-events), with
+  Music Assistant, a phone playing over AirPlay or Bluetooth, or a DLNA app or program that listens to
+  the renderer ([DLNA next and previous](#dlna-next-and-previous)). With nobody to ask (a client that
+  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect, or DLNA
+  with nobody listening, that can't be asked) it only fires the [command word event](actions.md#command-word-events), with
   `asked: false`, and whoever plays the music skips on that.
 - One model can't be two of these: chosen for more than one, it listens only as the first, in the
   order volume down, volume up, next song. The others keep their choice and listen again once it's
@@ -2732,6 +2772,25 @@ The Dot builds are small. The Echo Dot 2nd gen has about 445 MB of its 481 MB fr
 running, and the Echo Dot 3rd gen about 420 MB of its 470 MB when idle, with about 1 GB free on
 userdata. A helper that uses up the memory can get the daemon stopped, and an update that cannot keep
 the daemon up is rolled back, so keep what runs there light. The Echo Spot has 2 GB of memory.
+
+The device's firewall lets in from the network only the ports TECHO5 serves. It runs once, early in
+the boot, before the network and before `rc.local`, and is not run again when the network changes,
+so rules a script adds stay for as long as the device is up. A helper that listens on a port of its
+own opens it in a chain of its own, put first in INPUT (a rule appended after TECHO5's is never
+reached), for IPv4 and IPv6 alike. For a TCP port 32500, say:
+
+```sh
+for T in iptables-legacy ip6tables-legacy; do
+	$T -N MYHELPER-IN 2> /dev/null
+	$T -F MYHELPER-IN
+	$T -A MYHELPER-IN -p tcp --dport 32500 -j ACCEPT
+	$T -C INPUT -i wlan0 -j MYHELPER-IN 2> /dev/null || $T -I INPUT 1 -i wlan0 -j MYHELPER-IN
+done
+```
+
+Run again, it leaves one copy of each. Use the `-legacy` tools: the kernel has no nftables. The chain
+lets the port in and nothing else, and what it does not take goes on to TECHO5's rules as before.
+Talking to the daemon on the device itself, at `127.0.0.1`, needs no rule: loopback is never filtered.
 
 Anyone with SSH or a root shell can leave a script here that runs at every boot, so only put
 something here you trust.

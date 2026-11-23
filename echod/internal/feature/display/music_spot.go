@@ -107,9 +107,11 @@ func togglePlay() {
 }
 
 // stepStation plays the station after (or before) the one playing, round the current list. On another
-// room's player it is that player's next or previous track: it has no stations of this device's.
+// room's player it is that player's next or previous track: it has no stations of this device's. On a
+// DLNA song whose controller is listening it is the controller's next or previous (dlna.Skip, through
+// Transport), as the Show's buttons are.
 func stepStation(by int) {
-	if home.Following() {
+	if home.Following() || (media.Get().Receiving() == home.DLNAName && media.Get().SkipReaches()) {
 		if by > 0 {
 			transport(media.TransportNext)
 		} else {

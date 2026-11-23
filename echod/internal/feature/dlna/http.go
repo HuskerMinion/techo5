@@ -158,7 +158,10 @@ var avtVars = []stateVar{
 	{"AbsoluteCounterPosition", "i4", false, nil},
 	{"CurrentTransportActions", "string", false, nil},
 	{"LastChange", "string", true, nil},
-	{"A_ARG_TYPE_SeekMode", "string", false, []string{"REL_TIME", "TRACK_NR"}},
+	// TECHO5's own: next or previous pressed on the device, carried in LastChange only (events.request).
+	// Its value is "next" or "previous", a colon and the press's number: "next:3".
+	{"X_TECHO5_Request", "string", false, nil},
+	{"A_ARG_TYPE_SeekMode", "string", false, []string{"REL_TIME", "ABS_TIME", "TRACK_NR"}},
 	{"A_ARG_TYPE_SeekTarget", "string", false, nil},
 	{"A_ARG_TYPE_InstanceID", "ui4", false, nil},
 }
@@ -246,6 +249,7 @@ var (
 	errInvalidAction = soapError{401, "Invalid Action"}
 	errInvalidArgs   = soapError{402, "Invalid Args"}
 	errNotSupported  = soapError{710, "Seek mode not supported"}
+	errBadTarget     = soapError{711, "Illegal seek target"}
 	errNoContents    = soapError{701, "Transition not available"}
 	errNotVideo      = soapError{714, "Illegal MIME-type"}
 )

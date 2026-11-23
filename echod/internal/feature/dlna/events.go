@@ -39,6 +39,10 @@ type subscription struct {
 type events struct {
 	mu   sync.Mutex
 	subs map[string]*subscription
+
+	// requests counts the requests told (request): each one's number, so a controller can tell a
+	// second press from the same one heard twice.
+	requests uint32
 }
 
 func (e *events) handle(w http.ResponseWriter, r *http.Request, service string) {
@@ -106,7 +110,7 @@ func (e *events) subscribe(w http.ResponseWriter, r *http.Request, service strin
 	w.Header().Set("TIMEOUT", "Second-"+strconv.Itoa(int(subscribeFor/time.Second)))
 	w.WriteHeader(http.StatusOK)
 	// The first event is the whole state, sent once the answer is out.
-	body := lastChange(service)
+	body := lastChange(service, callbackHost(cb))
 	safe.Go("dlna event", func() {
 		time.Sleep(200 * time.Millisecond)
 		send(sid, s.callback, 0, body)
@@ -156,7 +160,7 @@ func (e *events) changed() {
 		if s.service == "ConnectionManager" {
 			continue
 		}
-		notes = append(notes, note{sid, s.callback, s.seq, lastChange(s.service)})
+		notes = append(notes, note{sid, s.callback, s.seq, lastChange(s.service, callbackHost(s.callback))})
 		s.seq++
 	}
 	e.mu.Unlock()
@@ -165,19 +169,70 @@ func (e *events) changed() {
 	}
 }
 
-// lastChange is a service's event: its state variables, in UPnP's LastChange form.
-func lastChange(service string) string {
+// listening is whether a controller is subscribed to the transport's events now: who a request
+// (request) would reach.
+func (e *events) listening() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.expireLocked()
+	for _, s := range e.subs {
+		if s.service == "AVTransport" {
+			return true
+		}
+	}
+	return false
+}
+
+// request tells the transport's subscribers that next or previous (what) was pressed on the device:
+// UPnP has no state variable for that, and a renderer has no queue to skip through, so it goes as one
+// of TECHO5's own (X_TECHO5_Request) in a LastChange of its own. Its value carries the press's number
+// ("next:3", "previous:4"), one more for each press and never the same twice in a run, so a controller
+// that takes a value differing from the last as a new press sees two nexts in a row as two. The controller that has the queue skips, and
+// sets the next song as it would for any other reason. It says whether anybody was told.
+func (e *events) request(what string) bool {
+	e.mu.Lock()
+	e.expireLocked()
+	e.requests++
+	inner := `<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">` +
+		`<X_TECHO5_Request val="` + what + ":" + strconv.FormatUint(uint64(e.requests), 10) + `"/>` +
+		`</InstanceID></Event>`
+	body := `<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property><LastChange>` + esc(inner) +
+		`</LastChange></e:property></e:propertyset>`
+	type note struct {
+		sid, cb string
+		seq     uint32
+	}
+	var notes []note
+	for sid, s := range e.subs {
+		if s.service != "AVTransport" {
+			continue // the volume's and the connection's subscribers have no queue to skip through
+		}
+		notes = append(notes, note{sid, s.callback, s.seq})
+		s.seq++
+	}
+	e.mu.Unlock()
+	for _, n := range notes {
+		safe.Go("dlna event", func() { send(n.sid, n.cb, n.seq, body) })
+	}
+	return len(notes) > 0
+}
+
+// lastChange is a service's event for the subscriber at host: its state variables, in UPnP's
+// LastChange form. The stream's address is whole only for the controller that set it (shownURI).
+func lastChange(service, host string) string {
 	var inner string
 	switch service {
 	case "AVTransport":
 		r := &Get().r
 		st := r.sync()
+		actions := r.actions()
 		r.mu.Lock()
 		cur := r.cur
 		r.mu.Unlock()
 		inner = `<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">` +
 			`<TransportState val="` + st + `"/><TransportStatus val="OK"/>` +
-			`<AVTransportURI val="` + esc(cur.uri) + `"/><CurrentTrackURI val="` + esc(cur.uri) + `"/>` +
+			`<CurrentTransportActions val="` + actions + `"/>` +
+			`<AVTransportURI val="` + esc(shownURI(cur, host)) + `"/><CurrentTrackURI val="` + esc(shownURI(cur, host)) + `"/>` +
 			`<CurrentTrackMetaData val="` + esc(cur.meta) + `"/><CurrentTrackDuration val="` + hms(cur.dur) + `"/>` +
 			`</InstanceID></Event>`
 	case "RenderingControl":
@@ -218,4 +273,12 @@ func send(sid, callback string, seq uint32, body string) {
 		return
 	}
 	resp.Body.Close()
+}
+
+// callbackHost is the host of a subscriber's callback address, "" when it cannot be read.
+func callbackHost(cb string) string {
+	if u, err := url.Parse(cb); err == nil {
+		return u.Hostname()
+	}
+	return ""
 }
