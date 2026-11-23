@@ -1,4 +1,4 @@
-//go:build dot && !donut && !cannoli
+//go:build dot && !donut
 
 package mic
 

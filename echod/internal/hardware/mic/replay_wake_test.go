@@ -1,4 +1,4 @@
-//go:build dot && !donut && !cannoli
+//go:build dot && !donut
 
 package mic
 
@@ -230,7 +230,7 @@ func scoreWake(t *testing.T, raw []byte, mixer Mixer, m wake.Model) []float64 {
 	for off := 0; off+period <= len(raw); off += period {
 		block := raw[off : off+period]
 		mics := Decode(block)
-		frame := mixer.Mix(mics)
+		frame := mixFrame(mixer, block, mics)
 		if canceled := c.apply(block, cancelInput(mixer, mics, frame)); canceled != nil {
 			frame = canceled
 		}

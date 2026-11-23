@@ -481,7 +481,7 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 	// The recent history is kept whether or not anyone is listening: a wake word is only recognized
 	// once it has been said, so by the time a turn starts, the words after it are already past.
 	mics := Decode(raw)
-	frame := s.mixer.Mix(mics)
+	frame := mixFrame(s.mixer, raw, mics)
 
 	// While something is playing, an echo canceled fixed path replaces the mix (cancelInput): the filter
 	// learns a single acoustic path, and the beamformer would steer at the loudest thing in the room,

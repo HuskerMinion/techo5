@@ -254,3 +254,102 @@ func (b *Beamformer) DirectivityDB(beam int, omega float64) float64 {
 	}
 	return -10 * math.Log10(diffuse)
 }
+
+// SetWeights replaces one bin of one beam with w, the weight vector as Superdirective or Constrained
+// gives it (not conjugated).
+func (b *Beamformer) SetWeights(beam, k int, w []complex128) {
+	for m := range w {
+		b.w[beam][k][m] = complex64(cmplx.Conj(w[m]))
+	}
+}
+
+// Bins is how many bins a block has, half the block and one.
+func (b *Beamformer) Bins() int { return b.n/2 + 1 }
+
+// Omega is bin k's angular frequency.
+func (b *Beamformer) Omega(k int) float64 { return 2 * math.Pi * float64(k) * b.rate / float64(b.n) }
+
+// Constrained is the superdirective weight vector that also nulls a second source: it passes a far
+// source at bearing unchanged and nothing of a source whose response across the microphones is null
+// (relative to any one of them), and of what is left lets through as little of a diffuse room as it can.
+// It is the linearly constrained minimum variance solution against the diffuse field, loaded until its
+// white noise gain reaches minWNG.
+//
+// The null is for the device's own speaker. It sits a few centimetres under the microphones, far
+// nearer than any talker, so its response is nothing like a far source's and has to be measured; and a
+// null on it takes out what the echo canceller cannot, the speaker's own distortion, which the
+// reference does not hold.
+func Constrained(g Geometry, omega, bearing float64, null []complex128, minWNG float64) []complex128 {
+	n := len(g)
+	d := Steering(g, omega, bearing)
+	gamma := diffuse(g, omega)
+	var w []complex128
+	for mu := 1e-4; ; mu *= 2 {
+		// Γ⁻¹d and Γ⁻¹h, then the 2×2 system that meets both constraints.
+		load := func() [][]complex128 {
+			a := make([][]complex128, n)
+			for i := range a {
+				a[i] = append([]complex128(nil), gamma[i]...)
+				a[i][i] += complex(mu, 0)
+			}
+			return a
+		}
+		gd := solve(load(), d)
+		gh := solve(load(), null)
+		dot := func(a, b []complex128) complex128 {
+			var s complex128
+			for i := range a {
+				s += cmplx.Conj(a[i]) * b[i]
+			}
+			return s
+		}
+		// [dᴴΓ⁻¹d dᴴΓ⁻¹h; hᴴΓ⁻¹d hᴴΓ⁻¹h] [a; b] = [1; 0]
+		m11, m12, m21, m22 := dot(d, gd), dot(d, gh), dot(null, gd), dot(null, gh)
+		det := m11*m22 - m12*m21
+		if cmplx.Abs(det) < 1e-12 {
+			// The null is where the talker is: nothing can tell them apart, so keep the talker.
+			return Superdirective(g, omega, bearing, minWNG)
+		}
+		a, b := m22/det, -m21/det
+		w = make([]complex128, n)
+		for i := range w {
+			w[i] = gd[i]*a + gh[i]*b
+		}
+		var norm float64
+		for _, v := range w {
+			norm += real(v)*real(v) + imag(v)*imag(v)
+		}
+		if 1/norm >= minWNG || mu > 1e3 {
+			return w
+		}
+	}
+}
+
+// Extra adds a beam slot holding a copy of beam's weights, for a caller that reshapes one beam (with
+// SetWeights) while keeping the original, and returns its index. It is not one of Beams' directions.
+func (b *Beamformer) Extra(beam int) int {
+	cp := make([][]complex64, len(b.w[beam]))
+	for k, row := range b.w[beam] {
+		cp[k] = append([]complex64(nil), row...)
+	}
+	b.w = append(b.w, cp)
+	return len(b.w) - 1
+}
+
+// diffuse is Γ, how alike two microphones hear a diffuse field.
+func diffuse(g Geometry, omega float64) [][]complex128 {
+	n := len(g)
+	gamma := make([][]complex128, n)
+	for i := range gamma {
+		gamma[i] = make([]complex128, n)
+		for j := range gamma[i] {
+			x := omega * g[i].Sub(g[j]).Len() / SpeedOfSound
+			v := 1.0
+			if x > 1e-9 {
+				v = math.Sin(x) / x
+			}
+			gamma[i][j] = complex(v, 0)
+		}
+	}
+	return gamma
+}
