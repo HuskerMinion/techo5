@@ -1,7 +1,8 @@
 // Package echoref is the echo canceller's playback reference made in software, for a board whose card
-// has no loopback of what it plays: athena on a mainline kernel without the AFE's DL1 write-back
-// (DL1_AWB_Record, mic/athena.go), which is the fallback there when that device does not open. The
-// speaker hands over every
+// has no loopback of what it plays, or one the canceller cannot use: athena on a mainline kernel
+// without the AFE's DL1 write-back (DL1_AWB_Record, mic/athena.go), which is the fallback there when
+// that device does not open, and the 1st gen Echo Show 5, whose loopback is aliased above about
+// 1.2 kHz (mic/softref_cronos.go). The speaker hands over every
 // period it sends the card, stamped with when its last frame will be heard; the microphones take out
 // what was heard over the stretch of time each of their reads covers.
 //
@@ -102,7 +103,25 @@ type ring struct {
 	dec   [2]*audio.Decimator
 	taps  int
 	rate  int
+
+	// next is where the read after the last one starts, follow whether there was a last one, and
+	// away how many reads in a row the clocks have placed further than keep from next.
+	next   float64
+	follow bool
+	away   int
 }
+
+// keep is how far, in samples at Rate, the clocks may place a read from where the last one ended and
+// it still carries on from there. Placed by the clocks alone, every read lands a few samples off the
+// last one's end, and on a capture read every 20 ms the reference skips or repeats a few samples at
+// every read: no canceller follows that above the bass. A read that comes back late moves its own
+// clock reading by more than that, by milliseconds, while the audio has not moved at all.
+const keep = 20 * Rate / 1000
+
+// moveAfter is how many reads in a row have to be placed further than keep before the reference does
+// move there, about half a second of 20 ms reads: one late read is a late read, and a stream that
+// started over (an overrun) stays where it moved to.
+const moveAfter = 25
 
 var played = &ring{clock: NewClock(Rate)}
 
@@ -150,6 +169,7 @@ func Push(pcm []byte, rate int, heardEnd time.Time) {
 // before the new audio, and the decimators would smear its tail into the first new samples.
 func (p *ring) restart() {
 	p.end = 0
+	p.follow, p.away = false, 0
 	for _, d := range p.dec {
 		d.Reset()
 	}
@@ -157,7 +177,8 @@ func (p *ring) restart() {
 }
 
 // Fill writes into l and r what the speaker played over len(l) samples at Rate, the first heard at
-// start (seconds since base, as Clock.At gives), read Lead ahead. Where there is nothing (the speaker
+// start (seconds since base, as Clock.At gives), read Lead ahead. Consecutive reads carry on from
+// each other (keep), so it is meant for one reader, the capture. Where there is nothing (the speaker
 // is not running, or the stretch is out of the ring) it writes silence. It reports whether any of it
 // was the speaker's.
 func Fill(l, r []float32, start float64) bool {
@@ -167,9 +188,23 @@ func Fill(l, r []float32, start float64) bool {
 	if !p.clock.ok || time.Since(p.last) > stale+time.Second {
 		clear(l)
 		clear(r)
+		p.follow = false
 		return false
 	}
 	first := math.Round((start + Lead.Seconds() - p.clock.off) * Rate)
+	if p.follow {
+		switch {
+		case math.Abs(first-p.next) <= keep:
+			p.away = 0
+			first = p.next
+		case p.away+1 < moveAfter:
+			p.away++
+			first = p.next
+		default:
+			p.away = 0
+		}
+	}
+	p.next, p.follow = first+float64(len(l)), true
 	any := false
 	for i := range l {
 		idx := first + float64(i)

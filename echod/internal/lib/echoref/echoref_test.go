@@ -122,3 +122,67 @@ func TestRestartAfterGap(t *testing.T) {
 		}
 	}
 }
+
+// pushRamp plays n periods of a ramp, every sample a quarter step above the last, stamped without
+// jitter, so
+// a read shows where in the audio it landed by the value it starts on.
+func pushRamp(t0 time.Time, periods int) {
+	const rate, period = 48000, 768
+	pcm := make([]byte, period*4)
+	for n := range periods {
+		for i := range period {
+			v := uint16(int16((n*period + i) / 4))
+			binary.LittleEndian.PutUint16(pcm[4*i:], v)
+			binary.LittleEndian.PutUint16(pcm[4*i+2:], v)
+		}
+		Push(pcm, rate, t0.Add(time.Duration((n+1)*period-1)*time.Second/rate))
+	}
+}
+
+// TestFillCarriesOn: reads placed by a jittery clock, a late read among them, each start exactly where
+// the last one ended, with nothing skipped or repeated across the boundary.
+func TestFillCarriesOn(t *testing.T) {
+	played = &ring{clock: NewClock(Rate)}
+	t0 := time.Now()
+	pushRamp(t0, 120)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	start := Seconds(t0) + 0.2
+	var last float32
+	for k := range 40 {
+		jitter := float64((k%5)-2) * 300e-6
+		if k == 20 {
+			jitter = 0.006 // a read that came back late
+		}
+		if !Fill(l, r, start+float64(k*n)/Rate+jitter) {
+			t.Fatalf("read %d found nothing", k)
+		}
+		if k > 0 {
+			// Three input samples to an output sample: the ramp rises 3/4 of a step across the boundary.
+			step := float64(l[0]-last) * (1 << 15) * 4 / 3
+			if math.Abs(step-1) > 0.4 {
+				t.Fatalf("read %d starts %.1f samples after the last one ended, want 1", k, step)
+			}
+		}
+		last = l[n-1]
+	}
+}
+
+// TestFillMovesWhenTheAudioDid: a placement that stays away for moveAfter reads is followed.
+func TestFillMovesWhenTheAudioDid(t *testing.T) {
+	played = &ring{clock: NewClock(Rate)}
+	t0 := time.Now()
+	pushRamp(t0, 120)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	start := Seconds(t0) + 0.2
+	Fill(l, r, start)
+	shift := 0.05 // 50 ms: the capture lost a stretch
+	for k := 1; k <= moveAfter; k++ {
+		Fill(l, r, start+float64(k*n)/Rate+shift)
+	}
+	want := math.Round((start+float64(moveAfter*n)/Rate+shift+Lead.Seconds()-played.clock.off)*Rate) + n
+	if played.next != want {
+		t.Errorf("after %d reads 50 ms away the reference is at %.0f, want %.0f", moveAfter, played.next, want)
+	}
+}
