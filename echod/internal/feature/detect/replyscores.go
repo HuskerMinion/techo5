@@ -71,6 +71,11 @@ func (r *replyScores) follow(v voice.Reply) {
 	// window_s is the time the scores were kept over, from the first audio arriving to the turn's end:
 	// not how long the reply sounded, which "reply played" has as seconds.
 	args := []any{"window_s", tenths(v.Ended.Sub(began)), "ended", v.Why, "frames_dropped", r.dropped() - r.missing}
+	if v.Elsewhere {
+		// The reply played on another speaker: nothing was playing here for the canceller to take out,
+		// so these are the stop word's scores over the room, not over a reply.
+		args = append(args, "elsewhere", true)
+	}
 	var others []any
 	scored := false
 	for _, p := range peaks {

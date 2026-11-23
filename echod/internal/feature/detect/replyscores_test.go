@@ -159,3 +159,17 @@ func TestARepliesStopWordScoresReachTheLog(t *testing.T) {
 		t.Errorf("said %q, want the stop word's 0.31 from the reply alone", lines[0])
 	}
 }
+
+// A reply that played on another speaker says so, since its scores are over the room, not over a reply.
+func TestAReplyOnAnotherSpeakerSaysSo(t *testing.T) {
+	at := time.Date(2026, 11, 23, 9, 0, 0, 0, time.UTC)
+	f := &fakePeaks{}
+	stops, dropped := true, uint64(0)
+	r, lines := replyLines(f, &stops, &dropped)
+	r.follow(voice.Reply{Began: at})
+	f.peaks = []Peak{{Slot: StopSlot, ID: "stop", Peak: 0.2, At: at.Add(time.Second), Cutoff: 0.5}}
+	r.follow(voice.Reply{Began: at, Ended: at.Add(5 * time.Second), Why: "spoken", Elsewhere: true})
+	if len(*lines) != 1 || !strings.Contains((*lines)[0], "elsewheretrue") {
+		t.Fatalf("said %q, want the line to say elsewhere", *lines)
+	}
+}

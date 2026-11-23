@@ -18,6 +18,10 @@ type Reply struct {
 	// "turn ended" line has it.
 	Ended time.Time
 	Why   string
+
+	// Elsewhere is the reply having played on the chosen reply player, not this device's speaker: the
+	// stop word was then listened for over a quiet room, not over a reply, and its scores say so.
+	Elsewhere bool
 }
 
 // Replying is told of every reply that had audio, as that starts and as the turn ends: for what
