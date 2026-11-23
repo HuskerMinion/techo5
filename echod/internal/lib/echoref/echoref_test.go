@@ -15,7 +15,7 @@ func TestFillLinesUp(t *testing.T) {
 		period = 768
 		click  = 20000 // the input frame the click is on
 	)
-	played = &ring{clock: NewClock(Rate)}
+	freshRing(t)
 	t0 := time.Now()
 	pcm := make([]byte, period*4)
 	for n := 0; n < 40; n++ {
@@ -55,7 +55,7 @@ func TestFillLinesUp(t *testing.T) {
 
 // TestFillSilentWithoutSpeaker: nothing pushed is silence, and says so.
 func TestFillSilentWithoutSpeaker(t *testing.T) {
-	played = &ring{clock: NewClock(Rate)}
+	freshRing(t)
 	l := []float32{1, 1}
 	r := []float32{1, 1}
 	if Fill(l, r, Seconds(time.Now())) {
@@ -89,7 +89,7 @@ func TestRestartAfterGap(t *testing.T) {
 		rate   = 48000
 		period = 768
 	)
-	played = &ring{clock: NewClock(Rate)}
+	freshRing(t)
 	stamp := func(from time.Time, n int) time.Time {
 		return from.Add(time.Duration((n+1)*period-1) * time.Second / rate)
 	}
@@ -142,7 +142,7 @@ func pushRamp(t0 time.Time, periods int) {
 // TestFillCarriesOn: reads placed by a jittery clock, a late read among them, each start exactly where
 // the last one ended, with nothing skipped or repeated across the boundary.
 func TestFillCarriesOn(t *testing.T) {
-	played = &ring{clock: NewClock(Rate)}
+	freshRing(t)
 	t0 := time.Now()
 	pushRamp(t0, 120)
 	const n = Rate / 50
@@ -150,7 +150,7 @@ func TestFillCarriesOn(t *testing.T) {
 	start := Seconds(t0) + 0.2
 	var last float32
 	for k := range 40 {
-		jitter := float64((k%5)-2) * 300e-6
+		jitter := float64(((k+2)%5)-2) * 300e-6 // none on the first read, which the rest follow
 		if k == 20 {
 			jitter = 0.006 // a read that came back late
 		}
@@ -170,7 +170,7 @@ func TestFillCarriesOn(t *testing.T) {
 
 // TestFillMovesWhenTheAudioDid: a placement that stays away for moveAfter reads is followed.
 func TestFillMovesWhenTheAudioDid(t *testing.T) {
-	played = &ring{clock: NewClock(Rate)}
+	freshRing(t)
 	t0 := time.Now()
 	pushRamp(t0, 120)
 	const n = Rate / 50
@@ -184,5 +184,76 @@ func TestFillMovesWhenTheAudioDid(t *testing.T) {
 	want := math.Round((start+float64(moveAfter*n)/Rate+shift+Lead.Seconds()-played.clock.off)*Rate) + n
 	if played.next != want {
 		t.Errorf("after %d reads 50 ms away the reference is at %.0f, want %.0f", moveAfter, played.next, want)
+	}
+}
+
+// freshRing gives the test a reference of its own, and puts the package's back when it ends.
+func freshRing(t *testing.T) {
+	old := played
+	played = &ring{clock: NewClock(Rate)}
+	t.Cleanup(func() { played = old })
+}
+
+// placed is where the clocks alone would place a read starting at start, as Fill computes it.
+func placed(start float64) float64 {
+	return math.Round((start + Lead.Seconds() - played.clock.off) * Rate)
+}
+
+// TestFillRejoins: a reader whose stream started over is placed by the clocks at once, not carried on
+// from before its gap.
+func TestFillRejoins(t *testing.T) {
+	freshRing(t)
+	t0 := time.Now()
+	pushRamp(t0, 120)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	start := Seconds(t0) + 0.2
+	for k := range 5 {
+		Fill(l, r, start+float64(k*n)/Rate)
+	}
+	Rejoin()
+	later := start + 0.3 // the capture lost 200 ms past where it would have been
+	Fill(l, r, later)
+	if want := placed(later) + n; played.next != want {
+		t.Errorf("after Rejoin the read carried on to %.0f, want it placed at %.0f", played.next, want)
+	}
+}
+
+// TestFillSlipsTowardsTheClocks: clocks that drift apart slowly are followed a sample at a time, so the
+// reference never sits more than a few samples from where they place it.
+func TestFillSlipsTowardsTheClocks(t *testing.T) {
+	freshRing(t)
+	t0 := time.Now()
+	pushRamp(t0, 120)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	start := Seconds(t0) + 0.2
+	var at float64
+	for k := range 3000 {
+		// 50 ppm, generous for two streams off one crystal: 48 samples, 3 ms, over the minute.
+		at = start + float64(k*n)*(1+50e-6)/Rate
+		Fill(l, r, at)
+	}
+	if d := played.next - n - placed(at); math.Abs(d) > slip+2 {
+		t.Errorf("after 48 samples of drift the reference is %.0f samples from the clocks, want at most %v", d, slip+2)
+	}
+}
+
+// TestPushJumpRejoins: the speaker's stream moving by more than a clock's snap (a short underrun) places
+// the next read afresh.
+func TestPushJumpRejoins(t *testing.T) {
+	freshRing(t)
+	t0 := time.Now()
+	pushRamp(t0, 60)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	Fill(l, r, Seconds(t0)+0.2)
+	if !played.follow {
+		t.Fatal("a read did not start following")
+	}
+	const rate, period = 48000, 768
+	Push(make([]byte, period*4), rate, t0.Add(time.Duration(61*period-1)*time.Second/rate+10*time.Millisecond))
+	if played.follow {
+		t.Error("the speaker's stream moved 10 ms and the next read still carries on from the last")
 	}
 }

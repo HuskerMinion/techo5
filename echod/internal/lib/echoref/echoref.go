@@ -104,11 +104,13 @@ type ring struct {
 	taps  int
 	rate  int
 
-	// next is where the read after the last one starts, follow whether there was a last one, and
-	// away how many reads in a row the clocks have placed further than keep from next.
+	// next is where the read after the last one starts, follow whether there was a last one, away
+	// how many reads in a row the clocks have placed further than keep from next, and lean the
+	// smoothed difference between where the clocks place a read and next (slip).
 	next   float64
 	follow bool
 	away   int
+	lean   float64
 }
 
 // keep is how far, in samples at Rate, the clocks may place a read from where the last one ended and
@@ -122,6 +124,18 @@ const keep = 20 * Rate / 1000
 // move there, about half a second of 20 ms reads: one late read is a late read, and a stream that
 // started over (an overrun) stays where it moved to.
 const moveAfter = 25
+
+// slip is how far, in samples, the clocks' placement has to lean off next on average before next moves
+// one sample towards it. Held to next, a reference would keep whatever drift there is between the two
+// cards' clocks up to keep, and a reference a few milliseconds late misses the start of every echo;
+// moved a sample at a time it follows the clocks' average, with one sample's step now and then rather
+// than a jump at every read. The first read's own placement, which may have come back late, is
+// walked off the same way.
+const (
+	slip      = 2.0
+	leanAlpha = 1.0 / 64
+	leanClamp = 8.0 // one late read counts this much at most
+)
 
 var played = &ring{clock: NewClock(Rate)}
 
@@ -160,7 +174,13 @@ func Push(pcm []byte, rate int, heardEnd time.Time) {
 	}
 	// The newest sample out of the decimator is the input from its delay back.
 	delay := time.Duration(float64(p.taps-1) / 2 / float64(rate) * float64(time.Second))
+	was, before := p.clock.ok, p.clock.off
 	p.clock.Mark(p.end-1, heardEnd.Add(-delay))
+	if was && math.Abs(p.clock.off-before) >= snap {
+		// The speaker's own stream moved (an underrun shorter than stale): that is the audio moving,
+		// not a reading's jitter, so the next read is placed afresh.
+		p.follow = false
+	}
 	p.last = heardEnd
 }
 
@@ -169,7 +189,7 @@ func Push(pcm []byte, rate int, heardEnd time.Time) {
 // before the new audio, and the decimators would smear its tail into the first new samples.
 func (p *ring) restart() {
 	p.end = 0
-	p.follow, p.away = false, 0
+	p.follow = false
 	for _, d := range p.dec {
 		d.Reset()
 	}
@@ -193,18 +213,26 @@ func Fill(l, r []float32, start float64) bool {
 	}
 	first := math.Round((start + Lead.Seconds() - p.clock.off) * Rate)
 	if p.follow {
-		switch {
-		case math.Abs(first-p.next) <= keep:
+		switch d := first - p.next; {
+		case math.Abs(d) <= keep:
 			p.away = 0
+			p.lean += (max(-leanClamp, min(leanClamp, d)) - p.lean) * leanAlpha
+			if math.Abs(p.lean) >= slip {
+				step := math.Copysign(1, p.lean)
+				p.next += step
+				p.lean -= step
+			}
 			first = p.next
 		case p.away+1 < moveAfter:
 			p.away++
 			first = p.next
 		default:
-			p.away = 0
+			p.away, p.lean = 0, 0
 		}
+	} else {
+		p.follow, p.away, p.lean = true, 0, 0
 	}
-	p.next, p.follow = first+float64(len(l)), true
+	p.next = first + float64(len(l))
 	any := false
 	for i := range l {
 		idx := first + float64(i)
@@ -217,6 +245,16 @@ func Fill(l, r []float32, start float64) bool {
 		any = true
 	}
 	return any
+}
+
+// Rejoin is the reader's: its stream started over (it opened, or lost frames to an overrun), so its
+// next read is placed by the clocks afresh rather than carrying on from the last one, which was
+// before the gap: carried on, the reference would be late by the gap until moveAfter reads had passed.
+func Rejoin() {
+	p := played
+	p.mu.Lock()
+	p.follow = false
+	p.mu.Unlock()
 }
 
 // Seconds is t as Fill and Clock count it.

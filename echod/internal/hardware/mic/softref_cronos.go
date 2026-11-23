@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/echoref"
 )
 
@@ -26,10 +27,14 @@ import (
 // Only checkers: the 2nd gen Show 5 and the Show 8 (crown) read their loopback through what looks
 // like the same FPGA, but nobody has measured theirs.
 
-// delayedCapture is a capture that can say how long ago its newest frame was recorded.
+// delayedCapture is a capture that can say how long ago its newest frame was recorded, and how it is
+// open: the External ASP's native path (native.go) reads the device's format from Config, and gets
+// the software reference in channels 2 and 3, where it expects the card's loopback, as everything else
+// does.
 type delayedCapture interface {
 	capture
 	Delay() (int, error)
+	Config() alsa.Config
 }
 
 // softRefCapture is a capture with the loopback channels replaced by the software reference.
@@ -47,6 +52,7 @@ func withSoftRef(c capture) capture {
 		return c
 	}
 	echoref.Use(true)
+	echoref.Rejoin()
 	return &softRefCapture{delayedCapture: d, clock: echoref.NewClock(Rate)}
 }
 
@@ -56,8 +62,10 @@ func withSoftRef(c capture) capture {
 func (c *softRefCapture) Read(buf []byte) (int, error) {
 	n, err := c.delayedCapture.Read(buf)
 	if err != nil {
-		// An overrun starts the capture over; the next reading places it again.
+		// An overrun starts the capture over; the next reading places it again, and the reference
+		// with it, not carrying on from before the frames that were lost.
 		c.clock.Reset()
+		echoref.Rejoin()
 	}
 	frameBytes := Channels * Bits / 8
 	frames := n / frameBytes
