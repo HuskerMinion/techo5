@@ -176,6 +176,7 @@ func Restored(cur Config, file []byte, model string) (Restoration, error) {
 	}
 	c.moveSounds()
 	c.rescaleNightLight()
+	c.moveLanguage()
 	// A size this board does not offer (150% from a Skylight, restored onto a Show) is drawn at the most
 	// it does: its pages were laid out for that, not for a size its picker never shows.
 	if c.Screen.TextSize > layout.MostTextSize() {
