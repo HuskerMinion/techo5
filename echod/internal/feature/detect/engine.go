@@ -33,7 +33,8 @@ const Refractory = 800 * time.Millisecond
 // NearMiss is the peak score worth reporting for an utterance that never fired, and NearMissSettle
 // how long after that peak to wait before deciding it is not going to. The sliding average ramps
 // through the low scores on its way to a real detection, so reporting as soon as the threshold is
-// crossed reports successes, not failures.
+// crossed reports successes, not failures. A slot may have a lower floor of its own for the log
+// (Engine.NearMissFloor); NearMiss stays what anything acting on a near miss is told about.
 const (
 	NearMiss       = 0.5
 	NearMissSettle = 700 * time.Millisecond
@@ -78,7 +79,17 @@ type Engine struct {
 	// OnNearMiss runs when an utterance peaked over NearMiss and fell away without firing, with the peak
 	// it reached, off the audio path. A near miss is the only sign the device gets that somebody tried
 	// and was not heard, which is the one moment when getting out of their way is worth something.
+	//
+	// It is NearMiss, whatever NearMissFloor says: a peak under it that the floor lets through is
+	// logged and listed for the setup page, and nothing else. What acts on a near miss (the ducker, the
+	// ring's hush, the wake clips) was tuned for NearMiss and keeps it.
 	OnNearMiss func(slot int, peak float64)
+
+	// NearMissFloor is the lowest peak worth a near miss line for a slot, asked when the utterance peaks,
+	// with the cutoff then in force; nil, or a slot it has no opinion on, is NearMiss. It only ever
+	// matters under NearMiss: see OnNearMiss. A line for a peak under NearMiss gives that cutoff, not the
+	// one in force when the near miss settles.
+	NearMissFloor func(slot int, cutoff float64) float64
 
 	// OnScored runs once the hold after a detection ends, with the peak the utterance reached and the
 	// cutoff it was judged against, off the audio path. A false wake's score is what says how far the
@@ -138,6 +149,13 @@ type slot struct {
 	peak       float64
 	peakAt     time.Time
 	suppressed int
+
+	// peakFloor is the near miss floor (nearMissFloor) as it stood when the peak was reached, and
+	// peakCutoff the cutoff it came from. The floor follows the cutoff, and the cutoff moves as the
+	// speaker starts and stops: a word said as a reply ends peaks against the cutoff for playing, and is
+	// settled against the quiet room's a moment later. What it came close to is the cutoff it was said
+	// against.
+	peakFloor, peakCutoff float64
 
 	// While holding, a detection has already fired and scoring continues only to find the peak the
 	// utterance reached, so hits and misses are both reported as peaks.
@@ -620,19 +638,36 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 		e.candidate(n, s, score, cutoff, now)
 		if score > s.peak {
 			s.peak, s.peakAt = score, now
+			s.peakFloor, s.peakCutoff = e.nearMissFloor(n, cutoff), cutoff
+		}
+		if now.Sub(s.peakAt) <= NearMissSettle {
+			return
 		}
 		// The utterance peaked and fell away without firing.
-		if s.peak >= NearMiss && now.Sub(s.peakAt) > NearMissSettle {
-			slog.Info("wake near miss", "slot", n+1, "id", s.model.ID, "peak", s.peak,
-				"cutoff", cutoff, "dropped", source.Dropped())
+		if s.peak > 0 && s.peak >= s.peakFloor {
+			// A peak under NearMiss is only here for a floor of its slot's own. Its line has that floor
+			// in it, to say why it is there, and the cutoff the floor came from, the one in force at the
+			// peak, so the two agree and say how close the try came. Every line there was before reads
+			// as it always has, with the cutoff in force now.
+			against, floor := cutoff, []any(nil)
+			if s.peak < NearMiss {
+				against, floor = s.peakCutoff, []any{"floor", s.peakFloor}
+			}
+			slog.Info("wake near miss", append([]any{"slot", n + 1, "id", s.model.ID, "peak", s.peak,
+				"cutoff", against, "dropped", source.Dropped()}, floor...)...)
 			e.board.event(wakeword.ScoreEvent{At: now, Slot: n + 1, What: "near miss", ID: s.model.ID, Peak: s.peak,
-				Cutoff: cutoff})
-			if e.OnNearMiss != nil {
+				Cutoff: against})
+			if e.OnNearMiss != nil && s.peak >= NearMiss {
 				i, peak := n, s.peak
 				safe.Go("wake near miss", func() { e.OnNearMiss(i, peak) })
 			}
-			s.peak = 0
 		}
+		// A peak that settled under its floor is let go of as well. With the one floor every slot used to
+		// have this changed nothing, since a peak under it could never be reported. With a floor that
+		// moves, a peak left over from a quiet room would stand over the next try, said over a reply,
+		// that peaked lower than it but over the reply's floor: that try would set no peak of its own,
+		// and leave no line.
+		s.peak = 0
 		return
 	}
 
@@ -646,6 +681,15 @@ func (e *Engine) judge(n int, s *slot, score float64, now time.Time, source *mic
 	if e.OnDetect != nil {
 		safe.Go("wake detected", func() { e.OnDetect(n) })
 	}
+}
+
+// nearMissFloor is the lowest peak worth a near miss line for slot n against cutoff: NearMissFloor's
+// answer, never over NearMiss, so a floor of a slot's own can only ever add lines.
+func (e *Engine) nearMissFloor(n int, cutoff float64) float64 {
+	if e.NearMissFloor == nil {
+		return NearMiss
+	}
+	return min(e.NearMissFloor(n, cutoff), NearMiss)
 }
 
 // candidate follows an utterance between Candidate and the threshold, and reports it once it falls
