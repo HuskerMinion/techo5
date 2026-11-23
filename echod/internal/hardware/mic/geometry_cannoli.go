@@ -10,13 +10,14 @@ import "github.com/HuskerMinion/techo5/echod/internal/lib/array"
 //
 // The shape is Amazon's: codebook_Cancheese.txt in /vendor/etc/audio-algorithms gives an L of 22.5 mm
 // legs. Where it lies, and which channel is which corner, was measured on one unit (2026-11-23,
-// cmd/beamcal): white noise from a phone a metre out toward each of the twelve LEDs, recorded at 96 kHz.
-// The free fit came out as 21.6, 20.5 and 32.4 mm with ch1 in the corner; this is the L laid on it
-// (1.2 mm rms from the fit). With it, all twelve takes localize within 19 degrees, nine within 10. The
-// take from straight behind came out at 163 degrees twice, until it was taken again with the phone
-// where the LED is: 4 degrees off, and refitting with it moved no microphone by more than 0.2 mm.
+// cmd/beamcal): white noise from a phone a metre out toward each of the twelve LEDs, recorded at 96 kHz,
+// in two rounds of twelve. The free fit over both came out as 21.1, 21.5 and 31.1 mm with ch1 in the
+// corner; this is the L laid on it (0.7 mm rms from the fit, 0.3 mm from the first round's alone).
+// Through the daemon's finder all 24 takes localize within 20 degrees, 7.7 on average. That scatter is
+// the phone's placement and the room: the same LED in the two rounds differs by up to 22 degrees, and
+// the geometry of either round alone does as well on both.
 var arrayGeometry = array.Geometry{
-	{X: 0.00203, Y: 0.01665},
-	{X: -0.01039, Y: -0.00211},
-	{X: 0.00836, Y: -0.01454},
+	{X: 0.00172, Y: 0.01668},
+	{X: -0.01035, Y: -0.00230},
+	{X: 0.00863, Y: -0.01438},
 }
