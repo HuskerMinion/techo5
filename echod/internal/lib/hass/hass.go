@@ -44,6 +44,10 @@ type Client struct {
 	// once between them (signin.go); signedOut is Home Assistant having refused to.
 	renew     sync.Mutex
 	signedOut bool
+	// refused is the token having been refused by Home Assistant on the last word from it (a REST
+	// 401, a websocket auth_invalid), and cleared by any word it took. A device whose stored token
+	// was revoked otherwise looks the same as one whose Home Assistant has not come up yet (#706).
+	refused bool
 	// closed: the access is being left (api's leave, a reset), so nothing is written back to the file
 	// that leaving removes, though what is in memory serves until the restart (Close).
 	closed bool
@@ -117,7 +121,7 @@ func (c *Client) Set(url, token string) error {
 	c.mu.Lock()
 	was := c.acc
 	c.acc = access{URL: url, Token: token}
-	c.signedOut = false
+	c.signedOut, c.refused = false, false
 	c.mu.Unlock()
 	if err := c.save(); err != nil {
 		return err
@@ -219,6 +223,7 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 	if err != nil {
 		return nil, err
 	}
+	c.heard(resp.StatusCode != http.StatusUnauthorized)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
 	}
@@ -226,6 +231,21 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 		return nil, fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
 	}
 	return out, nil
+}
+
+// heard notes whether Home Assistant took the token on its last word.
+func (c *Client) heard(took bool) {
+	c.mu.Lock()
+	c.refused = !took
+	c.mu.Unlock()
+}
+
+// Refused says Home Assistant refused the stored token the last time it was asked: the access is
+// there but no longer works, and only new access will do.
+func (c *Client) Refused() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.refused && c.acc.Token != ""
 }
 
 // send is one request with acc's token, and the reply read whole.

@@ -66,6 +66,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -271,7 +272,10 @@ type Display struct {
 	// splashMin has passed.
 	booting bool
 	started time.Time
-	logo    *splash
+	// tried is the splash having asked Home Assistant once whether it takes the device's token, so a
+	// refused one ends the splash at once rather than after unreachableWait (#706).
+	tried bool
+	logo  *splash
 
 	// sheet is the settings sheet being shown; restartArm is the first of the two taps Restart wants.
 	sheet      bool
@@ -2871,9 +2875,13 @@ func (d *Display) frame() (next time.Duration) {
 	// address, over a splash that would otherwise wait for a Home Assistant it cannot reach. And so does
 	// a Home Assistant that does not come, with access to one or without: the clock, the alarms and the
 	// settings, the way to the setup page among them, were all behind the logo (splashGivesWay).
+	if booting && !d.tried && hass.Get().Ready() && now.Sub(started) >= splashMin {
+		d.tried = true
+		safe.Go("asking Home Assistant whether it takes the token", func() { _, _ = hass.Get().Fetch("/api/") })
+	}
 	if booting {
 		if ends, why := splashGivesWay(now.Sub(started), homeAssistantHere(), ring.any(), d.wifiOpen,
-			hass.Get().Ready()); ends {
+			hass.Get().Ready(), hass.Get().Refused(), asksAtDevice()); ends {
 			d.booting, booting = false, false
 			if why == "done" {
 				slog.Info("splash done", "after", now.Sub(started).Round(time.Millisecond))
