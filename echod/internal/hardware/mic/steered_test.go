@@ -4,11 +4,13 @@ package mic
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -153,4 +155,97 @@ func decimateTake(raw []byte, channels, factor int) [][]int16 {
 		}
 	}
 	return out
+}
+
+// The speech takes against each tuning: how much of the time, once the talker has started, the ring
+// would point within 30 degrees of them.
+//
+//	ECHOLOCAL_SPEECH_DIR=/path/to/takes go test -tags "dot cannoli" ./internal/hardware/mic -run SpeechTakes -v
+func TestFinderOnSpeechTakes(t *testing.T) {
+	dir := os.Getenv("ECHOLOCAL_SPEECH_DIR")
+	if dir == "" {
+		t.Skip("set ECHOLOCAL_SPEECH_DIR to a directory of seg-<n>.s32 speech takes")
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "seg-*.s32"))
+	re := regexp.MustCompile(`seg-(\d+)`)
+	type take struct {
+		seg  int
+		mics [][]int16
+	}
+	var takes []take
+	for _, path := range files {
+		seg, _ := strconv.Atoi(re.FindStringSubmatch(filepath.Base(path))[1])
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		takes = append(takes, take{seg, decimateTake(raw, 6, 6)})
+	}
+	tunings := map[string]finderTuning{
+		"default":           defaultTuning,
+		"slow":              {decay: 0.95, conf: 0.06},
+		"onset":             {decay: 0.9, conf: 0.06, onset: true},
+		"vote":              {decay: 0.9, conf: 0.06, vote: 0.99},
+		"onset+vote":        {decay: 0.9, conf: 0.06, onset: true, vote: 0.99},
+		"onset+vote slow":   {decay: 0.8, conf: 0.06, onset: true, vote: 0.995},
+		"onset+vote strict": {decay: 0.9, conf: 0.12, onset: true, vote: 0.99},
+		"onset+vote fast":   {decay: 0.7, conf: 0.06, onset: true, vote: 0.98},
+	}
+	for name, tu := range tunings {
+		line := ""
+		var total float64
+		for _, tk := range takes {
+			f := newFinderTuned(tu)
+			hit, n := 0, 0
+			for i := 0; i+320 <= len(tk.mics[0]); i += 320 {
+				frame := make([][]int16, Mics)
+				for m := range frame {
+					frame[m] = tk.mics[m][i : i+320]
+				}
+				f.look(frame, false)
+				if i < Rate || f.bearing < 0 {
+					continue
+				}
+				n++
+				if math.Abs(math.Remainder(array.Degrees(f.bearing)-float64(tk.seg*30), 360)) <= 30 {
+					hit++
+				}
+			}
+			share := float64(hit) / float64(max(n, 1))
+			total += share
+			line += fmt.Sprintf(" seg%d %3.0f%%", tk.seg, share*100)
+		}
+		// How long the ring takes to turn when the talker changes: every take after every other, the
+		// time from the change until it points within 30 degrees of the new one.
+		var turns []float64
+		for _, a := range takes {
+			for _, b := range takes {
+				if a.seg == b.seg {
+					continue
+				}
+				f := newFinderTuned(tu)
+				for _, tk := range []take{a, b} {
+					for i := 0; i+320 <= len(tk.mics[0]); i += 320 {
+						frame := make([][]int16, Mics)
+						for m := range frame {
+							frame[m] = tk.mics[m][i : i+320]
+						}
+						f.look(frame, false)
+						if tk.seg == b.seg && f.bearing >= 0 &&
+							math.Abs(math.Remainder(array.Degrees(f.bearing)-float64(b.seg*30), 360)) <= 30 {
+							turns = append(turns, float64(i)/Rate)
+							break
+						}
+					}
+				}
+			}
+		}
+		sort.Float64s(turns)
+		median, worst := 0.0, 0.0
+		if len(turns) > 0 {
+			median, worst = turns[len(turns)/2], turns[len(turns)-1]
+		}
+		t.Logf("%-18s mean %3.0f%% turn median %.1fs worst %.1fs (%d/30) |%s", name,
+			total/float64(len(takes))*100, median, worst, len(turns), line)
+	}
 }

@@ -112,9 +112,10 @@ type Source struct {
 	finder *Beamformer
 	// arrayFinder replaces finder where the array's geometry was measured (steered.go); facing then
 	// holds tenths of a degree clockwise from segment 0 rather than a beam.
-	arrayFinder *finder
-	facing      atomic.Int32
-	wantFacing  atomic.Bool
+	arrayFinder  *finder
+	facingFrames int
+	facing       atomic.Int32
+	wantFacing   atomic.Bool
 }
 
 // SetMixing chooses how the microphones are combined. It takes effect on the next frame, and reports
