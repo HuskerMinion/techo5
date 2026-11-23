@@ -142,7 +142,7 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 
 	_ = raw.SetDeadline(time.Now().Add(handshakeFor))
 	key := r.Key()
-	if len(key) < 4 {
+	if len(key) < KeyMin {
 		return errors.New("no pairing key set")
 	}
 	c, err := accept(raw, key)

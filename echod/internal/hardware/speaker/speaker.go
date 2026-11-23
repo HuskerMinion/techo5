@@ -286,6 +286,13 @@ func (p *Player) Detach(s Source) {
 	p.srcQuiet.Store(0)
 }
 
+// Source is the Source now attached, nil if none.
+func (p *Player) Source() Source {
+	p.srcMu.Lock()
+	defer p.srcMu.Unlock()
+	return p.src
+}
+
 // Written is the output frame index of the next frame to be handed to the card.
 func (p *Player) Written() uint64 { return p.written.Load() }
 

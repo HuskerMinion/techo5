@@ -120,3 +120,26 @@ func TestTurningCastOffEndsAQuestionAtOnce(t *testing.T) {
 		t.Fatalf("state %q, want off", got)
 	}
 }
+
+// Each question has its own id, so the screen can tell the one it drew from one that came up since (a
+// tap answers only the drawn, settled question), and it is 0 when nothing is asked.
+func TestEachQuestionHasItsOwnID(t *testing.T) {
+	f := open(t)
+	if f.AskID() != 0 {
+		t.Fatal("an id with nothing asked")
+	}
+	done := make(chan error, 1)
+	var ids []uint64
+	for _, name := range []string{"A", "A"} {
+		go func() { done <- f.consent(name) }()
+		answer(t, f, name, false)
+		<-done
+		ids = append(ids, f.askSeq)
+	}
+	if ids[0] == ids[1] {
+		t.Fatalf("two questions shared the id %d", ids[0])
+	}
+	if f.AskID() != 0 {
+		t.Fatal("an id left over after the answer")
+	}
+}

@@ -24,6 +24,9 @@ func PairingURL(host string, port int, key, name string) string {
 
 var keyEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
+// KeyMin is the shortest key the receiver takes and the cast_key action sets. NewKey makes 16.
+const KeyMin = 8
+
 // NewKey is a fresh pairing key: 16 characters, 80 bits, from letters and digits a person can read
 // off a screen if the QR code will not scan.
 func NewKey() string {

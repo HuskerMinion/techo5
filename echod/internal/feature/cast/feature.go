@@ -70,6 +70,8 @@ type Feature struct {
 	// A phone waiting to be accepted: its name, and where the answer goes. Empty when none is.
 	asking string
 	answer chan bool
+	askID  uint64 // which question it is, so a tap answers the one that was drawn (AskID)
+	askSeq uint64
 
 	// The names phones have given, newest last and few: they are a person's, often, and the log says
 	// them, so a diagnostics bundle has to know them to take them out (feature/diag).
@@ -210,6 +212,14 @@ func (f *Feature) Asking() string {
 	return f.asking
 }
 
+// AskID is which question is up, 0 when none is: each phone's question has its own, so the screen can
+// tell a question it has drawn from one that has come up since.
+func (f *Feature) AskID() uint64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.askID
+}
+
 // Decide answers the question on the screen: true lets the phone cast, false sends it away.
 func (f *Feature) Decide(accept bool) {
 	f.mu.Lock()
@@ -250,14 +260,15 @@ func (f *Feature) consent(name string) error {
 		f.mu.Unlock()
 		return errors.New("Cast is off")
 	}
-	f.asking, f.answer = name, ch
+	f.askSeq++
+	f.asking, f.answer, f.askID = name, ch, f.askSeq
 	f.mu.Unlock()
 	f.state.Set("asking: " + name)
 	f.Changed.Emit(struct{}{})
 	slog.Info("cast: asking", "phone", name)
 	defer func() {
 		f.mu.Lock()
-		f.asking, f.answer = "", nil
+		f.asking, f.answer, f.askID = "", nil, 0
 		f.mu.Unlock()
 		f.Changed.Emit(struct{}{})
 	}()
@@ -288,14 +299,18 @@ func (f *Feature) Actions() []*esphome.Action {
 		Args: []esphome.Arg{{Name: "key", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
 			key := strings.TrimSpace(c.String("key"))
-			if key != "" && len(key) < 8 {
+			if key != "" && len(key) < KeyMin {
 				return nil, errors.New("the cast key has to be at least 8 characters, or empty to make a new random one")
 			}
 			if key == "" {
 				key = NewKey()
 			}
 			slog.Info("cast: key set")
-			return nil, config.Set().Cast().Key(key)
+			err := config.Set().Cast().Key(key)
+			// A cast that is on was made with the old key, and the phone that has it is no longer paired:
+			// it ends, rather than carrying on under a key that has been thrown away.
+			f.Stop()
+			return nil, err
 		},
 	}}
 }

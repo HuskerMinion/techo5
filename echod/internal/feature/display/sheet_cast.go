@@ -11,6 +11,12 @@ import (
 // Turning it on is also a switch in Home Assistant; the key is made when Cast is first turned on, so
 // none of this needs Home Assistant at all.
 
+// The Connections card's line mentions Cast on the Show; the Spot has no Cast and keeps the shared one.
+func init() {
+	categoryBlurbs[catConnections] = "Wi-Fi, Bluetooth, the Bluetooth proxy and Cast"
+	categoryBlurbKeys[catConnections] = "cast_connections_blurb"
+}
+
 func castRows() []settingRow {
 	c := config.Get().Cast
 	sub := tr("ui_off")

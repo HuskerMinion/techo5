@@ -85,7 +85,9 @@ func (o *audioOut) open() {
 }
 
 func (o *audioOut) close() {
-	o.p.Attach(nil)
+	// Only this output: Sendspin's may have taken the slot back when it resumed, and clearing that would
+	// leave its music silent after the cast.
+	o.p.Detach(o)
 	o.mu.Lock()
 	o.ready, o.pcm = false, nil
 	o.mu.Unlock()
@@ -237,7 +239,18 @@ func (o *audioOut) correct(from uint64) {
 // Suspend and Resume: whatever else wants the speaker (an answer, an alarm) takes it, and the cast
 // rejoins where its clock says when it is let back.
 func (o *audioOut) Suspend() { o.mu.Lock(); o.held = true; o.mu.Unlock() }
-func (o *audioOut) Resume()  { o.mu.Lock(); o.held = false; o.mu.Unlock() }
+
+// Resume plays again, and takes the slot back: a stream that started during the cast (Sendspin's)
+// attached itself in this one's place and cleared it when it ended, and the speaker has one source.
+func (o *audioOut) Resume() {
+	o.mu.Lock()
+	o.held = false
+	ready := o.ready
+	o.mu.Unlock()
+	if ready {
+		o.p.Attach(o)
+	}
+}
 
 // Duck quietens rather than pauses: a hole in the sound of a film is worse than a quiet stretch. db is
 // the attenuation the speaker's arbiter asks for, negative, and 0 for none (as sendspin's output reads it).

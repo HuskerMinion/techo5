@@ -385,3 +385,28 @@ func TestADelayIsHeldToTheSettingsRange(t *testing.T) {
 		t.Errorf("a huge delay = %d frames, want %d (one second)", o.delay, want)
 	}
 }
+
+type otherSource struct{}
+
+func (otherSource) Render(uint64, []int16) {}
+
+// A cast attached while this output was stood down and cleared the speaker's one source slot when it
+// ended: resuming takes it back, so the music does not carry on in silence.
+func TestResumeTakesTheSourceSlotBack(t *testing.T) {
+	p := speaker.New()
+	o := newOut(p)
+	o.ready = true
+	p.Attach(otherSource{})
+	o.Suspend()
+	p.Attach(nil)
+	o.Resume()
+	if p.Source() != speaker.Source(o) {
+		t.Fatal("the output was not attached after resuming")
+	}
+	o.ready = false
+	p.Attach(nil)
+	o.Resume()
+	if p.Source() != nil {
+		t.Fatal("an output that is not open took the slot")
+	}
+}

@@ -122,3 +122,43 @@ func TestDriftReanchorsWhenFarOff(t *testing.T) {
 		t.Fatal("still anchored three seconds out")
 	}
 }
+
+// otherSource stands in for Sendspin's output: something else that takes the speaker's one slot.
+type otherSource struct{}
+
+func (otherSource) Render(uint64, []int16) {}
+
+// The speaker has one source slot. A cast that ends must not clear what another output attached in the
+// meantime, and one that was stood down must take the slot back when it is let back in.
+func TestTheSourceSlotSurvivesAnotherOutputAndComesBack(t *testing.T) {
+	p := speaker.New()
+	o := newAudioOut(p)
+	o.open()
+	if p.Source() != speaker.Source(o) {
+		t.Fatal("open did not take the slot")
+	}
+
+	// Sendspin starts during the cast, attaches, and clears the slot when its stream ends.
+	other := otherSource{}
+	p.Attach(other)
+	o.Suspend()
+	p.Detach(other)
+	o.Resume()
+	if p.Source() != speaker.Source(o) {
+		t.Fatal("the cast was silent after the other stream ended: Resume did not take the slot back")
+	}
+
+	// The cast ends after another output took the slot (Sendspin resumed): it stays where it is.
+	p.Attach(other)
+	o.close()
+	if p.Source() != speaker.Source(other) {
+		t.Fatal("the cast's close cleared another output's slot")
+	}
+
+	// And a cast that closes while it holds the slot leaves it empty.
+	o.open()
+	o.close()
+	if p.Source() != nil {
+		t.Fatal("the slot was left attached to a closed cast")
+	}
+}

@@ -450,7 +450,13 @@ func (o *out) Suspend() {
 func (o *out) Resume() {
 	o.mu.Lock()
 	o.held = false
+	ready := o.ready
 	o.mu.Unlock()
+	// A cast (or anything else that attached while this was stood down) took the speaker's one source
+	// slot and cleared it when it ended: take it back, or the music carries on in silence.
+	if ready {
+		o.p.Attach(o)
+	}
 	slog.Info("sendspin resume", "queued_ms", o.queuedMs())
 }
 

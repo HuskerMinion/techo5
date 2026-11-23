@@ -530,6 +530,7 @@ type Display struct {
 	videoOver     image.Rectangle
 	vp            videoPainter
 	vask          askLatch
+	cask          askLatch // the cast question drawn (castScene), so a tap answers that one once it has settled
 	pask          askLatch // the setup page's asking, drawn (pageAsk)
 	videoLit      uint64   // the last video that lit the panel (frame)
 	castAskLit    bool     // the question a phone is waiting behind has lit the panel (castLights)
@@ -1214,7 +1215,9 @@ func (d *Display) gesture(g touch.Gesture) {
 	_, _, _, asking := video.Get().Asking()
 	// Not on the video page either: its controls work at night as by day (the night light's rule is
 	// the clock's, a hand in the dark more likely a knock than a request).
-	glowing := d.nightGlow && !d.wifiOpen && !asksAtDevice() && !asking && !d.videoOnScreen
+	// Nor on a phone waiting to be accepted: the night light is lit for the question (castLights), and a
+	// tap on Accept is the answer, not a request to lift the night light.
+	glowing := d.nightGlow && !d.wifiOpen && !asksAtDevice() && !asking && !d.videoOnScreen && cast.Get().Asking() == ""
 	// A dashboard a tap on the night light opened is used as by day, at the night light's level. Only
 	// that one: a dashboard left up from the day, or put up by Home Assistant, stays under the night.
 	// And only while it is what is drawn: the settings or the drawer opened from it are not shown over

@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/skip2/go-qrcode"
 
@@ -68,6 +69,12 @@ func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
 	want := (f.Active() || f.Asking() != "" || f.PairingShown()) && s.phase == "idle" && !sheetOrDrawer &&
 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showWifi && !s.bt.Pairing
 	s.showCast = want
+	// The question drawn, for the tap's latch: only once it is on the screen, and only that one.
+	drawn := uint64(0)
+	if want && f.Asking() != "" {
+		drawn = f.AskID()
+	}
+	d.cask.drawn(drawn, time.Now())
 	d.mu.Lock()
 	d.castShowing = want
 	d.mu.Unlock()
@@ -83,8 +90,11 @@ func (d *Display) castGesture(g touch.Gesture) {
 	}
 	// A phone waiting to be accepted: the left half of the buttons sends it away, the right half lets
 	// it in. Nothing else on this page answers.
+	// Only the question drawn, once it has been up askSettle (askLatch): a finger on its way to a
+	// settings row, or to what was there before, must not answer a question that has just come up.
 	if cast.Get().Asking() != "" {
-		if g.Kind == touch.Tap && d.r != nil && d.r.actionDecided(g.Y) {
+		id, ok := d.cask.answerable(time.Now())
+		if ok && id == cast.Get().AskID() && g.Kind == touch.Tap && d.r != nil && d.r.actionDecided(g.Y) {
 			cast.Get().Decide(g.X >= d.r.w/2)
 		}
 		return
