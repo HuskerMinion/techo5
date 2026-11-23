@@ -25,17 +25,15 @@ func SetTalker(f func() (float64, bool)) {
 // when it hears its name: it says which way the device is listening. Where that is not known the ring
 // glows evenly, which is what a wake effect without a direction would show anyway.
 //
-// With a palette of two colors the ring is the first and the arc the second (EffectTalker runs in
-// listening's blue and cyan); in one color, the arc is the color at full over the rest dimmed.
+// It takes the ring light's color and works out the arc from it (listeningColors): in the default blue
+// that is Amazon's pairing, a deep blue ring with a cyan arc.
 //
 // The arc eases toward a new direction rather than jumping, as Room Compass does, so a talker moving
 // while they speak turns it rather than flicking it about. It breathes a little, as Pulse does, so the
 // ring reads as listening rather than as a light left on.
 func toward(p Palette) Frame {
 	const (
-		// floor is how bright the rest of the ring is in one color, and width how wide the arc, in
-		// segments.
-		floor = 0.06
+		// width is how wide the arc is, in segments.
 		width = 2.2
 		ease  = 0.25
 
@@ -43,10 +41,7 @@ func toward(p Palette) Frame {
 		period = 1600 * time.Millisecond
 		depth  = 0.2
 	)
-	ring, arc := scale(p[0], floor), p[0]
-	if len(p) > 1 {
-		ring, arc = p[0], p[len(p)-1]
-	}
+	ring, arc := listeningColors(p)
 	var at float64
 	var known bool
 
@@ -72,13 +67,37 @@ func toward(p Palette) Frame {
 				if d := ringDist(i, at); d < width {
 					f = (1 - d/width) * (1 - d/width)
 				}
-			} else if len(p) > 1 {
-				f = 0.3
 			} else {
-				f = 0.7
+				f = 0.3
 			}
 			out[i] = scale(blend(ring, arc, f), breath)
 		}
 		return out
 	}
+}
+
+// listeningColors is the ring and the arc for a ring light of p's first color.
+//
+// The arc is the color lighter and its hue turned a little toward cyan's side of it, the ring the
+// color itself a little dimmed: from the blue the ring is set to by default, a deep blue ring and a
+// cyan arc, as Amazon's. Hue does the work rather than brightness, because the Dot 5's fabric spreads
+// every module over its neighbours and evens brightness out (2026-11-23: a white ring with one module at
+// full and the rest at a sixteenth looked even). A color with too little hue to turn (white, greys)
+// takes the default blue pair, since there is nothing in it to make an arc from.
+func listeningColors(p Palette) (ring, arc Color) {
+	const (
+		// shift is how far round the wheel the arc turns, lighten how much of its saturation it gives
+		// up, and dim what the ring keeps of its value.
+		shift   = -45.0 / 360
+		lighten = 0.5
+		dim     = 0.75
+	)
+	if len(p) > 1 {
+		return p[0], p[len(p)-1]
+	}
+	h, s, v := toHSV(p[0])
+	if s < 0.25 || v < 0.1 {
+		return listening[0], listening[1]
+	}
+	return fromHSV(h, s, v*dim), fromHSV(h+shift, s*lighten, 1)
 }

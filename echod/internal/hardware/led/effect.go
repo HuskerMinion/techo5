@@ -91,6 +91,11 @@ type Effect struct {
 	// on when nothing is listening for it.
 	Senses func(p Palette, r Room) Frame
 
+	// Derives is an effect that inherits the ring's color and works out a companion to it (a lighter,
+	// shifted hue), so it may light channels the ring's color does not have. It still follows the ring:
+	// a different color in gives different colors out.
+	Derives bool
+
 	// Placed is an effect whose segments are places round the device rather than steps of a motion:
 	// it points at something. Reversing it would point at the mirror image, so it is never reversed.
 	// Every room effect is treated as placed too.
