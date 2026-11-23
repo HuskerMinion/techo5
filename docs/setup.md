@@ -114,7 +114,7 @@ button on one without. There's no password, the answer at the device is what pro
 nobody answers, the page says so and offers to ask again.
 For a device out of reach, such as a Dot on a shelf, Home Assistant can answer instead: **Setup page
 asking** shows the address of the browser asking, and **Let in from Home Assistant** lets it in, the same
-as a press on the device. The device's screen says a browser was let in. This needs an API encryption
+as a press on the device. A device with a screen says a browser was let in. This needs an API encryption
 key on the device. The **Visit** link on the device's page in Home Assistant opens the setup page while
 it's on (or a short list with it, if another of the device's pages is on too), so the whole thing can be done from Home Assistant: turn on **Setup page**, open it with
 **Visit**, choose **Ask to be let in**, then press **Let in from Home Assistant**.
@@ -1064,7 +1064,7 @@ other Shows don't have the switches.
   first): while the microphones are muted, a red **Microphone off** pill sits at the top of the screen.
   Turn the switch off to leave that to the red light on the mute button, which says it already; a lost
   Wi-Fi or Home Assistant is still shown at the top. The night clock never shows the pill either way.
-  The Skylight and the Panel app have no mute light, so they always show it and don't have the switch.
+  The Panel app has no mute light, so it always shows it and doesn't have the switch.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
   watched** lights it only while a picture leaves the device: a stream, a camera page, or Home
