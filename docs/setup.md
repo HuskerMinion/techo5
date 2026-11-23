@@ -1016,13 +1016,15 @@ other Shows don't have the switches.
 - **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
-- **Screen language** (Settings → General): the language of the screen. German, French, Galician,
+- **Screen language** (Settings → General): the language of the screen. German, Catalan, French, Galician,
   Italian, Japanese, Romanian, Spanish, Turkish and Valencian translate the whole screen, settings included, and Dutch
   its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
   picks which words the screen listens for. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
+  A device set to Valencian back when that was the only Catalan keeps it: the saved choice moves to
+  Valencian's own key once, and the device says once that Catalan can be chosen now.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
   screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle

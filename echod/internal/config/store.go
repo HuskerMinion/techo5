@@ -51,6 +51,11 @@ func Set() Writer { return store().Set() }
 // the file is overwritten on the next change.
 func LoadError() error { return current().err }
 
+// LanguageAnnounce is what a language split just added to the menu, named as the menu names it,
+// empty when nothing moved: the start-up tells the owner once, in the language the device woke up
+// in, that this one can be chosen now too (screen.go).
+func LanguageAnnounce() string { return store().announceLang }
+
 // Started records what echod was told at start-up.
 func Started(d Device) { store().started(d) }
 
@@ -77,6 +82,10 @@ type Store struct {
 
 	// was is the file as it was read, kept for the settings this build has no field for (unknown.go).
 	was map[string]any
+
+	// announceLang is what this Load's language move (screen.go) added to the menu, empty when
+	// nothing moved. Set while loading and read-only after, so it needs no lock.
+	announceLang string
 }
 
 // Load reads the file over the defaults, so a key the file does not mention keeps the value it was
@@ -91,8 +100,9 @@ func Load(path string) (*Store, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			st.c.Speaker.SoundsMoved = true // a new device starts on the new default: nothing to move
-			st.c.rescaleNightLight()        // nor a night clock level to put on the new scale
+			st.c.Speaker.SoundsMoved = true  // a new device starts on the new default: nothing to move
+			st.c.rescaleNightLight()         // nor a night clock level to put on the new scale
+			st.c.Screen.LanguageMoved = true // nor a Valencian choice made under the old ca
 			st.readable = true
 			return st, nil
 		}
@@ -104,6 +114,7 @@ func Load(path string) (*Store, error) {
 	_ = json.Unmarshal(b, &st.was)
 	st.c.moveSounds()
 	st.c.rescaleNightLight()
+	st.announceLang = st.c.moveLanguage()
 
 	st.readable = true
 	return st, nil

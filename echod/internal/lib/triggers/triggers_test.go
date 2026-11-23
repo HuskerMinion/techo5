@@ -25,17 +25,18 @@ func TestJapaneseWeatherDoesNotInterceptTemperatureCommands(t *testing.T) {
 
 // One sentence per language for each thing the screen does, as someone would actually say it.
 var spoken = map[string]struct{ weather, radar, home, camera string }{
-	"ja": {"明日は雨が降りますか", "雨雲レーダーを見せて", "時計に戻って", "玄関のカメラを見せて"},
-	"en": {"what's the weather", "show me the rain map", "go home", "show the front door"},
-	"de": {"Wie ist das Wetter?", "Zeig mir die Regenkarte", "Zurück zur Uhr", "Zeig die Haustür"},
-	"ca": {"Quin temps farà demà?", "Mostra'm el mapa de pluja", "Torna al rellotge", "Mostra la porta d'entrada"},
-	"es": {"¿Qué tiempo hace?", "Muéstrame el mapa de lluvia", "Volver al reloj", "Muestra la puerta principal"},
-	"fr": {"Quel temps fait-il ?", "Montre la carte des pluies", "Retour à l'horloge", "Montre la porte d'entrée"},
-	"it": {"Che tempo fa?", "Mostra la mappa della pioggia", "Torna all'orologio", "Mostra la porta d'ingresso"},
-	"nl": {"Hoe is het weer?", "Laat de buienradar zien", "Terug naar de klok", "Laat de voordeur zien"},
-	"pt": {"Como está o tempo?", "Mostra o mapa de chuva", "Volta pro relógio", "Mostra a porta da frente"},
-	"ro": {"Cum e vremea mâine?", "Arată-mi harta ploilor", "Înapoi la ceas", "Arată ușa de la intrare"},
-	"ru": {"Какая погода?", "Покажи карту дождя", "Верни часы", "Покажи входную дверь"},
+	"ja":          {"明日は雨が降りますか", "雨雲レーダーを見せて", "時計に戻って", "玄関のカメラを見せて"},
+	"en":          {"what's the weather", "show me the rain map", "go home", "show the front door"},
+	"de":          {"Wie ist das Wetter?", "Zeig mir die Regenkarte", "Zurück zur Uhr", "Zeig die Haustür"},
+	"ca":          {"Quin temps farà demà?", "Mostra'm el mapa de pluja", "Torna al rellotge", "Mostra la porta d'entrada"},
+	"ca-valencia": {"Quin temps farà hui?", "Mostra'm el mapa de pluja", "Torna al rellotge", "Mostra la porta d'entrada"},
+	"es":          {"¿Qué tiempo hace?", "Muéstrame el mapa de lluvia", "Volver al reloj", "Muestra la puerta principal"},
+	"fr":          {"Quel temps fait-il ?", "Montre la carte des pluies", "Retour à l'horloge", "Montre la porte d'entrée"},
+	"it":          {"Che tempo fa?", "Mostra la mappa della pioggia", "Torna all'orologio", "Mostra la porta d'ingresso"},
+	"nl":          {"Hoe is het weer?", "Laat de buienradar zien", "Terug naar de klok", "Laat de voordeur zien"},
+	"pt":          {"Como está o tempo?", "Mostra o mapa de chuva", "Volta pro relógio", "Mostra a porta da frente"},
+	"ro":          {"Cum e vremea mâine?", "Arată-mi harta ploilor", "Înapoi la ceas", "Arată ușa de la intrare"},
+	"ru":          {"Какая погода?", "Покажи карту дождя", "Верни часы", "Покажи входную дверь"},
 }
 
 func TestJapanesePhrasesAndFalsePositives(t *testing.T) {
