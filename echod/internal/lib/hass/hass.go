@@ -223,7 +223,7 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 	if err != nil {
 		return nil, err
 	}
-	c.heard(resp.StatusCode != http.StatusUnauthorized)
+	c.heard(acc.Token, resp.StatusCode != http.StatusUnauthorized)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
 	}
@@ -233,19 +233,23 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 	return out, nil
 }
 
-// heard notes whether Home Assistant took the token on its last word.
-func (c *Client) heard(took bool) {
+// heard notes whether Home Assistant took token on its last word. An answer about a token since
+// replaced (a request still on its way when new access was given) says nothing about the new one.
+func (c *Client) heard(token string, took bool) {
 	c.mu.Lock()
-	c.refused = !took
+	if c.acc.Token == token {
+		c.refused = !took
+	}
 	c.mu.Unlock()
 }
 
-// Refused says Home Assistant refused the stored token the last time it was asked: the access is
-// there but no longer works, and only new access will do.
+// Refused says Home Assistant refused the device's access the last time it was asked: the stored token
+// is there but no longer works, or a sign-in was refused its renewal (SignedOut). Only new access will
+// do.
 func (c *Client) Refused() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.refused && c.acc.Token != ""
+	return c.refused && c.acc.Token != "" || c.signedOut
 }
 
 // send is one request with acc's token, and the reply read whole.

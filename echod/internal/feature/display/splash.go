@@ -90,7 +90,7 @@ func splashGivesWay(elapsed time.Duration, here, ringing, wifi, access, refused,
 		return true, "Wi-Fi setup"
 	case asking:
 		return true, "a browser is asking to be let in"
-	case access && refused:
+	case refused:
 		return true, "Home Assistant refused this device's access"
 	case !access && elapsed >= noHomeAssistantWait:
 		return true, "no Home Assistant access"

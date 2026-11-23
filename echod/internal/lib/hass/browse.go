@@ -93,7 +93,7 @@ func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
 		return nil, err
 	}
 	if hello.Type == "auth_ok" || hello.Type == "auth_invalid" {
-		c.heard(hello.Type == "auth_ok")
+		c.heard(acc.Token, hello.Type == "auth_ok")
 	}
 	if hello.Type != "auth_ok" {
 		conn.Close()

@@ -26,7 +26,7 @@ func TestTheSplashGivesWay(t *testing.T) {
 		{"access, Home Assistant restarting", 2 * time.Minute, false, false, false, true, false, false, false},
 		{"access, Home Assistant never came", unreachableWait, false, false, false, true, false, false, true},
 		{"access refused", time.Second, false, false, false, true, true, false, true},
-		{"refused without access", time.Second, false, false, false, false, true, false, false},
+		{"a sign-in refused its renewal", time.Second, false, false, false, false, true, false, true},
 		{"a browser asking", time.Second, false, false, false, true, false, true, true},
 	} {
 		if got, why := splashGivesWay(c.elapsed, c.here, c.ringing, c.wifi, c.access, c.refused, c.asking); got != c.want {
