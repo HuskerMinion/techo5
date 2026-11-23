@@ -95,7 +95,7 @@ func Run(ctx context.Context) error {
 	if announce := config.LanguageAnnounce(); announce != "" {
 		lang := config.Get().Screen.Language
 		if err := notify.Get().Notify(fmt.Sprintf(locale.Text(lang, "screen_language_now_variant_s"), announce),
-			locale.Text(lang, "screen_language"), "mdi:translate", "", "", "", 0); err != nil {
+			locale.Text(lang, "screen_language"), "mdi:translate", "off", "", "", 0); err != nil {
 			slog.Warn("the new-variant notice could not go up", "err", err)
 		}
 		if err := config.Set().Screen().LanguageMoved(true); err != nil {
