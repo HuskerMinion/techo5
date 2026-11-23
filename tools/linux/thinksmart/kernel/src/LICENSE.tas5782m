@@ -6,7 +6,13 @@ It is a Linux kernel module and is licensed under the GNU General Public License
 (SPDX-License-Identifier: GPL-2.0-only), like the kernel.
 
 Changes 2026-11-20 (TECHO5): the debug build layer (tas5782m_dbg.h, the TAS5782M_DEBUG blocks and the
-tas5782m_trace calls) was removed; tas5782m_write_traced became regmap_write. Nothing else changed.
+tas5782m_trace calls) was removed; tas5782m_write_traced became regmap_write.
+
+Changes 2026-11-21 (TECHO5): the driver no longer fails its probe when the DSP tuning file is missing.
+Until the file is there, or on a unit without one, it starts the chip on a flat sequence
+(tas5782m_dsp_flat in tas5782m_tables.c: the tuning tables' writes other than coefficients) with the
+digital volume 4.5 dB lower, and it looks for the file again at each stream start
+(tas5782m_load_tuning).
 
 
                     GNU GENERAL PUBLIC LICENSE
