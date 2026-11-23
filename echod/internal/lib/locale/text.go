@@ -1105,6 +1105,7 @@ var uiTranslations = map[string]map[string]string{
 		// Catalan, as the Institut d'Estudis Catalans writes it (Catalan as it is spoken and
 		// written in Barcelona), with tu: "toca" for the screen and "prem" for the buttons.
 		"popup_started":                 "Ha començat",
+		"ui_alert_issued":               "Emès %s",
 		"popup_in_a_minute":             "D'aquí a un minut",
 		"popup_in_d_minutes":            "D'aquí a %d minuts",
 		"popup_in_an_hour":              "D'aquí a una hora",
@@ -1208,6 +1209,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Activar el so",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB és el normal; pujar-ho pot distorsionar, sobretot amb més greus",
 		"a_browser_is_asking":                                  "UN NAVEGADOR DEMANA ACCÉS",
+		"official_weather_alerts_for_home":                     "Avisos meteorològics oficials per a la teva zona",
 		"a_camera_s_own_audio_while_its_view_is_up":            "El so de la càmera mentre es veu en pantalla",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Un toc torna a mostrar la pantalla fins que l'habitació queda en silenci",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspecte complet que s'aplica sobre el tema i la font",
@@ -2282,7 +2284,7 @@ var uiTranslations = map[string]map[string]string{
 		"dim_after_idle": "Atenuar després d'inactivitat",
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Baixa al mínim fins que la toques, li parles o algú s'hi acosta",
 		"asks_twice":                                     "Pregunta dues vegades",
-		"official_weather_alerts_for_home":               "Avisos meteorològics oficials per a la teva zona",
+		"official_weather_alerts_for_home":               "Avisos meteorològics oficials per a la teua zona",
 		"at_night":                                       "De nit",
 		"audio_output":                                   "Eixida d'àudio",
 		"auto_brightness":                                "Brillantor automàtica",
