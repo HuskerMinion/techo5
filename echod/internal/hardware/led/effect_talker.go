@@ -21,24 +21,32 @@ func SetTalker(f func() (float64, bool)) {
 	talker.Store(&f)
 }
 
-// toward lights the whole ring softly with a bright arc toward whoever is talking, as Amazon's own
-// ring does when it hears its name: it says which way the device is listening. Where that is not known
-// the ring glows evenly, which is what a wake effect without a direction would show anyway.
+// toward lights the whole ring with a bright arc toward whoever is talking, as Amazon's own ring does
+// when it hears its name: it says which way the device is listening. Where that is not known the ring
+// glows evenly, which is what a wake effect without a direction would show anyway.
+//
+// With a palette of two colors the ring is the first and the arc the second (EffectTalker runs in
+// listening's blue and cyan); in one color, the arc is the color at full over the rest dimmed.
 //
 // The arc eases toward a new direction rather than jumping, as Room Compass does, so a talker moving
 // while they speak turns it rather than flicking it about. It breathes a little, as Pulse does, so the
 // ring reads as listening rather than as a light left on.
 func toward(p Palette) Frame {
 	const (
-		// floor is how bright the rest of the ring is, and width how wide the arc, in segments.
-		floor = 0.25
-		width = 2.6
+		// floor is how bright the rest of the ring is in one color, and width how wide the arc, in
+		// segments.
+		floor = 0.06
+		width = 2.2
 		ease  = 0.25
 
 		// period is one breath, and depth how much of the brightness it takes.
 		period = 1600 * time.Millisecond
 		depth  = 0.2
 	)
+	ring, arc := scale(p[0], floor), p[0]
+	if len(p) > 1 {
+		ring, arc = p[0], p[len(p)-1]
+	}
 	var at float64
 	var known bool
 
@@ -58,16 +66,19 @@ func toward(p Palette) Frame {
 		}
 
 		out := make([]Color, Segments)
-		if !known {
-			for i := range out {
-				out[i] = p.Shade(0, 0.7*breath)
-			}
-			return out
-		}
 		for i := range out {
-			out[i] = p.Shade(0, floor*breath)
+			f := 0.0
+			if known {
+				if d := ringDist(i, at); d < width {
+					f = (1 - d/width) * (1 - d/width)
+				}
+			} else if len(p) > 1 {
+				f = 0.3
+			} else {
+				f = 0.7
+			}
+			out[i] = scale(blend(ring, arc, f), breath)
 		}
-		dot(out, at, p.Shade(0, (1-floor)*breath), width)
 		return out
 	}
 }
