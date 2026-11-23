@@ -234,3 +234,36 @@ func TestA10AudioChunkLosesSendAheadOnTheWayToTheLibrary(t *testing.T) {
 		}
 	}
 }
+
+// Artwork from a 1.0 server comes as a transfer, its messages only a type and a flags byte ahead of
+// the rest (#708). The library cuts 9 bytes off each, so the bridge pads 8 in after the type: what
+// the library hands on is then the message whole but for its type, a 2-byte cancel included.
+func TestForLibraryPadsArtwork(t *testing.T) {
+	announce := []byte{9, 0x02, 0, 0, 0, 0, 0, 0x12, 0xd6, 0x87, 0, 0, 0x01, 0x00}
+	for _, wire := range [][]byte{
+		announce,
+		{8, 0x01},                // a cancel
+		{8, 0, 0xff, 0xd8, 0xff}, // a short last part
+		append([]byte{11, 0}, make([]byte, 65517)...), // the largest part
+	} {
+		got := forLibrary(wire)
+		if len(got) != len(wire)+8 || got[0] != wire[0] || !bytes.Equal(got[1:9], make([]byte, 8)) {
+			t.Errorf("% x: padded to % x", wire[:min(len(wire), 16)], got[:min(len(got), 16)])
+			continue
+		}
+		if !bytes.Equal(got[9:], wire[1:]) {
+			t.Errorf("% x: the library would be handed % x", wire[:min(len(wire), 16)], got[9:min(len(got), 25)])
+		}
+	}
+	// Not artwork: the audio chunk still loses send_ahead, and anything else is left as it came.
+	ts := []byte{0, 0, 0, 0, 0, 0, 0, 1}
+	audio := append(append([]byte{audioChunkType}, ts...), 0, 0, 0, 5, 0xff, 0xf8)
+	if got, want := forLibrary(audio), append(append([]byte{audioChunkType}, ts...), 0xff, 0xf8); !bytes.Equal(got, want) {
+		t.Errorf("audio: got % x, want % x", got, want)
+	}
+	for _, other := range [][]byte{{}, {12, 1, 2}, {7}} {
+		if got := forLibrary(other); !bytes.Equal(got, other) {
+			t.Errorf("changed % x to % x", other, got)
+		}
+	}
+}

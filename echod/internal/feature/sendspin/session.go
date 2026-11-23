@@ -101,9 +101,14 @@ type session struct {
 	// see stopRelease and ended. Written and read on the session's own goroutine only.
 	stopAsked bool
 
-	// picture counts the pictures the server has sent, so one still being decoded or waiting for its
-	// moment is dropped once a newer one has arrived.
+	// picture counts the pictures made current, so one still being decoded is dropped once a newer
+	// one is current.
 	picture atomic.Uint64
+
+	// pending is the picture waiting for its time, and parts the one coming in parts on the encrypted
+	// wire. Both are the session goroutine's only; see artwork.go.
+	pending *time.Timer
+	parts   assembly
 
 	// encrypted is a connection over the encrypted wire, to a server written to the 1.0 specification.
 	encrypted bool
