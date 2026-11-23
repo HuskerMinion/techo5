@@ -390,6 +390,61 @@ class Lk2ndAb(unittest.TestCase):
         self.assertEqual((st, slot), (1, ''), out)
         self.assertEqual(self.restarts()[n:], ['restart normal'])
 
+    def test_a_trial_kernel_starts_only_once(self):
+        # Every try started; once it runs, recovery holds system1's good kernel instead.
+        self.new_unit()
+        self.kernel('b', 'B')
+        self.bootctl('set-active', 'b')
+        for left in (2, 1, 0):
+            self.cmdline('ab.slot=a')
+            st, out = self.run_ab('boot')
+            self.assertEqual(self.restarts()[-1], 'restart recovery', out)
+            self.cmdline(pack.TRIAL + ' ab.slot=b')
+            st, slot, out = self.boot()
+            self.assertEqual((st, slot), (0, 'b'), out)
+            cl = get(self.u + '/recovery')[64:576].rstrip(b'\0').decode()
+            self.assertEqual(cl, CMDLINE + ' ab.slot=a techo5.kernel=fallback')
+        self.assertIn('recovery: slot a\'s kernel, to fall back to', self.run_ab('status')[1])
+        # Out of tries, back on a; Recovery from lk2nd's menu now starts slot a's kernel, which
+        # gives up on b rather than settling it.
+        self.cmdline('ab.slot=a')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (0, 'a'), out)
+        self.cmdline('ab.slot=a techo5.kernel=fallback')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (0, 'a'), out)
+        self.assertIn('slot b: priority 0, tries 0, successful 0', self.record())
+
+    def test_a_trial_kernel_with_no_fallback_clears_recovery(self):
+        # Slot a good but its kernel gone from the store: recovery is cleared instead.
+        self.new_unit()
+        self.kernel('b', 'B')
+        self.bootctl('set-active', 'b')
+        self.run_ab('boot')
+        os.remove(self.u + '/store/slots/a/boot/boot.img')
+        self.cmdline(pack.TRIAL + ' ab.slot=b')
+        st, slot, out = self.boot()
+        self.assertEqual((st, slot), (0, 'b'), out)
+        self.assertIn('recovery cleared', out)
+        self.assertEqual(get(self.u + '/recovery')[:8], bytes(8))
+        self.assertIn('recovery: nothing', self.run_ab('status')[1])
+
+    def test_a_commit_that_cannot_write_the_fallback_says_so(self):
+        self.new_unit()
+        self.kernel('b', 'B')
+        self.bootctl('set-active', 'b')
+        self.run_ab('boot')
+        self.cmdline(pack.TRIAL + ' ab.slot=b')
+        self.boot()
+        self.assertEqual(self.bootctl('mark-good', 'b')[0], 0)
+        os.remove(self.u + '/store/slots/a/boot/boot.img')
+        self.cmdline('ab.slot=a')
+        st, out = self.run_ab('boot')
+        self.assertEqual(self.restarts()[-1], 'restart normal', out)
+        self.assertIn('ab.slot=b', self.extlinux())
+        self.assertIn('NO WAY BACK', out)
+        self.assertEqual(get(self.u + '/recovery')[:8], bytes(8))
+
     def test_no_bootable_slot_is_rescue(self):
         self.new_unit()
         self.bootctl('mark-bad', 'a')

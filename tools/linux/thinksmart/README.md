@@ -116,7 +116,9 @@ or, in recovery mode, the Android boot image in `recovery`, once. So the boot la
   committed, and the next start moves its kernel to `system1`.
 - A kernel in `recovery` starts its slot only while the record has that slot on trial. One left
   there from an earlier trial and started again (lk2nd's menu has a Recovery entry) is stale: it
-  restarts, back on `system1`.
+  restarts, back on `system1`. A trial kernel also starts only once: before its slot runs,
+  `lk2nd-ab` replaces it in `recovery` with `system1`'s good kernel as the fallback (or clears
+  `recovery`), since a slot out of tries still counts as unsettled and a start by hand takes no try.
 - The kernel that moves to `system1` at a commit has only started from `recovery` before. If lk2nd's
   extlinux path fails it, nothing on the unit can count the restarts (lk2nd counts nothing, and a
   kernel that never reaches init runs no boot layer), so the move puts the kernel it replaces, the
@@ -124,7 +126,8 @@ or, in recovery mode, the Android boot image in `recovery`, once. So the boot la
   hand, it marks the new slot bad, puts its own kernel back on `system1` and boots its own slot.
   lk2nd's menu: power on with nothing held, then hold Volume Down once the logo shows (held from
   power-on it is Lenovo's own locked fastboot instead); Volume Down moves, Volume Up picks
-  Recovery.
+  Recovery. If that kernel cannot be written at the move, `recovery` is cleared and the boot log
+  says there is no way back; `lk2nd-ab status` says what `recovery` holds.
 - lk2nd 20.0 (on the units, January 2025) starts a kernel taking at most 32 MiB in memory from
   extlinux, so a slot whose kernel is bigger is marked bad before its trial (and `pack.py` refuses to
   build one).

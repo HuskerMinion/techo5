@@ -23,7 +23,9 @@
 #     mark-good), and the next start from system1 moves that slot's kernel there.
 #   - A kernel in recovery starts a slot only while the record has that slot on trial (bootable, not
 #     yet good). One left there from an earlier trial, started later from lk2nd's menu, is stale: it
-#     restarts, back on system1, and boots nothing.
+#     restarts, back on system1, and boots nothing. And a trial kernel starts only once: before its
+#     slot runs, recovery gets system1's good kernel as the fallback (or is cleared), since a slot
+#     out of tries is still unsettled in the record, and a start by hand takes no try.
 #   - The kernel that moves to system1 at a commit has only ever started from recovery. If lk2nd's
 #     extlinux path fails it, every start is that failing kernel again, and nothing on the unit can
 #     count those starts: the bootloader counts nothing, and a kernel that never reaches its init
@@ -31,6 +33,7 @@
 #     still in the store) goes into recovery, marked techo5.kernel=fallback. Started from there (lk2nd's
 #     menu, "Recovery"), it marks the committed slot bad, puts its own slot's kernel back on system1
 #     and boots its own slot: the update undone, the unit as it was before it.
+#     If that kernel cannot be written, recovery is cleared and status says there is no way back.
 #
 # The slot's kernel is slots/<x>/boot/boot.img (slotctl links the rootfs's
 # usr/share/techo5/kernel/boot-thinksmart.img there): kernel/build.sh's boot image, header version 0,
@@ -248,6 +251,26 @@ fallback() {
 	say "recovery: slot $1's kernel, to fall back to"
 }
 
+# clear_recovery: no boot image in recovery, so lk2nd's Recovery entry starts nothing
+clear_recovery() {
+	dev=$(recovery_dev) || return 1
+	dd if=/dev/zero of="$dev" bs=4096 count=1 conv=fsync 2>/dev/null
+}
+
+# retire_trial <slot>: a trial kernel was started: recovery must not start it again (a try is taken
+# only by trial(), so a second start from lk2nd's menu would cost none). The kernel on system1, when
+# its slot is good, goes there as the way back; otherwise recovery is cleared.
+retire_trial() {
+	w=$(entry_slot)
+	if [ -n "$w" ] && [ "$w" != "$1" ]; then
+		eval "wp=\$P_$w ws=\$S_$w"
+		[ "$wp" -gt 0 ] && [ "$ws" = 1 ] && fallback "$w" && return 0
+	fi
+	clear_recovery && say "recovery cleared: slot $1's trial kernel starts only once" && return 0
+	say "slot $1's trial kernel could not be taken out of recovery"
+	return 1
+}
+
 restart() {
 	sync
 	say "restarting${1:+ into $1}"
@@ -265,6 +288,9 @@ cmd_boot() {
 		[ -n "$b" ] || { say "a kernel on trial without ab.slot="; return 1; }
 		eval "p=\$P_$b s=\$S_$b"
 		if [ "$p" -gt 0 ] && [ "$s" = 0 ]; then
+			# Taken out of recovery before it runs: started again from lk2nd's menu after its
+			# tries are used up, it would count as on trial and could still be committed.
+			retire_trial "$b" || { say "not starting slot $b's trial; back to system1"; restart; }
 			echo "$b"
 			return 0
 		fi
@@ -314,7 +340,12 @@ cmd_boot() {
 			install "$p" || { say "slot $p's kernel could not go to system1"; [ "$b" = "$p" ] && { echo "$p"; return 0; }; return 1; }
 			if [ -n "$was" ] && [ "$was" != "$p" ]; then
 				eval "wp=\$P_$was ws=\$S_$was"
-				[ "$wp" -gt 0 ] && [ "$ws" = 1 ] && fallback "$was"
+				if [ "$wp" -gt 0 ] && [ "$ws" = 1 ] && ! fallback "$was"; then
+					# Recovery would hold an image the boot layer refuses: clear it, so lk2nd's
+					# Recovery entry plainly does nothing, and say so in status.
+					clear_recovery
+					say "NO WAY BACK: slot $was's kernel could not go to recovery; if slot $p's kernel fails from system1, reinstall"
+				fi
 			fi
 			restart
 		fi
@@ -326,9 +357,21 @@ cmd_boot() {
 	return 1
 }
 
+# recovery_holds: what lk2nd's Recovery entry starts
+recovery_holds() {
+	dev=$(recovery_dev) || { echo "no recovery partition"; return; }
+	[ "$(head -c 8 "$dev" 2>/dev/null)" = "ANDROID!" ] || { echo "nothing"; return; }
+	cl=$(hdr_cmdline "$dev")
+	x=$(echo "$cl" | sed -n 's/.*ab\.slot=\([ab]\).*/\1/p')
+	if echo "$cl" | grep -qw $FALLBACK_WORD; then echo "slot $x's kernel, to fall back to"
+	elif echo "$cl" | grep -qw $TRIAL_WORD; then echo "slot $x's kernel, on trial"
+	else echo "an image TECHO5 did not put there"; fi
+}
+
 cmd_status() {
 	bootctl status
 	echo "system1: slot $(entry_slot) ($(entry_dir)); booted: $(booted || echo none)$(on_trial_kernel && echo ', from recovery (on trial)')"
+	echo "recovery: $(recovery_holds)"
 }
 
 case "${1:-}" in
