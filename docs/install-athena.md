@@ -147,7 +147,9 @@ On TECHO5's kernel the microphones can be muted two ways, as on a Home Assistant
 - **Home Assistant** (the **Microphone mute** switch) and **the screen** (the microphone switch in
   the settings sheet) switch the microphone chip's channels off, so the microphones hand on nothing
   at all. They can switch them back on. The red light stays off for this mute, since it belongs to the
-  button's latch; the screen shows **MICROPHONE OFF** at the top instead. It is kept over a restart.
+  button's latch; the screen shows **MICROPHONE OFF** at the top instead, even with **Show Microphone
+  off** turned off (that switch only leaves the button's mute to the red light). It is kept over a
+  restart.
 
 > [!IMPORTANT]
 > **The button always wins.** If you press the mute button while Home Assistant or the screen has
