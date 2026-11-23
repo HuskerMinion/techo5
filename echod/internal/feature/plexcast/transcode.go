@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -41,22 +42,44 @@ func capProfileAt(w, h int) string {
 // at arm's length. offset is seconds on the transcoder; Plex's own offsets are milliseconds.
 func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, offset time.Duration, subtitles bool, session string) (string, error) {
 	q := url.Values{
-		"path":                        {it.key},
-		"mediaIndex":                  {"0"},
-		"partIndex":                   {"0"},
-		"protocol":                    {"hls"},
-		"directPlay":                  {"0"},
-		"directStream":                {"1"},
-		"fastSeek":                    {"1"},
-		"copyts":                      {"1"},
-		"offset":                      {strconv.Itoa(int(offset / time.Second))},
-		"session":                     {session},
+		"path":       {it.key},
+		"mediaIndex": {"0"},
+		"partIndex":  {"0"},
+		"protocol":   {"hls"},
+		// The server copies what it can and converts only the rest, which is the point of asking it to
+		// decide rather than demanding a stream.
+		"directPlay":   {"0"},
+		"directStream": {"1"},
+		"fastSeek":     {"1"},
+		// The decision document itself, in the shape Plex's own clients ask for: without it the server
+		// answers the older one, which carries no per-stream decision to read.
+		"hasMDE": {"1"},
+		// Where the device is, and what to scale the picture and the sound for. A decision made for the
+		// wrong location picks the wrong ceiling, and the device draws the picture full screen with one
+		// volume, so nothing here is the client's business but the size and the loudness.
+		"location":          {"lan"},
+		"subtitleSize":      {"100"},
+		"audioBoost":        {"100"},
+		"mediaBufferSize":   {"102400"},
+		"autoAdjustQuality": {"0"},
+		"offset":            {strconv.Itoa(int(offset / time.Second))},
+		"session":           {session},
+
 		"X-Plex-Client-Identifier":    {clientIdentifier()},
 		"X-Plex-Session-Identifier":   {session},
 		"X-Plex-Platform":             {platform},
+		"X-Plex-Product":              {product},
+		"X-Plex-Version":              {version()},
+		"X-Plex-Device":               {device},
+		"X-Plex-Device-Name":          {friendlyName()},
 		"X-Plex-Client-Profile-Name":  {"generic"},
 		"X-Plex-Client-Profile-Extra": {capProfile},
 		"X-Plex-Token":                {req.token},
+	}
+	// copyts keeps the timestamps of the original in the stream, which a seek starts from: without it a
+	// seek lands at the start of the file rather than at the offset asked for.
+	if offset > 0 {
+		q.Set("copyts", "1")
 	}
 	if a := it.part.audioStream(); a != 0 {
 		q.Set("audioStreamID", strconv.Itoa(a))
@@ -83,18 +106,28 @@ func decide(ctx context.Context, u, token string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Plex-Client-Identifier", clientIdentifier())
+	// The identity goes in headers as well as in the query: the server works out which client is asking
+	// from what it is told here, and a decision asked for without it is answered with a bare 400 -- the
+	// same request with the product and platform named is answered with the decision.
+	for k, v := range identityHeaders() {
+		req.Header.Set(k, v)
+	}
 	req.Header.Set("X-Plex-Token", token)
+	req.Header.Set("X-Plex-Platform", platform)
 	req.Header.Set("Accept", "application/xml")
 	resp, err := fetchClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, mostMetadata))
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("the server would not decide on a stream: %s", resp.Status)
+		// What the server said, not just the code: a decision it will not make is one it explains in a
+		// line -- a profile it cannot parse, a stream id it does not know -- and without that line the
+		// device's log says only that casting failed.
+		said, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("the server would not decide on a stream: %s: %s", resp.Status, strings.TrimSpace(string(said)))
 	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, mostMetadata))
 	return nil
 }
 
@@ -111,7 +144,10 @@ func stopTranscode(ctx context.Context, req mediaRequest, session string) {
 	if err != nil {
 		return
 	}
-	r.Header.Set("X-Plex-Client-Identifier", clientIdentifier())
+	for k, v := range identityHeaders() {
+		r.Header.Set(k, v)
+	}
+	r.Header.Set("X-Plex-Platform", platform)
 	if resp, err := fetchClient.Do(r); err == nil {
 		resp.Body.Close()
 	}
