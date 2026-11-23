@@ -121,6 +121,12 @@ iptables-legacy -I TECHO5-IN 2 -p udp --dport 32412:32413 -j ACCEPT
 - **It casts but nothing plays.** For a film, check **Video** is on. For music, the device's log
   (`/var/log/techo5.log`, `grep plex:`) says what the server answered: a library whose files the
   server cannot reach is answered with an error, not a stream.
+- **The log says the server would not decide on a stream (400).** The server picks the transcode
+  profile from the platform name the client sends and answers one it does not know with a bare HTML
+  400 on every `/transcode/universal` route -- `Linux` is such a name, `Generic` is not, and the
+  server's own log says `using profile Generic` when it accepts. That is why the device calls itself
+  `Generic` there and TECHO5 as its product; the panel is described separately, by the client profile
+  in `transcode.go`. A 400 that names nothing else is this, not the title.
 - **The phone does not see it from away.** The address published to the account is the home
   network's, so a phone outside the house cannot reach the player at it; what it can do is send down
   the account's socket, which is opened as soon as an account is linked and reported in the log as

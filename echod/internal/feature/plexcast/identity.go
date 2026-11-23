@@ -53,6 +53,11 @@ func clientIdentifier() string {
 	return id
 }
 
+// deviceModel is what the account records as the device: the board's own name, worked out at startup
+// from the kernel's board ("Echo Show 8 2nd gen (athena)"), so that a device named Echo Show 8 is not
+// listed as a Show 5.
+var deviceModel = layout.Model
+
 // friendlyName is what Plex lists the device as: the name the owner gave it, or the device's default.
 func friendlyName() string {
 	if n := config.Get().Device.Name; n != "" {
@@ -79,7 +84,7 @@ func identityHeaders() map[string]string {
 		"X-Plex-Product":           product,
 		"X-Plex-Version":           version(),
 		"X-Plex-Platform":          platform,
-		"X-Plex-Device":            device,
+		"X-Plex-Device":            deviceModel,
 		"X-Plex-Device-Name":       friendlyName(),
 		"X-Plex-Client-Identifier": clientIdentifier(),
 		"X-Plex-Provides":          "client,player,pubsub-player",

@@ -70,7 +70,7 @@ func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, off
 		"X-Plex-Platform":             {platform},
 		"X-Plex-Product":              {product},
 		"X-Plex-Version":              {version()},
-		"X-Plex-Device":               {device},
+		"X-Plex-Device":               {deviceModel},
 		"X-Plex-Device-Name":          {friendlyName()},
 		"X-Plex-Client-Profile-Name":  {"generic"},
 		"X-Plex-Client-Profile-Extra": {capProfile},

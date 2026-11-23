@@ -44,12 +44,14 @@ const (
 	// are the casting app's, and what they play is what the owner asked for.
 	Port = 32500
 
-	// What the device says it is. product is the name Plex shows in an account's device list; platform
-	// and device are the same strings Plex's own players send, because some of its servers key a
-	// transcode profile on them.
+	// What the device says it is. product is the name Plex shows in an account's device list. platform
+	// is not a description but a key: the server picks the transcode profile from it, and a name it
+	// does not know is answered with a bare 400 on every /transcode/universal route -- "Linux" among
+	// them. Generic is the stand-in profile (the server's own decision log says "using profile
+	// Generic"), and the profile in transcode.go adds the one transcode target this hardware takes to
+	// it. The model the server records is the board's, from layout.Model (identity.go).
 	product     = "TECHO5"
-	platform    = "Linux"
-	device      = "Echo Show 5"
+	platform    = "Generic"
 	deviceClass = "tv"
 
 	// protocolVersion is the Companion API this implements: version 1, advertised as 3 as Plex Web
