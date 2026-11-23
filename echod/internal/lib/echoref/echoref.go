@@ -104,13 +104,11 @@ type ring struct {
 	taps  int
 	rate  int
 
-	// next is where the read after the last one starts, follow whether there was a last one, away
-	// how many reads in a row the clocks have placed further than keep from next, and lean the
-	// smoothed difference between where the clocks place a read and next (slip).
+	// next is where the read after the last one starts, follow whether there was a last one, and
+	// away how many reads in a row the clocks have placed further than keep from next.
 	next   float64
 	follow bool
 	away   int
-	lean   float64
 }
 
 // keep is how far, in samples at Rate, the clocks may place a read from where the last one ended and
@@ -125,17 +123,13 @@ const keep = 20 * Rate / 1000
 // started over (an overrun) stays where it moved to.
 const moveAfter = 25
 
-// slip is how far, in samples, the clocks' placement has to lean off next on average before next moves
-// one sample towards it. Held to next, a reference would keep whatever drift there is between the two
-// cards' clocks up to keep, and a reference a few milliseconds late misses the start of every echo;
-// moved a sample at a time it follows the clocks' average, with one sample's step now and then rather
-// than a jump at every read. The first read's own placement, which may have come back late, is
-// walked off the same way.
-const (
-	slip      = 2.0
-	leanAlpha = 1.0 / 64
-	leanClamp = 8.0 // one late read counts this much at most
-)
+// Once a read is placed, the reference is held there: nothing nudges it after the clocks. Measured on
+// an Echo Show 5 1st gen with music for two minutes, held, it stayed on the same sample throughout
+// (both cards run off the same clocks); nudged a sample at a time towards the clocks' average, or
+// placed afresh whenever the speaker's own clock reading snapped, it wandered by up to eight samples,
+// and every sample it moved cost the canceller what it had learned above 2 kHz, where a sample is a
+// good part of a period. It moves only where the audio really did: a stream that started over on
+// either side (restart, Rejoin), or a placement that stays more than keep away (moveAfter).
 
 var played = &ring{clock: NewClock(Rate)}
 
@@ -174,13 +168,7 @@ func Push(pcm []byte, rate int, heardEnd time.Time) {
 	}
 	// The newest sample out of the decimator is the input from its delay back.
 	delay := time.Duration(float64(p.taps-1) / 2 / float64(rate) * float64(time.Second))
-	was, before := p.clock.ok, p.clock.off
 	p.clock.Mark(p.end-1, heardEnd.Add(-delay))
-	if was && math.Abs(p.clock.off-before) >= snap {
-		// The speaker's own stream moved (an underrun shorter than stale): that is the audio moving,
-		// not a reading's jitter, so the next read is placed afresh.
-		p.follow = false
-	}
 	p.last = heardEnd
 }
 
@@ -216,21 +204,15 @@ func Fill(l, r []float32, start float64) bool {
 		switch d := first - p.next; {
 		case math.Abs(d) <= keep:
 			p.away = 0
-			p.lean += (max(-leanClamp, min(leanClamp, d)) - p.lean) * leanAlpha
-			if math.Abs(p.lean) >= slip {
-				step := math.Copysign(1, p.lean)
-				p.next += step
-				p.lean -= step
-			}
 			first = p.next
 		case p.away+1 < moveAfter:
 			p.away++
 			first = p.next
 		default:
-			p.away, p.lean = 0, 0
+			p.away = 0
 		}
 	} else {
-		p.follow, p.away, p.lean = true, 0, 0
+		p.follow, p.away = true, 0
 	}
 	p.next = first + float64(len(l))
 	any := false

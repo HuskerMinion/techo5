@@ -219,41 +219,21 @@ func TestFillRejoins(t *testing.T) {
 	}
 }
 
-// TestFillSlipsTowardsTheClocks: clocks that drift apart slowly are followed a sample at a time, so the
-// reference never sits more than a few samples from where they place it.
-func TestFillSlipsTowardsTheClocks(t *testing.T) {
+// TestFillHoldsItsPlace: clocks that place every read a few samples off where the last one ended, the
+// same way every time, do not walk the reference after them; only a real move does (moveAfter).
+func TestFillHoldsItsPlace(t *testing.T) {
 	freshRing(t)
 	t0 := time.Now()
 	pushRamp(t0, 120)
 	const n = Rate / 50
 	l, r := make([]float32, n), make([]float32, n)
 	start := Seconds(t0) + 0.2
-	var at float64
-	for k := range 3000 {
-		// 50 ppm, generous for two streams off one crystal: 48 samples, 3 ms, over the minute.
-		at = start + float64(k*n)*(1+50e-6)/Rate
-		Fill(l, r, at)
+	Fill(l, r, start)
+	held := played.next
+	for k := 1; k <= 200; k++ {
+		Fill(l, r, start+float64(k*n+6)/Rate) // six samples later than carrying on, every read
 	}
-	if d := played.next - n - placed(at); math.Abs(d) > slip+2 {
-		t.Errorf("after 48 samples of drift the reference is %.0f samples from the clocks, want at most %v", d, slip+2)
-	}
-}
-
-// TestPushJumpRejoins: the speaker's stream moving by more than a clock's snap (a short underrun) places
-// the next read afresh.
-func TestPushJumpRejoins(t *testing.T) {
-	freshRing(t)
-	t0 := time.Now()
-	pushRamp(t0, 60)
-	const n = Rate / 50
-	l, r := make([]float32, n), make([]float32, n)
-	Fill(l, r, Seconds(t0)+0.2)
-	if !played.follow {
-		t.Fatal("a read did not start following")
-	}
-	const rate, period = 48000, 768
-	Push(make([]byte, period*4), rate, t0.Add(time.Duration(61*period-1)*time.Second/rate+10*time.Millisecond))
-	if played.follow {
-		t.Error("the speaker's stream moved 10 ms and the next read still carries on from the last")
+	if want := held + 200*n; played.next != want {
+		t.Errorf("after 200 reads the reference is at %.0f, want it held at %.0f", played.next, want)
 	}
 }
