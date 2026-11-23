@@ -120,6 +120,11 @@ there yet. macOS also asks the first time the agent goes on the
 network: allow it. All keys work except Print Screen and F21 to F24, which Mac keyboards don't
 have; `cmd` is the Command key.
 
+To keep the agent in the menu bar rather than a Terminal window,
+[TECHO5 Deck for macOS](https://github.com/aptonline/Techo5-Deck-Menu) is a community app (MIT
+licensed, not made by this project) that downloads the agent from this project's releases, checks
+it, and starts it with the Mac.
+
 ### Linux
 
 Mark the download as a program and run it: `chmod +x techo5-deck-linux-amd64`, then
