@@ -62,6 +62,7 @@ type Feature struct {
 	mu      sync.Mutex
 	running context.CancelFunc
 	runCtx  context.Context // ends with running: a question waits no longer than the port is open
+	ln      net.Listener    // the port, closed by close() itself so Cast turned on again at once can listen
 	wake    chan struct{}
 
 	// The screen's size, told by the display; a cast is refused until it is known.
@@ -86,6 +87,7 @@ type Feature struct {
 	titleAt time.Time
 	scale   int // 2 when frames arrive at half size, to be drawn doubled
 	frame   *image.RGBA
+	scratch *image.RGBA // doubleInto's working copy, kept between frames
 	version uint64
 	recv    *Receiver
 
@@ -249,7 +251,7 @@ func (f *Feature) idle() {
 
 // consent waits for somebody at the device to accept the phone. It always asks: the name is the
 // phone's own word and every phone shares the key, so there is nothing to remember a phone by.
-func (f *Feature) consent(name string) error {
+func (f *Feature) consent(name string, gone <-chan struct{}) error {
 	f.remember(name)
 	ch := make(chan bool, 1)
 	f.mu.Lock()
@@ -285,6 +287,10 @@ func (f *Feature) consent(name string) error {
 	case <-ctx.Done():
 		f.idle()
 		return errors.New("Cast was turned off")
+	case <-gone:
+		// The phone gave up (or was stopped by cast_key): nobody is left to answer for.
+		f.idle()
+		return errors.New("the phone left")
 	}
 	return nil
 }
@@ -416,7 +422,7 @@ func (f *Feature) settle(parent context.Context) {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	f.mu.Lock()
-	f.running, f.runCtx = cancel, ctx
+	f.running, f.runCtx, f.ln = cancel, ctx, ln
 	f.mu.Unlock()
 
 	if err := firewall.Open(firewall.Cast, Port); err != nil {
@@ -439,13 +445,18 @@ func (f *Feature) settle(parent context.Context) {
 
 func (f *Feature) close() {
 	f.mu.Lock()
-	cancel := f.running
-	f.running, f.runCtx, f.recv = nil, nil, nil
+	cancel, ln := f.running, f.ln
+	f.running, f.runCtx, f.recv, f.ln = nil, nil, nil, nil
 	f.mu.Unlock()
 	if cancel == nil {
 		return
 	}
 	cancel() // a question still on the screen goes with the port (consent watches the context)
+	if ln != nil {
+		// Now, not when Serve notices the context: Cast turned off and on again at once would find the
+		// port still taken.
+		_ = ln.Close()
+	}
 	if err := firewall.Close(firewall.Cast); err != nil {
 		slog.Warn("closing the cast port failed", "err", err)
 	}
@@ -502,7 +513,7 @@ func (s *sink) Begin(h Hello) (Welcome, error) {
 	if h.Audio && (h.Rate != speaker.Rate || h.Channels != speaker.Channels) {
 		return Welcome{}, errors.New("audio has to be 48000 Hz stereo")
 	}
-	if err := f.consent(h.Name); err != nil {
+	if err := f.consent(h.Name, h.Gone); err != nil {
 		return Welcome{}, err
 	}
 	f.mu.Lock()
@@ -531,7 +542,7 @@ func (s *sink) Frame(img image.Image) {
 	f.mu.Lock()
 	if f.frame != nil {
 		if f.scale == 2 {
-			doubleInto(f.frame, img)
+			f.scratch = doubleInto(f.frame, img, f.scratch)
 		} else {
 			b := img.Bounds()
 			at := image.Pt((f.frame.Rect.Dx()-b.Dx())/2, (f.frame.Rect.Dy()-b.Dy())/2)
@@ -564,7 +575,7 @@ func (s *sink) End() {
 	speaker.Sound().Backgrounds().Gave(f.audio)
 	f.audio.close()
 	f.mu.Lock()
-	f.phone, f.frame = "", nil
+	f.phone, f.frame, f.scratch = "", nil, nil
 	f.mu.Unlock()
 	f.idle()
 	f.Changed.Emit(struct{}{})
@@ -572,9 +583,15 @@ func (s *sink) End() {
 
 // doubleInto draws img into dst at twice its size, each pixel as four, centered. It is soft, and it is
 // a fraction of the decoding a full-size frame costs.
-func doubleInto(dst *image.RGBA, img image.Image) {
+//
+// scratch is where img is first drawn as RGBA, made once and handed back to be used for the next frame:
+// a frame is a few hundred kilobytes, and it was allocated for every one.
+func doubleInto(dst *image.RGBA, img image.Image, scratch *image.RGBA) *image.RGBA {
 	b := img.Bounds()
-	small := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	if scratch == nil || scratch.Rect.Dx() != b.Dx() || scratch.Rect.Dy() != b.Dy() {
+		scratch = image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	}
+	small := scratch
 	draw.Draw(small, small.Rect, img, b.Min, draw.Src)
 	ox, oy := (dst.Rect.Dx()-2*b.Dx())/2, (dst.Rect.Dy()-2*b.Dy())/2
 	for y := 0; y < small.Rect.Dy(); y++ {
@@ -598,4 +615,5 @@ func doubleInto(dst *image.RGBA, img image.Image) {
 			copy(dst.Pix[(ty+1)*dst.Stride+lo:(ty+1)*dst.Stride+hi], r0[lo:hi])
 		}
 	}
+	return scratch
 }

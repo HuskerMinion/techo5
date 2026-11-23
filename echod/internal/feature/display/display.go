@@ -3199,6 +3199,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.pask.drawn(drawnPage, now)
 	d.videoScene(&s, now)
+	d.castLatch(&s, cast.Get().AskID(), now) // after the scene says what is over the question
 	if s.showVideo {
 		boring = false
 	}

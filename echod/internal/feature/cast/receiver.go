@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
 )
@@ -59,6 +60,64 @@ func (r *Receiver) Stop(reason string) {
 		_ = Write(c, KindStop, []byte(reason))
 		c.Close()
 	}
+}
+
+// handshakeErr is a connection that did not get through the handshake: it has not proved the key.
+type handshakeErr struct{ error }
+
+func (e handshakeErr) Unwrap() error { return e.error }
+
+// watchGone says when the connection has closed, by looking at it without reading (MSG_PEEK): what the
+// phone sends is left for the session. The receiver's Sink may wait on a person (the question at the
+// screen), and nothing else is reading the connection then, so a phone that gives up or is stopped
+// would otherwise be found out only when the wait ends. stop ends the watching.
+func watchGone(raw net.Conn) (gone <-chan struct{}, stop func()) {
+	g, quit := make(chan struct{}), make(chan struct{})
+	sc, ok := raw.(syscall.Conn)
+	if !ok {
+		return g, func() {} // cannot look: never says
+	}
+	go func() {
+		tick := time.NewTicker(200 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			select {
+			case <-quit:
+				return
+			case <-tick.C:
+				if peerClosed(sc) {
+					close(g)
+					return
+				}
+			}
+		}
+	}()
+	var once sync.Once
+	return g, func() { once.Do(func() { close(quit) }) }
+}
+
+// peerClosed is whether the connection has ended, from either side: a read that would return 0 bytes or
+// an error, looked at without taking anything from it.
+func peerClosed(sc syscall.Conn) bool {
+	rc, err := sc.SyscallConn()
+	if err != nil {
+		return true
+	}
+	var n int
+	var rerr error
+	if err := rc.Control(func(fd uintptr) {
+		var b [1]byte
+		n, _, rerr = syscall.Recvfrom(int(fd), b[:], syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+	}); err != nil {
+		return true // the descriptor is closed
+	}
+	switch rerr {
+	case nil:
+		return n == 0
+	case syscall.EAGAIN, syscall.EINTR:
+		return false
+	}
+	return true
 }
 
 // lateMax is how far past its time a frame is still shown. Later than that, showing it only makes the
@@ -113,6 +172,12 @@ func (r *Receiver) Serve(ctx context.Context, ln net.Listener) error {
 		go func() {
 			defer r.give()
 			if err := r.session(ctx, c); err != nil && ctx.Err() == nil {
+				// A connection that never proved the key is a port scan or a phone on another key: one
+				// line each at Debug, not a log full of them at Info.
+				if errors.As(err, new(handshakeErr)) {
+					slog.Debug("cast: a connection that did not get through the handshake", "from", c.RemoteAddr(), "err", err)
+					return
+				}
 				slog.Info("cast ended", "from", c.RemoteAddr(), "err", err)
 			}
 		}()
@@ -147,7 +212,7 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	}
 	c, err := accept(raw, key)
 	if err != nil {
-		return err
+		return handshakeErr{err}
 	}
 	r.mu.Lock()
 	r.cur = c
@@ -170,6 +235,9 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	}
 	h.Name = clean(h.Name)
 	h.Title = printable(h.Title, 80)
+	var stopWatch func()
+	h.Gone, stopWatch = watchGone(raw)
+	defer stopWatch()
 	if h.Scale == 0 {
 		h.Scale = 1
 	}

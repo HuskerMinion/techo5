@@ -4,6 +4,7 @@ package cast
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 )
@@ -35,7 +36,7 @@ func answer(t *testing.T, f *Feature, name string, accept bool) {
 func TestConsentAcceptThenTheSamePhoneIsAskedAgain(t *testing.T) {
 	f := open(t)
 	done := make(chan error, 1)
-	go func() { done <- f.consent("Pixel 9") }()
+	go func() { done <- f.consent("Pixel 9", nil) }()
 	answer(t, f, "Pixel 9", true)
 	if err := <-done; err != nil {
 		t.Fatalf("accepted phone refused: %v", err)
@@ -44,7 +45,7 @@ func TestConsentAcceptThenTheSamePhoneIsAskedAgain(t *testing.T) {
 		t.Fatal("still asking after the answer")
 	}
 	// A name proves nothing (the phone picks it), so a reconnect is asked about too.
-	go func() { done <- f.consent("Pixel 9") }()
+	go func() { done <- f.consent("Pixel 9", nil) }()
 	answer(t, f, "Pixel 9", false)
 	if err := <-done; err == nil {
 		t.Fatal("a phone accepted before got in without being asked")
@@ -54,13 +55,13 @@ func TestConsentAcceptThenTheSamePhoneIsAskedAgain(t *testing.T) {
 func TestConsentDeclineRefuses(t *testing.T) {
 	f := open(t)
 	done := make(chan error, 1)
-	go func() { done <- f.consent("Stranger") }()
+	go func() { done <- f.consent("Stranger", nil) }()
 	answer(t, f, "Stranger", false)
 	if err := <-done; err == nil || err.Error() != "declined" {
 		t.Fatalf("got %v, want declined", err)
 	}
 	// Declined is not remembered: the next try asks again.
-	go func() { done <- f.consent("Stranger") }()
+	go func() { done <- f.consent("Stranger", nil) }()
 	answer(t, f, "Stranger", true)
 	if err := <-done; err != nil {
 		t.Fatalf("second try: %v", err)
@@ -70,10 +71,10 @@ func TestConsentDeclineRefuses(t *testing.T) {
 func TestConsentOtherPhoneIsAsked(t *testing.T) {
 	f := open(t)
 	done := make(chan error, 1)
-	go func() { done <- f.consent("A") }()
+	go func() { done <- f.consent("A", nil) }()
 	answer(t, f, "A", true)
 	<-done
-	go func() { done <- f.consent("B") }()
+	go func() { done <- f.consent("B", nil) }()
 	answer(t, f, "B", false)
 	if err := <-done; err == nil {
 		t.Fatal("a phone that was never accepted got in on another's acceptance")
@@ -82,7 +83,7 @@ func TestConsentOtherPhoneIsAsked(t *testing.T) {
 
 func TestConsentOnAClosedPortIsRefusedWithoutAsking(t *testing.T) {
 	f := build() // never opened, as after close()
-	if err := f.consent("Late"); err == nil {
+	if err := f.consent("Late", nil); err == nil {
 		t.Fatal("a hello that arrived after Cast was turned off was asked about")
 	}
 	if f.Asking() != "" {
@@ -96,7 +97,7 @@ func TestConsentOnAClosedPortIsRefusedWithoutAsking(t *testing.T) {
 func TestTurningCastOffEndsAQuestionAtOnce(t *testing.T) {
 	f := open(t)
 	done := make(chan error, 1)
-	go func() { done <- f.consent("Pixel") }()
+	go func() { done <- f.consent("Pixel", nil) }()
 	deadline := time.Now().Add(time.Second)
 	for f.Asking() != "Pixel" {
 		if time.Now().After(deadline) {
@@ -131,7 +132,7 @@ func TestEachQuestionHasItsOwnID(t *testing.T) {
 	done := make(chan error, 1)
 	var ids []uint64
 	for _, name := range []string{"A", "A"} {
-		go func() { done <- f.consent(name) }()
+		go func() { done <- f.consent(name, nil) }()
 		answer(t, f, name, false)
 		<-done
 		ids = append(ids, f.askSeq)
@@ -142,4 +143,49 @@ func TestEachQuestionHasItsOwnID(t *testing.T) {
 	if f.AskID() != 0 {
 		t.Fatal("an id left over after the answer")
 	}
+}
+
+func TestAQuestionEndsWhenThePhoneLeaves(t *testing.T) {
+	f := open(t)
+	gone := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- f.consent("Pixel", gone) }()
+	deadline := time.Now().Add(time.Second)
+	for f.Asking() != "Pixel" {
+		if time.Now().After(deadline) {
+			t.Fatal("never asked")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(gone)
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a question for a phone that left was accepted")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the question stayed up for a phone that was gone")
+	}
+	if f.Asking() != "" {
+		t.Fatal("still asking after the phone left")
+	}
+}
+
+// Cast turned off and on again at once must find the port free: close() closes the listener itself.
+func TestCloseFreesThePortAtOnce(t *testing.T) {
+	f := open(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	f.mu.Lock()
+	f.ln = ln
+	f.mu.Unlock()
+	f.close()
+	again, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatalf("the port was still taken after close: %v", err)
+	}
+	again.Close()
 }

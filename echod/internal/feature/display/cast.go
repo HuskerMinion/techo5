@@ -60,6 +60,19 @@ func (d *Display) castLights(on, night bool) bool {
 	return on
 }
 
+// castLatch tells the tap's latch which question is on the screen, once the frame's scene is whole: only
+// when it is really on top. What draw() puts over it (the setup page's or a DLNA video's question, the
+// PIN pad, a QR scan, the camera test, an alert) leaves it undrawn and so unanswerable, and its settle
+// must not start behind them, or it could be answered the moment the other page goes.
+func (d *Display) castLatch(s *scene, id uint64, now time.Time) {
+	drawn := uint64(0)
+	if s.showCastAsk && !s.callPageUp() && !s.ring.any() && !s.pin.open && !s.setupAsking && !s.showVideoAsk &&
+		!s.bt.Pairing && !s.showWifi && s.qrscan == nil && s.camtest == nil && !s.showAlert {
+		drawn = id
+	}
+	d.cask.drawn(drawn, now)
+}
+
 // castScene decides whether the cast is the page.
 func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
 	f := cast.Get()
@@ -69,12 +82,9 @@ func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
 	want := (f.Active() || f.Asking() != "" || f.PairingShown()) && s.phase == "idle" && !sheetOrDrawer &&
 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showWifi && !s.bt.Pairing
 	s.showCast = want
-	// The question drawn, for the tap's latch: only once it is on the screen, and only that one.
-	drawn := uint64(0)
-	if want && f.Asking() != "" {
-		drawn = f.AskID()
-	}
-	d.cask.drawn(drawn, time.Now())
+	// The question is over the deck, a custom screen and a video: they give way to it (their scenes
+	// leave themselves out while it is up), so a tap on Accept is not a press on a deck button under it.
+	s.showCastAsk = want && f.Asking() != ""
 	d.mu.Lock()
 	d.castShowing = want
 	d.mu.Unlock()

@@ -139,9 +139,14 @@ func (o *out) open(sampleRate, channels, bitDepth int) error {
 
 	o.mu.Lock()
 	o.ready = true
+	held := o.held
 	o.mu.Unlock()
 
-	o.p.Attach(o)
+	// Not while stood down: a new stream/start without an end, during a cast, would take the speaker's
+	// one slot and leave the cast silent. Resume takes it back when the hold ends.
+	if !held {
+		o.p.Attach(o)
+	}
 	return nil
 }
 

@@ -36,6 +36,10 @@ type Hello struct {
 	// work at 2, and the picture is softer.
 	Scale int `json:"scale,omitempty"`
 
+	// Gone is closed when the phone's connection has closed, for what waits on the phone (the question
+	// at the screen): the receiver sets it, and it is not on the wire.
+	Gone <-chan struct{} `json:"-"`
+
 	// Title is what is playing, for the device to say on its screen for a moment. Optional.
 	Title string `json:"title,omitempty"`
 }

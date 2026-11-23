@@ -329,3 +329,40 @@ func TestQueuedFramesAreNotShownAfterTheCastEnds(t *testing.T) {
 		t.Fatalf("%d frames were shown after the cast ended", n)
 	}
 }
+
+// watchGone says the connection has closed without taking what the phone sent from the session.
+func TestWatchGoneSeesAClosedConnectionAndLeavesDataAlone(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() { c, _ := ln.Accept(); accepted <- c }()
+	client, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := <-accepted
+	defer server.Close()
+
+	gone, stop := watchGone(server)
+	defer stop()
+	_, _ = client.Write([]byte("x"))
+	select {
+	case <-gone:
+		t.Fatal("a phone that sent data was taken for gone")
+	case <-time.After(500 * time.Millisecond):
+	}
+	buf := make([]byte, 1)
+	_ = server.SetReadDeadline(time.Now().Add(time.Second))
+	if n, _ := server.Read(buf); n != 1 || buf[0] != 'x' {
+		t.Fatal("watching took the phone's data")
+	}
+	client.Close()
+	select {
+	case <-gone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a closed connection was not noticed")
+	}
+}

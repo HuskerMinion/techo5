@@ -29,7 +29,7 @@ func videoCovered(s scene) bool {
 	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || cueLit(s.cue) ||
 		(s.cue != "" && (cueWords(s.cue, s.heard, s.reply) != "" || s.failed != ""))
 	return s.call.Phase != phone.Idle || s.ring.any() || s.pin.open || s.setupAsking || s.showVideoAsk || s.bt.Pairing ||
-		s.showWifi || s.showCamera || s.showSheet || turn
+		s.showWifi || s.showCamera || s.showSheet || s.showCastAsk || turn
 }
 
 // videoScene fills in the video's part of the scene, and tells the player whether it is covered.

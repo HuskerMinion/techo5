@@ -410,3 +410,26 @@ func TestResumeTakesTheSourceSlotBack(t *testing.T) {
 		t.Fatal("an output that is not open took the slot")
 	}
 }
+
+// A new stream/start with no end, during a cast, opens the output again while it is stood down: it must
+// not take the speaker's one slot, which leaves the cast silent. Resume takes it back later.
+func TestOpenWhileStoodDownLeavesTheSlotAlone(t *testing.T) {
+	p := speaker.New()
+	o := newOut(p)
+	if err := o.open(speaker.Rate, speaker.Channels, speaker.Bits); err != nil {
+		t.Fatal(err)
+	}
+	cast := otherSource{}
+	p.Attach(cast) // the cast took the slot when it started
+	o.Suspend()
+	if err := o.open(speaker.Rate, speaker.Channels, speaker.Bits); err != nil {
+		t.Fatal(err)
+	}
+	if p.Source() != speaker.Source(cast) {
+		t.Fatal("a stream restarting during a cast took the slot from it")
+	}
+	o.Resume()
+	if p.Source() != speaker.Source(o) {
+		t.Fatal("the output did not take the slot back when it resumed")
+	}
+}
