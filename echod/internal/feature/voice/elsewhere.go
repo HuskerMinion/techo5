@@ -31,6 +31,11 @@ var callPlayer = func(entity, url string) error {
 	})
 }
 
+// stopPlayer asks Home Assistant to stop entity. A variable for the tests, as callPlayer is.
+var stopPlayer = func(entity string) error {
+	return hass.Get().Call("media_player", "media_stop", map[string]any{"entity_id": entity})
+}
+
 // playerUp is whether the player is there to take a reply. Home Assistant answers a play_media call to
 // an unavailable player without an error and plays nothing, so the state is asked first. A state that
 // cannot be read is taken as up: the call then says for itself. A player Home Assistant does not have at
@@ -120,6 +125,7 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 		var bytes int
 		err := media.FetchVoice(ctx, url, func(b []byte) { bytes += len(b) })
 		if ctx.Err() != nil {
+			stopElsewhere(entity)
 			return true
 		}
 		if err != nil {
@@ -137,6 +143,21 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 	select {
 	case <-t.C:
 	case <-ctx.Done():
+		if early {
+			stopElsewhere(entity)
+		}
 	}
 	return true
+}
+
+// stopElsewhere stops a reply handed to the player early, when the turn is stopped (the stop word, a
+// cancel, a new wake word): the player was given it as the agent began to write, so without this a long
+// answer somebody asked to stop would be read out there to the end. A reply sent whole was only handed
+// over once written, and stopped before that, as it always was.
+func stopElsewhere(entity string) {
+	if err := stopPlayer(entity); err != nil {
+		slog.Warn("replies: could not stop the reply on another player", "player", entity, "err", err)
+		return
+	}
+	slog.Info("reply on another player stopped", "player", entity)
 }

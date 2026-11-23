@@ -227,3 +227,48 @@ func TestAnEarlyReplyThePlayerRefusesPlaysHere(t *testing.T) {
 		t.Error("the refusal was not remembered")
 	}
 }
+
+// A turn stopped while its early reply plays on another player stops it there too: the player was
+// handed it as the agent began writing, and would otherwise read a long answer to the end.
+func TestAStoppedEarlyReplyStopsThePlayer(t *testing.T) {
+	_ = fakePlayer(t, nil)
+	handed := make(chan struct{}, 4)
+	fake := callPlayer
+	callPlayer = func(e, u string) error {
+		err := fake(e, u)
+		handed <- struct{}{}
+		return err
+	}
+	stopped := make(chan string, 4)
+	oldStop := stopPlayer
+	stopPlayer = func(e string) error { stopped <- e; return nil }
+	t.Cleanup(func() { stopPlayer = oldStop })
+
+	c := thinkingTurn(t)
+	config.Set().Brain().SetReplyPlayer("media_player.living_room")
+	if err := config.Set().Wake(0).Delivery(config.DeliveryEarly); err != nil {
+		t.Fatal(err)
+	}
+	if wakeword.Delivery(0) != config.DeliveryEarly {
+		t.Skip("could not set the delivery")
+	}
+	url, release := heldSpeech(t)
+	defer close(release)
+	c.runURL = url
+
+	c.handle(event{kind: evEarlyReply})
+	select {
+	case <-handed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the player was not handed the reply")
+	}
+	c.handle(event{kind: evCancel})
+	select {
+	case e := <-stopped:
+		if e != "media_player.living_room" {
+			t.Errorf("stopped %q", e)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the player was not stopped with the turn")
+	}
+}
