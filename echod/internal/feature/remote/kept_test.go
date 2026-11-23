@@ -64,6 +64,7 @@ var keptByRestore = map[string]keptSetting{
 	"wake_call_1":                      {setWakeCall(0), wakeCall(0)},
 	"wake_call_2":                      {setWakeCall(1), wakeCall(1)},
 	"presence_detection":               {func(c *config.Config) { c.Presence.On = true }, func(c config.Config) bool { return c.Presence.On }},
+	"presence_sensitivity":             {func(c *config.Config) { c.Presence.Sensitivity = 80 }, func(c config.Config) bool { return c.Presence.Sensitivity == 80 }},
 	"gestures":                         {func(c *config.Config) { c.Presence.Gestures = true }, func(c config.Config) bool { return c.Presence.Gestures }},
 	"wake_word_on_home_assistant":      {func(c *config.Config) { c.Wake.OnHA.Stream = true }, func(c config.Config) bool { return c.Wake.OnHA.Stream }},
 	"confirm_wake_with_home_assistant": {func(c *config.Config) { c.Wake.OnHA.Confirm = true }, func(c config.Config) bool { return c.Wake.OnHA.Confirm }},
