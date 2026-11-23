@@ -16,8 +16,8 @@ import (
 
 // Weather alerts on the Show (home/alerts.go fetches them): a badge on the clock while any is in force
 // at home, pills over the rain map, and a page with an alert's full text, opened from either. The
-// page is swiped sideways from one alert to the next and up or down through a long one, and put away
-// with Close or by leaving it a minute. Anything else opened (the forecast, the calendar, "go home")
+// page goes from one alert to the next with its ‹ › buttons or a sideways swipe, is swiped up or down
+// through a long one, and is put away with Close or by leaving it a minute. Anything else opened (the forecast, the calendar, "go home")
 // puts it away too.
 
 // alertShow is how long the alert page stays without a touch.
@@ -80,19 +80,56 @@ func (d *Display) alertGesture(g touch.Gesture) {
 	}
 	switch g.Kind {
 	case touch.SwipeLeft:
-		d.alertIdx, d.alertScroll = (d.alertIdx+1)%n, 0
+		d.alertIdx, d.alertScroll = alertStep(d.alertIdx, n, 1), 0
 	case touch.SwipeRight:
-		d.alertIdx, d.alertScroll = (d.alertIdx+n-1)%n, 0
+		d.alertIdx, d.alertScroll = alertStep(d.alertIdx, n, -1), 0
 	case touch.SwipeUp:
 		d.alertScroll = min(d.alertScroll+3, limit)
 	case touch.SwipeDown:
 		d.alertScroll = max(min(d.alertScroll, limit)-3, 0)
 	case touch.Tap:
-		if d.r != nil && image.Pt(g.X, g.Y).In(d.r.alertCloseButton()) {
+		if d.r == nil {
+			return
+		}
+		switch d.r.alertTapped(image.Pt(g.X, g.Y), n) {
+		case alertTapClose:
 			d.alertUntil = time.Time{}
 			slog.Info("screen: alert put away")
+		case alertTapPrev:
+			d.alertIdx, d.alertScroll = alertStep(d.alertIdx, n, -1), 0
+		case alertTapNext:
+			d.alertIdx, d.alertScroll = alertStep(d.alertIdx, n, 1), 0
 		}
 	}
+}
+
+// alertStep is the alert step places on from i of n, around the end either way.
+func alertStep(i, n, step int) int { return ((i+step)%n + n) % n }
+
+// What a tap on the alert page lands on.
+type alertTap int
+
+const (
+	alertTapNone alertTap = iota
+	alertTapClose
+	alertTapPrev
+	alertTapNext
+)
+
+// alertTapped is what a tap at p lands on with n alerts at home: Close, or with more than one, the
+// ‹ › beside it, each a little larger than drawn, as the calendar's are.
+func (r *renderer) alertTapped(p image.Point, n int) alertTap {
+	switch {
+	case p.In(r.alertCloseButton()):
+		return alertTapClose
+	case n < 2:
+		return alertTapNone
+	case p.In(r.alertPrevButton().Inset(-r.s(6))):
+		return alertTapPrev
+	case p.In(r.alertNextButton().Inset(-r.s(6))):
+		return alertTapNext
+	}
+	return alertTapNone
 }
 
 // ---- drawing
@@ -107,6 +144,23 @@ func (r *renderer) clearAlertTaps() {
 
 // alertCloseButton is the page's Close, where the weather page keeps its toggle.
 func (r *renderer) alertCloseButton() image.Rectangle { return r.weatherButton() }
+
+// alertNextButton is the page's ›, left of Close and as tall: the calendar header's arrow button.
+func (r *renderer) alertNextButton() image.Rectangle {
+	return r.alertArrowBox("›", r.alertCloseButton().Min.X-r.s(14))
+}
+
+// alertPrevButton is the page's ‹, left of ›.
+func (r *renderer) alertPrevButton() image.Rectangle {
+	return r.alertArrowBox("‹", r.alertNextButton().Min.X-r.s(14))
+}
+
+// alertArrowBox is an arrow button ending at right on Close's row, as wide as the calendar's
+// (calButtonBox) for the same mark.
+func (r *renderer) alertArrowBox(label string, right int) image.Rectangle {
+	c := r.alertCloseButton()
+	return image.Rect(right-r.width(r.small, label)-r.s(36), c.Min.Y, right, c.Max.Y)
+}
 
 // alertScrollLimit is how far the alert on the page could scroll in the frame last drawn.
 func (r *renderer) alertScrollLimit() int {
@@ -158,9 +212,14 @@ func (r *renderer) alertPage(s scene) {
 		r.text(r.tiny, l.s, x, top+i*step, l.c)
 	}
 
+	// The program's buttons: Close, and with more than one alert the ‹ › that go round them (a
+	// sideways swipe still does). The footer says which this is, short of the buttons.
+	n := len(s.alerts.Here)
+	right := r.alertCloseButton().Min.X
 	foot := ""
-	if n := len(s.alerts.Here); n > 1 {
-		foot = fmt.Sprintf(tr("ui_alert_n_of_n"), s.alertIdx+1, n) + "  ·  " + tr("ui_alert_swipe_next")
+	if n > 1 {
+		foot = fmt.Sprintf(tr("ui_alert_n_of_n"), s.alertIdx+1, n)
+		right = r.alertPrevButton().Min.X
 	}
 	if first < most {
 		if foot != "" {
@@ -168,10 +227,12 @@ func (r *renderer) alertPage(s scene) {
 		}
 		foot += tr("ui_alert_swipe_more")
 	}
-	r.text(r.micro, foot, x, r.h-r.s(62), dim)
-	b := r.alertCloseButton()
-	r.bevel(b, shift(ember, 16), true)
-	r.text(r.small, tr("close"), b.Min.X+(b.Dx()-r.width(r.small, tr("close")))/2, b.Max.Y-r.s(15), cream)
+	r.text(r.micro, r.clipTo(r.micro, foot, right-r.s(20)-x), x, r.h-r.s(62), dim)
+	if n > 1 {
+		r.calIconButtonAt(r.alertPrevButton(), "chevron-left")
+		r.calIconButtonAt(r.alertNextButton(), "chevron-right")
+	}
+	r.labelButton(r.alertCloseButton(), tr("close"), btnSecondary)
 }
 
 // alertPills lays out the pills for the kinds of alert at home in a row from x, y, as many as fit and
