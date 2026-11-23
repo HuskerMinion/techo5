@@ -68,9 +68,13 @@ Two ways, and both are used by Plex's own clients:
   `239.0.0.250:32413` when it starts and every 30 seconds after, so a controller that started later
   still finds it. This needs no account at all -- but the device only answers searches while an
   account is linked, since that is when it is a player.
-- **Through plex.tv**, for an app that is not on the same network: the device keeps a socket open
-  from the account's side, and the commands a phone sends down it are run against the same handlers
-  the network's commands use.
+- **Through plex.tv**, which is all some apps look at: the player list in Plexamp on iOS and in the
+  Plex apps comes from the account, not from the network, and holds only players the account has a
+  record of. The device reads its own number out of the account's device list (`plex.tv/devices.xml`)
+  and publishes its address against that number, and keeps a socket open from the account's side so
+  the commands a phone sends down it run against the same handlers the network's commands use. It is
+  the number that matters: a request against the device's own identifier is answered `200` and
+  changes nothing, which looks exactly like a registration that worked.
 
 The control server is on **TCP 32500**, discovery on **UDP 32412-32413**. An Echo's vendor firewall gets
 these from the daemon itself, by name, only while an account is linked; on the Alpine image
@@ -107,14 +111,19 @@ iptables-legacy -I TECHO5-IN 2 -p udp --dport 32412:32413 -j ACCEPT
 ## If it does not work
 
 - **It is not in the Plex apps' player list.** Check the account is linked (Settings → Connections →
-  Plex says *Linked as ...*). On the same network, a firewall between the phone and the device that
-  drops multicast or UDP 32412 is the usual cause; Plex Web and Desktop can also be pointed at the
-  device by address, which needs TCP 32500 only.
+  Plex says *Linked as ...*). An app that lists the account's players rather than searching the
+  network (Plexamp on iOS does no searching at all) never sees a device the account has no record of;
+  the record is made by the link, and the address is published on every start and every network
+  change, which the log reports as `plex: the account knows where the player is`. On the same
+  network, a firewall between the phone and the device that drops multicast or UDP 32412 is the usual
+  cause for the apps that do search; Plex Web and Desktop can also be pointed at the device by
+  address, which needs TCP 32500 only.
 - **It casts but nothing plays.** For a film, check **Video** is on. For music, the device's log
   (`/var/log/techo5.log`, `grep plex:`) says what the server answered: a library whose files the
   server cannot reach is answered with an error, not a stream.
-- **The phone does not see it from away.** Registering the device's address with the account is best
-  effort (Plex has no published API for it); casting from the same network always works, and casting
-  from away needs the account's socket, which is opened as soon as an account is linked.
+- **The phone does not see it from away.** The address published to the account is the home
+  network's, so a phone outside the house cannot reach the player at it; what it can do is send down
+  the account's socket, which is opened as soon as an account is linked and reported in the log as
+  `plex: the account's socket is open`.
 - **It disappeared after a router reboot.** It comes back: the discovery answer retries until it can
   bind, the socket reconnects with a backoff, and a new network address on the device restarts both.
