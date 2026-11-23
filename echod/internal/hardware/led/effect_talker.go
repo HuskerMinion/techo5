@@ -34,7 +34,7 @@ func SetTalker(f func() (float64, bool)) {
 func toward(p Palette) Frame {
 	const (
 		// width is how wide the arc is, in segments.
-		width = 2.2
+		width = 1.8
 		ease  = 0.25
 
 		// period is one breath, and depth how much of the brightness it takes.
@@ -78,8 +78,10 @@ func toward(p Palette) Frame {
 
 // listeningColors is the ring and the arc for a ring light of p's first color.
 //
-// The arc is the color lighter and its hue turned a little toward cyan's side of it, the ring the
-// color itself a little dimmed: from the blue the ring is set to by default, a deep blue ring and a
+// The arc is the color lighter, nearly white, and its hue turned a sixth of the way round toward
+// cyan's side of it; the ring is the color itself at under a third. Both are pushed that far because
+// less did not read as pointing on the unit (2026-11-23: a 45 degree turn over a ring at three
+// quarters looked like a lighter patch, not an arc): from the blue the ring is set to by default, a deep blue ring and a
 // cyan arc, as Amazon's. Hue does the work rather than brightness, because the Dot 5's fabric spreads
 // every module over its neighbours and evens brightness out (2026-11-23: a white ring with one module at
 // full and the rest at a sixteenth looked even). A color with too little hue to turn (white, greys)
@@ -88,9 +90,9 @@ func listeningColors(p Palette) (ring, arc Color) {
 	const (
 		// shift is how far round the wheel the arc turns, lighten how much of its saturation it gives
 		// up, and dim what the ring keeps of its value.
-		shift   = -45.0 / 360
-		lighten = 0.5
-		dim     = 0.75
+		shift   = -60.0 / 360
+		lighten = 0.35
+		dim     = 0.3
 	)
 	if len(p) > 1 {
 		return p[0], p[len(p)-1]

@@ -129,8 +129,8 @@ var ocean = Palette{
 // Dot 5's fabric spreads every module over its neighbours and evens brightness out, while a change of
 // hue survives it: a white ring with one module at full and the rest at a sixteenth looked even.
 var listening = Palette{
-	{R: 0x00, G: 0x10, B: 0xC0},
-	{R: 0x00, G: 0xE0, B: 0xFF},
+	{R: 0x00, G: 0x06, B: 0x50},
+	{R: 0x60, G: 0xF0, B: 0xFF},
 }
 
 // ice is the cold end of white: a blue shadow up to the glare off a surface. Hottest last, unlike
