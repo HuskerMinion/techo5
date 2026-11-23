@@ -14,7 +14,7 @@ can be complete and still never have been looked at on a real screen.
 | Language | Strings | Coverage | Translated by | Tried on a device |
 |---|---:|---:|---|---|
 | English | 1073 | source | | |
-| Catalan (ca) | 1072 | 99% | adocampo | Echo Show 5 1st gen, v1.6.46 (local build) |
+| Catalan (ca) | 1073 | 100% | adocampo | Echo Show 5 1st gen, v1.6.46 (local build) |
 | Dutch (nl) | 1036 | 96% | christianschmidt (#365) | Echo Show 5 1st gen, v1.6.36 (local build) |
 | French (fr) | 1073 | 100% | royto (#346) | Not yet |
 | Galician (gl) | 1073 | 100% | Xocko12 (#368) | Echo Show 5 2nd gen, v1.6.17 |

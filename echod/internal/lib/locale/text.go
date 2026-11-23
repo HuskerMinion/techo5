@@ -1994,6 +1994,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_nobody_to_call_yet":                     "encara no hi ha ningú a qui trucar",
 		"drawer_microphone_is_off":                      "el micròfon està apagat",
 		"drawer_microphone_is_on":                       "el micròfon està encés",
+		"mute_lifted_by_button":                         "El botó de silenci també ha tret el silenci posat des de Home Assistant o la pantalla.",
 		"drawer_playing_pick_a_station":                 "reproduint · tria una emissora",
 		"drawer_paused_pick_a_station":                  "en pausa · tria una emissora",
 		"drawer_radio_stations":                         "emissores de ràdio",
