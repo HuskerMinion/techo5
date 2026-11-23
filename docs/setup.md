@@ -1023,6 +1023,8 @@ other Shows don't have the switches.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
   picks which words the screen listens for. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
+  A device set to Valencian back when that was the only Catalan keeps it: the saved choice moves to
+  Valencian's own key once, and the device says once that Catalan can be chosen now.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
   screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
