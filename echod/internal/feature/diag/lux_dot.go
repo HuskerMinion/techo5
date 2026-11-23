@@ -14,7 +14,7 @@ func roomLux(r metrics.Reader, path string) metrics.Reading { return r.Lux(path)
 
 // luxPoll is how often the Dot's lux file is read to follow the light. The file is the sensor's own
 // value, read in a moment, and nothing tells the Dot when it changes, so it is looked at.
-const luxPoll = 2 * time.Second
+var luxPoll = 2 * time.Second
 
 // followLux sends the room's lux to Home Assistant as the light changes, as the screen devices do,
 // rather than only with the other diagnostics every five minutes: the file is read every luxPoll, and
@@ -28,12 +28,14 @@ func (d *Diag) followLux(ctx context.Context) {
 	var sent time.Time
 	var between time.Duration // between the last two readings sent (luxGap)
 	for {
+		var now time.Time
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case now = <-t.C:
 		}
-		if time.Since(sent) < luxGap(between) {
+		// Counted from tick to tick, so a gap of luxPoll is met on the next tick, not the one after.
+		if now.Sub(sent) < luxGap(between) {
 			continue
 		}
 		r := roomLux(metrics.Reader{}, d.luxPath)
@@ -42,8 +44,8 @@ func (d *Diag) followLux(ctx context.Context) {
 		}
 		d.lux.Set(float32(r.Value))
 		if !sent.IsZero() {
-			between = time.Since(sent)
+			between = now.Sub(sent)
 		}
-		sent = time.Now()
+		sent = now
 	}
 }

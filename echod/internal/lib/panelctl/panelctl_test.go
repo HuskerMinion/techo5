@@ -1,7 +1,11 @@
 package panelctl
 
 import (
+	"bufio"
+	"errors"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -31,13 +35,50 @@ func TestServeHandsEachLineToItsKind(t *testing.T) {
 	<-done
 }
 
-// Ready may be said more than once.
-func TestReadyTwice(t *testing.T) {
+// Nothing dials the app before Ready, so an echod subcommand does not take its one connection; Ready
+// dials once however often it is said, sends what was Sent before, and the app's lines then reach
+// handlers registered before it.
+func TestOnlyReadyDials(t *testing.T) {
+	app, dev := net.Pipe()
+	var dials atomic.Int32
+	mu.Lock()
+	dial = func() (net.Conn, error) {
+		if dials.Add(1) > 1 {
+			return nil, errors.New("one connection")
+		}
+		return dev, nil
+	}
+	mu.Unlock()
+	t.Cleanup(func() {
+		_ = app.Close()
+		mu.Lock()
+		dial = func() (net.Conn, error) { return nil, errors.New("test over") }
+		delete(handlers, "early-kind")
+		delete(latest, "status")
+		mu.Unlock()
+		start = sync.Once{} // a later run of the test dials again
+	})
+	got := make(chan []string, 1)
+	Handle("early-kind", func(args []string) { got <- args })
+	Send("status on")
+	time.Sleep(100 * time.Millisecond)
+	if dials.Load() != 0 {
+		t.Fatal("dialed before Ready")
+	}
+
 	Ready()
 	Ready()
+	sc := bufio.NewScanner(app)
+	if !sc.Scan() || sc.Text() != "status on" {
+		t.Fatalf("the app was sent %q, want the line Sent before Ready", sc.Text())
+	}
+	_, _ = app.Write([]byte("early-kind 1\n"))
 	select {
-	case <-ready:
-	default:
-		t.Fatal("not ready after Ready")
+	case args := <-got:
+		if len(args) != 1 || args[0] != "1" {
+			t.Fatalf("handler got %q", args)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a line from the app never reached a handler registered before Ready")
 	}
 }

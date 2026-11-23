@@ -214,7 +214,7 @@ func TestMusicThatStopsRingsTheAlarmSound(t *testing.T) {
 	time.Sleep(wakeWithin / 2)
 	m.heard.Store(false) // the station dropped
 	until(t, "the alarm sound", func() bool { _, _, sounds, _ := m.state(); return sounds == 1 })
-	if d := time.Since(time.Unix(0, lastHeard.Load())); d < wakeWithin-wakeEvery {
+	if d := time.Since(time.Unix(0, lastHeard.Load())); d < wakeWithin-3*wakeEvery { // the alarm's own look starts a moment before this one
 		t.Errorf("the alarm sound came %v after the music was last heard, before it had %v to come back", d, wakeWithin)
 	}
 	if !a.Ringing() {
