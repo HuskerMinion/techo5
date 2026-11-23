@@ -324,6 +324,8 @@ type Display struct {
 	glowLevel  *esphome.Number
 	// warmthSw is Night warmth (night_warmth.go).
 	warmthSw *esphome.Switch
+	// micOffSw is Show Microphone off (mic_off_pill.go), offered only where a mute light says it.
+	micOffSw *esphome.Switch
 	// liftSw is Adaptive backlight (adaptive_backlight.go), offered only where the GPU draws the panel.
 	liftSw *esphome.Switch
 	// dimmestNum is the Dimmest setting in Home Assistant: how dark auto-brightness goes.
@@ -594,6 +596,7 @@ func build() *Display {
 	d.skinSl = skinSelect(d.wake)
 	d.clockTap = clockTapSelect()
 	d.callBtn = callButtonSwitch(d.wake)
+	d.micOffSw = micOffPillSwitch(d.wake)
 	d.saverBtn = screensaverButton(d)
 	d.callScreenSel = callScreenSelect(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
@@ -723,6 +726,9 @@ func (d *Display) Entities() []esphome.Entity {
 	if liftOffered() {
 		ents = append(ents, d.liftSw)
 	}
+	if muteLightSaysIt() {
+		ents = append(ents, d.micOffSw)
+	}
 	if nightAlarmHere() {
 		ents = append(ents, d.nightAlarmSw)
 	}
@@ -759,6 +765,7 @@ func (d *Display) Restore(c config.Config) {
 	d.skinSl.Set(skins[skinIndex()].label)
 	d.clockTap.Set(clockTapChoices()[clockTapIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
+	setMicOffPill(d.micOffSw, !c.Screen.NoMicOffPill)
 	showCallScreen(d.callScreenSel, callScreenIndex())
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)

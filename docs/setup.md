@@ -1060,6 +1060,11 @@ other Shows don't have the switches.
   the same way in every style.
 - **Subtle mute ring** (Spot, in Home Assistant): the red ring shown while the microphones are muted
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
+- **Show Microphone off** (Show, in Home Assistant as `switch.<node>_show_microphone_off`, on at
+  first): while the microphones are muted, a red **Microphone off** pill sits at the top of the screen.
+  Turn the switch off to leave that to the red light on the mute button, which says it already; a lost
+  Wi-Fi or Home Assistant is still shown at the top. The night clock never shows the pill either way.
+  The Skylight and the Panel app have no mute light, so they always show it and don't have the switch.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
   watched** lights it only while a picture leaves the device: a stream, a camera page, or Home

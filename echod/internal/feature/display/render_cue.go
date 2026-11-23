@@ -133,7 +133,7 @@ func (r *renderer) cueLight(s scene) {
 	// tab, since a turn started then is about to fail for want of what the pill names.
 	switch {
 	case s.redClockFace():
-	case s.muted:
+	case s.micOffSaid():
 		r.header(s)
 	case s.linkDown != linkUp:
 		r.headerAt(s, band.Max.Y+r.s(36)+r.s(8))

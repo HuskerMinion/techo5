@@ -17,10 +17,11 @@ var notOnThisDevice = append(append([]string(nil), ringOnly...), notOnPanel...)
 
 // deviceSpecific is what the Show has beyond the shared list: AirPlay and Spotify Connect (which the
 // Spot has too, by its own list), the video player (feature/video), which neither the Spot nor the
-// Dot has, and the next alarm on the night clock, which only an Echo Show 5 or Show 8 offers (the tests
-// run as a Show 5: a machine with no panel named is read as the 2nd gen, layout.Show5).
+// Dot has, the next alarm on the night clock, which only an Echo Show 5 or Show 8 offers (the tests
+// run as a Show 5: a machine with no panel named is read as the 2nd gen, layout.Show5), and Show
+// Microphone off, which only a board with a red mute light offers (not the Skylight or a panel).
 // A panel's list goes without what notOnPanel names and has onlyOnPanel's besides.
-var deviceSpecific = append(slices.DeleteFunc([]string{"airplay", "airplay_sets_volume", "spotify_connect", "video", "dlna_video", "video_state", "video_title", "video_error", "clock_hold_gesture", "screen_night_alarm"},
+var deviceSpecific = append(slices.DeleteFunc([]string{"airplay", "airplay_sets_volume", "spotify_connect", "video", "dlna_video", "video_state", "video_title", "video_error", "clock_hold_gesture", "screen_night_alarm", "screen_microphone_off"},
 	func(id string) bool { return slices.Contains(notOnPanel, id) }), onlyOnPanel...)
 
 // The Show plays videos from Home Assistant: the actions an automation calls are there. A panel has no

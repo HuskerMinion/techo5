@@ -1469,7 +1469,7 @@ func (r *renderer) headerAt(s scene, y int) {
 	pad := r.s(14)
 	x := (r.w - w) / 2
 	fill, ink := walnut, amber
-	if s.muted {
+	if s.micOffSaid() {
 		// The microphone off is red with black words, the way a mute light is red: 5.7 to 1, readable
 		// at the pill's size over any page. The night clock has no header (redClockPage returns before
 		// it), so this never lights a dark bedroom.

@@ -198,6 +198,11 @@ type Screen struct {
 	// somebody wants it, so an update changes nobody's screen.
 	MuteRingSubtle bool `json:"mute_ring_subtle,omitempty"`
 
+	// NoMicOffPill leaves "Microphone off" out of the header on a Show, whose red mute light already
+	// says it (on unless this is set: the Show Microphone off switch, display/mic_off_pill.go, #621).
+	// A board with no mute light shows it whatever this says.
+	NoMicOffPill bool `json:"no_microphone_off_pill,omitempty"`
+
 	// CameraDotWatchedOnly lights the Spot's camera dot only while a picture leaves the device, not
 	// whenever the camera runs (#431). NoIdleRing leaves out the Spot's gray rim while nothing else is
 	// on it. Both off until somebody wants them, so an update changes nobody's screen.
@@ -536,6 +541,10 @@ func (w ScreenWriter) WeatherStill(v bool) error {
 
 func (w ScreenWriter) MuteRingSubtle(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.MuteRingSubtle = v })
+}
+
+func (w ScreenWriter) NoMicOffPill(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoMicOffPill = v })
 }
 
 func (w ScreenWriter) CameraDotWatchedOnly(v bool) error {
