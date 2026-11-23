@@ -169,23 +169,28 @@ func TestSayTimeSpanish(t *testing.T) {
 	})
 }
 
-// Spanish counts its parts of the day by the sun where home's place is known, but the sun only
-// moves them so far: the morning starts when it rises, never later than seven, and the afternoon
-// ends when it sets, never later than nine.
+// Spanish counts its parts of the day by the sun where home's place is known, the way the RAE has
+// them, but the sun only moves them so far: the morning starts when it rises, never later than
+// six, and the afternoon ends when it sets, never before eight and never later than nine.
 func TestSayTimeSpanishBySun(t *testing.T) {
-	spring := Sun{
-		Rise: time.Date(2026, 9, 16, 7, 30, 0, 0, time.Local),
-		Set:  time.Date(2026, 9, 16, 21, 20, 0, 0, time.Local),
+	madridDecember := Sun{ // the sun up at half past eight, down at twenty to six
+		Rise: time.Date(2026, 12, 21, 8, 34, 0, 0, time.Local),
+		Set:  time.Date(2026, 12, 21, 17, 51, 0, 0, time.Local),
 		OK:   true,
 	}
-	december := Sun{ // a Madrid December: the sun is up at twenty to nine
-		Rise: time.Date(2026, 9, 16, 8, 38, 0, 0, time.Local),
-		Set:  time.Date(2026, 9, 16, 17, 45, 0, 0, time.Local),
+	madridJune := Sun{ // up at twenty to seven, down at twenty to ten
+		Rise: time.Date(2026, 6, 21, 6, 44, 0, 0, time.Local),
+		Set:  time.Date(2026, 6, 21, 21, 48, 0, 0, time.Local),
 		OK:   true,
 	}
-	summer := Sun{ // and a June with the sunset past nine
-		Rise: time.Date(2026, 9, 16, 6, 40, 0, 0, time.Local),
-		Set:  time.Date(2026, 9, 16, 21, 46, 0, 0, time.Local),
+	londonJune := Sun{ // up at quarter to five: half past five is the morning's already
+		Rise: time.Date(2026, 6, 21, 4, 43, 0, 0, time.Local),
+		Set:  time.Date(2026, 6, 21, 21, 21, 0, 0, time.Local),
+		OK:   true,
+	}
+	puntaArenasDecember := Sun{ // up at twelve past five, down at ten past ten
+		Rise: time.Date(2026, 12, 21, 5, 12, 0, 0, time.Local),
+		Set:  time.Date(2026, 12, 21, 22, 10, 0, 0, time.Local),
 		OK:   true,
 	}
 	for _, c := range []struct {
@@ -193,17 +198,24 @@ func TestSayTimeSpanishBySun(t *testing.T) {
 		h, m int
 		want string
 	}{
-		{spring, 6, 45, "son las siete menos cuarto de la madrugada"}, // the sun has not risen yet
-		{spring, 7, 35, "son las siete y treinta y cinco de la mañana"},
-		{spring, 20, 10, "son las ocho y diez de la tarde"}, // the sun has not set yet
-		{spring, 21, 30, "son las nueve y media de la noche"},
-		{december, 6, 30, "son las seis y media de la madrugada"}, // seven has come, the sun has not
-		{december, 8, 15, "son las ocho y cuarto de la mañana"},   // the sun still sleeps; seven is the cap
-		{summer, 6, 15, "son las seis y cuarto de la madrugada"},  // this sun rises before seven
-		{summer, 20, 30, "son las ocho y media de la tarde"},
-		{summer, 21, 15, "son las nueve y cuarto de la noche"}, // nine is the cap, sunset or no sunset
+		{madridDecember, 5, 30, "son las cinco y media de la madrugada"},
+		{madridDecember, 6, 0, "son las seis en punto de la mañana"},  // six is the cap; the sun sleeps
+		{madridDecember, 8, 15, "son las ocho y cuarto de la mañana"}, // the December dark is the morning's
+		{madridDecember, 19, 0, "son las siete en punto de la tarde"}, // and the December night is the afternoon's
+		{madridDecember, 20, 15, "son las ocho y cuarto de la noche"},
+		{madridJune, 6, 15, "son las seis y cuarto de la mañana"},     // six is the cap; the sun has not risen
+		{madridJune, 21, 13, "son las nueve y trece de la noche"},     // nine is the cap; the sun is still up
+		{londonJune, 4, 30, "son las cuatro y media de la madrugada"}, // this sun rose at quarter to five
+		{londonJune, 5, 30, "son las cinco y media de la mañana"},
+		{londonJune, 20, 30, "son las ocho y media de la tarde"},
+		{puntaArenasDecember, 4, 50, "son las cinco menos diez de la madrugada"},
+		{puntaArenasDecember, 5, 30, "son las cinco y media de la mañana"}, // the Chilean December dawn
+		{puntaArenasDecember, 20, 30, "son las ocho y media de la tarde"},
+		{puntaArenasDecember, 21, 30, "son las nueve y media de la noche"}, // nine is the cap, sunset or no sunset
 	} {
-		got := said(SayTimeSun(time.Date(2026, 9, 16, c.h, c.m, 0, 0, time.Local), "es", c.sun))
+		rise := c.sun.Rise // each city's sun on its own day, so the clock's day and the sun's agree
+		tt := time.Date(rise.Year(), rise.Month(), rise.Day(), c.h, c.m, 0, 0, time.Local)
+		got := said(SayTimeSun(tt, "es", c.sun))
 		if got != c.want {
 			t.Errorf("%02d:%02d = %q, want %q", c.h, c.m, got, c.want)
 		}
