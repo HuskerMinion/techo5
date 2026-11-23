@@ -9,6 +9,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -109,6 +110,15 @@ type session struct {
 	// wire. Both are the session goroutine's only; see artwork.go.
 	pending *time.Timer
 	parts   assembly
+
+	// art is the picture waiting to be decoded (show): next, made current as picture n (0 for none),
+	// and busy while one is being decoded.
+	art struct {
+		mu   sync.Mutex
+		next []byte
+		n    uint64
+		busy bool
+	}
 
 	// encrypted is a connection over the encrypted wire, to a server written to the 1.0 specification.
 	encrypted bool
@@ -888,6 +898,7 @@ func (s *session) finish() {
 	// for a connection that has already gone.
 	s.releaseNow()
 	s.asked.Store("")
+	s.unpend() // a picture waiting for its time is the gone server's, not to be shown after it
 	s.ended()
 	media.ClearPosition() // the lyrics do not run on for a track the server is no longer playing
 	s.client.Close()

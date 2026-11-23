@@ -82,10 +82,41 @@ func (s *session) pend(at int64, image []byte) {
 
 // show makes image the current picture. One still being decoded is dropped once a newer one is
 // current, so the order they became current in is the order they are shown in.
+//
+// One picture is decoded at a time, off the read loop, which carries the audio too: a server that sends
+// pictures faster than this board decodes them would otherwise start a full-size decode for each, all
+// at once, and run the device out of memory. A picture that waits is replaced by a newer one, which is
+// the only one worth showing.
 func (s *session) show(image []byte) {
 	n := s.picture.Add(1)
-	// Decoded off the read loop, which carries the audio too.
-	safe.Go("sendspin artwork", func() { home.RemoteArt(image, func() bool { return s.picture.Load() == n }) })
+	s.art.mu.Lock()
+	s.art.next, s.art.n = image, n
+	start := !s.art.busy
+	s.art.busy = true
+	s.art.mu.Unlock()
+	if start {
+		safe.Go("sendspin artwork", s.decodePictures)
+	}
+}
+
+// decodePictures decodes the waiting picture, then the next one to have come meanwhile, until none
+// is waiting.
+func (s *session) decodePictures() {
+	for {
+		s.art.mu.Lock()
+		image, n := s.art.next, s.art.n
+		if n == 0 {
+			s.art.busy = false
+			s.art.mu.Unlock()
+			return
+		}
+		s.art.next, s.art.n = nil, 0
+		s.art.mu.Unlock()
+		current := func() bool { return s.picture.Load() == n }
+		if current() {
+			home.RemoteArt(image, current)
+		}
+	}
 }
 
 // unpend drops the picture waiting for its time, if there is one. The current picture stays. A
