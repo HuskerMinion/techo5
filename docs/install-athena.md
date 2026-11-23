@@ -172,9 +172,9 @@ once. A second press while it is still going on is lost, so wait for the red lig
 again.
 
 The software mute is as strong as the device's own software: it isn't a hardware interlock like the
-button's latch. For a mute nothing on the device can undo, use the button. It is for the microphones:
-the button's latch also cuts the camera in hardware, while with the software mute on the camera can't
-be started, but a camera view that is already running keeps running.
+button's latch. For a mute nothing on the device can undo, use the button. The camera goes off with
+either mute: the button's latch cuts it in hardware, and with the software mute on the camera can't
+be started and a running camera view stops within a moment.
 
 ## Which screen
 
