@@ -72,7 +72,27 @@ type frontKey struct {
 // features the models were trained on. They score differently enough that the sensitivity settings
 // mean different things on each, so it is a switch for now: TECHO5_WAKE_FRONTEND=exact in the daemon's
 // environment, read when it starts. A backend keeps the one it was made with.
-var ExactFrontEnd = os.Getenv("TECHO5_WAKE_FRONTEND") == "exact"
+//
+// The Echo Dot 5th gen starts on the exact one (exactByDefault): it has no settings from before to
+// keep meaning what they did, and its microphones are where the approximate one loses most. The same
+// "Hey Jarvis" through the daemon's path, the word from across a room (the direct sound and a 0.5 s
+// tail at 0 dB under it, speech at -60 dBFS, six voices): 0.56 to 1.00 on the approximate front end and
+// 1.00 six times on the exact one; over the speaker's own music at -40 dBFS at the microphones, 5 of 6
+// with the worst at 0.31 against 6 of 6 with the worst at 0.99. That spread is what the unit showed
+// in a quiet room (0.63 to 0.99, 2 of 6 over 0.85; wakebench, 2026-11-22). It costs less, too.
+// TECHO5_WAKE_FRONTEND=approx is the way back.
+var ExactFrontEnd = exactFrontEnd(os.Getenv("TECHO5_WAKE_FRONTEND"), exactByDefault)
+
+// exactFrontEnd is the front end the environment asks for, or the board's own where it asks for none.
+func exactFrontEnd(env string, byDefault bool) bool {
+	switch env {
+	case "exact":
+		return true
+	case "approx":
+		return false
+	}
+	return byDefault
+}
 
 // microBackend is microWakeWord. Each wake word is its own streaming model, but they all read the same
 // features of the same audio, so the feature front end runs once per step size and every model is fed
