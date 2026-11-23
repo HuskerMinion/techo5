@@ -38,7 +38,7 @@ func TestKeepAfterARing(t *testing.T) {
 		{"hardware that does not act on the button is never touched", false, true, true, nil, true},
 	} {
 		line := &fakeLine{muted: tc.now, acts: tc.acts}
-		m := &Mute{sw: &esphome.Switch{}, line: line}
+		m := &Mute{sw: &esphome.Switch{}, line: line, store: func(bool) {}}
 		m.sw.Set(tc.was)
 
 		m.keep()
@@ -94,5 +94,30 @@ func TestKeepThroughAHold(t *testing.T) {
 		if w.sw.Get() != tc.was {
 			t.Errorf("%s: switch says %v, want %v", tc.name, w.sw.Get(), tc.was)
 		}
+	}
+}
+
+// savedLine is a line with a part that is saved apart from what it reads, as the 2nd gen Show 8's
+// software mute beside the button's latch.
+type savedLine struct {
+	fakeLine
+	soft bool
+}
+
+func (s *savedLine) Set(muted bool) error { s.soft = muted; s.muted = muted; return nil }
+func (s *savedLine) Saved() bool          { return s.soft }
+
+// A mute put back after a press that went to a ring is saved: on the 2nd gen Show 8 the press released
+// the button's latch and the mute came back as the software one, which was never saved, so the next
+// start brought the microphones up live.
+func TestAMutePutBackAfterARingIsSaved(t *testing.T) {
+	line := &savedLine{fakeLine: fakeLine{muted: false, acts: true}}
+	m := &Mute{sw: &esphome.Switch{}, line: line}
+	m.sw.Set(true)
+	var stored []bool
+	m.store = func(saved bool) { stored = append(stored, saved) }
+	m.keepAs(true, "a press that went to a ring")
+	if len(stored) != 1 || !stored[0] {
+		t.Fatalf("stored %v after the mute was put back, want [true]", stored)
 	}
 }

@@ -76,6 +76,9 @@ type Mute struct {
 	// announce is what follows once the switch says what the line reads: announced, unless a test
 	// stands in for it.
 	announce func(muted, asked bool)
+
+	// store is where save writes, unless a test stands in for it: the setting.
+	store func(saved bool)
 }
 
 var (
@@ -510,6 +513,10 @@ func (m *Mute) keepAs(was bool, what string) {
 	if !was {
 		mic.Rewire()
 	}
+	// Saved as well: where the mute was put back as another kind than it was (the 2nd gen Show 8, whose
+	// button released its latch and whose mute is now the software one), what is kept for the next start
+	// has changed, and left unsaved the microphones would come up live after a restart.
+	m.save(was)
 	slog.Info("microphone mute left as it was", "after", what, "muted", was)
 }
 
@@ -549,18 +556,7 @@ func (m *Mute) announced(muted, asked bool) {
 		return
 	}
 
-	saved := muted
-	if line, ok := m.line.(interface{ Persisted() bool }); ok {
-		saved = line.Persisted()
-	}
-	// Where the mute has a software part beside the button's latch (the 2nd gen Show 8 on TECHO5's
-	// mainline kernel), only that part is kept: the latch is the button's.
-	if line, ok := m.line.(interface{ Saved() bool }); ok {
-		saved = line.Saved()
-	}
-	if err := config.Set().Microphone().Muted(saved); err != nil {
-		slog.Error("saving mute state failed", "err", err)
-	}
+	m.save(muted)
 	slog.Info("microphone mute", "muted", muted)
 
 	m.Changed.Emit(muted)
@@ -573,10 +569,10 @@ func (m *Mute) announced(muted, asked bool) {
 	m.liftedNote()
 }
 
-// liftedNote tells the screen (LiftedByButton) that the mute button took a mute set from Home Assistant or the screen
-// with it, where it can (the 2nd gen Show 8 on TECHO5's mainline kernel): pressing the button to let
-// the latch go lifts both, so the microphones are live, and whoever muted it from afar would otherwise
-// find it listening with no word of why.
+// liftedNote tells the screen (LiftedByButton) that the mute button took a mute set from Home
+// Assistant or the screen with it, where it can (the 2nd gen Show 8 on TECHO5's mainline kernel):
+// pressing the button to let the latch go lifts both, so the microphones are live, and whoever muted
+// it from afar would otherwise find it listening with no word of why.
 func (m *Mute) liftedNote() {
 	line, ok := m.line.(interface{ LiftedByButton() bool })
 	if !ok || !line.LiftedByButton() {
@@ -584,6 +580,26 @@ func (m *Mute) liftedNote() {
 	}
 	slog.Info("microphone mute: the button lifted the mute set from Home Assistant or the screen")
 	m.LiftedByButton.Emit(struct{}{})
+}
+
+// save keeps the mute for the next start: what the line reads, or, where only part of it is the
+// device's to bring back, that part. A panel keeps its software cut and not the slider found silent;
+// the 2nd gen Show 8 on TECHO5's mainline kernel keeps its software mute and not the button's latch.
+func (m *Mute) save(muted bool) {
+	saved := muted
+	if line, ok := m.line.(interface{ Persisted() bool }); ok {
+		saved = line.Persisted()
+	}
+	if line, ok := m.line.(interface{ Saved() bool }); ok {
+		saved = line.Saved()
+	}
+	if m.store != nil {
+		m.store(saved)
+		return
+	}
+	if err := config.Set().Microphone().Muted(saved); err != nil {
+		slog.Error("saving mute state failed", "err", err)
+	}
 }
 
 // pollInterval is how often await looks while it waits.
