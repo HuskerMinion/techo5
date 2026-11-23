@@ -112,7 +112,7 @@ func main() {
 		fmt.Println()
 	}
 
-	g, res, err := array.Fit(len(mics), obs)
+	g, res, err := fitRobust(len(mics), len(pairs), obs)
 	if err != nil {
 		fail("%v", err)
 	}
@@ -174,23 +174,33 @@ func load(path string, channels int, mics []int, skip int) ([][]float32, error) 
 	return out, nil
 }
 
-// decimate takes every factor-th sample after a moving average as wide, which is crude but leaves
-// the band below 7 kHz at 16 kHz with its phase intact, and phase is all a locator reads.
+// decimate low-passes at 7 kHz with a windowed sinc and keeps every factor-th sample. The filter has
+// to be a real one: the ultrasound probe puts a tone 30 dB over the room between 16 and 40 kHz, and a
+// crude one folds it into the band the locator reads. It is linear phase, the same on every channel.
 func decimate(in [][]float32, factor int) [][]float32 {
 	if factor <= 1 {
 		return in
 	}
+	const taps = 255
+	cut := 7000.0 / (16000.0 * float64(factor)) // of the input rate
+	h := make([]float32, taps)
+	for i := range h {
+		x := float64(i - taps/2)
+		v := 2 * cut
+		if x != 0 {
+			v = math.Sin(2*math.Pi*cut*x) / (math.Pi * x)
+		}
+		w := 0.42 - 0.5*math.Cos(2*math.Pi*float64(i)/(taps-1)) + 0.08*math.Cos(4*math.Pi*float64(i)/(taps-1))
+		h[i] = float32(v * w)
+	}
 	out := make([][]float32, len(in))
 	for m, x := range in {
-		// Two passes of a windowed-sinc low pass at 7.2 kHz would be better; a 4-pole would shift
-		// phase alike on every channel, which does not matter for differences. A box of factor
-		// samples is linear phase and enough here.
-		for i := 0; i+factor <= len(x); i += factor {
+		for i := 0; i+taps <= len(x); i += factor {
 			var s float32
-			for j := range factor {
-				s += x[i+j]
+			for j, c := range h {
+				s += x[i+j] * c
 			}
-			out[m] = append(out[m], s/float32(factor))
+			out[m] = append(out[m], s)
 		}
 	}
 	return out
@@ -207,4 +217,47 @@ func rmsDB(x []float32) float64 {
 func fail(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "beamcal: "+format+"\n", a...)
 	os.Exit(1)
+}
+
+// fitRobust fits, and then fits again without the take it explains worst, for as long as that take is
+// far worse than the rest. A take the room answered instead of the source (a reflection off a wall
+// stronger than the direct sound, or the source not where its LED said) pulls every position toward
+// it.
+func fitRobust(n, pairs int, obs []array.Observation) (array.Geometry, float64, error) {
+	for {
+		g, res, err := array.Fit(n, obs)
+		if err != nil {
+			return nil, 0, err
+		}
+		per := map[float64]float64{}
+		for _, o := range obs {
+			e := g.TDOA(o.P, o.Bearing) - o.TDOA
+			per[o.Bearing] += e * e / float64(pairs)
+		}
+		if len(per) <= 6 {
+			return g, res, nil
+		}
+		var errs []float64
+		worst := math.Inf(1)
+		for b, e := range per {
+			errs = append(errs, e)
+			if math.IsInf(worst, 1) || e > per[worst] {
+				worst = b
+			}
+		}
+		sort.Float64s(errs)
+		median := errs[len(errs)/2]
+		if per[worst] < 9*median {
+			return g, res, nil
+		}
+		fmt.Printf("leaving out the take at %.0f° (%.1f µs rms, the median take %.1f)\n",
+			array.Degrees(worst), math.Sqrt(per[worst])*1e6, math.Sqrt(median)*1e6)
+		kept := []array.Observation{}
+		for _, o := range obs {
+			if o.Bearing != worst {
+				kept = append(kept, o)
+			}
+		}
+		obs = kept
+	}
 }
