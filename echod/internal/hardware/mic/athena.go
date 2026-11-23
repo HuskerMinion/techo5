@@ -375,9 +375,37 @@ func athenaCodecCut(cut bool) error {
 	return nil
 }
 
+// athenaCodecRead is whether the converter's microphone channels are off: every channel enable reads
+// off. A channel left on is live, so one is enough to say not cut.
+func athenaCodecRead() (bool, error) {
+	k := athenaRunning()
+	m, err := alsa.OpenMixer(Card)
+	if err != nil {
+		return false, fmt.Errorf("athena: opening the mixer: %w", err)
+	}
+	defer m.Close()
+	for _, c := range k.controls {
+		if !athenaChannelEnable(c.name) {
+			continue
+		}
+		ctl, err := m.Lookup(c.name)
+		if err != nil {
+			return false, fmt.Errorf("athena: %s: %w", c.name, err)
+		}
+		v, err := m.Get(ctl)
+		if err != nil {
+			return false, err
+		}
+		if len(v) > 0 && v[0] != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 func init() {
 	if layout.AthenaMainline() {
-		privacy.SetCodec(athenaCodecCut)
+		privacy.SetCodec(athenaCodecCut, athenaCodecRead)
 	}
 }
 

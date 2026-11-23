@@ -30,8 +30,8 @@ import (
 //     measured 2026-11-22, and it switches both ways under a running capture), and the capture hands
 //     on silence from the next frame (softwareCut), so the pre-roll history hears nothing while the
 //     converter catches up. It does not light the red light, which is the latch's own; the screen's
-//     "microphone off" pill says it, and says only it: a mute of the button's alone has the light. Software can lift it, so it is as strong as root, as the Echo Dot
-//     2nd gen's mute_lamp is.
+//     "microphone off" pill says it, and says only it: a mute of the button's alone has the light.
+//     Software can lift it, so it is as strong as root, as the Echo Dot 2nd gen's mute_lamp is.
 //
 // The button is the stronger of the two, both ways:
 //
@@ -73,6 +73,12 @@ func (athenaMute) Get() (bool, error) {
 	}
 	return latched || softwareCut.Load(), nil
 }
+
+// Latched reads the button's latch alone, for a process that is not the daemon (the CLI), whose copy
+// of the software mute means nothing.
+func (athenaMute) Latched() (bool, error) { return athenaLatch() }
+
+func (athenaMute) heldByTheDaemon() {}
 
 // HardwareActs is true either way: the button moves the latch itself, and its release lifts the
 // software mute (athenaFollow) before the tap is heard.

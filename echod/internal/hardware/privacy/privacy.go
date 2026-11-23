@@ -67,13 +67,20 @@ func SoftwareCut() bool { return softwareCut.Load() }
 // than this flag and the frames would stay silent afterwards.
 func Seed(muted bool) { seedSoftwareCut(muted) }
 
-// codec switches the microphone converter's channels off (true) or on, for a device whose software
-// mute includes the converter (the 2nd gen Show 8 on TECHO5's mainline kernel, platform_athena.go).
-// hardware/mic sets it, since the card is its own; nil until it has.
-var codec atomic.Pointer[func(cut bool) error]
+// codec switches the microphone converter's channels off (true) or on, and codecRead reads whether
+// they are off, for a device whose software mute includes the converter (the 2nd gen Show 8 on
+// TECHO5's mainline kernel, platform_athena.go). hardware/mic sets both, since the card is its own;
+// nil until it has.
+var (
+	codec     atomic.Pointer[func(cut bool) error]
+	codecRead atomic.Pointer[func() (bool, error)]
+)
 
-// SetCodec is how hardware/mic hands over the converter's channel switch.
-func SetCodec(fn func(cut bool) error) { codec.Store(&fn) }
+// SetCodec is how hardware/mic hands over the converter's channel switch and its reading.
+func SetCodec(cut func(bool) error, read func() (bool, error)) {
+	codec.Store(&cut)
+	codecRead.Store(&read)
+}
 
 func codecCut(cut bool) error {
 	fn := codec.Load()
@@ -81,4 +88,24 @@ func codecCut(cut bool) error {
 		return nil
 	}
 	return (*fn)(cut)
+}
+
+// CodecCut reads whether the converter's channels are off. known is false where there is no
+// converter cut.
+func CodecCut() (cut, known bool, err error) {
+	fn := codecRead.Load()
+	if fn == nil {
+		return false, false, nil
+	}
+	cut, err = (*fn)()
+	return cut, true, err
+}
+
+// HeldByTheDaemon reports whether a mute has a part that only the running daemon holds: the Spot's
+// and a panel's software cut, and the software mute beside the latch on the 2nd gen Show 8 on TECHO5's
+// mainline kernel. Another process (the CLI) sees only its own copy of that part, so it must not
+// read it as the device's or set it.
+func HeldByTheDaemon(m Mute) bool {
+	_, ok := m.(interface{ heldByTheDaemon() })
+	return ok
 }

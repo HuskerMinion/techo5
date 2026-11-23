@@ -22,12 +22,14 @@ func newAthenaFake(t *testing.T) *athenaFake {
 	latch, grace := athenaLatch, athenaKeyGrace
 	athenaLatch = func() (bool, error) { return f.latched, nil }
 	athenaKeyGrace = 0
-	SetCodec(func(cut bool) error { f.codec = append(f.codec, cut); return nil })
+	SetCodec(func(cut bool) error { f.codec = append(f.codec, cut); return nil },
+		func() (bool, error) { return len(f.codec) > 0 && f.codec[len(f.codec)-1], nil })
 	softwareCut.Store(false)
 	athenaLifted.Store(false)
 	t.Cleanup(func() {
 		athenaLatch, athenaKeyGrace = latch, grace
 		codec.Store(nil)
+		codecRead.Store(nil)
 		softwareCut.Store(false)
 		athenaLifted.Store(false)
 	})
@@ -150,5 +152,24 @@ func reader(events []input.Event, before func(int)) func() (input.Event, error) 
 		e := events[i]
 		i++
 		return e, nil
+	}
+}
+
+// The CLI is not the daemon: a mute with a part only the daemon holds says so, and the converter's
+// own reading is what tells another process whether the software mute is on.
+func TestAthenaMuteIsHeldByTheDaemon(t *testing.T) {
+	newAthenaFake(t)
+	if !HeldByTheDaemon(athenaMute{}) {
+		t.Fatal("the 2nd gen Show 8's mute was not marked as the daemon's")
+	}
+	if !HeldByTheDaemon(software{}) {
+		t.Error("a software-only mute was not marked as the daemon's")
+	}
+	if HeldByTheDaemon(platform{}) {
+		t.Error("a latch-only Show was marked as the daemon's")
+	}
+	_ = athenaMute{}.Set(true)
+	if cut, known, err := CodecCut(); err != nil || !known || !cut {
+		t.Errorf("converter reads cut=%v known=%v err=%v after a mute", cut, known, err)
 	}
 }
