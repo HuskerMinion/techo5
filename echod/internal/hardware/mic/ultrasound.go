@@ -31,11 +31,18 @@ func TapRaw(f func(RawBlock)) (stop func()) {
 	return func() { rawTap.CompareAndSwap(p, nil) }
 }
 
-// emitRaw gives b to the listener, where there is one.
+// rawDumpTap is the native dump's own listener (rawdump.go), beside TapRaw's, so a dump taken
+// while the ultrasound probe runs neither stops it nor is stopped by it.
+var rawDumpTap atomic.Pointer[func(RawBlock)]
+
+// emitRaw gives b to the listeners, where there are any.
 //
 //lint:ignore U1000 used by the boards that carry the raw microphones (athena.go), not on every build
 func emitRaw(b RawBlock) {
 	if f := rawTap.Load(); f != nil {
+		(*f)(b)
+	}
+	if f := rawDumpTap.Load(); f != nil {
 		(*f)(b)
 	}
 }
