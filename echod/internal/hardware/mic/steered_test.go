@@ -111,7 +111,7 @@ func TestFinderOnCalTakes(t *testing.T) {
 		f := newFinder()
 		// The take is the noise from its first sample, which a floor learned from it would call the
 		// room: start from next to nothing instead, so all of it counts.
-		f.act.floor = 1
+		f.quiet.floor = 1
 		for i := 0; i+320 <= len(mics[0]); i += 320 {
 			frame := make([][]int16, Mics)
 			for m := range frame {

@@ -62,6 +62,9 @@ func build() *Reaction {
 	}
 
 	source := mic.Get()
+	// Where the talker is, for the wake word's "Toward Talker", which is played by name and has no room
+	// of its own to read.
+	led.SetTalker(source.Facing)
 	r.room = led.Room{
 		Level:  source.Level,
 		Facing: source.Facing,

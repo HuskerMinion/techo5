@@ -63,7 +63,13 @@ func (a *activity) weight(x [][]float32) float64 {
 		}
 		n += len(m)
 	}
-	e = e/float64(max(n, 1)) + 1e-3
+	return a.weightEnergy(e / float64(max(n, 1)))
+}
+
+// weightEnergy is weight for a block whose mean energy is already known, in whatever units the caller
+// keeps consistently.
+func (a *activity) weightEnergy(e float64) float64 {
+	e += 1e-3
 	a.last = e
 	// The floor follows the quietest blocks at once and rises only slowly, about 3 dB a second.
 	if a.floor == 0 || e < a.floor {
@@ -131,15 +137,30 @@ type finderTuning struct {
 var defaultTuning = finderTuning{decay: locateDecay, conf: confident, onset: true, vote: 0.99}
 
 // finder is the facing for a measured array: where the last sound that stood out came from.
+//
+// While the speaker plays it hears through it: it learns, bin by bin, how the speaker reaches each
+// microphone from the loopback (as the steered mix does for its null), and takes that out of the
+// spectra before localizing what is left. Without that a wake word said over music has no direction,
+// since the device itself is the loudest thing in the room.
 type finder struct {
 	t      finderTuning
 	loc    *array.Locator
 	blocks *blocker
-	act    activity
 	since  int
 
-	// env is the energy of recent blocks, for onsets.
-	env float64
+	// quiet weighs blocks while nothing plays, loud while something does: their floors are nothing alike.
+	quiet, loud activity
+	// env is the energy of recent blocks, for onsets, per activity.
+	envQuiet, envLoud float64
+
+	// x and r are the band's spectra of the microphones and the loopback; sxr and srr the speaker's
+	// response learned from them.
+	x       [][]complex64
+	r       []complex64
+	sxr     [][]complex128
+	srr     []float64
+	learned int
+
 	// tally is the vote per locator bearing.
 	tally []float64
 
@@ -152,28 +173,33 @@ func newFinder() *finder { return newFinderTuned(defaultTuning) }
 func newFinderTuned(t finderTuning) *finder {
 	l := array.NewLocator(arrayGeometry, steerBlock, Rate, locateLo, locateHi, locateGrid)
 	l.Decay = t.decay
-	return &finder{t: t, loc: l, blocks: newBlocker(len(arrayGeometry)), bearing: -1,
-		tally: make([]float64, locateGrid)}
+	bins := l.Spectrum().Bins()
+	f := &finder{t: t, loc: l, blocks: newBlocker(len(arrayGeometry) + 1), bearing: -1,
+		tally: make([]float64, locateGrid), r: make([]complex64, bins), srr: make([]float64, bins)}
+	for range arrayGeometry {
+		f.x = append(f.x, make([]complex64, bins))
+		f.sxr = append(f.sxr, make([]complex128, bins))
+	}
+	return f
 }
 
-// look takes one frame. playing is whether the speaker is: what the microphones hear then is mostly
-// the device itself, which has no direction worth showing, so nothing counts.
-func (f *finder) look(mics [][]int16, playing bool) {
-	f.blocks.add(mics, func(block [][]float32) {
-		w := f.act.weight(block)
-		if f.t.onset {
-			e := f.act.last
-			rise := 0.0
-			if f.env > 0 {
-				rise = 10 * math.Log10(e/f.env)
-			}
-			f.env = 0.7*f.env + 0.3*e
-			w *= math.Max(0, math.Min(1, rise/3))
-		}
-		if playing {
-			w = 0
-		}
-		f.loc.Add(block, w)
+// look takes one frame without the loopback. playing is whether the speaker is, which with nothing
+// to take it out by means nothing can be told.
+func (f *finder) look(mics [][]int16, playing bool) { f.lookRef(mics, nil, playing) }
+
+// lookRef takes one frame and the loopback of the same time, nil when there is none.
+func (f *finder) lookRef(mics [][]int16, ref []int16, playing bool) {
+	chans := make([][]int16, 0, len(arrayGeometry)+1)
+	chans = append(chans, mics[:len(arrayGeometry)]...)
+	hasRef := ref != nil
+	if !hasRef {
+		ref = make([]int16, len(mics[0]))
+	}
+	chans = append(chans, ref)
+
+	f.blocks.add(chans, func(block [][]float32) {
+		w := f.weigh(block, playing, hasRef)
+		f.loc.AddBand(f.x, w)
 		if w > 0 {
 			f.since = 0
 		} else {
@@ -194,6 +220,69 @@ func (f *finder) look(mics [][]int16, playing bool) {
 	if b, c := f.loc.Bearing(); c >= f.t.conf {
 		f.bearing = b
 	}
+}
+
+// weigh transforms a block, takes the speaker out of it while it plays, and says how much the block
+// should count.
+func (f *finder) weigh(block [][]float32, playing, hasRef bool) float64 {
+	spec := f.loc.Spectrum()
+	mics := len(arrayGeometry)
+	for m := range mics {
+		spec.Into(block[m], f.x[m])
+	}
+
+	act, env := &f.quiet, &f.envQuiet
+	if playing {
+		if !hasRef {
+			return 0
+		}
+		act, env = &f.loud, &f.envLoud
+		spec.Into(block[mics], f.r)
+		for k, r := range f.r {
+			rc := complex128(complex(real(r), -imag(r)))
+			f.srr[k] = speakerKeep*f.srr[k] + float64(real(r)*real(r)+imag(r)*imag(r))
+			for m := range f.sxr {
+				f.sxr[m][k] = complex(speakerKeep, 0)*f.sxr[m][k] + complex128(f.x[m][k])*rc
+			}
+		}
+		f.learned++
+		if f.learned >= speakerReady {
+			for k, r := range f.r {
+				if f.srr[k] <= 0 {
+					continue
+				}
+				for m := range f.x {
+					h := f.sxr[m][k] / complex(f.srr[k], 0)
+					f.x[m][k] -= complex64(h * complex128(r))
+				}
+			}
+		}
+	}
+
+	// Without playback the block's own energy, as tuned on the speech takes; with it, what is left of
+	// the band once the speaker is taken out, since the block's energy is mostly the speaker.
+	var w float64
+	if playing {
+		var e float64
+		for m := range f.x {
+			for _, v := range f.x[m] {
+				e += float64(real(v)*real(v) + imag(v)*imag(v))
+			}
+		}
+		w = act.weightEnergy(e / float64(mics*len(f.r)*steerBlock))
+	} else {
+		w = act.weight(block[:mics])
+	}
+	if f.t.onset {
+		e := act.last
+		rise := 0.0
+		if *env > 0 {
+			rise = 10 * math.Log10(e / *env)
+		}
+		*env = 0.7**env + 0.3*e
+		w *= math.Max(0, math.Min(1, rise/3))
+	}
+	return w
 }
 
 // count adds this block's bearing to the tally, if it stood out and was confident, and answers with the

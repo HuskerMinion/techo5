@@ -42,9 +42,9 @@ const (
 	CenterMic = 2
 
 	// CancelOnMix runs the canceller on the chosen mix, so Microphone mixing decides what the wake word
-	// hears over music too: Center mic is ch2 alone, All microphones (and Delay and sum, which falls back
-	// to it while canceling) the average of the three. Over music Center mic hears a voice better: 27
-	// of 60 of the same utterances against 24 (config.DefaultMixing on this board).
+	// hears over music too: Center mic is ch2 alone, All microphones the average of the three, and the
+	// superdirective beam (the default, config.DefaultMixing) its speaker-nulled beam, held while it
+	// plays (steered_mix.go).
 	CancelOnMix = true
 
 	cannoliMicDevice = 9

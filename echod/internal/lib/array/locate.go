@@ -143,3 +143,16 @@ func (l *Locator) Bearing() (bearing, confidence float64) {
 	bearing = math.Mod((float64(best)+shift)*step+2*math.Pi, 2*math.Pi)
 	return bearing, c - mean
 }
+
+// Spectrum is the transform the locator works in, for a caller that changes the spectra before they
+// are added (AddBand).
+func (l *Locator) Spectrum() *Spectra { return l.spec }
+
+// AddBand is Add for spectra already made with Spectrum and already cut to its band, one per
+// microphone.
+func (l *Locator) AddBand(x [][]complex64, weight float64) {
+	for m := range l.x {
+		copy(l.x[m], x[m])
+	}
+	l.accumulate(weight)
+}

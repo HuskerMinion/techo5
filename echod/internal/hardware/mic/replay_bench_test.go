@@ -159,3 +159,53 @@ func newFixedBeam(b int) fixedBeam {
 
 func (f fixedBeam) Mix(mics [][]int16) []int16 { return f.s.Mix(mics) }
 func (fixedBeam) fixedPath()                   {}
+
+// Where the finder says the talker was at each wake word of a bench recording, the loopback taken out
+// of it while the speaker plays, and without. The bench's .prompts are the live detections' times less
+// 2.5 s (as bench takes made with the daemon's own log are written).
+//
+//	TECHO5_WAKEBENCH=/path/to/bench go test -tags "dot cannoli" ./internal/hardware/mic -run FacingAtWake -v
+func TestFacingAtWake(t *testing.T) {
+	dir := os.Getenv("TECHO5_WAKEBENCH")
+	if dir == "" {
+		t.Skip("TECHO5_WAKEBENCH not set")
+	}
+	takes, _ := filepath.Glob(filepath.Join(dir, "raw-vol*.s24"))
+	sort.Strings(takes)
+	for _, take := range takes {
+		tag := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(take), "raw-"), ".s24")
+		prompts := benchPrompts(t, dir, tag)
+		raw, err := os.ReadFile(take)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, subtract := range []bool{true, false} {
+			f := newFinder()
+			frameBytes := Channels * Bits / 8
+			period := FrameSamples * frameBytes
+			next := 0
+			line := ""
+			for off := 0; off+period <= len(raw) && next < len(prompts); off += period {
+				block := raw[off : off+period]
+				mics := Decode(block)
+				ref := make([]int16, len(mics[0]))
+				referenceInto(block, ref)
+				if subtract {
+					f.lookRef(mics, ref, playing(ref))
+				} else {
+					f.look(mics, playing(ref))
+				}
+				at := float64(off/frameBytes) / Rate
+				if at >= prompts[next]+2.5 {
+					if f.bearing < 0 {
+						line += "   -  "
+					} else {
+						line += fmt.Sprintf(" %4.0f°", f.bearing*180/3.141592653589793)
+					}
+					next++
+				}
+			}
+			t.Logf("%s subtract=%-5v at each wake:%s", tag, subtract, line)
+		}
+	}
+}

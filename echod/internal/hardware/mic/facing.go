@@ -10,10 +10,6 @@ import "math"
 // degrees, so up to 30 of any apparent error is the quantising rather than this number.
 const ringOffset = 320.0
 
-// facingLinger is how many frames the measured array's finder keeps listening after the last ask: two
-// seconds.
-const facingLinger = 100
-
 // Facing is where the loudest sound is, as a fraction clockwise round the ring from segment 0, and
 // whether that is known yet.
 //
@@ -49,23 +45,17 @@ func (s *Source) Facing() (float64, bool) {
 // the effect easing toward the answer, which is the right place for it: the estimate says where the
 // sound is now, and the animation decides how fast to believe it.
 func (s *Source) findFacing(raw []byte, mics [][]int16) {
-	// The measured array's finder works on a continuous stream (it hops blocks across frames and keeps
-	// a decaying sum), so once asked it keeps listening for a while, rather than seeing only the frames
-	// someone happened to ask during.
+	// The measured array's finder runs on every frame: it hops blocks across frames and keeps a
+	// decaying sum, and what it is asked for is usually where the wake word that just ended came from,
+	// so it has to have been listening before anyone asked. It costs a transform per microphone every
+	// 8 ms.
 	if arrayGeometry != nil {
-		if s.wantFacing.Swap(false) {
-			s.facingFrames = facingLinger
-		}
-		if s.facingFrames == 0 {
-			return
-		}
-		s.facingFrames--
 		if s.arrayFinder == nil {
 			s.arrayFinder = newFinder()
 		}
 		ref := make([]int16, len(mics[0]))
 		referenceInto(raw, ref)
-		s.arrayFinder.look(mics, playing(ref))
+		s.arrayFinder.lookRef(mics, ref, playing(ref))
 		if b := s.arrayFinder.bearing; b >= 0 {
 			s.facing.Store(int32(math.Round(b / (2 * math.Pi) * 3600)))
 		}
