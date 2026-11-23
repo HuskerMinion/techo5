@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/plexcast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 )
@@ -56,6 +57,12 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	if up {
 		d.videoTried = st.ID
 	}
+	// A film from the account can have its captions turned on or off from here; anything else has no
+	// server burning them into the picture.
+	s.videoSubs, s.videoSubsCan = false, false
+	if st.Active() && st.Origin == video.FromPlex {
+		s.videoSubs, s.videoSubsCan = plexcast.Subtitles()
+	}
 	controls := now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
 	s.videoControls = controls
 	s.videoLive = s.showVideo && up && st.Frames
@@ -72,6 +79,11 @@ func (d *Display) videoNext(now time.Time) time.Duration {
 	wait := videoRecheck
 	if left := until.Sub(now); left > 0 && left < wait {
 		wait = left + 10*time.Millisecond // the controls go when they are due to
+	}
+	// The spinner turns while the picture is on its way, so the canvas is redrawn faster than the
+	// half-second a playing film needs: a ring that moves once a second is not a spinner.
+	if st := video.Get().State(); st.Active() && !st.Frames {
+		wait = min(wait, 80*time.Millisecond)
 	}
 	return wait
 }
@@ -99,6 +111,15 @@ func (d *Display) videoGesture(g touch.Gesture) {
 		go video.Get().Stop()
 	case touch.SwipeUp:
 		d.showVideoControls()
+	case touch.SwipeLeft, touch.SwipeRight:
+		// A swipe across the picture is the transport: forward on the left, back on the right, as
+		// turning a page. Fifteen seconds a swipe, the step Plex's own players use for their buttons.
+		d.showVideoControls()
+		step := 15 * time.Second
+		if g.Kind == touch.SwipeRight {
+			step = -step
+		}
+		go seekVideo(step)
 	case touch.Tap:
 		d.mu.Lock()
 		shown := time.Now().Before(d.videoUntil)
@@ -109,6 +130,15 @@ func (d *Display) videoGesture(g touch.Gesture) {
 			d.showVideoControls()
 			return
 		}
+		if frac, ok := d.r.videoScrubAt(image.Pt(g.X, g.Y)); ok {
+			st := video.Get().State()
+			if st.Dur > 0 {
+				to := time.Duration(float64(st.Dur) * frac)
+				go seekVideo(to - st.Pos)
+			}
+			d.showVideoControls()
+			return
+		}
 		switch d.r.videoTapped(image.Pt(g.X, g.Y)) {
 		case videoTapPlay:
 			go video.Get().Toggle()
@@ -116,6 +146,9 @@ func (d *Display) videoGesture(g touch.Gesture) {
 		case videoTapStop:
 			slog.Info("screen: video stopped")
 			go video.Get().Stop()
+		case videoTapSubtitles:
+			go toggleSubtitles()
+			d.showVideoControls()
 		case videoTapQuieter:
 			go media.Get().Adjust(-1)
 			d.showVideoControls()
@@ -128,6 +161,36 @@ func (d *Display) videoGesture(g touch.Gesture) {
 			d.videoUntil = time.Time{}
 			d.mu.Unlock()
 		}
+	}
+}
+
+// seekVideo moves the picture by delta: the account's film through feature/plexcast, which is what the
+// phone's transport and the server's Now Playing page read, and any other video through the player
+// itself, which has nobody to tell.
+func seekVideo(delta time.Duration) {
+	st := video.Get().State()
+	to := st.Pos + delta
+	if to < 0 {
+		to = 0
+	}
+	if st.Dur > 0 && to > st.Dur {
+		to = st.Dur
+	}
+	if st.Origin == video.FromPlex && plexcast.SeekTo(to) {
+		return
+	}
+	video.Get().Seek(to)
+}
+
+// toggleSubtitles turns the account's captions the other way, if this film has any to turn.
+func toggleSubtitles() {
+	on, can := plexcast.Subtitles()
+	if !can {
+		return
+	}
+	slog.Info("screen: subtitles", "on", !on)
+	if err := plexcast.SetSubtitles(!on); err != nil {
+		slog.Warn("screen: the subtitles could not be changed", "err", err)
 	}
 }
 

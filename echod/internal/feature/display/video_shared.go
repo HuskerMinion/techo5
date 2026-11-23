@@ -37,6 +37,9 @@ const (
 	videoTapStop
 	videoTapQuieter
 	videoTapLouder
+	// videoTapSubtitles is the Show's captions button: a film from the account is burned in by the
+	// server, so the button starts it again at the same second with the captions the other way.
+	videoTapSubtitles
 )
 
 // videoAsk is the question about a DLNA video, as drawn.

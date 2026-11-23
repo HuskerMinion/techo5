@@ -338,8 +338,12 @@ type scene struct {
 	showVideo     bool
 	videoLive     bool
 	videoControls bool
-	showVideoAsk  bool
-	videoAsk      videoAsk
+	// videoSubs is the film's captions and videoSubsCan whether this device may say otherwise: only a
+	// film from the account has a server to burn them into the picture (plexcast.Subtitles).
+	videoSubs    bool
+	videoSubsCan bool
+	showVideoAsk bool
+	videoAsk     videoAsk
 
 	// press is the finger a press is shown under, while there is one (press.go).
 	press pressView

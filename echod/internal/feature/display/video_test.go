@@ -38,6 +38,7 @@ func TestTheVideoPage(t *testing.T) {
 			"video-paused":   {video: paused, showVideo: true, videoLive: true, videoControls: true},
 			"video-volume":   {video: playing, showVideo: true, videoLive: true, volume: 9, showVolume: true},
 			"video-loading":  {video: loading, showVideo: true, videoControls: true},
+			"video-captions": {video: playing, showVideo: true, videoLive: true, videoControls: true, videoSubs: true, videoSubsCan: true},
 			"video-failed":   {video: failed, showVideo: true},
 			"video-ask":      {showVideoAsk: true, videoAsk: videoAsk{id: 6, from: "192.168.1.30", title: "Holiday 2025.mp4"}},
 		}
@@ -61,15 +62,32 @@ func TestTheVideoPage(t *testing.T) {
 				}
 			}
 			if s.videoControls && s.video.Active() {
-				play, stop, quieter, louder := r.videoButtons()
-				for want, b := range map[videoTap]image.Rectangle{videoTapPlay: play, videoTapStop: stop, videoTapQuieter: quieter, videoTapLouder: louder} {
+				play, stop, subs := r.videoButtons()
+				// The captions button is only drawn for a film a server can burn them into.
+				want := map[videoTap]image.Rectangle{videoTapPlay: play, videoTapStop: stop}
+				if s.videoSubsCan {
+					want[videoTapSubtitles] = subs
+				}
+				for tap, b := range want {
 					mid := b.Min.Add(image.Pt(b.Dx()/2, b.Dy()/2))
-					if got := r.videoTapped(mid); got != want {
-						t.Errorf("%s%s: a tap on %v gave %v, want %v", name, panel.name, mid, got, want)
+					if got := r.videoTapped(mid); got != tap {
+						t.Errorf("%s%s: a tap on %v gave %v, want %v", name, panel.name, mid, got, tap)
 					}
+				}
+				if _, ok := r.videoScrubAt(play.Min.Add(image.Pt(play.Dx()/2, -r.s(4)))); ok {
+					t.Errorf("%s%s: a tap just above a button counted as on the scrub bar", name, panel.name)
 				}
 				if got := r.videoTapped(image.Pt(panel.wide/2, panel.high/3)); got != videoTapNone {
 					t.Errorf("%s%s: a tap on the picture gave %v", name, panel.name, got)
+				}
+				// The scrub bar: halfway along it is halfway through the title.
+				bar := r.videoBar()
+				frac, ok := r.videoScrubAt(image.Pt((bar.Min.X+bar.Max.X)/2, (bar.Min.Y+bar.Max.Y)/2))
+				if !ok || frac < 0.45 || frac > 0.55 {
+					t.Errorf("%s%s: the middle of the bar is %v, %v", name, panel.name, frac, ok)
+				}
+				if _, ok := r.videoScrubAt(image.Pt(panel.wide/2, panel.high/3)); ok {
+					t.Errorf("%s%s: a tap on the picture counted as on the scrub bar", name, panel.name)
 				}
 			}
 			if dir == "" {
