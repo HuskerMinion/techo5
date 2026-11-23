@@ -47,13 +47,14 @@ func (d *Diag) followLux(ctx context.Context) {
 	})
 	defer stop()
 	var sent time.Time
+	var between time.Duration // between the last two readings sent (luxGap)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-changed:
 		}
-		if wait := luxGap(time.Since(sent)) - time.Since(sent); wait > 0 {
+		if wait := luxGap(between) - time.Since(sent); wait > 0 {
 			select {
 			case <-ctx.Done():
 				return
@@ -65,6 +66,9 @@ func (d *Diag) followLux(ctx context.Context) {
 			continue
 		}
 		d.lux.Set(float32(lux))
+		if !sent.IsZero() {
+			between = time.Since(sent)
+		}
 		sent = time.Now()
 	}
 }

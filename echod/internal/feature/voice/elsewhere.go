@@ -109,7 +109,9 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 	// well before the player has said it all when the agent writes faster than it is spoken.
 	started := time.Now()
 	failedElsewhere.Store(false)
-	c.elsewhere.Store(true)
+	if ctx.Err() == nil { // a reply already given up on is not the one the turn will report
+		c.elsewhere.Store(true)
+	}
 	if early {
 		slog.Info("reply sent to another player as it is written", "player", entity)
 	} else {

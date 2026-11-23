@@ -26,13 +26,14 @@ func (d *Diag) followLux(ctx context.Context) {
 	t := time.NewTicker(luxPoll)
 	defer t.Stop()
 	var sent time.Time
+	var between time.Duration // between the last two readings sent (luxGap)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 		}
-		if time.Since(sent) < luxGap(time.Since(sent)) {
+		if time.Since(sent) < luxGap(between) {
 			continue
 		}
 		r := roomLux(metrics.Reader{}, d.luxPath)
@@ -40,6 +41,9 @@ func (d *Diag) followLux(ctx context.Context) {
 			continue
 		}
 		d.lux.Set(float32(r.Value))
+		if !sent.IsZero() {
+			between = time.Since(sent)
+		}
 		sent = time.Now()
 	}
 }

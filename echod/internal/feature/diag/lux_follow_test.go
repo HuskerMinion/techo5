@@ -25,16 +25,16 @@ func TestLuxWorthSending(t *testing.T) {
 	}
 }
 
-// A lamp switched on after a quiet spell goes at once; a light that keeps changing goes a quarter
+// A lamp switched on in a steady room goes at once; once readings come close together, a quarter
 // minute apart, not every two seconds.
 func TestLuxGap(t *testing.T) {
+	if g := luxGap(0); g != luxEvery {
+		t.Errorf("first reading: %v, want %v", g, luxEvery)
+	}
 	if g := luxGap(10 * time.Minute); g != luxEvery {
-		t.Errorf("after a quiet spell: %v, want %v", g, luxEvery)
+		t.Errorf("after a steady spell: %v, want %v", g, luxEvery)
 	}
 	if g := luxGap(3 * time.Second); g != luxBusy {
-		t.Errorf("3 s after the last: %v, want %v", g, luxBusy)
-	}
-	if g := luxGap(luxBusyFor); g != luxEvery {
-		t.Errorf("a minute after the last: %v, want %v", g, luxEvery)
+		t.Errorf("readings 3 s apart: %v, want %v", g, luxBusy)
 	}
 }

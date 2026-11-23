@@ -10,19 +10,21 @@ import (
 // them, the diagnostics' own interval sends it as before.
 //
 // A light that keeps changing (a television in a dark room, a ceiling fan's shadow) would otherwise
-// send a reading every luxEvery for as long as it went on. So a reading that comes within luxBusyFor
-// of the last one sent waits luxBusy: a lamp switched on is in Home Assistant within seconds, as it
-// was, and a flickering room settles to a reading every quarter minute.
+// send a reading every luxEvery for as long as it went on. So once two readings have gone within
+// luxBusyFor of each other, the next waits luxBusy: a lamp switched on in a room that has been steady
+// is in Home Assistant within seconds, as it was, and a flickering room settles to a reading every
+// quarter minute.
 const (
 	luxEvery   = 2 * time.Second
 	luxBusy    = 15 * time.Second
-	luxBusyFor = time.Minute
+	luxBusyFor = 30 * time.Second
 	luxStep    = 0.1 // of the last reading sent, and at least 1 lux
 )
 
-// luxGap is how long after the last reading sent, since ago, the next may go.
-func luxGap(since time.Duration) time.Duration {
-	if since < luxBusyFor {
+// luxGap is the least time after the last reading sent before the next may go, given the time
+// between the last two sent (0 with fewer than two).
+func luxGap(between time.Duration) time.Duration {
+	if between > 0 && between < luxBusyFor {
 		return luxBusy
 	}
 	return luxEvery
