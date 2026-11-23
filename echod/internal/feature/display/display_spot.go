@@ -1762,6 +1762,11 @@ func (d *Display) frame() (next time.Duration) {
 	if away {
 		s.nowPlaying = false
 	}
+	// The light before an alarm takes the face from the music, as the alarm ringing would (#17): the
+	// panel is the lamp in the room. The music plays on; its face comes back when the light ends.
+	if s.nowPlaying && sunriseProgress(now) > 0 {
+		s.nowPlaying = false
+	}
 	if s.nowPlaying || (s.menuOpen && s.menuMode == modeRadio) {
 		if rows := radioRows(s.radio, s.playing || s.paused); s.radioSel >= len(rows) || s.radioSel < 0 {
 			s.radioSel = min(max(s.radioSel, 0), max(len(rows)-1, 0))
