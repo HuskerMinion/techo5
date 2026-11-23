@@ -12,6 +12,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/android/logd"
 	"github.com/HuskerMinion/techo5/echod/internal/boot"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/panelctl"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/profile"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -28,6 +29,9 @@ func newRunCmd() *cobra.Command {
 			h := logd.NewHandler(layout.LogTag, cmd.ErrOrStderr())
 			defer h.Close()
 			slog.SetDefault(slog.New(h))
+			// Every package has initialized by now: the panel's control line may hand on what the app
+			// has said (panelctl.Ready). On a device that is not a panel nothing ever dialed it.
+			panelctl.Ready()
 
 			// init discards our stderr, so a panic would otherwise vanish and look like a silent
 			// restart. Log it, then let it kill the process as it would have.
