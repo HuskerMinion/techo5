@@ -156,9 +156,11 @@ func (d *Display) showsNowPlaying() bool {
 }
 
 // musicFaceUp is whether the face a tap lands on is now playing: music wanting it, and not quiet so
-// long that the clock has taken the face back (musicAway), where a tap is the clock's again.
+// long that the clock has taken the face back (musicAway), where a tap is the clock's again. Nor while
+// the light before an alarm has the face (the frame gives it the light then, techo5-spot#17): a tap
+// there is the light's, to let go of it, not a pause for the music playing on under it.
 func (d *Display) musicFaceUp() bool {
-	if !d.showsNowPlaying() {
+	if !d.showsNowPlaying() || sunriseProgress(time.Now()) > 0 {
 		return false
 	}
 	d.mu.Lock()
