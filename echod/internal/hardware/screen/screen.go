@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -539,8 +540,17 @@ func (d *Device) pan(next int) error {
 	return nil
 }
 
-// Close unmaps and closes the framebuffer. The last frame stays on the panel.
+// Close paints the panel black, then unmaps and closes the framebuffer. A panel keeps showing the last
+// frame it was sent after the daemon has gone, with the backlight off as well, and some glass holds a
+// picture left that long: the Echo Show 5 2nd gen's kept a shadow of the clock's digits (#560). So the
+// last frame is a black one. A crash never gets here; a stop, a restart and an update do.
 func (d *Device) Close() error {
+	if d.canvas != nil {
+		blank(d.canvas)
+		if err := d.Present(); err != nil {
+			slog.Warn("screen: painting the panel black on the way out failed", "err", err)
+		}
+	}
 	_ = d.settle()
 	if d.gpuPath.disp != nil {
 		d.gpuPath.disp.Release(errors.New("screen: closed"))
@@ -558,6 +568,13 @@ func (d *Device) Close() error {
 		return nil
 	}
 	return d.f.Close()
+}
+
+// blank paints c black, fully opaque.
+func blank(c *image.RGBA) {
+	for i := 0; i < len(c.Pix); i += 4 {
+		c.Pix[i], c.Pix[i+1], c.Pix[i+2], c.Pix[i+3] = 0, 0, 0, 0xff
+	}
 }
 
 // The 2nd gen Show 8 on TECHO5's mainline kernel has a pwm-backlight instead of Amazon's LED class
