@@ -98,7 +98,7 @@ func (d *Device) enterGPU() error {
 // retryGPU tries the GPU again once its wait is over.
 func (d *Device) retryGPU() {
 	g := &d.gpuPath
-	if d.gpu != nil || g.disp == nil || g.retryAt.IsZero() || time.Now().Before(g.retryAt) {
+	if d.gpu != nil || d.closing || g.disp == nil || g.retryAt.IsZero() || time.Now().Before(g.retryAt) {
 		return
 	}
 	if err := d.enterGPU(); err != nil {

@@ -1482,6 +1482,7 @@ func (d *Display) Close() error {
 	if d.dev == nil {
 		return nil
 	}
+	d.dev.Blank() // the last frame goes black rather than staying on the glass (#560)
 	err := d.dev.Close()
 	d.dev = nil
 	return err

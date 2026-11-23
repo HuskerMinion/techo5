@@ -2646,6 +2646,15 @@ func (d *Display) Close() error {
 	if d.dev == nil {
 		return nil
 	}
+	// The last frame goes black (#560), unless it is an update's own screen saying it is restarting or
+	// rebooting, which is what somebody looking needs to see for the next minute: a few seconds of it
+	// do not mark the glass.
+	d.mu.Lock()
+	restarting := d.updateActive && updateBarSpins(d.updatePhase)
+	d.mu.Unlock()
+	if !restarting {
+		d.dev.Blank()
+	}
 	err := d.dev.Close()
 	d.dev = nil
 	return err

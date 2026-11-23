@@ -149,6 +149,9 @@ func (d *Device) PresentFrame([]byte, image.Rectangle) error {
 }
 
 // Close lets the app's surface go. The connection stays for the touchscreen until it fails.
+// Blank does nothing here: the app owns the surface, and what it shows once the daemon goes is its own.
+func (d *Device) Blank() {}
+
 func (d *Device) Close() error { return nil }
 
 var (

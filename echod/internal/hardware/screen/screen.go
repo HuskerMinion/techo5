@@ -90,9 +90,11 @@ func ioctl(fd uintptr, req uintptr, arg unsafe.Pointer) error {
 
 // Device is the open framebuffer.
 type Device struct {
-	f   *os.File
-	mem []byte
-	v   varInfo
+	// closing is the daemon going away (Blank): the GPU helper is not brought back for a last frame.
+	closing bool
+	f       *os.File
+	mem     []byte
+	v       varInfo
 
 	line      int // bytes per panel row
 	pageBytes int
@@ -540,17 +542,25 @@ func (d *Device) pan(next int) error {
 	return nil
 }
 
-// Close paints the panel black, then unmaps and closes the framebuffer. A panel keeps showing the last
-// frame it was sent after the daemon has gone, with the backlight off as well, and some glass holds a
-// picture left that long: the Echo Show 5 2nd gen's kept a shadow of the clock's digits (#560). So the
-// last frame is a black one. A crash never gets here; a stop, a restart and an update do.
-func (d *Device) Close() error {
-	if d.canvas != nil {
-		blank(d.canvas)
-		if err := d.Present(); err != nil {
-			slog.Warn("screen: painting the panel black on the way out failed", "err", err)
-		}
+// Blank paints the panel black, for the daemon going away: a panel keeps showing the last frame it
+// was sent after the daemon has gone, with the backlight off as well, and some glass holds a picture
+// left that long (the Echo Show 5 2nd gen's kept a shadow of the clock's digits, #560). It does not
+// bring the GPU helper back to do it (closing): one that has gone is not started only to be let go of.
+// A crash never gets here; a stop does, and the display decides when a restart's own screen should
+// stay up instead.
+func (d *Device) Blank() {
+	if d.canvas == nil {
+		return
 	}
+	d.closing = true
+	blank(d.canvas)
+	if err := d.Present(); err != nil {
+		slog.Warn("screen: painting the panel black on the way out failed", "err", err)
+	}
+}
+
+// Close unmaps and closes the framebuffer. The last frame stays on the panel; Blank first to clear it.
+func (d *Device) Close() error {
 	_ = d.settle()
 	if d.gpuPath.disp != nil {
 		d.gpuPath.disp.Release(errors.New("screen: closed"))
