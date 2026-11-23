@@ -1475,7 +1475,9 @@ with) sets how sure it has to be. At the top of its range, the stop word is off.
 close and wasn't heard leaves a `wake near miss` line with `slot=101` in the device's log, and shows in
 the setup page's [scores](#watching-the-wake-word-scores). Said over an answer or music with echo
 cancellation active, it counts as close from further under the threshold than other words do: how
-close it came there is what says whether to lower the threshold.
+close it came there is what says whether to lower the threshold. How close a "stop" said over an
+answer came is also in the log, one line an answer (see
+[Watching the wake word scores](#watching-the-wake-word-scores)).
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
@@ -1945,6 +1947,12 @@ device's screen.
 The scores are numbers, never audio, and are kept only in memory: the last 64 events, and the peaks
 from moment to moment only while the page is watching, for ten seconds after its last look. They are
 behind the press like the rest of the page, and watching doesn't keep the page open.
+
+A "stop" said over an answer is easy to miss on the bar, so the device's log keeps one number of it,
+the way it keeps `wake detected` and `wake near miss`: as each answer ends, a `stop word over the
+reply` line has the stop word's highest score while the answer was on its way and playing, and the
+cutoff it was judged against. It is the best of the whole answer, so to compare, say "stop" once an
+answer, and let a few answers play with nothing said.
 
 ### Recording takes of a word
 

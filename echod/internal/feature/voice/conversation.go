@@ -393,6 +393,9 @@ type reply struct {
 
 	// id tells this reply's evPlaying from a stopped one's. Zero is no reply.
 	id uint64
+
+	// began is when its audio started, zero until it has (Replying).
+	began time.Time
 }
 
 func newConversation(vs *esphome.VoiceSatellite) *conversation {
@@ -840,6 +843,12 @@ func (c *conversation) turnEvent(e event) {
 			return
 		}
 		c.disarm()
+		// Told once a turn: a repeat of its evPlaying, or that of the url that took a streamed reply
+		// over (speakReply), is not a second start.
+		if c.reply.began.IsZero() {
+			c.reply.began = c.now()
+			Replying.Emit(Reply{Began: c.reply.began})
+		}
 
 	case evCutOff:
 		// An announcement, or an alarm, took the speaker from the reply. Nothing else would end the
@@ -1258,7 +1267,9 @@ func (c *conversation) speakReply(url string, early bool) {
 	c.enter(phaseReplying)
 	c.replies++
 	id := c.replies
-	c.reply = reply{url: url, id: id, early: early}
+	// A reply taken over by its url (a streamed one, or one fetched early) keeps when its audio began:
+	// the turn has had audio, and is told as ended whether or not the url's own audio came (Replying).
+	c.reply = reply{url: url, id: id, early: early, began: c.reply.began}
 	playing := func() { c.post(event{kind: evPlaying, reply: id}) }
 
 	c.showPhase(wakeword.ReplyingEffect(c.slot))
@@ -1360,6 +1371,11 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	c.enter(phaseIdle)
 	c.claim.Clear()
 	c.player.Sounding(false)
+	// Every way out of replying comes through here, so a reply that had audio is told as ended
+	// whichever way that was.
+	if !c.reply.began.IsZero() {
+		Replying.Emit(Reply{Began: c.reply.began, Ended: c.now(), Why: why})
+	}
 	c.reply = reply{}
 	c.hold(c.pending != nil)
 

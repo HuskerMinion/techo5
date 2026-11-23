@@ -25,7 +25,8 @@ type callScores struct {
 	missing uint64    // frames missed before it did
 }
 
-// peakMarker is the engine's side of it, so a test can stand in.
+// peakMarker is the engine's side of it, a keeper of the call's own (Engine.NewPeaks), so a test can
+// stand in.
 type peakMarker interface {
 	MarkPeaks()
 	Peaks() []Peak
@@ -54,7 +55,7 @@ func (c *callScores) follow(st phone.State, now time.Time) {
 
 func newCallScores(e *Engine) *callScores {
 	return &callScores{
-		marks:   e,
+		marks:   e.NewPeaks(),
 		dropped: e.source.Dropped,
 		say:     slog.Info,
 	}
