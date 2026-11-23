@@ -182,15 +182,14 @@ func (m *Mute) Entities() []esphome.Entity {
 	return []esphome.Entity{m.sw, m.ring, m.brightness}
 }
 
-// ShownOnScreen is whether the screen should say the microphones are off while they are. Yes for every
-// mute, except where the button's latch lights its own red light and has a software mute beside it
-// (the 2nd gen Show 8 on TECHO5's mainline kernel): there the light says the button's mute, and the
-// screen says only the one Home Assistant or the screen set, which has no light.
-func (m *Mute) ShownOnScreen() bool {
+// UnlitMute is whether a mute is on that no mute light shows: the software mute beside the button's
+// latch on the 2nd gen Show 8 on TECHO5's mainline kernel, whose red light is wired to the latch
+// alone. The screen always says such a mute, whatever Show Microphone off is set to.
+func (m *Mute) UnlitMute() bool {
 	if line, ok := m.line.(interface{ SoftwareMuted() bool }); ok {
 		return line.SoftwareMuted()
 	}
-	return true
+	return false
 }
 
 // Muted reports whether the line is cut, which is what a turn has to check before opening the

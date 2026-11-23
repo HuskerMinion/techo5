@@ -97,3 +97,20 @@ func TestTheHeaderSaysWhatIsLost(t *testing.T) {
 		}
 	}
 }
+
+// Show Microphone off leaves a mute to the red light where the light says it, but never a mute no
+// light shows (the software mute on the 2nd gen Show 8 on TECHO5's kernel): that keeps its pill.
+func TestTheSwitchNeverHidesAnUnlitMute(t *testing.T) {
+	was := micOffPillHidden.Load()
+	t.Cleanup(func() { micOffPillHidden.Store(was) })
+	micOffPillHidden.Store(true)
+	if !muteLightSaysIt() {
+		t.Skip("no mute light on this board")
+	}
+	if line := headerLine(scene{muted: true}); line != "" {
+		t.Errorf("a mute the red light shows put %q at the top with the switch off", line)
+	}
+	if headerLine(scene{muted: true, unlitMute: true}) == "" {
+		t.Error("the switch took the pill away from a mute no light shows")
+	}
+}
