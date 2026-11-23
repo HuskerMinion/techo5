@@ -20,6 +20,11 @@ const luxStale = time.Minute
 // luxEvery is the least time between two lux readings sent as the light changes, and luxStep the
 // change worth sending: a lamp switched on or off, a cloud, not every flicker of a reading. Between
 // them, the diagnostics' own interval sends it as before.
+// luxLongest is the longest a reading stands while the sensor is being read: the sensor reports only
+// on a change, so a steady room's reading is good for hours, but one that has said nothing all day is
+// more likely stuck than steady, and the file is asked instead.
+const luxLongest = 12 * time.Hour
+
 const (
 	luxEvery = 2 * time.Second
 	luxStep  = 0.1 // of the last reading sent, and at least 1 lux
@@ -29,7 +34,7 @@ const (
 // input device the screen's auto-brightness already reads (hardware/ambient), not through a file
 // metrics.LuxPath can find; a board that has such a file is read from it instead.
 func roomLux(r metrics.Reader, path string) metrics.Reading {
-	if lux, at, ok := ambient.Get().Current(); ok && (ambient.Get().Live() || time.Since(at) < luxStale) {
+	if lux, at, ok := ambient.Get().Current(); ok && (ambient.Get().Live() && time.Since(at) < luxLongest || time.Since(at) < luxStale) {
 		return metrics.Reading{Value: lux, Known: true}
 	}
 	return r.Lux(path)
