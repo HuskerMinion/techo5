@@ -352,11 +352,18 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 // only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
 // confirmed it, so a faint one is not asked about again (#503).
-func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, decide func(answer bool)) {
+func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
 	n.contendHeard(n.wakeWord(slot), at, clarity,
 		func() bool { return n.canAnswer(slot) },
 		func(time.Time, float64) { decide(true) },
-		func() { decide(true) },
+		func() {
+			// Answered without a claim for the word (busy, unable, nobody to ask): the unsure claim
+			// is taken back, or a device that heard it for sure would wait unsureFor on it for nothing.
+			if settled != nil {
+				settled(false)
+			}
+			decide(true)
+		},
 		func() { decide(false) })
 }
 
