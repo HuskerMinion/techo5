@@ -352,11 +352,18 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 // only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
 // confirmed it, so a faint one is not asked about again (#503).
-func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, decide func(answer bool)) {
+func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
 	n.contendHeard(n.wakeWord(slot), at, clarity,
 		func() bool { return n.canAnswer(slot) },
 		func(time.Time, float64) { decide(true) },
-		func() { decide(true) },
+		func() {
+			// Answered without a claim for the word (busy, unable, nobody to ask): the unsure claim
+			// is taken back, or a device that heard it for sure would wait unsureFor on it for nothing.
+			if settled != nil {
+				settled(false)
+			}
+			decide(true)
+		},
 		func() { decide(false) })
 }
 
@@ -465,6 +472,12 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		elsewhere = mine.elsewhere
 		if !beaten && !elsewhere && able {
 			unsure, hold = n.unsureSince(mine.at.Add(-mine.window), mine.claim, now)
+			// However many unsure claims come, the wake word is held unsureFor at most in all: each new
+			// one would otherwise start the wait again, and a device that kept sending them (a broken
+			// one, or one that has lost track of its turns) would keep this one from ever answering.
+			if hold && !mine.held.IsZero() && now.Sub(mine.held) >= unsureFor {
+				hold = false
+			}
 			if hold {
 				first = mine.held.IsZero()
 				if first {

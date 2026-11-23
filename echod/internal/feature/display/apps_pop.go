@@ -22,7 +22,7 @@ func (r *renderer) appsPopup(s scene) {
 	r.pending = r.pending[:0]
 	r.press.on = false
 	pickMax := r.picker(p, s.pickScroll)
-	r.appsDrawn.Store(true)
+	r.appsNext = true // the screen's once the frame is done (renderer.draw)
 	r.zmu.Lock()
 	r.zones, r.pending = r.pending, r.zones
 	r.cardMax, r.pickMax = 0, pickMax

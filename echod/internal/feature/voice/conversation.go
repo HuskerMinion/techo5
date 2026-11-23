@@ -158,6 +158,10 @@ type event struct {
 // being written and an event that does not fit the phase is dropped by the transition rather than by
 // a guard flag.
 type conversation struct {
+	// elsewhere is the reply being said having gone to the chosen reply player rather than this
+	// device's speaker (playElsewhere), for the end of the turn to say so (Reply.Elsewhere).
+	elsewhere atomic.Bool
+
 	vs *esphome.VoiceSatellite
 
 	// ha and direct are the two backends a turn can run against, and be the one the open turn is
@@ -393,6 +397,9 @@ type reply struct {
 
 	// id tells this reply's evPlaying from a stopped one's. Zero is no reply.
 	id uint64
+
+	// began is when its audio started, zero until it has (Replying).
+	began time.Time
 }
 
 func newConversation(vs *esphome.VoiceSatellite) *conversation {
@@ -735,9 +742,11 @@ func (c *conversation) turnEvent(e event) {
 
 	case evEarlyReply:
 		if c.phase == phaseIdle || c.phase == phaseReplying || c.runURL == "" ||
-			wakeword.Delivery(c.slot) != config.DeliveryEarly || replyPlayer() != "" {
+			wakeword.Delivery(c.slot) != config.DeliveryEarly {
 			return
 		}
+		// A player chosen for replies is handed the url now too, rather than once the reply is written
+		// and downloaded (#707): playElsewhere sees the reply is early.
 		slog.Info("reply fetched early", "slot", c.slot+1)
 		c.speakEarly(c.runURL)
 
@@ -756,13 +765,18 @@ func (c *conversation) turnEvent(e event) {
 		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
 			return
 		}
-		// Already playing as it is written; without the offer (an agent that does not stream), it is
-		// still fetched as it arrives rather than whole.
-		if wakeword.Delivery(c.slot) == config.DeliveryEarly && replyPlayer() == "" {
-			if c.phase != phaseReplying || !c.reply.early {
-				c.speakEarly(e.url)
+		// Already playing as it is written, here or on the chosen player: this is the same reply, and
+		// sending it again would have the player say it twice. Without the offer (an agent that does
+		// not stream), it is still fetched here as it arrives rather than whole; a player is sent it
+		// whole, as it always was.
+		if wakeword.Delivery(c.slot) == config.DeliveryEarly {
+			if c.phase == phaseReplying && c.reply.early {
+				return
 			}
-			return
+			if replyPlayer() == "" {
+				c.speakEarly(e.url)
+				return
+			}
 		}
 		c.speak(e.url)
 
@@ -833,6 +847,12 @@ func (c *conversation) turnEvent(e event) {
 			return
 		}
 		c.disarm()
+		// Told once a turn: a repeat of its evPlaying, or that of the url that took a streamed reply
+		// over (speakReply), is not a second start.
+		if c.reply.began.IsZero() {
+			c.reply.began = c.now()
+			Replying.Emit(Reply{Began: c.reply.began})
+		}
 
 	case evCutOff:
 		// An announcement, or an alarm, took the speaker from the reply. Nothing else would end the
@@ -1251,7 +1271,10 @@ func (c *conversation) speakReply(url string, early bool) {
 	c.enter(phaseReplying)
 	c.replies++
 	id := c.replies
-	c.reply = reply{url: url, id: id, early: early}
+	// A reply taken over by its url (a streamed one, or one fetched early) keeps when its audio began:
+	// the turn has had audio, and is told as ended whether or not the url's own audio came (Replying).
+	c.reply = reply{url: url, id: id, early: early, began: c.reply.began}
+	c.elsewhere.Store(false)
 	playing := func() { c.post(event{kind: evPlaying, reply: id}) }
 
 	c.showPhase(wakeword.ReplyingEffect(c.slot))
@@ -1261,7 +1284,7 @@ func (c *conversation) speakReply(url string, early bool) {
 	// audio, and the limit it was given when the device stopped listening goes on running until some
 	// of that audio turns up.
 	errand := func(ctx context.Context, p *speaker.Player) error {
-		if c.playElsewhere(ctx, url, playing) {
+		if c.playElsewhere(ctx, url, playing, false) {
 			return nil
 		}
 		return c.play(ctx, url, playing, phone.RepliesIntoCall())
@@ -1271,6 +1294,9 @@ func (c *conversation) speakReply(url string, early bool) {
 		s := newStream(c.speaker.Splices(), c.speaker.Underruns(), wakeword.Buffer(c.slot))
 		c.reply.stream = s
 		errand = func(ctx context.Context, p *speaker.Player) error {
+			if c.playElsewhere(ctx, url, playing, true) {
+				return nil
+			}
 			return s.fetch(ctx, p, url, playing)
 		}
 	case url == "":
@@ -1350,6 +1376,11 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	c.enter(phaseIdle)
 	c.claim.Clear()
 	c.player.Sounding(false)
+	// Every way out of replying comes through here, so a reply that had audio is told as ended
+	// whichever way that was.
+	if !c.reply.began.IsZero() {
+		Replying.Emit(Reply{Began: c.reply.began, Ended: c.now(), Why: why, Elsewhere: c.elsewhere.Load()})
+	}
 	c.reply = reply{}
 	c.hold(c.pending != nil)
 
@@ -1690,10 +1721,12 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 // A wake Home Assistant confirmed is the exception (#477): the turn opens most of a second after the
 // device's engine scored the word, and the request said straight after it went to Home Assistant's wake
 // word stage, not to speech-to-text. With or without a sound it reaches back to the score (heard), and
-// the usual 250 ms before it, as far as the microphones' history goes.
+// the usual 250 ms before it, as far as the microphones' history goes: mic.Held, since a confirmed wake
+// can also wait for the devices in the house to decide which one answers it (#685), and a reach of
+// only mic.Confirming lost the start of a request said straight after the word.
 func historyFor(slot int, followUp, confirmed bool, waited, heard time.Duration) time.Duration {
 	if confirmed {
-		return min(max(heard+mic.History, mic.History+waited), mic.Confirming)
+		return min(max(heard+mic.History, mic.History+waited), mic.Held)
 	}
 	if wakeword.Tones(slot, followUp) && !prerollWithSound() {
 		return min(max(waited, heard), mic.History+waited)

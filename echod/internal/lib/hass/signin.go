@@ -82,7 +82,7 @@ func (c *Client) SignIn(ctx context.Context, base, clientID, code string) error 
 	c.mu.Lock()
 	was := c.acc
 	c.acc = access{URL: base, Token: t.Access, Refresh: t.Refresh, ClientID: clientID, Expires: expiry(t)}
-	c.signedOut = false
+	c.signedOut, c.refused = false, false
 	c.mu.Unlock()
 	if err := c.save(); err != nil {
 		return err

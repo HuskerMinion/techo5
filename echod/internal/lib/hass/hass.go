@@ -44,6 +44,10 @@ type Client struct {
 	// once between them (signin.go); signedOut is Home Assistant having refused to.
 	renew     sync.Mutex
 	signedOut bool
+	// refused is the token having been refused by Home Assistant on the last word from it (a REST
+	// 401, a websocket auth_invalid), and cleared by any word it took. A device whose stored token
+	// was revoked otherwise looks the same as one whose Home Assistant has not come up yet (#706).
+	refused bool
 	// closed: the access is being left (api's leave, a reset), so nothing is written back to the file
 	// that leaving removes, though what is in memory serves until the restart (Close).
 	closed bool
@@ -117,7 +121,7 @@ func (c *Client) Set(url, token string) error {
 	c.mu.Lock()
 	was := c.acc
 	c.acc = access{URL: url, Token: token}
-	c.signedOut = false
+	c.signedOut, c.refused = false, false
 	c.mu.Unlock()
 	if err := c.save(); err != nil {
 		return err
@@ -219,6 +223,7 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 	if err != nil {
 		return nil, err
 	}
+	c.heard(acc.Token, resp.StatusCode != http.StatusUnauthorized)
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
 	}
@@ -226,6 +231,25 @@ func (c *Client) doContext(ctx context.Context, method, path string, body any) (
 		return nil, fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
 	}
 	return out, nil
+}
+
+// heard notes whether Home Assistant took token on its last word. An answer about a token since
+// replaced (a request still on its way when new access was given) says nothing about the new one.
+func (c *Client) heard(token string, took bool) {
+	c.mu.Lock()
+	if c.acc.Token == token {
+		c.refused = !took
+	}
+	c.mu.Unlock()
+}
+
+// Refused says Home Assistant refused the device's access the last time it was asked: the stored token
+// is there but no longer works, or a sign-in was refused its renewal (SignedOut). Only new access will
+// do.
+func (c *Client) Refused() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.refused && c.acc.Token != "" || c.signedOut
 }
 
 // send is one request with acc's token, and the reply read whole.

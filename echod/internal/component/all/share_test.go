@@ -125,7 +125,7 @@ var neverShared = []string{
 	"follow_ups_1", "follow_ups_2", "follow_up_1", "follow_up_2", "follow_up_tone_1", "follow_up_tone_2",
 	"wake_tone_1", "wake_tone_2", "wake_effect_1", "wake_effect_2", "ring_volume", "voice_volume", "call_volume", "intercom_do_not_disturb",
 	"slideshow_mode", "immich_favorites", "calendar_popups", "weather_source", "radar_source", "lyrics",
-	"quiet_hours", "weather_alerts",
+	"quiet_hours", "weather_alerts", "screen_microphone_off",
 }
 
 func TestNeverSharedIsNotOnTheList(t *testing.T) {

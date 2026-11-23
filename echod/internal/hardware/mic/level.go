@@ -87,10 +87,12 @@ const (
 type leveler struct {
 	gain float32
 
-	// least is how low the floors may go, which follows the analog gain and so is set from outside the
-	// reader that uses it. quiet is the same for the gate over the floor, in dB.
-	least atomic.Uint32
-	quiet atomic.Int32
+	// least is how low the floors that decide anything may go, and roomLeast how low the one published as
+	// the room's floor may go (see quietest and roomQuietest). Both follow the analog gain and so are set
+	// from outside the reader that uses them. quiet is the same for the gate over the floor, in dB.
+	least     atomic.Uint32
+	roomLeast atomic.Uint32
+	quiet     atomic.Int32
 
 	// peak is the most the level has reached since somebody asked, for something sampling far more slowly
 	// than the level moves. Only the reader writes it; asking clears it.
@@ -110,16 +112,22 @@ type leveler struct {
 
 	// The published level runs on its own band-limited measurement: lp and hp are the filter state,
 	// lpA and hpA their coefficients, and bandFloor follows the room in that band the way floor does
-	// in the whole.
+	// in the whole, down to roomLeast rather than least: it is the room's floor as published, and the
+	// level is measured against it or least, whichever is higher.
 	lp                 [levelPoles]float32
 	hp                 float32
 	lpA, hpA           float32
 	bandRMS, bandFloor float32
+	// levelFloor is bandFloor held at least, followed on its own: the floor the published level is
+	// measured against. Taken from bandFloor it would sit at least while bandFloor climbed back up
+	// from far under it, so a fan starting after a long quiet spell would read as loud for most of a
+	// minute rather than becoming the room as it did before #377.
+	levelFloor float32
 
 	// unclamped follows the band the way bandFloor does without the least it may go to, and lowest is the
 	// least it reached since the last log line, unclampedFrames frames ago: how quiet the room really is,
-	// which bandFloor cannot show below quietest. Logged hourly, it is what quietest is to be set from on
-	// boards it was never measured on (#377).
+	// with nothing holding it up. Logged hourly, it is what roomQuietest was set from (#377) and what
+	// either least is to be checked against on boards they were never measured on.
 	unclamped, lowest float32
 	unclampedFrames   int
 
@@ -137,7 +145,7 @@ type leveler struct {
 // a room it has adapted badly to.
 func (l *leveler) forget() {
 	l.gain = float32(math.Pow(10, startGainDB/20))
-	l.floor, l.bandFloor = fullScale, fullScale
+	l.floor, l.bandFloor, l.levelFloor = fullScale, fullScale, fullScale
 	l.publish()
 }
 
@@ -164,11 +172,12 @@ func newLeveler() *leveler {
 		levelUp:   float32(1 - math.Exp(-frame/levelAttack.Seconds())),
 		levelDown: float32(1 - math.Exp(-frame/levelRelease.Seconds())),
 
-		bandFloor: fullScale,
-		unclamped: fullScale,
-		lowest:    fullScale,
-		lpA:       float32(1 - math.Exp(-2*math.Pi*levelHighHz/Rate)),
-		hpA:       float32(1 - math.Exp(-2*math.Pi*levelLowHz/Rate)),
+		bandFloor:  fullScale,
+		levelFloor: fullScale,
+		unclamped:  fullScale,
+		lowest:     fullScale,
+		lpA:        float32(1 - math.Exp(-2*math.Pi*levelHighHz/Rate)),
+		hpA:        float32(1 - math.Exp(-2*math.Pi*levelLowHz/Rate)),
 	}
 
 	l.atGain(config.Get().Microphone.Gain)
@@ -177,7 +186,10 @@ func newLeveler() *leveler {
 }
 
 // atGain tells the leveler what the analog gain is now, which is what decides how low its floors may go.
-func (l *leveler) atGain(db int) { l.least.Store(math.Float32bits(quietest(db))) }
+func (l *leveler) atGain(db int) {
+	l.least.Store(math.Float32bits(quietest(db)))
+	l.roomLeast.Store(math.Float32bits(roomQuietest(db)))
+}
 
 // atSensitivity sets how far over the floor counts as something happening.
 func (l *leveler) atSensitivity(db int) { l.quiet.Store(int32(db)) }
@@ -216,23 +228,42 @@ func (l *leveler) observe(frame []int16) (rms, peak float32) {
 	rms = float32(math.Sqrt(sum / float64(len(frame))))
 	l.bandRMS = float32(math.Sqrt(band / float64(len(frame))))
 
-	// Follow the room, quickly down and slowly up, never below one sample of quantisation. Both bands
-	// track their own, since a floor from the wrong band is not a floor.
+	// Follow the room, quickly down and slowly up. Both bands track their own, since a floor from the
+	// wrong band is not a floor. The whole band's floor only gates the gain, so it stops at least; the
+	// band's is also the room's floor as published, so it goes on down to roomLeast, and the level
+	// holds it at least itself.
 	least := float32(math.Float32frombits(l.least.Load()))
 	l.floor = follow(l.floor, rms, l.floorDown, l.floorUp, least)
-	l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	l.bandFloor = follow(l.bandFloor, l.bandRMS, l.floorDown, l.floorUp, math.Float32frombits(l.roomLeast.Load()))
 	l.bandPublished.Store(math.Float32bits(l.bandFloor))
 	l.logUnclamped(least)
 
-	l.publishLevel(l.bandRMS)
+	l.levelFloor = follow(l.levelFloor, l.bandRMS, l.floorDown, l.floorUp, least)
+	l.publishLevel(l.bandRMS, l.levelFloor)
 	return rms, peak
 }
 
-// The floors track how quiet the room gets, and this is as low as that tracking may go. Not because a room
-// cannot be quieter, but because below the converter's own noise the number describes the converter: with
-// the microphones cut this band reads 4 to 8 at the default gain, and a floor of one quantisation step puts
-// that 12 to 15 dB over nothing — so the wobble of noise alone crosses whatever gate sits above it and back,
-// for as long as the floor takes to climb.
+// The floors track how quiet the room gets, and this is as low as a floor that decides something may go:
+// the one the gain's speech gate, the published level and how far a voice stood out (standout.go) are
+// measured against. Not because a room cannot be quieter, but because down there a frame's loudness says
+// more about the converter and the rounding than about the room: with the microphones cut this band reads
+// 4 to 8 at the default gain on the board it was first measured on, and a floor of one quantisation step
+// puts that 12 to 15 dB over nothing — so the wobble of noise alone crosses whatever gate sits above it
+// and back, for as long as the floor takes to climb.
+//
+// The Dots, the Echo 2 and the Spot are quieter than that, and a quiet room on them sits under this nearly
+// all the time (#377): hourly, the lowest the band got at the default gain was a median of -88 to -96
+// dBFS across five devices, against -66.2 here: around one sample step (-90.3) or under it. That is not
+// a reason to lower this one, because everything measured against it was set with the floor resting here
+// in a quiet room. Let the floor fall another 25 to 30 dB and each of them moves by that much: the level's
+// sensitivity and its span (levelTopDB) would put ordinary speech 50 dB over the floor and pin the ring,
+// and start the level on sounds that read nothing today; the gain's speech gate would open on the faint
+// sounds between words and carry the gain to its ceiling, bringing the room up with it; and a device
+// whose converters round a quiet room to almost nothing would stand out further than one across the room
+// for that alone. Below a step the frames are also mostly rounding, a few stray steps among zeros, so the
+// lower the floor goes the more of what crosses a gate over it is the rounding. Lowering it for these
+// devices means measuring all of that again. What it was too high for is showing the room, and the floor
+// published for that has a least of its own (roomQuietest).
 //
 // It moves with the analog gain because that gain is ahead of the converter and lifts its noise along with
 // the room. A fixed number would be right at one setting and wrong across the range: too low near the
@@ -246,11 +277,23 @@ const (
 	quietestLimit  = 2.0
 )
 
+// The room's floor as published goes this far under quietest, so a quiet room reads as quiet as it is
+// rather than resting on a limit. The quietest hour logged on any of the five devices in #377 was 41 dB
+// under quietest (-107.4 dBFS at the default gain); 50 leaves room for a quieter house than any of those,
+// and still stops short of nothing, which would read as minus infinity. It moves with the gain because
+// quietest does: a room is measured through that gain, so it moves the room's reading with it.
+const roomUnderQuietestDB = 50.0
+
+// roomQuietest is the lowest the room's published floor may go at a given analog gain.
+func roomQuietest(db int) float32 {
+	return quietest(db) * float32(math.Pow(10, -roomUnderQuietestDB/20))
+}
+
 // unclampedEvery is how many frames apart the unclamped floor is logged: an hour.
 const unclampedEvery = int(time.Hour / time.Second * Rate / FrameSamples)
 
 // logUnclamped follows the room's band with no least, and once an hour logs the quietest it got beside
-// the least the floor is held to. A room that is quieter than that least shows it here and nowhere else.
+// the least the level is held to and the least the published floor is.
 func (l *leveler) logUnclamped(least float32) {
 	l.unclamped = follow(l.unclamped, l.bandRMS, l.floorDown, l.floorUp, 0)
 	l.lowest = min(l.lowest, l.unclamped)
@@ -258,8 +301,10 @@ func (l *leveler) logUnclamped(least float32) {
 		return
 	}
 	dB := func(v float32) float64 { return math.Round(200*math.Log10(float64(max(v, 0.01))/fullScale)) / 10 }
+	room := math.Float32frombits(l.roomLeast.Load())
 	slog.Info("room floor, unclamped", "lowest_dbfs", dB(l.lowest), "least_dbfs", dB(least),
-		"lowest", math.Round(float64(l.lowest)*10)/10, "least", math.Round(float64(least)*10)/10)
+		"room_least_dbfs", dB(room), "lowest", math.Round(float64(l.lowest)*10)/10,
+		"least", math.Round(float64(least)*10)/10)
 	l.lowest, l.unclampedFrames = fullScale, 0
 }
 
@@ -293,11 +338,12 @@ func levelFrom(overDB, quiet, span float64) float64 {
 	return x * x * x * (x*(6*x-15) + 10)
 }
 
-// publishLevel turns this frame's loudness into how loud the room is, from 0 to 1.
-func (l *leveler) publishLevel(rms float32) {
+// publishLevel turns this frame's loudness into how loud the room is, from 0 to 1, measured over floor:
+// the room's floor, held at quietest.
+func (l *leveler) publishLevel(rms, floor float32) {
 	over := 0.0
-	if rms > l.bandFloor {
-		over = 20 * math.Log10(float64(rms/l.bandFloor))
+	if rms > floor {
+		over = 20 * math.Log10(float64(rms/floor))
 	}
 	quiet := float64(l.quiet.Load())
 	want := float32(levelFrom(over, quiet, levelTopDB-quiet))
@@ -385,9 +431,10 @@ func (s *Source) SetSensitivity(db int) {
 	slog.Info("room sensitivity", "over_floor_db", db)
 }
 
-// Floor is the quietest the room has been heard to be, in dBFS, in the band the level measures. It is what
-// the level is measured against, and on its own it is the room's own noise: it follows a fan starting, a
-// window opening, a house waking up.
+// Floor is the quietest the room has been heard to be, in dBFS, in the band the level measures. It is the
+// room's own noise: it follows a fan starting, a window opening, a house waking up. The level is measured
+// against it, or against quietest where the room is quieter than that, so in a quiet room this can read
+// well under where the level starts counting (#377).
 //
 // It moves with the analog gain as well, so changing that is a step in the history rather than the room
 // having changed.

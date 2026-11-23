@@ -92,6 +92,9 @@ func (c *Client) wsOpen(ctx context.Context) (*wsSession, error) {
 		conn.Close()
 		return nil, err
 	}
+	if hello.Type == "auth_ok" || hello.Type == "auth_invalid" {
+		c.heard(acc.Token, hello.Type == "auth_ok")
+	}
 	if hello.Type != "auth_ok" {
 		conn.Close()
 		return nil, fmt.Errorf("hass: websocket auth: %s %s", hello.Type, hello.Message)

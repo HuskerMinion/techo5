@@ -3,6 +3,7 @@ package detect
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"unicode/utf8"
 
@@ -19,6 +20,45 @@ import (
 // because its interface does — #74 is about running more than that, and a reserved index next to them
 // would be in the way of it.
 const StopSlot = 100
+
+// While the speaker's allowance is off its threshold, the stop word's near miss floor follows its
+// cutoff, stopNearMissBelow under it and never under stopNearMissLeast (stopNearMissFloor).
+const (
+	stopNearMissBelow = 0.15
+	stopNearMissLeast = 0.30
+)
+
+// stopNearMissFloor is the lowest peak of the stop word worth a "wake near miss" line, against the
+// cutoff in force, with slack saying whether that cutoff has the allowance for the speaker taken off
+// (slackFor); every other slot, and the stop word without the allowance, keeps NearMiss.
+//
+// While the speaker plays and the echo canceller runs, the stop word's cutoff is its threshold less the
+// playing allowance, and no lower than 0.50 (thresholdFor): with a threshold anywhere from 0.50 to 0.60
+// that is 0.50, which is NearMiss itself. A "stop" said over a reply that scored anything short of the
+// cutoff was then under the floor too, and left no line at all, so a word the device all but heard and
+// one it never heard read the same in the log, at every threshold an owner was likely to try for it.
+// The stop word is the one word always said over the device's own sound, and how close it comes there
+// is what says whether a lower threshold, the volume or the canceller is the thing to change.
+//
+// A floor that follows the cutoff gives those tries a line (slot=101, with the floor in it). It is
+// for the log and the setup page's list only: the engine still tells the ducker, the ring's hush and
+// the wake clips about a near miss only from NearMiss up, so nothing the device does changes with it.
+//
+// It is only for while the allowance is off. In a quiet room the cutoff is the threshold itself, and
+// a floor under 0.5 there would let the television or a conversation the stop model half likes write
+// a line every NearMissSettle for as long as it goes on, pushing the wake words' own detections and
+// near misses out of the setup page's list and the diagnostics bundle; a reply, at least, ends.
+//
+// The floor is rounded to hundredths. A threshold set from Home Assistant comes as a float32, 0.55 as
+// 0.550000011920929, and so does a cutoff made from it: unrounded, the floor would read
+// floor=0.40000001192092896 in the log, and a cutoff a hair under 0.65 would put it a hair under
+// NearMiss, with a floor in lines that ought to read as they always have.
+func stopNearMissFloor(slot int, cutoff float64, slack bool) float64 {
+	if slot != StopSlot || !slack {
+		return NearMiss
+	}
+	return min(NearMiss, max(math.Round((cutoff-stopNearMissBelow)*100)/100, stopNearMissLeast))
+}
 
 // stopModel describes the embedded word to the engine. The numbers come from the manifest it ships
 // with, and the cutoff is deliberately unreachable: the engine applies the user's threshold itself, and

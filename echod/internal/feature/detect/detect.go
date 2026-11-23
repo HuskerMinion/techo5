@@ -219,12 +219,20 @@ func newDetect() *Detect {
 		}
 		return wakeword.Threshold(slot)
 	}
-	e.Threshold = func(slot int) float64 {
+	slack := func(slot int) bool {
 		// A call still waiting to be dialed has no far end in the speaker, only "Calling Mom.", so the
 		// stop word keeps the slack it has over any announcement.
 		onCall := phone.Get().Busy() && !phone.Get().State().Waiting
-		slack := slackFor(slot, mic.Get().Canceling(), onCall, ring.IsSounding())
-		return thresholdWithPlayback(slot, base, config.Get().Wake.Stop.Threshold, slack, wakeword.PlayingThreshold)
+		return slackFor(slot, mic.Get().Canceling(), onCall, ring.IsSounding())
+	}
+	e.Threshold = func(slot int) float64 {
+		return thresholdWithPlayback(slot, base, config.Get().Wake.Stop.Threshold, slack(slot), wakeword.PlayingThreshold)
+	}
+	// While the speaker's allowance is off its threshold, the stop word's near misses are logged from
+	// under its cutoff, rather than from NearMiss, which is where its cutoff then sits (stop.go). The
+	// engine asks in the same breath as it asks for the cutoff, when the word peaks.
+	e.NearMissFloor = func(slot int, cutoff float64) float64 {
+		return stopNearMissFloor(slot, cutoff, slack(slot))
 	}
 
 	// d is made below, once the hooks it chains onto are in place; a detection only arrives after Start.
@@ -323,6 +331,8 @@ func newDetect() *Detect {
 	phone.Get().Changed.Listen(func(phone.State) {
 		go calls.follow(phone.Get().State(), time.Now())
 	})
+	// And what the stop word scored over each reply, said as the turn ends (replyscores.go).
+	followReplies(e, slog.Info)
 	for _, k := range commandKinds {
 		c := newCommand(d, k)
 		c.watch()

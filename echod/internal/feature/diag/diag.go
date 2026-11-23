@@ -600,7 +600,8 @@ func (d *Diag) hardware() {
 
 	// Sampled with everything else, so at the default interval this shows the room's resting level rather
 	// than tracking speech. That is the number worth having: the sensitivity is set as a distance above
-	// the floor, and both sides of it are here.
+	// the floor, and both sides of it are here. The floor is the room's own, which on a quiet Dot, Echo 2
+	// or Spot is well under the least the level counts from (mic.Source.Floor, #377).
 	room := func(id, name, icon string) *esphome.Sensor {
 		return &esphome.Sensor{
 			Base: esphome.Base{
@@ -794,7 +795,7 @@ func (d *Diag) Sample() {
 	d.room()
 }
 
-// room is what the level the ring can react to is reading, and the floor it is measured against.
+// room is what the level the ring can react to is reading, and the room's floor under it.
 func (d *Diag) room() {
 	source := mic.Get()
 	d.roomLevel.Set(float32(source.Peak()))

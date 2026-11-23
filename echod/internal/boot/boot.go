@@ -17,11 +17,13 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/component/all"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/firstrun"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/notify"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/locale"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
@@ -82,6 +84,24 @@ func Run(ctx context.Context) error {
 	// restoring is not an event, so nothing chimes and nothing reaches the logbook.
 	component.Default().Restore(config.Get())
 	slog.Info("state restored")
+
+	// A language split into variants left its devices saved under the old key: whoever set it chose
+	// the old content on purpose, and wakes up in it under the variant's own key. Since many set it
+	// taking the closest thing on the menu, the device says once, in the language it woke up in,
+	// that the menu's new one can be chosen too — and waits to be tapped rather than spending its
+	// one telling on an empty room: a device that updated through the night says it in the morning,
+	// when the card waits dark until somebody wakes the screen. The move is put on disk with it, so
+	// no second boot says it again.
+	if announce := config.LanguageAnnounce(); announce != "" {
+		lang := config.Get().Screen.Language
+		if err := notify.Get().Notify(fmt.Sprintf(locale.Text(lang, "screen_language_now_variant_s"), announce),
+			locale.Text(lang, "screen_language"), "mdi:translate", "off", "", "", 0); err != nil {
+			slog.Warn("the new-variant notice could not go up", "err", err)
+		}
+		if err := config.Set().Screen().LanguageMoved(true); err != nil {
+			slog.Warn("the language move could not be saved", "err", err)
+		}
+	}
 
 	group := service.New()
 	component.Default().AddTo(group)

@@ -66,6 +66,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -271,7 +272,10 @@ type Display struct {
 	// splashMin has passed.
 	booting bool
 	started time.Time
-	logo    *splash
+	// tried is the splash having asked Home Assistant once whether it takes the device's token, so a
+	// refused one ends the splash at once rather than after unreachableWait (#706).
+	tried bool
+	logo  *splash
 
 	// sheet is the settings sheet being shown; restartArm is the first of the two taps Restart wants.
 	sheet      bool
@@ -320,6 +324,8 @@ type Display struct {
 	glowLevel  *esphome.Number
 	// warmthSw is Night warmth (night_warmth.go).
 	warmthSw *esphome.Switch
+	// micOffSw is Show Microphone off (mic_off_pill.go), offered only where a mute light says it.
+	micOffSw *esphome.Switch
 	// liftSw is Adaptive backlight (adaptive_backlight.go), offered only where the GPU draws the panel.
 	liftSw *esphome.Switch
 	// dimmestNum is the Dimmest setting in Home Assistant: how dark auto-brightness goes.
@@ -590,6 +596,7 @@ func build() *Display {
 	d.skinSl = skinSelect(d.wake)
 	d.clockTap = clockTapSelect()
 	d.callBtn = callButtonSwitch(d.wake)
+	d.micOffSw = micOffPillSwitch(d.wake)
 	d.saverBtn = screensaverButton(d)
 	d.callScreenSel = callScreenSelect(d.wake)
 	d.styleSwipeSw = styleSwipeSwitch()
@@ -719,6 +726,9 @@ func (d *Display) Entities() []esphome.Entity {
 	if liftOffered() {
 		ents = append(ents, d.liftSw)
 	}
+	if muteLightSaysIt() {
+		ents = append(ents, d.micOffSw)
+	}
 	if nightAlarmHere() {
 		ents = append(ents, d.nightAlarmSw)
 	}
@@ -755,6 +765,7 @@ func (d *Display) Restore(c config.Config) {
 	d.skinSl.Set(skins[skinIndex()].label)
 	d.clockTap.Set(clockTapChoices()[clockTapIndex()].label)
 	setCallButton(d.callBtn, c.Screen.CallButton)
+	setMicOffPill(d.micOffSw, !c.Screen.NoMicOffPill)
 	showCallScreen(d.callScreenSel, callScreenIndex())
 	d.styleSwipeSw.Set(!c.Screen.NoStyleSwipe)
 	d.volumeSwipeSw.Set(!c.Screen.NoVolumeSwipe)
@@ -2635,6 +2646,15 @@ func (d *Display) Close() error {
 	if d.dev == nil {
 		return nil
 	}
+	// The last frame goes black (#560), unless it is an update's own screen saying it is restarting or
+	// rebooting, which is what somebody looking needs to see for the next minute: a few seconds of it
+	// do not mark the glass.
+	d.mu.Lock()
+	restarting := d.updateActive && updateBarSpins(d.updatePhase)
+	d.mu.Unlock()
+	if !restarting {
+		d.dev.Blank()
+	}
 	err := d.dev.Close()
 	d.dev = nil
 	return err
@@ -2871,9 +2891,13 @@ func (d *Display) frame() (next time.Duration) {
 	// address, over a splash that would otherwise wait for a Home Assistant it cannot reach. And so does
 	// a Home Assistant that does not come, with access to one or without: the clock, the alarms and the
 	// settings, the way to the setup page among them, were all behind the logo (splashGivesWay).
+	if booting && !d.tried && hass.Get().Ready() && now.Sub(started) >= splashMin {
+		d.tried = true
+		safe.Go("asking Home Assistant whether it takes the token", func() { _, _ = hass.Get().Fetch("/api/") })
+	}
 	if booting {
 		if ends, why := splashGivesWay(now.Sub(started), homeAssistantHere(), ring.any(), d.wifiOpen,
-			hass.Get().Ready()); ends {
+			hass.Get().Ready(), hass.Get().Refused(), asksAtDevice()); ends {
 			d.booting, booting = false, false
 			if why == "done" {
 				slog.Info("splash done", "after", now.Sub(started).Round(time.Millisecond))

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -89,9 +90,11 @@ func ioctl(fd uintptr, req uintptr, arg unsafe.Pointer) error {
 
 // Device is the open framebuffer.
 type Device struct {
-	f   *os.File
-	mem []byte
-	v   varInfo
+	// closing is the daemon going away (Blank): the GPU helper is not brought back for a last frame.
+	closing bool
+	f       *os.File
+	mem     []byte
+	v       varInfo
 
 	line      int // bytes per panel row
 	pageBytes int
@@ -539,7 +542,24 @@ func (d *Device) pan(next int) error {
 	return nil
 }
 
-// Close unmaps and closes the framebuffer. The last frame stays on the panel.
+// Blank paints the panel black, for the daemon going away: a panel keeps showing the last frame it
+// was sent after the daemon has gone, with the backlight off as well, and some glass holds a picture
+// left that long (the Echo Show 5 2nd gen's kept a shadow of the clock's digits, #560). It does not
+// bring the GPU helper back to do it (closing): one that has gone is not started only to be let go of.
+// A crash never gets here; a stop does, and the display decides when a restart's own screen should
+// stay up instead.
+func (d *Device) Blank() {
+	if d.canvas == nil {
+		return
+	}
+	d.closing = true
+	blank(d.canvas)
+	if err := d.Present(); err != nil {
+		slog.Warn("screen: painting the panel black on the way out failed", "err", err)
+	}
+}
+
+// Close unmaps and closes the framebuffer. The last frame stays on the panel; Blank first to clear it.
 func (d *Device) Close() error {
 	_ = d.settle()
 	if d.gpuPath.disp != nil {
@@ -558,6 +578,13 @@ func (d *Device) Close() error {
 		return nil
 	}
 	return d.f.Close()
+}
+
+// blank paints c black, fully opaque.
+func blank(c *image.RGBA) {
+	for i := 0; i < len(c.Pix); i += 4 {
+		c.Pix[i], c.Pix[i+1], c.Pix[i+2], c.Pix[i+3] = 0, 0, 0, 0xff
+	}
 }
 
 // The 2nd gen Show 8 on TECHO5's mainline kernel has a pwm-backlight instead of Amazon's LED class

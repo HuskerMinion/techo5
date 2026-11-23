@@ -171,10 +171,12 @@ type Confirmation struct {
 // The nearest-device decision for a wake Home Assistant confirmed (#685). feature/nearest sets it, which
 // this package cannot import; without it the turn opens at once. decide is told whether this device
 // answers.
-var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64, decide func(answer bool))]
+var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))]
 
-// SetConfirmedContest is feature/nearest putting a confirmed wake through its decision.
-func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, decide func(answer bool))) {
+// SetConfirmedContest is feature/nearest putting a confirmed wake through its decision. settled is the
+// unsure claim's, if one was made (nil if not): the decision takes it back when it answers without
+// claiming the word, so a device waiting on the unsure claim is not left waiting.
+func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))) {
 	confirmedContest.Store(&f)
 }
 
@@ -493,7 +495,7 @@ func (c *conversation) heardOnHA() {
 		gen, slot, from, clarity := c.decided, w.slot, w.from, w.clarity
 		c.deciding = &deciding{w: w, at: c.now(), gen: gen}
 		safe.Go("confirmed wake claim", func() {
-			(*f)(slot, from, clarity, func(answer bool) {
+			(*f)(slot, from, clarity, settled, func(answer bool) {
 				c.post(event{kind: evContested, gen: gen, answer: answer})
 			})
 		})

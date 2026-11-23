@@ -19,7 +19,7 @@ type contest struct {
 func withContest(t *testing.T) *contest {
 	t.Helper()
 	ct := &contest{decide: make(chan func(bool), 1)}
-	SetConfirmedContest(func(slot int, at time.Time, clarity float64, decide func(bool)) {
+	SetConfirmedContest(func(slot int, at time.Time, clarity float64, settled func(bool), decide func(bool)) {
 		ct.slot, ct.at, ct.clarity = slot, at, clarity
 		ct.decide <- decide
 	})

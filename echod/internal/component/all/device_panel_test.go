@@ -31,6 +31,9 @@ var notOnPanel = []string{
 	"wifi_prefer_5ghz", "wifi_quiet_hours", "wifi_quiet_hours_end", "wifi_quiet_hours_start",
 	// The next alarm on the night clock is the Echo Show 5's and Show 8's (feature/display night_alarm.go).
 	"screen_night_alarm",
+	// A tablet has no mute light, so its header always says the microphone is off (feature/display
+	// mic_off_pill.go).
+	"screen_microphone_off",
 }
 
 // onlyOnPanel is what a panel adds: Android can silence a tablet's microphone under the app.

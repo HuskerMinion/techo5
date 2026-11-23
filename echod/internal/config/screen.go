@@ -198,6 +198,11 @@ type Screen struct {
 	// somebody wants it, so an update changes nobody's screen.
 	MuteRingSubtle bool `json:"mute_ring_subtle,omitempty"`
 
+	// NoMicOffPill leaves "Microphone off" out of the header on a Show, whose red mute light already
+	// says it (on unless this is set: the Show Microphone off switch, display/mic_off_pill.go, #621).
+	// A board with no mute light shows it whatever this says.
+	NoMicOffPill bool `json:"no_microphone_off_pill,omitempty"`
+
 	// CameraDotWatchedOnly lights the Spot's camera dot only while a picture leaves the device, not
 	// whenever the camera runs (#431). NoIdleRing leaves out the Spot's gray rim while nothing else is
 	// on it. Both off until somebody wants them, so an update changes nobody's screen.
@@ -213,6 +218,12 @@ type Screen struct {
 	// "pt", "ru", "ja" — empty for all of them. It has nothing to do with what the assistant understands or
 	// says, which is Home Assistant's pipeline; it decides only which pages a sentence brings up.
 	Language string `json:"language,omitempty"`
+
+	// LanguageMoved is whether a saved screen language has had its one look for the ca move: the ca
+	// key held the Valencian catalog until Central Catalan took it over, and a device saved with ca
+	// chose Valencian, which it keeps under its own key (moveLanguage). It defaults to false so that a
+	// file saved before it existed gets its look; a new device is born with it set.
+	LanguageMoved bool `json:"language_moved,omitempty"`
 
 	// ClockTap is what a tap on the clock does: empty starts a voice turn, as it always has,
 	// "dashboard" puts the dashboard up, "deck" the deck (Show), and "nothing" leaves it, for a panel
@@ -288,6 +299,34 @@ const DefaultScreenBrightness = 60
 
 func defaultScreen() Screen {
 	return Screen{On: true, Brightness: DefaultScreenBrightness, Auto: true, Theme: DefaultTheme}
+}
+
+// languageSplits are the languages that have been split into variants: the old key held one of
+// them, and a device saved under it chose that one on purpose, so it keeps it under the variant's
+// own key and hears once about whatever took the old key over. A future split — an Argentine
+// Spanish, a Cantonese beside Mandarin, an Australian English — is a line here, and the notice
+// comes with it. announces is the new thing's name as the menu itself shows it.
+var languageSplits = []struct{ was, keeps, announces string }{
+	{"ca", "ca-valencia", "Català"},
+}
+
+// moveLanguage gives a device saved before its language was split into variants the variant's own
+// key, so the old key is free for the one that took it over: everybody who set it chose the old
+// content on purpose, and wakes up in it. One look per file — the flag says it has been seen — so
+// a key chosen after the move means what it now says, and stays. It reports the name of what the
+// menu has gained, which is what the start-up tells the owner about.
+func (c *Config) moveLanguage() string {
+	if c.Screen.LanguageMoved {
+		return ""
+	}
+	c.Screen.LanguageMoved = true
+	for _, s := range languageSplits {
+		if c.Screen.Language == s.was {
+			c.Screen.Language = s.keeps
+			return s.announces
+		}
+	}
+	return ""
 }
 
 type ScreenWriter struct{ st *Store }
@@ -504,6 +543,10 @@ func (w ScreenWriter) MuteRingSubtle(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.MuteRingSubtle = v })
 }
 
+func (w ScreenWriter) NoMicOffPill(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.NoMicOffPill = v })
+}
+
 func (w ScreenWriter) CameraDotWatchedOnly(v bool) error {
 	return w.st.Update(func(c *Config) { c.Screen.CameraDotWatchedOnly = v })
 }
@@ -538,6 +581,10 @@ func (w ScreenWriter) ModernNowPlaying(on bool) error {
 
 func (w ScreenWriter) Language(v string) error {
 	return w.st.Update(func(c *Config) { c.Screen.Language = v })
+}
+
+func (w ScreenWriter) LanguageMoved(v bool) error {
+	return w.st.Update(func(c *Config) { c.Screen.LanguageMoved = v })
 }
 
 func (w ScreenWriter) ClockTap(v string) error {

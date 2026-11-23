@@ -890,8 +890,9 @@ func (d *Display) gesture(g touch.Gesture) {
 		return
 	}
 	// A critical notification takes the face over a reminder and an announcement (render_spot.go), and
-	// the taps with it, unless a camera view is over it.
-	if _, camera := home.Get().Camera(); !camera {
+	// the taps with it, unless a camera view is over it: gated as the face is (gateCamera), so a view
+	// held back for the night does not take taps from the card that is showing.
+	if cam, camera := home.Get().Camera(); func() bool { _, up := d.gateCamera(cam, camera, nightNow(time.Now())); return !up }() {
 		if n, up := notify.Get().Card(); up && n.Critical {
 			if g.Kind == touch.Tap && d.r != nil {
 				d.r.tapNotifyFace(n, image.Pt(g.X, g.Y))
@@ -1481,6 +1482,7 @@ func (d *Display) Close() error {
 	if d.dev == nil {
 		return nil
 	}
+	d.dev.Blank() // the last frame goes black rather than staying on the glass (#560)
 	err := d.dev.Close()
 	d.dev = nil
 	return err

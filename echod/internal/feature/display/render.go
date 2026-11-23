@@ -347,8 +347,12 @@ type scene struct {
 // building a face at each size is not something to do per frame.
 type renderer struct {
 	// appsDrawn is whether the last frame drew a panel's apps list (apps_pop.go): only then do fingers go
-	// to it, since a page drawn instead of it (a camera, an alert, a turn) is what they are for.
+	// to it, since a page drawn instead of it (a camera, an alert, a turn) is what they are for. It is
+	// the last finished frame's, published as the frame ends: a tap while the next frame is still being
+	// drawn finds the list the screen shows (appsNext).
 	appsDrawn atomic.Bool
+	// appsNext is whether the frame being drawn has drawn the list, published to appsDrawn when it is done.
+	appsNext bool
 
 	nightBuf     *image.RGBA // the night layer kept between frames (nightLayerFor)
 	paint                    // the canvas, its size, and the settings screen's tap zones
@@ -628,7 +632,12 @@ func (r *renderer) useFont() {
 // draw composes a whole frame. Everything is repainted: the canvas is small and a full paint is
 // simpler than tracking what changed.
 func (r *renderer) draw(s scene) {
-	r.appsDrawn.Store(false)
+	// Published at the very end, after every overlay: cleared here, it left the list without its
+	// fingers for as long as each frame took to draw. A finger coming down asks for a frame (the press,
+	// press.go), and a tap lifts before a slow page (the Dashboard style on a Fire tablet) is done, so
+	// every tap found it false, put the list away and went to the clock under it, which opened it again.
+	r.appsNext = false
+	defer func() { r.appsDrawn.Store(r.appsNext) }()
 	r.useFont()
 	r.marked, r.footAt, r.lcarsDrawn = false, 0, false
 	r.press = s.press
@@ -674,6 +683,7 @@ func (r *renderer) draw(s scene) {
 		if r.rainbowKept(s) {
 			// The page as it was, its taps as they were: only Rainbow is drawn again.
 			r.keepCallBar()
+			r.appsNext = r.appsDrawn.Load()
 			r.turnCue(s)
 			return
 		}
@@ -1469,7 +1479,7 @@ func (r *renderer) headerAt(s scene, y int) {
 	pad := r.s(14)
 	x := (r.w - w) / 2
 	fill, ink := walnut, amber
-	if s.muted {
+	if s.micOffSaid() {
 		// The microphone off is red with black words, the way a mute light is red: 5.7 to 1, readable
 		// at the pill's size over any page. The night clock has no header (redClockPage returns before
 		// it), so this never lights a dark bedroom.

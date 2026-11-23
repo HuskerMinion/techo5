@@ -150,7 +150,7 @@ func (b *bridge) fromServer() {
 			return
 		}
 		if kind == websocket.BinaryMessage {
-			if err := b.plain.WriteMessage(websocket.BinaryMessage, playerAudio(data)); err != nil {
+			if err := b.plain.WriteMessage(websocket.BinaryMessage, forLibrary(data)); err != nil {
 				b.end(err)
 				return
 			}
@@ -582,4 +582,28 @@ func playerAudio(data []byte) []byte {
 		return data
 	}
 	return append(data[:audioHeaderOld:audioHeaderOld], data[audioHeader10:]...)
+}
+
+// Artwork from a 1.0 server is not one message per picture with a 9-byte header, as the library takes
+// it, but a transfer: an announce, then the picture in parts, each with only its type and a flags byte
+// before it, and a cancel that is those two bytes alone. The session puts the parts back together
+// (sendspin/artwork.go); all the bridge does is put 8 bytes of padding after the type, where the
+// library looks for a timestamp, so the library hands on the rest whole. Without it a cancel, and a
+// last part of under 7 bytes, are too short for the library and lost, and every other message loses
+// its first 7 bytes.
+const (
+	artworkFirstType = 8
+	artworkLastType  = 11
+	artworkPadding   = 8
+)
+
+// forLibrary is a binary message from a 1.0 server as the library takes it.
+func forLibrary(data []byte) []byte {
+	if len(data) > 0 && data[0] >= artworkFirstType && data[0] <= artworkLastType {
+		padded := make([]byte, 0, len(data)+artworkPadding)
+		padded = append(padded, data[0])
+		padded = append(padded, make([]byte, artworkPadding)...)
+		return append(padded, data[1:]...)
+	}
+	return playerAudio(data)
 }

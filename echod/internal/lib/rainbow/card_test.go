@@ -109,6 +109,85 @@ func TestAVeryLongAnswerIsCutAtTheMostLines(t *testing.T) {
 	}
 }
 
+// Cutting an answer at cardMost costs the same however long it is: the last line is cut from the word
+// that did not fit on it, not from all the rest. Cut from all the rest, an answer of 9000 characters took
+// most of a second on a fast computer, many on the Show, and this one of 180,000 would run past the
+// test's time limit.
+func TestTheCutCostsTheSameForAnyLength(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	w := int(cardW*g.k - 2*cardPad*g.k)
+	a := wrapLines(f.Reply, strings.Repeat(longReply+" ", 20), w, cardMost)
+	b := wrapLines(f.Reply, strings.Repeat(longReply+" ", 400), w, cardMost)
+	if !slices.Equal(a, b) || len(b) != cardMost || !strings.HasSuffix(b[cardMost-1], "…") {
+		t.Fatalf("cut differently for a longer answer:\n%q\n%q", a[len(a)-1], b[len(b)-1])
+	}
+	// The cut line is what the whole of the rest gave: as much of the line and the next word as fits.
+	whole := wrapLines(f.Reply, strings.Repeat(longReply+" ", 20), w, 0)
+	if !slices.Equal(a[:cardMost-1], whole[:cardMost-1]) {
+		t.Error("the lines over the cut are not the answer's")
+	}
+	rest := strings.Join(whole[cardMost-1:cardMost+3], " ") // three lines past the cut stand for the rest
+	if want := clipLine(f.Reply, rest, w); a[cardMost-1] != want {
+		t.Errorf("the last line is %q, want %q", a[cardMost-1], want)
+	}
+}
+
+// The window on an answer cut at cardMost keeps up with the voice on the screen, frame by frame as Draw
+// moves it, not only in the reckoning: halfway down the lines on the card once the voice is halfway
+// through them, and on the last of them once it is past them, while it says the rest. Gone by the lines
+// on the card alone, it was only a sixth of the way down them once the voice was past them, and got to
+// the end only with the whole answer said.
+func TestTheDrawnWindowOnACutAnswerKeepsUpWithTheVoice(t *testing.T) {
+	g := newGeometry(960, 480)
+	f := Faces{Heard: face(t, 26), Reply: face(t, 34)}
+	heard, huge := "tell me everything about the weather", strings.Repeat(longReply+" ", 20)
+	full := 0
+	for _, l := range wrapLines(f.Reply, huge, int(cardW*g.k-2*cardPad*g.k), 0) {
+		full += len([]rune(l))
+	}
+	kept := 0
+	for _, c := range newCardWords(g, f, heard, huge, true, "k").chars {
+		kept += c
+	}
+	share := float64(kept) / float64(full)
+	if share > 0.5 {
+		t.Fatalf("the lines on the card are %.2f of the answer", share)
+	}
+
+	bg := page(t, 960, 480)
+	dst := image.NewRGBA(bg.Rect)
+	var s Screen
+	start := time.Date(2026, 10, 21, 10, 42, 0, 0, time.UTC)
+	const speak = 20.0 // seconds to the end of the lines on the card, and a little past
+	half := false
+	for n := 0; float64(n)*0.066 < speak+2; n++ {
+		at := float64(n) * 0.066
+		tr := Turn{Phase: "replying", Level: 0.5, Heard: heard, Reply: huge, Said: clamp01((at - 2) / speak * (share + 0.02))}
+		if at < 1.5 {
+			tr = Turn{Phase: "thinking", Heard: heard}
+		}
+		copy(dst.Pix, bg.Pix)
+		s.Draw(dst, start.Add(time.Duration(at*float64(time.Second))), tr, f)
+		w := s.card.cur
+		if w == nil || !w.reply || !w.scrolls() {
+			continue
+		}
+		if !half && tr.Said >= share/2 {
+			half = true
+			if want := float64(cardMost-cardLines) / 2; math.Abs(w.scrollTo-want) > 2 {
+				t.Errorf("halfway through the lines on the card the window is %.2f lines down, want about %.0f", w.scrollTo, want)
+			}
+		}
+	}
+	if !half {
+		t.Fatal("the voice never got halfway through the lines on the card")
+	}
+	if w := s.card.cur; w.scrollTo < float64(cardMost-cardLines)-0.01 {
+		t.Errorf("past the lines on the card the window is %.2f lines down, want %d", w.scrollTo, cardMost-cardLines)
+	}
+}
+
 // A long answer is laid out whole, the card as tall as four lines of it, and the window scrolls down it
 // with the voice to rest on its end; the edges fade where there is more. On the Show 8's screen and the
 // Show 5's.

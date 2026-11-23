@@ -114,7 +114,7 @@ button on one without. There's no password, the answer at the device is what pro
 nobody answers, the page says so and offers to ask again.
 For a device out of reach, such as a Dot on a shelf, Home Assistant can answer instead: **Setup page
 asking** shows the address of the browser asking, and **Let in from Home Assistant** lets it in, the same
-as a press on the device. The device's screen says a browser was let in. This needs an API encryption
+as a press on the device. A device with a screen says a browser was let in. This needs an API encryption
 key on the device. The **Visit** link on the device's page in Home Assistant opens the setup page while
 it's on (or a short list with it, if another of the device's pages is on too), so the whole thing can be done from Home Assistant: turn on **Setup page**, open it with
 **Visit**, choose **Ask to be let in**, then press **Let in from Home Assistant**.
@@ -1017,13 +1017,15 @@ other Shows don't have the switches.
 - **Video** (Show and Spot): videos full screen from Home Assistant's `play_video` action and, with **DLNA
   video** on, from DLNA apps. Off on a new device. On the setup page's Screen tab. See
   [Video](video.md).
-- **Screen language** (Settings → General): the language of the screen. German, French, Galician,
+- **Screen language** (Settings → General): the language of the screen. German, Catalan, French, Galician,
   Italian, Japanese, Romanian, Spanish, Turkish and Valencian translate the whole screen, settings included, and Dutch
   its labels and buttons. Dutch, Portuguese and Russian write the clock's day and date, the forecast's days, the weather's
   words and the alarm after the date; the rest stays in English, as with *Match all* or *English*.
   Untranslated messages fall back to English ([how far each language is](translating.md)). It also
   picks which words the screen listens for. It
   doesn't change what the assistant understands or says, which is set by Home Assistant's pipeline.
+  A device set to Valencian back when that was the only Catalan keeps it: the saved choice moves to
+  Valencian's own key once, and the device says once that Catalan can be chosen now.
 - **Turn screen**: how a voice request looks. This one is on the Spot too. An answer too long for the
   screen is shown a page at a time, turning as the voice reads it. **Classic** is the words,
   **Wave** is glowing lines, **Bars** is an LED-style equalizer, **VU meters** are two moving-needle
@@ -1043,9 +1045,9 @@ other Shows don't have the switches.
   along the top and bottom only while the device thinks, and what was heard and the answer on a card
   of frosted glass a little above the middle. An answer longer than the card's four lines scrolls up
   through it as it is said, and stays on its last lines once it is; a very long one is cut after 40
-  lines. A request opens with a gold globe at the right edge and a wave of pink crossing the screen.
-  During night hours it is Cue and captions instead (red over the night clock), so the colors don't
-  light the room.
+  lines, which stay on the card while the voice says the rest. A request opens with a gold globe at
+  the right edge and a wave of pink crossing the screen. During night hours it is Cue and captions
+  instead (red over the night clock), so the colors don't light the room.
   The screen under a cue keeps working: a tap there does what it always does, and a tap on the
   captions (or Rainbow's card) puts them away. Stop a request by voice or with the stop word. A page
   with buttons to answer (a call, a ringing alarm, the settings, a camera) gets neither the light nor
@@ -1059,6 +1061,11 @@ other Shows don't have the switches.
   the same way in every style.
 - **Subtle mute ring** (Spot, in Home Assistant): the red ring shown while the microphones are muted
   is drawn thin and in a dimmer red, so it doesn't light up a dark room.
+- **Show Microphone off** (Show, in Home Assistant as `switch.<node>_show_microphone_off`, on at
+  first): while the microphones are muted, a red **Microphone off** pill sits at the top of the screen.
+  Turn the switch off to leave that to the red light on the mute button, which says it already; a lost
+  Wi-Fi or Home Assistant is still shown at the top. The night clock never shows the pill either way.
+  The Panel app has no mute light, so it always shows it and doesn't have the switch.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
   watched** lights it only while a picture leaves the device: a stream, a camera page, or Home
@@ -1472,7 +1479,13 @@ ordinary turn.
 ringing alarm or timer, an answer, an announcement or the music. After an alarm it also lets go of a
 wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
 isn't cut off. **Stop word threshold** (on the device's microphone in Home Assistant, 0.70 to start
-with) sets how sure it has to be. At the top of its range, the stop word is off.
+with) sets how sure it has to be. At the top of its range, the stop word is off. A "stop" that came
+close and wasn't heard leaves a `wake near miss` line with `slot=101` in the device's log, and shows in
+the setup page's [scores](#watching-the-wake-word-scores). Said over an answer or music with echo
+cancellation active, it counts as close from further under the threshold than other words do: how
+close it came there is what says whether to lower the threshold. How close a "stop" said over an
+answer came is also in the log, one line an answer (see
+[Watching the wake word scores](#watching-the-wake-word-scores)).
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
@@ -1550,6 +1563,9 @@ What goes and what stays:
 - This device's own sounds stay on it too: the wake sound, timers, alarms and announcements.
 - If Home Assistant or the player does not take a reply, that reply plays on this device, and the log
   says so once until it works again.
+- With Reply delivery set to *Early*, the player is handed the reply as soon as Home Assistant starts
+  making its speech, so a long answer starts there while the agent is still writing it, as it does on
+  this device. Otherwise the reply is sent once it is written.
 
 Listening again after a reply: this device cannot hear when another speaker finishes. It waits for the
 length of the reply plus two seconds, then listens, so a question gets its answer without the wake
@@ -1917,6 +1933,15 @@ your own**, on a device with microphones.
 - **Last heard** lists the latest detections, near misses, wakes the device was unsure of (with
   **Confirm wake with Home Assistant** on: a score over its threshold but under the wake word's), and
   words that became ready or were taken out, each with the numbers its line in the log has.
+- A near miss is a word that scored at least 0.5 and stayed under what it was judged against. During
+  playback with echo cancellation active, the stop word also counts one from 0.15 under what it is
+  judged against, if that is lower (never under 0.30): it is then judged against 0.50 at any threshold
+  up to 0.60, and a try that came close would leave nothing behind. With a 0.60 cutoff that is from
+  0.45, with 0.50 from 0.35; in a quiet room it is 0.5, as for every other word. The ones under 0.5 have
+  the floor they were judged by at the end of the log line (`floor=0.35`), and the cutoff in force when
+  the word peaked (for a "stop" said just as an answer ends, the one for playback). They are only
+  listed and logged: they don't duck the music, hush a ringing alarm or get kept as a wake clip, as a
+  near miss from 0.5 up still does.
 - **Watch** draws each word's highest score in the last two seconds as a bar, with a line where its
   cutoff is, and adds what is heard as it happens. Scores just after a wake or an unmute, while the device
   holds detections back, don't count toward the bar. Without script, **Refresh** brings the table and the
@@ -1930,6 +1955,12 @@ device's screen.
 The scores are numbers, never audio, and are kept only in memory: the last 64 events, and the peaks
 from moment to moment only while the page is watching, for ten seconds after its last look. They are
 behind the press like the rest of the page, and watching doesn't keep the page open.
+
+A "stop" said over an answer is easy to miss on the bar, so the device's log keeps one number of it,
+the way it keeps `wake detected` and `wake near miss`: as each answer ends, a `stop word over the
+reply` line has the stop word's highest score while the answer was on its way and playing, and the
+cutoff it was judged against. It is the best of the whole answer, so to compare, say "stop" once an
+answer, and let a few answers play with nothing said.
 
 ### Recording takes of a word
 
