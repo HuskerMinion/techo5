@@ -64,11 +64,14 @@ project started on:
   national weather services' own warnings, yellow, orange or red, in the words the service issued them
   in: in the screen's language where the service issues that language, else in English. Home's
   MeteoAlarm regions are found from its location: the regions it lies in, and the coastal waters off
-  it. The U.K., Switzerland, Sweden, Norway, Estonia, Ukraine and Israel send each warning with its
-  own outline instead, which is matched against home's location. The feed is read every 10 minutes
-  while the screen is drawing, the longest MeteoAlarm's
+  it. They come from MeteoAlarm's own region file, some 30 MB, downloaded when home is first looked
+  up and again only when MeteoAlarm publishes a new one (asked once a month); only the regions near
+  home are kept on the device. The U.K., Switzerland, Sweden, Norway, Estonia, Ukraine and Israel send each warning with its
+  own outline instead, which is matched against home's location. Every 10 minutes while the screen
+  is drawing, the longest MeteoAlarm's
   [terms](https://meteoalarm.org/en/live/page/terms-and-conditions) let what is shown lag behind
-  meteoalarm.org. With no country set in Home Assistant, MeteoAlarm is still used for a home in one of
+  meteoalarm.org, the feed is asked whether it changed, and read again (a few megabytes for a big
+  country) only when it did, or after an hour. With no country set in Home Assistant, MeteoAlarm is still used for a home in one of
   its regions, but **a home in a country whose warnings come as outlines (the U.K., Switzerland,
   Sweden, Norway, Estonia, Luxembourg, Ukraine, Andorra, Israel) gets no alerts without Home
   Assistant's country**, since the source follows the country. On

@@ -33,8 +33,9 @@ func (s alertSource) every() time.Duration {
 }
 
 // alertSourceFor is the source home's country picks; with no country known, home's place: the U.S.,
-// or one of MeteoAlarm's regions. A home in a country whose warnings come as outlines (the U.K.,
-// Switzerland...) needs the country: MeteoAlarm has no regions there to find it by.
+// or Europe, where MeteoAlarm's regions say whether home is in one. A home in a country whose
+// warnings come as outlines (the U.K., Switzerland...) needs the country: MeteoAlarm has no regions
+// there to find it by.
 func alertSourceFor(lat, lon float64) alertSource {
 	c := homeCountry()
 	if _, ok := meteoAlarmCountries[c]; ok {
@@ -43,7 +44,7 @@ func alertSourceFor(lat, lon float64) alertSource {
 	if inUS(lat, lon) {
 		return alertsFromNWS
 	}
-	if c == "" && len(regionsNear(loadRegions(), lat, lon)) > 0 {
+	if c == "" && mayBeEurope(lat, lon) {
 		return alertsFromMeteoAlarm
 	}
 	return alertsFromNone

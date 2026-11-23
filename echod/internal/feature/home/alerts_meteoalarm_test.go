@@ -1,5 +1,3 @@
-//go:build !dot
-
 package home
 
 import (
@@ -9,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -26,34 +25,6 @@ func regionCodes(rs []maRegion) []string {
 	return out
 }
 
-// Home's regions are the ones it lies in and the sea off it; a neighbor does not count.
-func TestRegionsFoundFromWhereHomeIs(t *testing.T) {
-	all := loadRegions()
-	if len(all) < 1900 {
-		t.Fatalf("%d regions read, want MeteoAlarm's two thousand", len(all))
-	}
-	for _, c := range []struct {
-		name     string
-		lat, lon float64
-		want     []string
-	}{
-		{"Santander", 43.46, -3.80, []string{"ES133", "ES842"}}, // the coast, and the waters off it
-		{"Bremen", 53.08, 8.80, []string{"DE369"}},
-		{"Rome", 41.90, 12.50, []string{"IT012"}},
-	} {
-		if got := regionCodes(regionsNear(all, c.lat, c.lon)); !slices.Equal(got, c.want) {
-			t.Errorf("%s: %v, want %v", c.name, got, c.want)
-		}
-	}
-	if got := regionsNear(all, 35.68, 139.69); len(got) != 0 {
-		t.Errorf("Tokyo: %v, want none", regionCodes(got))
-	}
-	i := slices.IndexFunc(all, func(g maRegion) bool { return g.code == "ES842" })
-	if i < 0 || all[i].name != "Costa - Litoral cántabro" {
-		t.Errorf("ES842 is called %q", all[i].name)
-	}
-}
-
 // fakeMeteoAlarm serves countries' feeds and the warnings' CAP documents, and counts what it is asked.
 type fakeMeteoAlarm struct {
 	mu    sync.Mutex
@@ -69,11 +40,18 @@ func (m *fakeMeteoAlarm) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.mu.Lock()
-	m.asked = append(m.asked, r.URL.Path)
+	m.asked = append(m.asked, r.Method+" "+r.URL.Path)
 	m.mu.Unlock()
 	if name, ok := strings.CutPrefix(r.URL.Path, "/feeds/meteoalarm-legacy-atom-"); ok {
-		if f, ok := m.feeds[name]; ok {
-			fmt.Fprint(w, f)
+		m.mu.Lock()
+		f, ok := m.feeds[name]
+		m.mu.Unlock()
+		if ok {
+			// As MeteoAlarm does: a length, and for a HEAD nothing else.
+			w.Header().Set("Content-Length", strconv.Itoa(len(f)))
+			if r.Method != http.MethodHead {
+				fmt.Fprint(w, f)
+			}
 			return
 		}
 	}
@@ -91,7 +69,7 @@ func (m *fakeMeteoAlarm) count(prefix string) int {
 	defer m.mu.Unlock()
 	n := 0
 	for _, p := range m.asked {
-		if strings.HasPrefix(p, prefix) {
+		if strings.HasPrefix(p, prefix) || strings.HasPrefix(p, "GET "+prefix) {
 			n++
 		}
 	}
@@ -139,6 +117,7 @@ func useConfig(t *testing.T, p config.Place) {
 	t.Helper()
 	after := filepath.Join(t.TempDir(), "after.json")
 	t.Cleanup(func() { config.Use(after) })
+	useSampleRegions(t) // and no test asks MeteoAlarm itself
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	if err := config.Set().Home().Place(p); err != nil {
 		t.Fatal(err)
@@ -239,7 +218,7 @@ func TestMeteoAlarmOutlines(t *testing.T) {
 // France names its regions by NUTS3 code, which MeteoAlarm's alias list ties to the EMMA_ID.
 func TestMeteoAlarmAliasCodes(t *testing.T) {
 	useConfig(t, config.Place{Name: "Paris", Lat: 48.857, Lon: 2.35, Country: "FR"})
-	all := loadRegions()
+	all := regionsAround(context.Background(), 48.857, 2.35)
 	h := areaFor(all, 48.857, 2.35, "FR")
 	e := maEntry{}
 	e.Geocodes = append(e.Geocodes, struct {
@@ -271,6 +250,16 @@ func TestMeteoAlarmNotAFeed(t *testing.T) {
 	if _, err := (&Feature{}).buildMeteoAlarm(context.Background(), 48.21, 16.37); err == nil {
 		t.Error("a page that is not a feed read as no warnings")
 	}
+
+	// A feed with no entries, as Austria's often is, is a country without warnings.
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, feed())
+	}))
+	defer empty.Close()
+	meteoAlarmFeeds = empty.URL + "/feeds/meteoalarm-legacy-atom-"
+	if v, err := (&Feature{}).buildMeteoAlarm(context.Background(), 48.21, 16.37); err != nil || len(v.Here) != 0 {
+		t.Errorf("an empty feed: %v, %v", v.Here, err)
+	}
 }
 
 func TestAlertSourceFor(t *testing.T) {
@@ -282,10 +271,9 @@ func TestAlertSourceFor(t *testing.T) {
 		{config.Place{Lat: 51.51, Lon: -0.13, Country: "GB"}, alertsFromMeteoAlarm}, // outlines, no regions
 		{config.Place{Lat: 41.26, Lon: -95.94, Country: "US"}, alertsFromNWS},
 		{config.Place{Lat: 35.68, Lon: 139.69, Country: "JP"}, alertsFromNone},
-		{config.Place{Lat: 53.08, Lon: 8.80}, alertsFromMeteoAlarm}, // no country: one of MeteoAlarm's regions
+		{config.Place{Lat: 53.08, Lon: 8.80}, alertsFromMeteoAlarm}, // no country, in Europe
 		{config.Place{Lat: 41.26, Lon: -95.94}, alertsFromNWS},      // no country: the U.S.
-		// No country, in a country MeteoAlarm has no regions for: nothing (docs/overview.md says so).
-		{config.Place{Lat: 51.51, Lon: -0.13}, alertsFromNone},
+		{config.Place{Lat: 35.68, Lon: 139.69}, alertsFromNone},     // no country, neither
 	} {
 		c.place.Name = "Home"
 		useConfig(t, c.place)
@@ -295,6 +283,62 @@ func TestAlertSourceFor(t *testing.T) {
 	}
 	if alertsFromMeteoAlarm.every() != 10*time.Minute || alertsFromNWS.every() != alertsEvery {
 		t.Error("the sources' paces")
+	}
+
+	// No country, in a country whose warnings come as outlines: MeteoAlarm has no region there, so
+	// no feed to read and no alerts (docs/overview.md says so).
+	useConfig(t, config.Place{Name: "Home", Lat: 51.51, Lon: -0.13})
+	if v, err := (&Feature{}).buildMeteoAlarm(context.Background(), 51.51, -0.13); err != nil || len(v.Here) != 0 {
+		t.Errorf("London with no country: %v, %v", v.Here, err)
+	}
+}
+
+// Every ten minutes the feed is only asked for its length; it is read again when that changed, or
+// after an hour.
+func TestMeteoAlarmFeedReadOnlyWhenChanged(t *testing.T) {
+	useConfig(t, config.Place{Name: "Santander", Lat: 43.46, Lon: -3.80, Country: "ES"})
+	m := &fakeMeteoAlarm{caps: map[string]string{}}
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+	defer func(f string) { meteoAlarmFeeds = f }(meteoAlarmFeeds)
+	meteoAlarmFeeds = srv.URL + "/feeds/meteoalarm-legacy-atom-"
+	later := time.Now().Add(6 * time.Hour).UTC().Format(time.RFC3339)
+	wind := entry(srv.URL, "w", "EMMA_ID:ES133", "Litoral cántabro", "Yellow Wind Warning issued for Spain - Litoral", "Alert", later)
+	away := entry(srv.URL, "a", "EMMA_ID:ES242", "Castellón", "Red Wind Warning issued for Spain - Castellón", "Alert", later)
+	m.mu.Lock()
+	m.feeds = map[string]string{"spain": feed(wind, away)}
+	m.mu.Unlock()
+	f := &Feature{}
+	build := func() int {
+		v, err := f.buildMeteoAlarm(context.Background(), 43.46, -3.80)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(v.Here)
+	}
+	if n := build(); n != 1 || m.count("/feeds/") != 1 {
+		t.Fatalf("first: %d alerts, %d reads", n, m.count("/feeds/"))
+	}
+	f.alerts.mu.Lock()
+	if memo := f.alerts.ma.feeds["ES"]; memo == nil || len(memo.entries) != 1 {
+		t.Errorf("kept %v, want home's one entry", memo)
+	}
+	f.alerts.mu.Unlock()
+	if n := build(); n != 1 || m.count("/feeds/") != 1 || m.count("HEAD /feeds/") != 1 {
+		t.Errorf("unchanged: %d alerts, %d reads, %d HEADs; want the kept one, no read", n, m.count("/feeds/"), m.count("HEAD /feeds/"))
+	}
+	rain := entry(srv.URL, "r", "EMMA_ID:ES133", "Litoral cántabro", "Yellow Rain Warning issued for Spain - Litoral", "Alert", later)
+	m.mu.Lock()
+	m.feeds["spain"] = feed(wind, rain, away)
+	m.mu.Unlock()
+	if n := build(); n != 2 || m.count("/feeds/") != 2 {
+		t.Errorf("changed: %d alerts, %d reads", n, m.count("/feeds/"))
+	}
+	f.alerts.mu.Lock()
+	f.alerts.ma.feeds["ES"].read = time.Now().Add(-meteoAlarmFull - time.Minute)
+	f.alerts.mu.Unlock()
+	if build(); m.count("/feeds/") != 3 {
+		t.Errorf("after an hour the feed was not read again (%d reads)", m.count("/feeds/"))
 	}
 }
 

@@ -1,13 +1,17 @@
 package home
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"image/color"
+	"io"
 	"log/slog"
 	"math"
+	"net/http"
 	"slices"
 	"sort"
 	"strconv"
@@ -34,8 +38,11 @@ import (
 var meteoAlarmFeeds = "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-"
 
 const (
-	// meteoAlarmEvery is how often the feed is read: the longest MeteoAlarm's terms let it lag.
+	// meteoAlarmEvery is how often the feed is asked about: the longest MeteoAlarm's terms let it lag.
+	// The feed cannot say it has not changed, so it is asked for its length first, and read again
+	// only when that changed, or at least every meteoAlarmFull.
 	meteoAlarmEvery = 10 * time.Minute
+	meteoAlarmFull  = time.Hour
 	// capFetches caps how many CAP documents one refresh asks for; the rest are shown from the feed.
 	capFetches = 12
 	// coastKm is how far off home a coastal region (a sea area, numbered 8xx) still counts as home's.
@@ -65,8 +72,15 @@ type maRegion struct {
 	box                 [4]float64 // west, south, east, north
 }
 
-// marine is whether a region is a sea area: MeteoAlarm numbers those from 800.
-func (g maRegion) marine() bool { return len(g.code) == 5 && g.code[2] == '8' }
+// marine is whether a region is a sea area: MeteoAlarm numbers those from 800, but in a country with
+// no coast the 800s are land (Austria's AT801 to AT804 are districts).
+func (g maRegion) marine() bool {
+	return len(g.code) == 5 && g.code[2] == '8' && !landlocked[g.country]
+}
+
+// landlocked are MeteoAlarm's countries with no coast.
+var landlocked = map[string]bool{"AD": true, "AT": true, "CH": true, "CZ": true, "HU": true, "LU": true,
+	"MD": true, "MK": true, "RS": true, "SK": true}
 
 // regionsNear are the regions home's alerts are for, found from where it is: those it lies in, and
 // the sea areas just off it.
@@ -151,6 +165,16 @@ type homeArea struct {
 	names     []string // the regions, for the log
 }
 
+// sig tells one area from another: what a feed's kept entries were matched against.
+func (h homeArea) sig() string {
+	keys := make([]string, 0, len(h.codes))
+	for k := range h.codes {
+		keys = append(keys, k[0]+":"+k[1])
+	}
+	slices.Sort(keys)
+	return fmt.Sprintf("%.5f,%.5f %s", h.lat, h.lon, strings.Join(keys, " "))
+}
+
 // areaFor is home's area: the regions found from where home is. The countries are those regions',
 // and Home Assistant's own.
 func areaFor(all []maRegion, lat, lon float64, country string) homeArea {
@@ -173,11 +197,6 @@ func areaFor(all []maRegion, lat, lon float64, country string) homeArea {
 }
 
 // ---- the feed
-
-// maFeed is a country's Atom feed, as much of it as is read.
-type maFeed struct {
-	Entries []maEntry `xml:"entry"`
-}
 
 type maEntry struct {
 	Geocodes []struct {
@@ -210,8 +229,9 @@ func (e maEntry) capURL() string {
 	return ""
 }
 
-// rings are the entry's outlines, longitude and latitude: CAP writes "lat,lon lat,lon ...".
-func (e maEntry) rings() [][][2]float64 {
+// outlines are the entry's outlines, longitude and latitude, as they came: CAP writes "lat,lon
+// lat,lon ...". Home is matched against them in full; only the copy drawn on the map is thinned.
+func (e maEntry) outlines() [][][2]float64 {
 	var out [][][2]float64
 	for _, p := range e.Polygons {
 		var ring [][2]float64
@@ -227,8 +247,17 @@ func (e maEntry) rings() [][][2]float64 {
 			}
 		}
 		if len(ring) >= 3 {
-			out = append(out, thin(ring, 0.01))
+			out = append(out, ring)
 		}
+	}
+	return out
+}
+
+// drawn are outlines thinned to what the rain map can show, about a kilometer between points.
+func drawn(outlines [][][2]float64) [][][2]float64 {
+	out := make([][][2]float64, 0, len(outlines))
+	for _, r := range outlines {
+		out = append(out, thin(r, 0.01))
 	}
 	return out
 }
@@ -386,33 +415,204 @@ func langOf(tag string) string {
 // ---- putting it together
 
 // meteoAlarm is the source's memory between refreshes: the CAP documents read, kept while their
-// warnings are listed, and the area last matched, for the log.
+// warnings are listed, each country feed's home entries as last read, and the area last matched,
+// for the log.
 type meteoAlarm struct {
 	caps   map[string]*capAlert // nil for one that could not be had (a 404: it was replaced)
+	feeds  map[string]*feedMemo
 	names  string
 	logged bool
 }
 
+// feedMemo is a country feed as last read: its length, when, for which area, and home's entries.
+type feedMemo struct {
+	length  int64
+	read    time.Time
+	area    string
+	entries []maEntry
+}
+
 var errFeed = errors.New("not a MeteoAlarm feed")
 
-// readFeed is a country's feed. A feed that is not one (MeteoAlarm answers some with a page saying
-// "Internal Server Error") is an error, not a country without warnings.
-func readFeed(ctx context.Context, country string) ([]maEntry, error) {
-	// No Accept: MeteoAlarm answers one naming the feed's own type with 406 Not Acceptable.
-	b, err := getLimit(ctx, meteoAlarmFeeds+meteoAlarmCountries[country], "", 32<<20)
+// homeEntries are the entries of a country's feed that are for home. The feed is asked for its
+// length first: unchanged, and read within meteoAlarmFull, the entries kept from last time are it.
+func (f *Feature) homeEntries(ctx context.Context, country string, area homeArea) ([]maEntry, error) {
+	url := meteoAlarmFeeds + meteoAlarmCountries[country]
+	a := &f.alerts
+	a.mu.Lock()
+	memo := a.ma.feeds[country]
+	a.mu.Unlock()
+	if memo != nil && memo.area == area.sig() && time.Since(memo.read) < meteoAlarmFull {
+		if n, err := feedLength(ctx, url); err == nil && n > 0 && n == memo.length {
+			return memo.entries, nil
+		}
+	}
+	entries, n, err := readFeed(ctx, url, area)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", country, err)
 	}
-	var f maFeed
-	if err := xml.Unmarshal(b, &f); err != nil {
-		return nil, fmt.Errorf("%s: %w: %v", country, errFeed, err)
+	a.mu.Lock()
+	if a.ma.feeds == nil {
+		a.ma.feeds = map[string]*feedMemo{}
 	}
-	return f.Entries, nil
+	a.ma.feeds[country] = &feedMemo{length: n, read: time.Now(), area: area.sig(), entries: entries}
+	a.mu.Unlock()
+	return entries, nil
+}
+
+// feedLength is a feed's length, from a HEAD.
+func feedLength(ctx context.Context, url string) (int64, error) {
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := maClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	return resp.ContentLength, nil
+}
+
+// readFeed reads a country's feed as it comes, an entry at a time, and keeps home's: a big
+// country's feed runs to megabytes, nearly all of it for elsewhere. A feed that is not one
+// (MeteoAlarm answers some with a page saying "Internal Server Error") is an error, not a country
+// without warnings.
+func readFeed(ctx context.Context, url string, area homeArea) (entries []maEntry, length int64, err error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	// No Accept: MeteoAlarm answers one naming the feed's own type with 406 Not Acceptable.
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := maClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, 0, fmt.Errorf("%s: %w", url, errNotFound)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("%s: %s", url, resp.Status)
+	}
+	counted := &countingReader{r: io.LimitReader(resp.Body, 64<<20)}
+	sc := bufio.NewScanner(counted)
+	sc.Buffer(make([]byte, 0, 64<<10), 8<<20) // one entry, its outline and all
+	sc.Split(splitEntries)
+	isFeed := false
+	for sc.Scan() {
+		chunk := sc.Bytes()
+		start := bytes.Index(chunk, []byte("<entry>"))
+		head := chunk
+		if start >= 0 {
+			head = chunk[:start]
+		}
+		if !isFeed && bytes.Contains(head, []byte("<feed")) {
+			isFeed = true // a feed with no entries is one too
+		}
+		if start < 0 || !isFeed {
+			continue
+		}
+		chunk = chunk[start:]
+		// Most of a big country's feed is for elsewhere: told from the raw bytes, without decoding.
+		if !area.mayBeAt(chunk) {
+			continue
+		}
+		var e maEntry
+		if err := xml.Unmarshal(chunk, &e); err != nil {
+			return nil, 0, fmt.Errorf("%w: %v", errFeed, err)
+		}
+		if area.at(e, e.outlines()) {
+			entries = append(entries, e)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, 0, fmt.Errorf("%w: %v", errFeed, err)
+	}
+	if !isFeed {
+		return nil, 0, errFeed
+	}
+	n := resp.ContentLength
+	if n <= 0 {
+		n = counted.n
+	}
+	return entries, n, nil
+}
+
+// splitEntries splits a feed after each entry: a token is what came before an entry and the entry.
+func splitEntries(data []byte, atEOF bool) (int, []byte, error) {
+	end := []byte("</entry>")
+	if i := bytes.Index(data, end); i >= 0 {
+		return i + len(end), data[:i+len(end)], nil
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+// mayBeAt is whether an entry's raw bytes may be for home: one of home's codes is in it, or it has
+// an outline and a point of it is within reach of home. It may say yes wrongly, never no.
+func (h homeArea) mayBeAt(chunk []byte) bool {
+	for k := range h.codes {
+		if bytes.Contains(chunk, []byte(">"+k[1]+"<")) {
+			return true
+		}
+	}
+	rest := chunk
+	for {
+		i := bytes.Index(rest, []byte("polygon>"))
+		if i < 0 {
+			return false
+		}
+		rest = rest[i+len("polygon>"):]
+		j := bytes.IndexByte(rest, '<')
+		if j < 0 {
+			return false
+		}
+		poly := rest[:j]
+		rest = rest[j:]
+		var ring [][2]float64
+		for _, pair := range bytes.Fields(poly) {
+			la, lo, ok := bytes.Cut(pair, []byte(","))
+			if !ok {
+				continue
+			}
+			lat, err1 := strconv.ParseFloat(string(la), 64)
+			lon, err2 := strconv.ParseFloat(string(lo), 64)
+			if err1 == nil && err2 == nil {
+				ring = append(ring, [2]float64{lon, lat})
+			}
+		}
+		if len(ring) >= 3 && ringContains(ring, h.lat, h.lon) {
+			return true
+		}
+	}
+}
+
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // buildMeteoAlarm is the alerts for a home at lat, lon from MeteoAlarm.
 func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertView, error) {
-	area := areaFor(loadRegions(), lat, lon, homeCountry())
+	// The regions may need MeteoAlarm's geocode file, some 30 MB: more time than a feed.
+	rctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	all := regionsAround(rctx, lat, lon)
+	cancel()
+	area := areaFor(all, lat, lon, homeCountry())
 	if len(area.countries) == 0 {
 		f.alerts.mu.Lock()
 		if !f.alerts.ma.logged {
@@ -435,7 +635,7 @@ func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertV
 	var failed error
 	read := 0
 	for _, c := range area.countries {
-		entries, err := readFeed(ctx, c)
+		entries, err := f.homeEntries(ctx, c, area)
 		if err != nil {
 			// A neighbor's feed that fails leaves home's own: only when none could be read is it an error.
 			slog.Debug("alerts: meteoalarm feed", "country", c, "err", err)
@@ -453,10 +653,7 @@ func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertV
 			if lv, _ := fromTitle(e.Title); lv == 1 {
 				continue // green: nothing to be aware of
 			}
-			rings := e.rings()
-			if !area.at(e, rings) {
-				continue
-			}
+			rings := drawn(e.outlines())
 			key := e.capURL()
 			if key == "" {
 				key = e.Identifier
