@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // capProfile is what this device's decoder takes, said to the Plex server as a profile it may add to its
@@ -39,8 +38,13 @@ func capProfileAt(w, h int) string {
 //
 // Subtitles are burned into the picture rather than sent as a separate track: nothing on this device
 // draws a text overlay over a video, and a burned caption is the one that is legible on a screen held
-// at arm's length. offset is seconds on the transcoder; Plex's own offsets are milliseconds.
-func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, offset time.Duration, subtitles bool, session string) (string, error) {
+// at arm's length.
+//
+// The stream is the whole title, always from its start: where in it the device is, is the player's
+// business (feature/video seeks inside the playlist), which is how Plex's own clients play and scrub.
+// Asking the server to begin at an offset instead makes every skip a new transcode -- three seconds
+// of waiting, and a burst of them from a phone's scrub bar leaves nothing playing at all.
+func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, subtitles bool, session string) (string, error) {
 	q := url.Values{
 		"path":       {it.key},
 		"mediaIndex": {"0"},
@@ -62,7 +66,7 @@ func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, off
 		"audioBoost":        {"100"},
 		"mediaBufferSize":   {"102400"},
 		"autoAdjustQuality": {"0"},
-		"offset":            {strconv.Itoa(int(offset / time.Second))},
+		"offset":            {"0"},
 		"session":           {session},
 
 		"X-Plex-Client-Identifier":    {clientIdentifier()},
@@ -75,11 +79,6 @@ func (p *playback) videoURL(ctx context.Context, req mediaRequest, it *item, off
 		"X-Plex-Client-Profile-Name":  {"generic"},
 		"X-Plex-Client-Profile-Extra": {capProfile},
 		"X-Plex-Token":                {req.token},
-	}
-	// copyts keeps the timestamps of the original in the stream, which a seek starts from: without it a
-	// seek lands at the start of the file rather than at the offset asked for.
-	if offset > 0 {
-		q.Set("copyts", "1")
 	}
 	if a := it.part.audioStream(); a != 0 {
 		q.Set("audioStreamID", strconv.Itoa(a))

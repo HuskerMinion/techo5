@@ -72,6 +72,9 @@ type playback struct {
 	pausedAt  time.Time
 
 	audio, subtitle int
+	// subtitles is the device's own answer for the film on screen, nil while it is the file's: burned
+	// captions are part of the picture the server makes, so turning them on or off is a new transcode.
+	subtitles       *bool
 	shuffle, repeat int
 	queueID, itemID string
 
@@ -96,6 +99,7 @@ func (p *playback) start(req mediaRequest, it *item) error {
 	p.state = stateBuffering
 	p.started, p.base, p.pausedFor, p.pausedAt = time.Now(), req.offset, 0, time.Time{}
 	p.audio, p.subtitle = it.part.audioStream(), it.part.subtitleStream()
+	p.subtitles = nil
 	p.queueID, p.itemID = queueIDs(req.container)
 	p.reported = time.Time{}
 	p.cancel, p.videoID = nil, 0
@@ -135,12 +139,13 @@ func (p *playback) start(req mediaRequest, it *item) error {
 // startVideo is a film: the server's decided stream, full screen, with its sound.
 func (p *playback) startVideo(ctx context.Context, gen int, req mediaRequest, it *item, session string) error {
 	subs := p.subtitleOn()
-	u, err := p.videoURL(ctx, req, it, p.at(), subs, session)
+	u, err := p.videoURL(ctx, req, it, subs, session)
 	if err != nil {
 		p.failed(gen, err)
 		return err
 	}
-	id, err := video.Play(video.Request{URL: u, Title: it.title, Origin: video.FromPlex})
+	// Where to begin is the player's: the stream is the whole title, and a resume is a seek into it.
+	id, err := video.Play(video.Request{URL: u, Title: it.title, Origin: video.FromPlex, StartAt: p.at()})
 	if err != nil {
 		p.failed(gen, err)
 		return err
@@ -236,11 +241,19 @@ func (p *playback) cover(gen int, req mediaRequest, it *item) {
 	}
 }
 
-// subtitleOn is whether the film should have its subtitles burned in: a subtitle the casting app chose,
-// or one the file has selected.
+// subtitleOn is whether the film should have its subtitles burned in: what the device last said, else a
+// subtitle the casting app chose, else one the file has selected.
 func (p *playback) subtitleOn() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.subtitleOnLocked()
+}
+
+// subtitleOnLocked is subtitleOn with the lock already held. Wants p.mu.
+func (p *playback) subtitleOnLocked() bool {
+	if p.subtitles != nil {
+		return *p.subtitles
+	}
 	return p.subtitle != 0 || (p.it != nil && p.it.part.subtitleStream() != 0)
 }
 
@@ -489,18 +502,38 @@ func (p *playback) off() {
 	p.mu.Unlock()
 }
 
-// seek starts the item again at pos, which is how this device seeks: a song's stream and a film's
-// transcode both begin where they are told to. It costs the second of buffering a remote player is
-// expected to take.
+// seek moves what is playing to pos. A film moves inside its own stream, which the player does without
+// asking the server anything, so a scrub from the phone costs a second rather than a new transcode per
+// command -- a burst of them used to leave the film stopped. A song has no stream to move within, so
+// its transcode is asked for again at the new second.
 func (p *playback) seek(pos time.Duration) error {
 	p.mu.Lock()
 	req, it := p.req, p.it
+	isVideo, videoID, state := p.isVideo, p.videoID, p.state
 	p.mu.Unlock()
 	if it == nil {
 		return errNothingPlaying
 	}
 	if pos < 0 {
 		pos = 0
+	}
+	if it.dur > 0 && pos > it.dur {
+		pos = it.dur
+	}
+	if isVideo && videoID != 0 && state != stateBuffering {
+		if id, ok := video.Seek(pos); ok {
+			p.mu.Lock()
+			p.videoID = id
+			p.base, p.started, p.pausedFor = pos, time.Now(), 0
+			if p.state == statePaused {
+				p.pausedAt = time.Now()
+			} else {
+				p.pausedAt = time.Time{}
+			}
+			p.mu.Unlock()
+			p.changed()
+			return nil
+		}
 	}
 	req.offset = pos
 	return p.start(req, it)

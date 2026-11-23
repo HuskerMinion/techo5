@@ -76,6 +76,11 @@ type session struct {
 	dropped int
 	playing bool // started (the first frame has arrived)
 
+	// base is where in the title this session begins: zero for one that plays from the start, and the
+	// seek for one started partway in. Every time this session reports is that much further in, so a
+	// seek is a new session that says the same kind of thing about a different place.
+	base time.Duration
+
 	// The clock. With sound, it is how far the room has heard (media.Player.Heard) until the sound runs
 	// out, and the wall clock from there; without, the wall clock alone. wallBase is where the wall
 	// clock was when it last started or stopped, wallFrom when it started (zero while it is stopped).
@@ -93,7 +98,8 @@ type session struct {
 
 func newSession(id uint64, req Request, u *url.URL, scr Screen, panelW, panelH int) *session {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &session{id: id, req: req, u: u, ctx: ctx, cancel: cancel, screen: scr, panelW: panelW, panelH: panelH}
+	s := &session{id: id, req: req, u: u, ctx: ctx, cancel: cancel, screen: scr, panelW: panelW, panelH: panelH,
+		base: req.StartAt, wallBase: req.StartAt}
 	s.cond = sync.NewCond(&s.mu)
 	s.most = max(queueBytes/max(FrameBytes(panelW, panelH), 1), 3)
 	return s
@@ -190,7 +196,8 @@ func (s *session) play(insecure bool) (error, bool) {
 		"probed in", time.Since(began).Round(time.Millisecond))
 	s.changed()
 
-	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}), true, s.sound)
+	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen,
+		StartAt: s.req.StartAt, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}), true, s.sound)
 	if err != nil {
 		return err, false
 	}
@@ -333,13 +340,14 @@ func (s *session) waitLocked(d time.Duration) {
 	t.Stop()
 }
 
-// at is when frame n is due, from the start of the video.
+// at is when frame n is due, from the start of the title: a session that began at a seek counts its
+// frames from there, so the base is added back.
 func (s *session) at(n int) time.Duration {
 	r := s.rate
 	if r.Num <= 0 {
 		r = Rate{30, 1}
 	}
-	return time.Duration(int64(n) * int64(r.Den) * int64(time.Second) / int64(r.Num))
+	return s.base + time.Duration(int64(n)*int64(r.Den)*int64(time.Second)/int64(r.Num))
 }
 
 // next is the frame due now, if one is, dropping those a later frame has already overtaken; else how
@@ -388,8 +396,8 @@ func (s *session) clock() time.Duration {
 		defer s.mu.Unlock()
 		// Only forward: what is queued is counted as it is handed over, so a moment's count can come
 		// out short of the last one, and a picture is never sent back for it.
-		if ok && at > s.lastHeard {
-			s.lastHeard, s.lastMove = at, time.Now()
+		if heard := s.base + at; ok && heard > s.lastHeard {
+			s.lastHeard, s.lastMove = heard, time.Now()
 		}
 		return s.lastHeard
 	}

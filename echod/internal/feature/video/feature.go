@@ -405,6 +405,35 @@ func (f *Feature) StopID(id uint64) {
 	}
 }
 
+// Seek moves the video that is up to at, counted from the start of the title: the decoder starts
+// again at that moment, from the same address, and nothing is asked of whoever sent the video. That
+// is how Plex's own clients scrub -- the whole title is one stream, and moving within it is the
+// player's business -- and it is why a scrub bar costs a second of buffering rather than a new
+// transcode on the server. ok is false when there is no video to move.
+func (f *Feature) Seek(at time.Duration) (uint64, bool) {
+	f.mu.Lock()
+	s := f.cur
+	f.mu.Unlock()
+	if s == nil {
+		return 0, false
+	}
+	at = max(at, 0)
+	// A video held where it is stays held: a seek is not a play.
+	paused := s.paused()
+	req := s.req
+	req.StartAt = at
+	f.mu.Lock()
+	f.seq++
+	id := f.seq
+	f.mu.Unlock()
+	slog.Info("video: seeking", "from", s.id, "to", at.Round(time.Second))
+	f.begin(id, req)
+	if paused {
+		f.Pause()
+	}
+	return id, true
+}
+
 // Pause and Resume hold the video where it is and carry it on; Toggle does whichever it is not doing.
 func (f *Feature) Pause()  { f.setPaused(true) }
 func (f *Feature) Resume() { f.setPaused(false) }
@@ -559,15 +588,16 @@ func ownHost(host string) bool {
 
 // The package's own calls, which the DLNA renderer and the setup page use on every device.
 
-func Play(req Request) (uint64, error) { return Get().Play(req) }
-func Stop()                            { Get().Stop() }
-func StopID(id uint64)                 { Get().StopID(id) }
-func Pause()                           { Get().Pause() }
-func Resume()                          { Get().Resume() }
-func Current() State                   { return Get().State() }
-func SetOn(on bool)                    { Get().SetOn(on) }
-func SetDLNA(on bool)                  { Get().SetDLNA(on) }
-func Listen(fn func())                 { Get().Changed.Listen(func(struct{}) { fn() }) }
+func Play(req Request) (uint64, error)     { return Get().Play(req) }
+func Stop()                                { Get().Stop() }
+func StopID(id uint64)                     { Get().StopID(id) }
+func Seek(at time.Duration) (uint64, bool) { return Get().Seek(at) }
+func Pause()                               { Get().Pause() }
+func Resume()                              { Get().Resume() }
+func Current() State                       { return Get().State() }
+func SetOn(on bool)                        { Get().SetOn(on) }
+func SetDLNA(on bool)                      { Get().SetDLNA(on) }
+func Listen(fn func())                     { Get().Changed.Listen(func(struct{}) { fn() }) }
 
 // DLNAOn is whether the DLNA renderer takes videos now.
 func DLNAOn() bool {

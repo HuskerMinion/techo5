@@ -80,6 +80,8 @@ func (p *playback) setStreams(audio, subtitle int) error {
 	}
 	if subtitle >= 0 {
 		it.part.selectStream(streamSubtitle, subtitle)
+		// A controller's choice is the answer from now on.
+		p.subtitles = nil
 	}
 	p.mu.Unlock()
 	// The server records the choice for this user, so a resume starts with what was picked. It is done
@@ -94,6 +96,59 @@ func (p *playback) setStreams(audio, subtitle int) error {
 	}
 	req.offset = p.at()
 	return p.start(req, it)
+}
+
+// The screen's own hold on a film the account is playing: its captions, and where in it the film is.
+// Both are the device acting for its own owner, so they go through the same playback a controller's
+// commands do rather than a second path that could disagree with it.
+
+// Subtitles is whether the film on screen has its captions, and whether this device can say otherwise.
+// Only a film from the account has a server to burn a caption into the picture, and only one with a
+// subtitle to burn has the choice at all.
+func Subtitles() (on, can bool) {
+	p := Get().pb
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.isVideo || p.it == nil {
+		return false, false
+	}
+	for _, s := range p.it.part.streams {
+		if s.kind == streamSubtitle && s.id != 0 {
+			return p.subtitleOnLocked(), true
+		}
+	}
+	return false, false
+}
+
+// SetSubtitles turns the captions on or off, starting the film again at the same second: a burned
+// caption is part of the picture the server makes, so a stream already being made cannot have one
+// added to it. The film comes back where it was, which costs the second any stream change costs.
+func SetSubtitles(on bool) error {
+	p := Get().pb
+	p.mu.Lock()
+	req, it := p.req, p.it
+	if !p.isVideo || it == nil {
+		p.mu.Unlock()
+		return errNothingPlaying
+	}
+	p.subtitles = &on
+	req.offset = p.atLocked(time.Now())
+	p.mu.Unlock()
+	slog.Info("plex: subtitles", "on", on)
+	return p.start(req, it)
+}
+
+// SeekTo is the screen's scrub bar: it moves the account's film to pos and says whether it was one.
+// A film is played as one stream, so the move is the player's and nothing is asked of the server.
+func SeekTo(pos time.Duration) bool {
+	p := Get().pb
+	p.mu.Lock()
+	ok := p.isVideo && p.it != nil
+	p.mu.Unlock()
+	if !ok {
+		return false
+	}
+	return p.seek(pos) == nil
 }
 
 // selectStream marks one stream of a kind chosen and the others not, which is how the transcode asks

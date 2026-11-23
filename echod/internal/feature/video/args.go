@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Screen is what the picture is made for: the canvas the daemon draws on (960×480 on the Show 5,
@@ -104,6 +105,10 @@ type Decoding struct {
 	URL    string
 	Info   Info
 	Screen Screen
+
+	// StartAt is how far into the stream the decoder begins: ffmpeg's own input seek, which for an HLS
+	// playlist is a jump to the segment that holds that moment rather than a read from the first one.
+	StartAt time.Duration
 
 	// CAFile is where the certificate authorities are, empty for OpenSSL's own default; Insecure
 	// stops certificates being checked (the device's own Insecure TLS setting).
@@ -207,6 +212,11 @@ func DecodeArgs(d Decoding) []string {
 	// Past 720p every core, and best effort even so: the decoder's own shortcuts (skipping the
 	// deblocking) make ffmpeg 8 refuse to open the picture's output when given on its command line.
 	a = append(a, "-threads", strconv.Itoa(t))
+	if d.StartAt > 0 {
+		// Before -i: the seek is the demuxer's, so a playlist is entered at the segment asked for and
+		// the frames after it are numbered from zero, which is what the session's clock assumes.
+		a = append(a, "-ss", strconv.FormatFloat(d.StartAt.Seconds(), 'f', 3, 64))
+	}
 	a = append(a, "-i", d.URL)
 	a = append(a, "-map", "0:v:"+strconv.Itoa(d.Info.VideoIndex), "-an", "-sn", "-dn",
 		"-vf", Filter(d.Info, d.Screen), "-fps_mode", "passthrough",

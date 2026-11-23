@@ -28,6 +28,11 @@ type Request struct {
 	URL   string
 	Title string
 
+	// StartAt is how far into the video to begin. It is the decoder's own seek, not the sender's: a
+	// stream that runs the whole title (Plex's transcode of it) is one the player can seek in without
+	// asking anybody for anything, which is what a scrub bar and a controller's seekTo both need.
+	StartAt time.Duration
+
 	Origin Origin
 	// From is the address that asked, for a DLNA controller: what the screen names and remembers.
 	From string
@@ -69,6 +74,9 @@ type State struct {
 
 	// Ended is the ID of the last video to play to its end by itself; Failed the ID of the last that
 	// failed, and Err why, ErrAt when.
+	//
+	// Pos is how far into the video it is and Dur how long it runs, both from the start of the title
+	// even after a seek: a controller's timeline and the screen's scrub bar read them.
 	Ended  uint64
 	Failed uint64
 	Err    string
