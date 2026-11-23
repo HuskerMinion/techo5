@@ -1716,10 +1716,12 @@ func (c *conversation) stream(ctx context.Context, be backend, slot int, followU
 // A wake Home Assistant confirmed is the exception (#477): the turn opens most of a second after the
 // device's engine scored the word, and the request said straight after it went to Home Assistant's wake
 // word stage, not to speech-to-text. With or without a sound it reaches back to the score (heard), and
-// the usual 250 ms before it, as far as the microphones' history goes.
+// the usual 250 ms before it, as far as the microphones' history goes: mic.Held, since a confirmed wake
+// can also wait for the devices in the house to decide which one answers it (#685), and a reach of
+// only mic.Confirming lost the start of a request said straight after the word.
 func historyFor(slot int, followUp, confirmed bool, waited, heard time.Duration) time.Duration {
 	if confirmed {
-		return min(max(heard+mic.History, mic.History+waited), mic.Confirming)
+		return min(max(heard+mic.History, mic.History+waited), mic.Held)
 	}
 	if wakeword.Tones(slot, followUp) && !prerollWithSound() {
 		return min(max(waited, heard), mic.History+waited)

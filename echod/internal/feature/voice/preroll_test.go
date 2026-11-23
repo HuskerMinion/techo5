@@ -134,8 +134,12 @@ func TestAConfirmedWakeReachesBackToTheScore(t *testing.T) {
 		if got, want := historyFor(0, false, true, 0, 900*time.Millisecond), 900*time.Millisecond+mic.History; got != want {
 			t.Errorf("tone %v, scored 900 ms ago: history %v, want %v", tone, got, want)
 		}
-		if got := historyFor(0, false, true, 0, time.Minute); got != mic.Confirming {
-			t.Errorf("tone %v, scored a minute ago: history %v, want at most %v", tone, got, mic.Confirming)
+		// Confirmed after the house decided who answers (#685): 2.4 s back, all of it kept.
+		if got, want := historyFor(0, false, true, 0, 2400*time.Millisecond), 2400*time.Millisecond+mic.History; got != want {
+			t.Errorf("tone %v, scored 2.4 s ago: history %v, want %v", tone, got, want)
+		}
+		if got := historyFor(0, false, true, 0, time.Minute); got != mic.Held {
+			t.Errorf("tone %v, scored a minute ago: history %v, want at most %v", tone, got, mic.Held)
 		}
 	}
 }
