@@ -15,7 +15,7 @@ import (
 // it is not built (CONFIG_SENSORS_TSL2540 is off).
 //
 // So lux is worked out here, as Fire OS works it out in libacehal_ambientLightSensor.so: two linear
-// forms of the channels, one row of coefficients picked by the cover's colour (idme alsparams' capcolor),
+// forms of the channels, one row of coefficients picked by the cover's color (idme alsparams' capcolor),
 // blended by smootherstep on the infrared share and divided by the gain and the integration time; then a
 // straight line through the unit's two factory points (idme alscal: the counts at 20 and 400 lx, taken at
 // alsparams' gain and time). Read off that library's disassembly by echo-dot-assist (Gamer92000, MIT:

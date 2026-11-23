@@ -21,7 +21,7 @@ const (
 // thresholdFor is the motion band's excess over the noise that counts as movement, in dB, for a
 // sensitivity of 1 to 100: 10 dB at 1, 6 at 50, 3 at 100. A still room reads 0 to 2 (the most of
 // three microphones' readings, each a ratio of two averages of a hundred bins; dsp_test.go, with music
-// playing), and somebody walking a couple of metres off tens of dB.
+// playing), and somebody walking a couple of meters off tens of dB.
 func thresholdFor(sensitivity int) float64 {
 	s := float64(min(max(sensitivity, 1), 100))
 	if s <= 50 {
