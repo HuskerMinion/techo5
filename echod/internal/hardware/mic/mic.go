@@ -109,9 +109,12 @@ type Source struct {
 
 	// Which way the loudest sound is, as a beam, or -1 until something asks. finder belongs to the
 	// reader; wantFacing is how anything else asks it to look.
-	finder     *Beamformer
-	facing     atomic.Int32
-	wantFacing atomic.Bool
+	finder *Beamformer
+	// arrayFinder replaces finder where the array's geometry was measured (steered.go); facing then
+	// holds tenths of a degree clockwise from segment 0 rather than a beam.
+	arrayFinder *finder
+	facing      atomic.Int32
+	wantFacing  atomic.Bool
 }
 
 // SetMixing chooses how the microphones are combined. It takes effect on the next frame, and reports
@@ -508,7 +511,7 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 	// Before the noise reduction, which would lower the floor it is measured against.
 	s.standout.add(frame, s.leveler.leastNow())
 
-	s.findFacing(mics)
+	s.findFacing(raw, mics)
 
 	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the
 	// room, and before leveling, so the gain is not put back on a floor that has just been removed.

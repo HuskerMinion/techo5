@@ -66,6 +66,19 @@ func (l *Locator) Add(block [][]float32, weight float64) {
 	for m := range l.x {
 		l.spec.Into(block[m], l.x[m])
 	}
+	l.accumulate(weight)
+}
+
+// AddSpectra is Add for a caller that has already transformed the block, at the Locator's size and
+// rate (a Beamformer's Spectrum): full holds every bin up to half the rate, per microphone.
+func (l *Locator) AddSpectra(full [][]complex64, weight float64) {
+	for m := range l.x {
+		copy(l.x[m], full[m][l.spec.lo:l.spec.hi+1])
+	}
+	l.accumulate(weight)
+}
+
+func (l *Locator) accumulate(weight float64) {
 	d := complex(l.Decay, 0)
 	for p := range l.acc {
 		for k := range l.acc[p] {

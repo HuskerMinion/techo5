@@ -18,6 +18,15 @@ const ringOffset = 320.0
 func (s *Source) Facing() (float64, bool) {
 	s.wantFacing.Store(true)
 
+	// A measured array answers in degrees on the ring already (steered.go).
+	if arrayGeometry != nil {
+		tenths := s.facing.Load()
+		if tenths < 0 {
+			return 0, false
+		}
+		return float64(tenths) / 3600, true
+	}
+
 	beam := s.facing.Load()
 	if beam < 0 {
 		return 0, false
@@ -35,8 +44,21 @@ func (s *Source) Facing() (float64, bool) {
 // sound was — and a door closing or a hand clapping is over inside the wait. What steadies the ring is
 // the effect easing toward the answer, which is the right place for it: the estimate says where the
 // sound is now, and the animation decides how fast to believe it.
-func (s *Source) findFacing(mics [][]int16) {
+func (s *Source) findFacing(raw []byte, mics [][]int16) {
 	if !s.wantFacing.Swap(false) {
+		return
+	}
+
+	if arrayGeometry != nil {
+		if s.arrayFinder == nil {
+			s.arrayFinder = newFinder()
+		}
+		ref := make([]int16, len(mics[0]))
+		referenceInto(raw, ref)
+		s.arrayFinder.look(mics, playing(ref))
+		if b := s.arrayFinder.bearing; b >= 0 {
+			s.facing.Store(int32(math.Round(b / (2 * math.Pi) * 3600)))
+		}
 		return
 	}
 

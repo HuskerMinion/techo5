@@ -88,7 +88,12 @@ var mixes = sync.OnceValue(func() []mix {
 	}
 	// Steering needs the ring: the delays are the Dot's geometry, and two microphones have no
 	// direction to resolve.
-	if Mics >= 3 {
+	switch {
+	case arrayGeometry != nil:
+		// A board whose geometry was measured steers with it. The delay and sum below assumes the
+		// seven-microphone ring, which this array is not.
+		out = append(out, mix{config.MixSuperdirective, func() Mixer { return newSteered() }})
+	case Mics >= 3:
 		out = append(out, mix{config.MixDelaySum, func() Mixer { return NewBeamformer() }})
 	}
 

@@ -126,3 +126,59 @@ func TestLocatorFindsBearing(t *testing.T) {
 		}
 	}
 }
+
+func TestBeamformerPassesItsBearingAndRejectsOthers(t *testing.T) {
+	const rate, n = 16000.0, 256
+	g := lShape.Centered()
+	bf := NewBeamformer(g, n, rate, 12, -10)
+
+	// Every beam passes a source at its own bearing unchanged.
+	for beam := range 12 {
+		bearing := 2 * math.Pi * float64(beam) / 12
+		for _, f := range []float64{500, 1000, 3000, 6000} {
+			w := Superdirective(g, 2*math.Pi*f, bearing, 0.1)
+			d := Steering(g, 2*math.Pi*f, bearing)
+			var r complex128
+			for m := range w {
+				r += complex(real(w[m]), -imag(w[m])) * d[m]
+			}
+			if math.Abs(real(r)-1) > 1e-6 || math.Abs(imag(r)) > 1e-6 {
+				t.Fatalf("beam %d at %v Hz passes its own bearing as %v", beam, f, r)
+			}
+		}
+	}
+
+	// Against a diffuse room it does better than delay and sum (which gains 10·log10(3) at most, and
+	// next to nothing at low frequencies on 22 mm).
+	for _, f := range []float64{1000, 2000, 4000} {
+		if di := bf.DirectivityDB(0, 2*math.Pi*f); di < 3 {
+			t.Errorf("directivity at %v Hz is %.1f dB", f, di)
+		}
+	}
+
+	// Streaming: a source at beam 3's bearing comes through beam 3 at its level, and one opposite it is
+	// lower.
+	level := func(beam int, deg float64) float64 {
+		bf.Beam = beam
+		mics := delayed(g, Radians(deg), rate, 4096, 11)
+		var out []float32
+		for i := 0; i+320 <= len(mics[0]); i += 320 {
+			frame := make([][]float32, 3)
+			for m := range frame {
+				frame[m] = mics[m][i : i+320]
+			}
+			out = append(out, bf.Process(frame)...)
+		}
+		var s, ref float64
+		for i := 1024; i < len(out); i++ {
+			s += float64(out[i]) * float64(out[i])
+			ref += float64(mics[0][i]) * float64(mics[0][i])
+		}
+		return 10 * math.Log10(s/ref)
+	}
+	on := level(3, 90)
+	off := level(3, 270)
+	if math.Abs(on) > 1.5 || off > on-3 {
+		t.Errorf("beam 3: %.1f dB from its bearing, %.1f dB from the opposite side", on, off)
+	}
+}

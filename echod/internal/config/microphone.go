@@ -298,6 +298,10 @@ const (
 	// MixBeamformer is the fixed beamformer the device shipped with, whose per-band coefficients are
 	// on the device and were tuned on this enclosure.
 	MixBeamformer Mixing = "beamformer"
+
+	// MixSuperdirective steers superdirective weights, computed from the array's measured geometry,
+	// at whichever direction speech comes from.
+	MixSuperdirective Mixing = "superdirective"
 )
 
 // Label is how the setting is shown.
@@ -311,6 +315,8 @@ func (m Mixing) Label() string {
 		return "Delay and sum"
 	case MixBeamformer:
 		return "Beamformer"
+	case MixSuperdirective:
+		return "Superdirective beam"
 	}
 	return string(m)
 }
