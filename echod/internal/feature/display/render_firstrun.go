@@ -176,12 +176,22 @@ func isListedRoom(room string) bool {
 	return false
 }
 
+// frKeyPer is how many keys go in a row: two rows while they fit, three from fourteen on, when
+// seven names to a row are wider than the row is.
+func frKeyPer(n int) int {
+	if n > 13 {
+		return (n + 2) / 3
+	}
+	return (n + 1) / 2
+}
+
 // frRoomRects are where the name step's rooms go: two rows of four, over the buttons.
 func (r *renderer) frRoomRects() []image.Rectangle { return r.frKeyRects(len(frRooms)) }
 
 // frLangRects are where the language step's languages go: two rows over the buttons, six and five,
-// where the rooms' two rows go. Each key is as wide as its name needs, with what the row has left
-// shared out among them: a few names are longer than an even share of the row.
+// where the rooms' two rows go, or three rows once there are too many languages for two. Each key
+// is as wide as its name needs, with what the row has left shared out among them: a few names are
+// longer than an even share of the row.
 func (r *renderer) frLangRects() []image.Rectangle {
 	r.useFont()
 	labels := frLangLabels()
@@ -189,7 +199,7 @@ func (r *renderer) frLangRects() []image.Rectangle {
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
 	gap := r.s(14)
-	per := (len(labels) + 1) / 2
+	per := frKeyPer(len(labels))
 	out := make([]image.Rectangle, len(labels))
 	for start := 0; start < len(labels); start += per {
 		row := labels[start:min(len(labels), start+per)]
@@ -217,17 +227,22 @@ func frLangLabels() []string {
 	return out
 }
 
-// frKeyRects are where n keys go in two rows over the buttons, the first row the fuller.
+// frKeyRects are where n keys go in rows over the buttons, the first row the fuller.
 func (r *renderer) frKeyRects(n int) []image.Rectangle {
 	left := r.margin + r.s(40)
 	room := r.w - 2*r.margin - r.s(80)
 	gap, h := r.s(14), r.s(50)
-	per := (n + 1) / 2
+	per := frKeyPer(n)
+	rows := (n + per - 1) / per
+	vgap := gap
+	if rows > 2 {
+		h, vgap = r.s(44), r.s(6) // three rows have to leave the lines above them their room too
+	}
 	w := (room - (per-1)*gap) / per
-	top := r.h - r.s(64) - r.s(72) - r.s(16) - 2*h - gap
+	top := r.h - r.s(64) - r.s(72) - r.s(16) - rows*h - (rows-1)*vgap
 	out := make([]image.Rectangle, n)
 	for i := range n {
-		x, y := left+(i%per)*(w+gap), top+(i/per)*(h+gap)
+		x, y := left+(i%per)*(w+gap), top+(i/per)*(h+vgap)
 		out[i] = image.Rect(x, y, x+w, y+h)
 	}
 	return out
