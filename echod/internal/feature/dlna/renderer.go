@@ -26,6 +26,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // The transport: the song a controller set, its state, and the song it queued to follow. The device
@@ -103,14 +104,15 @@ const firstBytes = 15 * time.Second
 // limit, since a song plays for minutes. A controller names the address, and any host on the network
 // can be a controller, so the device never connects to itself (loopback), to link-local or multicast
 // addresses, or to nowhere, whatever name, redirect or DNS answer leads there: refused when the
-// connection is made, so redirects and rebinding are covered too.
+// connection is made, so redirects and rebinding are covered too. Every request names the device
+// (useragent): a song can come from a server that answers Go's own name differently (#730).
 var fetchClient = &http.Client{
-	Transport: &http.Transport{
+	Transport: useragent.Transport(&http.Transport{
 		DialContext:           (&net.Dialer{Timeout: 5 * time.Second, Control: refuseOwn}).DialContext,
 		ResponseHeaderTimeout: 10 * time.Second,
 		MaxIdleConns:          4,
 		IdleConnTimeout:       30 * time.Second,
-	},
+	}),
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 3 {
 			return errors.New("too many redirects")

@@ -16,6 +16,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // Formats is what Home Assistant is asked to convert to. It runs the conversion through ffmpeg, so
@@ -73,7 +74,9 @@ func Fetch(ctx context.Context, url string) ([]int16, error) {
 		return nil, err
 	}
 
-	client := &http.Client{Timeout: fetchTimeout}
+	// The device names itself (useragent): an external media source can be a server that answers Go's
+	// own name with something other than what was asked for (#730).
+	client := &http.Client{Timeout: fetchTimeout, Transport: useragent.Transport(nil)}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/netip"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // streamClient fetches the streams the device plays itself. Two things differ from Go's default client.
@@ -20,15 +22,19 @@ import (
 // internet may not send it to an address in the home instead: that would be the device making a request
 // on a stranger's behalf to something on the network it sits on. A station that is on the home network
 // to begin with, one typed on the setup page, can redirect within it.
+//
+// And every request names the device (useragent): some station networks give Go's own User-Agent a
+// short clip and then nothing (#730). The transport sets it, so the requests redirects make carry it
+// too.
 var streamClient = &http.Client{
-	Transport: &http.Transport{
+	Transport: useragent.Transport(&http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           icyDial,
 		TLSHandshakeTimeout:   15 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 		MaxIdleConns:          4,
 		IdleConnTimeout:       30 * time.Second,
-	},
+	}),
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 {
 			return errors.New("too many redirects")

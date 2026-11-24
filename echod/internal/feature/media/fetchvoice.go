@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // voiceTimeout bounds a reply fetched while it is still being written. Home Assistant sends it as
@@ -49,7 +50,7 @@ func fetchVoice(ctx context.Context, url string, stall time.Duration, each func(
 	if err != nil {
 		return err
 	}
-	client := &http.Client{Timeout: voiceTimeout}
+	client := &http.Client{Timeout: voiceTimeout, Transport: useragent.Transport(nil)} // named as Fetch's are (#730)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

@@ -14,6 +14,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // A url played over whatever is playing, rather than instead of it.
@@ -459,6 +460,11 @@ func readOver(stop context.Context, url string, spk *speaker.Player, muted func(
 // isMuted is whether this sound is silenced from the screen, for the reading to ask.
 func (s *overSound) isMuted() bool { return s.muted.Load() }
 
+// overClient is the default client but for the device's name on every request (useragent, #730): the
+// url is whatever Home Assistant converts, which can lead to a server that answers Go's own name
+// differently.
+var overClient = &http.Client{Transport: useragent.Transport(nil)}
+
 // readOverOnce is the reading itself: the same live WAV a track is, read into the speaker as it arrives.
 //
 // The body is what Home Assistant serves for a converted stream: its sizes were written before the
@@ -476,7 +482,7 @@ func readOverOnce(stop context.Context, url string, spk *speaker.Player, muted f
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := overClient.Do(req)
 	if err != nil {
 		return err
 	}
