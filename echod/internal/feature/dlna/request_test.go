@@ -80,7 +80,8 @@ func playingRenderer(t *testing.T) *Feature {
 	_ = config.Set().Streaming().DLNA(true)
 	f := &Feature{}
 	f.r.f = f
-	f.r.cur = song{uri: "http://192.0.2.10/song.flac", title: "Winding Road"}
+	// Set from the loopback, where the tests' subscribers listen: the controller that set it.
+	f.r.cur = song{uri: "http://192.0.2.10/song.flac", title: "Winding Road", from: "127.0.0.1"}
 	f.r.state = stPlaying
 	return f
 }
@@ -93,7 +94,7 @@ func TestASkipOnTheDeviceIsToldToTheController(t *testing.T) {
 	avt, got := subscriber(t)
 	rc, rcGot := subscriber(t)
 	f.e.subs = map[string]*subscription{
-		"uuid:avt": {service: "AVTransport", callback: avt, seq: 5, until: time.Now().Add(time.Hour)},
+		"uuid:avt": {service: "AVTransport", callback: avt, seq: 5, until: time.Now().Add(time.Hour), asks: askNext | askPrevious},
 		"uuid:rc":  {service: "RenderingControl", callback: rc, seq: 1, until: time.Now().Add(time.Hour)},
 	}
 	if !f.Skippable() {
@@ -154,11 +155,11 @@ func TestNoSkipWithNobodyListening(t *testing.T) {
 	noEvent(t, rcGot)
 
 	avt, got := subscriber(t)
-	f.e.subs["uuid:gone"] = &subscription{service: "AVTransport", callback: avt, until: time.Now().Add(-time.Second)}
+	f.e.subs["uuid:gone"] = &subscription{service: "AVTransport", callback: avt, until: time.Now().Add(-time.Second), asks: askNext}
 	if f.Skippable() || f.Skip(media.TransportNext) {
 		t.Error("a skip was offered to a subscription that has run out")
 	}
-	f.e.subs["uuid:avt"] = &subscription{service: "AVTransport", callback: avt, until: time.Now().Add(time.Hour)}
+	f.e.subs["uuid:avt"] = &subscription{service: "AVTransport", callback: avt, until: time.Now().Add(time.Hour), asks: askNext}
 	f.r.state = stStopped
 	if f.Skippable() || f.Skip(media.TransportNext) {
 		t.Error("a skip was offered with the renderer stopped")
@@ -178,7 +179,7 @@ func TestNoSkipWithNobodyListening(t *testing.T) {
 func TestAVideoIsSkippableOnlyAsTheRenderers(t *testing.T) {
 	f := playingRenderer(t)
 	avt, _ := subscriber(t)
-	f.e.subs = map[string]*subscription{"uuid:avt": {service: "AVTransport", callback: avt, until: time.Now().Add(time.Hour)}}
+	f.e.subs = map[string]*subscription{"uuid:avt": {service: "AVTransport", callback: avt, until: time.Now().Add(time.Hour), asks: askNext}}
 	f.r.cur.video, f.r.videoID = true, 7
 	if !f.VideoSkippable(7) {
 		t.Error("the renderer's video is not skippable")

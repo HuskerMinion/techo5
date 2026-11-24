@@ -73,9 +73,24 @@ func (r *renderer) seekPlace(to time.Duration) error {
 	}
 	r.seekTo, r.seeking = to, true
 	if r.seekTimer == nil {
-		r.seekTimer = time.AfterFunc(seekSettle, r.seekNow)
+		r.seekArm++
+		arm := r.seekArm
+		r.seekTimer = time.AfterFunc(seekSettle, func() { r.settled(arm) })
 	}
 	return nil
+}
+
+// settled is the settle timer armed as arm (r.seekArm) going off. A timer that went off just as the
+// seek it was for was forgotten (clearSeekLocked) is no longer the one armed: by the time it has the
+// lock another seek may have armed its own, and it must neither carry that one out early nor forget
+// its timer, which would leave it to go off later for nothing and a third armed beside it.
+func (r *renderer) settled(arm int) {
+	r.mu.Lock()
+	if arm != r.seekArm {
+		r.mu.Unlock()
+		return
+	}
+	r.carryOutSeek()
 }
 
 // seekable is whether the current song can be moved through, whether that is known yet (not while a
@@ -108,6 +123,11 @@ func (r *renderer) seekable() (ok, known bool, dur time.Duration) {
 // seekNow carries out the last seek asked for, once the burst has settled.
 func (r *renderer) seekNow() {
 	r.mu.Lock()
+	r.carryOutSeek()
+}
+
+// carryOutSeek is seekNow with r.mu held, which it lets go.
+func (r *renderer) carryOutSeek() {
 	r.seekTimer = nil
 	if !r.seeking {
 		r.mu.Unlock()
@@ -190,6 +210,7 @@ func (r *renderer) stopMappingLocked() {
 // clearSeekLocked forgets a seek not yet carried out: the song stopped or another set. Wants r.mu.
 func (r *renderer) clearSeekLocked() {
 	r.seeking, r.seekOnPlay = false, false
+	r.seekArm++ // a timer going off now, too late to be stopped, is not the one armed (settled)
 	if r.seekTimer != nil {
 		r.seekTimer.Stop()
 		r.seekTimer = nil
@@ -221,7 +242,7 @@ func (r *renderer) mapSong(ctx context.Context, cancel context.CancelFunc, gen i
 		return
 	}
 	if err != nil {
-		slog.Info("dlna: the song cannot be moved through", "title", s.title, "err", err)
+		slog.Info("dlna: the song cannot be moved through", "title", s.title, "err", quietErr(err))
 		if r.seeking && r.seekTimer == nil {
 			r.seeking = false
 		}

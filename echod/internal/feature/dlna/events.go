@@ -34,24 +34,42 @@ type subscription struct {
 	callback string
 	seq      uint32
 	until    time.Time
-	// seeks is whether the controller said, subscribing, that it acts on a seek asked of it
-	// (requestsHeader naming "seek"). Most controllers ignore TECHO5's own requests, so the screen
-	// offers to pass a seek on only to one that said so.
-	seeks bool
+	// asks is which of TECHO5's own requests the controller said, subscribing, that it acts on
+	// (requestsHeader). Home Assistant, Music Assistant and BubbleUPnP subscribe without saying any and
+	// do nothing with them, so the device offers a next, a previous or a seek that goes to the
+	// controller only when one that said so is listening: otherwise it would be a button that does
+	// nothing.
+	asks requests
 }
 
+// requests is a set of TECHO5's own requests (request) a controller acts on.
+type requests uint8
+
+const (
+	askNext requests = 1 << iota
+	askPrevious
+	askSeek
+)
+
 // requestsHeader is the header a controller subscribing to the transport names TECHO5's own requests
-// it acts on with ("X-TECHO5-Requests: next, previous, seek"). Only "seek" changes anything here.
+// it acts on with ("X-TECHO5-Requests: next, previous, seek").
 const requestsHeader = "X-TECHO5-Requests"
 
-// saysSeeks is whether a subscription's requests header names "seek".
-func saysSeeks(h string) bool {
+// namedRequests is the requests a subscription's requests header names; a word it does not know is
+// passed over.
+func namedRequests(h string) requests {
+	var asks requests
 	for _, w := range strings.Split(h, ",") {
-		if strings.EqualFold(strings.TrimSpace(w), "seek") {
-			return true
+		switch strings.ToLower(strings.TrimSpace(w)) {
+		case "next":
+			asks |= askNext
+		case "previous":
+			asks |= askPrevious
+		case "seek":
+			asks |= askSeek
 		}
 	}
-	return false
+	return asks
 }
 
 type events struct {
@@ -122,8 +140,10 @@ func (e *events) subscribe(w http.ResponseWriter, r *http.Request, service strin
 		e.subs = map[string]*subscription{}
 	}
 	sid := newSID()
-	s := &subscription{service: service, callback: cb, until: time.Now().Add(subscribeFor),
-		seeks: service == "AVTransport" && saysSeeks(r.Header.Get(requestsHeader))}
+	s := &subscription{service: service, callback: cb, until: time.Now().Add(subscribeFor)}
+	if service == "AVTransport" {
+		s.asks = namedRequests(r.Header.Get(requestsHeader))
+	}
 	e.subs[sid] = s
 	w.Header().Set("SID", sid)
 	w.Header().Set("TIMEOUT", "Second-"+strconv.Itoa(int(subscribeFor/time.Second)))
@@ -188,28 +208,17 @@ func (e *events) changed() {
 	}
 }
 
-// listening is whether a controller is subscribed to the transport's events now: who a request
-// (request) would reach.
-func (e *events) listening() bool {
+// listening is whether a controller that acts on any of asks is subscribed to the transport's events
+// now, and is the one that set the song at from (song.from): who a request (request) would reach. A
+// request is about the song on the device, and only its own controller has the queue it came from, or
+// can send it again from a place; another controller listening (a phone's app looking on) would skip
+// its own queue, or send its own song.
+func (e *events) listening(asks requests, from string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.expireLocked()
 	for _, s := range e.subs {
-		if s.service == "AVTransport" {
-			return true
-		}
-	}
-	return false
-}
-
-// seekListening is whether a controller that acts on a seek asked of it (subscription.seeks) is
-// subscribed to the transport's events now.
-func (e *events) seekListening() bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.expireLocked()
-	for _, s := range e.subs {
-		if s.service == "AVTransport" && s.seeks {
+		if s.service == "AVTransport" && s.asks&asks != 0 && sameHost(callbackHost(s.callback), from) {
 			return true
 		}
 	}
@@ -223,34 +232,42 @@ func (e *events) seekListening() bool {
 // value carries the request's number after a last colon ("next:3", "previous:4", "seek:95:5"), one
 // more for each request and never the same twice in a run, so a controller that takes a value
 // differing from the last as a new press sees two nexts in a row as two. The controller that has the
-// queue skips, or sends the stream again from the place, as it would for any other reason. It says
-// whether anybody was told.
-func (e *events) request(what string) bool {
+// queue skips, or sends the stream again from the place, as it would for any other reason. Only a
+// subscriber that said it acts on this kind of request (ask) and set the song at from (listening) is
+// told. It says whether anybody was.
+func (e *events) request(ask requests, what, from string) bool {
 	e.mu.Lock()
 	e.expireLocked()
-	e.requests++
-	inner := `<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">` +
-		`<X_TECHO5_Request val="` + what + ":" + strconv.FormatUint(uint64(e.requests), 10) + `"/>` +
-		`</InstanceID></Event>`
-	body := `<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property><LastChange>` + esc(inner) +
-		`</LastChange></e:property></e:propertyset>`
 	type note struct {
 		sid, cb string
 		seq     uint32
 	}
 	var notes []note
 	for sid, s := range e.subs {
-		if s.service != "AVTransport" {
-			continue // the volume's and the connection's subscribers have no queue to skip through
+		if s.service != "AVTransport" || s.asks&ask == 0 || !sameHost(callbackHost(s.callback), from) {
+			// The volume's and the connection's subscribers have no queue to skip through, and a
+			// controller that did not set the song, or does not act on the request, has nothing to do
+			// with it.
+			continue
 		}
 		notes = append(notes, note{sid, s.callback, s.seq})
 		s.seq++
 	}
+	if len(notes) == 0 {
+		e.mu.Unlock()
+		return false
+	}
+	e.requests++
+	inner := `<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">` +
+		`<X_TECHO5_Request val="` + what + ":" + strconv.FormatUint(uint64(e.requests), 10) + `"/>` +
+		`</InstanceID></Event>`
+	body := `<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property><LastChange>` + esc(inner) +
+		`</LastChange></e:property></e:propertyset>`
 	e.mu.Unlock()
 	for _, n := range notes {
 		safe.Go("dlna event", func() { send(n.sid, n.cb, n.seq, body) })
 	}
-	return len(notes) > 0
+	return true
 }
 
 // lastChange is a service's event for the subscriber at host: its state variables, in UPnP's
@@ -269,7 +286,7 @@ func lastChange(service, host string) string {
 			`<TransportState val="` + st + `"/><TransportStatus val="OK"/>` +
 			`<CurrentTransportActions val="` + actions + `"/>` +
 			`<AVTransportURI val="` + esc(shownURI(cur, host)) + `"/><CurrentTrackURI val="` + esc(shownURI(cur, host)) + `"/>` +
-			`<CurrentTrackMetaData val="` + esc(cur.meta) + `"/><CurrentTrackDuration val="` + hms(cur.dur) + `"/>` +
+			`<CurrentTrackMetaData val="` + esc(shownMeta(cur, host)) + `"/><CurrentTrackDuration val="` + hms(cur.dur) + `"/>` +
 			`</InstanceID></Event>`
 	case "RenderingControl":
 		vol := media.Get().Volume() * 100 / config.VolumeSteps

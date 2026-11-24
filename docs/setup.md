@@ -621,8 +621,10 @@ HTTP.
   contents when it has one, so in a variable bit rate file without one it can land a second or two
   off. It is off until turned on: anyone on the
   same network can play to it while it is on, as with any DLNA speaker, and can also ask what it is
-  playing, including the song's address (some servers put a login token in it, as with any DLNA
-  speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
+  playing. Only the app that sent the song is told its address and description whole; anyone else
+  asking is told them with whatever looks like a login in each address blanked (a Plex server's
+  `X-Plex-Token`, an `api_key`, a Subsonic server's password), so the token some servers put in
+  them is not handed to every device on the network. With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
   ([Video](video.md)). A program of your own on the device (one started from `rc.local`, see
   [Running something of your own at boot](#running-something-of-your-own-at-boot)) can use it as
   well, at `http://127.0.0.1:8181/dlna/device.xml`, while the DLNA switch is on: a video sent from
@@ -634,9 +636,9 @@ HTTP.
   <a id="dlna-next-and-previous"></a>**Next and previous.** A DLNA renderer has no queue: the app
   or program that sends it songs does. So next and previous pressed on the device, for a song or
   video the renderer is playing (the Now Playing buttons on the Show, a swipe on the Spot, the
-  video's back and forward, the next song word for a song), are passed on to whoever subscribed to
-  the renderer's AVTransport events, to skip in its own queue and send the next song with
-  `SetAVTransportURI` as it would at a song's end. UPnP has no word for this, so it is one of TECHO5's own state variables in a
+  video's back and forward, the next song word for a song), are passed on to the app that sent it,
+  when it subscribed to the renderer's AVTransport events and said it acts on them (below), to skip
+  in its own queue and send the next song with `SetAVTransportURI` as it would at a song's end. UPnP has no word for this, so it is one of TECHO5's own state variables in a
   `LastChange` event of its own (listed in the AVTransport description):
 
   ```xml
@@ -658,16 +660,34 @@ HTTP.
   The number is always after the last colon. It is sent only for a song or video the renderer can't
   move through itself (a live transcode, as a Plex add-on might send) that says how long it is: one
   the renderer can move through it moves itself, as for the app's Seek, and the app sees the new
-  place in the position it reads. A seek is passed on only to a controller that said it acts on one:
-  it sends `X-TECHO5-Requests: next, previous, seek` with its AVTransport SUBSCRIBE (most controllers
-  ignore TECHO5's own requests, so a bar that asked them would do nothing). With no such subscriber,
-  a song or video the renderer can't move through has no bar to tap. The controller can send the stream again from that place with
-  `SetAVTransportURI`. The events that follow (the state changing)
-  don't carry the request again, and the state sent on subscribing never has one. Only AVTransport
-  subscribers are told, and only while one is subscribed: with none, the device offers no back and
-  forward on a DLNA video, the next song word only fires its event (`asked: false`), and the
-  buttons on the Now Playing page do nothing for DLNA, as for a station. The song here plays on until the controller sends another. Controllers
-  that don't know the variable ignore it, as UPnP says to.
+  place in the position it reads. The controller can send the stream again from that place with
+  `SetAVTransportURI`.
+
+  Each request goes only to a controller that said it acts on it, and only to the one that sent
+  the song or video playing: it names the requests it acts on in an `X-TECHO5-Requests` header on
+  its AVTransport SUBSCRIBE, `X-TECHO5-Requests: next, previous, seek` for all three (any of them
+  alone works too). Most controllers (Home Assistant's DLNA player, Music Assistant, BubbleUPnP)
+  send no such header and ignore TECHO5's own requests, so buttons that asked them would do
+  nothing: with no such subscriber, the device offers no back and forward on a DLNA video, the
+  next song word only fires its event (`asked: false`), the buttons on the Now Playing page and a
+  swipe on the Spot do what they do for a station, and a song or video the renderer can't move
+  through has no bar to tap. The events that follow a request (the state changing) don't carry it
+  again, and the state sent on subscribing never has one. The song here plays on until the
+  controller sends another. Controllers that don't know the variable ignore it, as UPnP says to.
+
+  A controller that sends a film again from a place as one continuous stream (a transcode that
+  begins at 0:53:00, say) can say where in the whole film the stream begins, so that the screen
+  shows the film's own time and a place chosen on the bar is asked for in it. It is TECHO5's own
+  `start` attribute on the `res` of the description, in its own namespace:
+
+  ```xml
+  <res protocolInfo="http-get:*:video/mp2t:*" duration="0:44:00"
+       xmlns:techo5="urn:techo5:dlna" techo5:start="0:53:00">http://...</res>
+  ```
+
+  `duration` stays the stream's own length (here the 44 minutes left of a 1:37:00 film), as do the
+  positions the renderer reports; `start` is `H:MM:SS`, and a seek the screen asks for is in the
+  whole film's time (`seek:3300:8` for 0:55:00).
 - **A phone over Bluetooth.** On the Show, the Spot and the Dot, the **Bluetooth phone**
   switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
   minutes the device can be found and paired with, with no scan for speakers, and a phone connects

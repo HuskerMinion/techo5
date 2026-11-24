@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -87,6 +88,7 @@ type renderer struct {
 	seeking    bool
 	seekTo     time.Duration
 	seekTimer  *time.Timer        // the settle before a burst's last seek is carried out
+	seekArm    int                // which settle timer is the armed one (settled)
 	seekOnPlay bool               // a seek while paused, carried out on Play
 	seekFetch  context.CancelFunc // ends a seek's fetch, when another takes its place
 
@@ -182,7 +184,7 @@ func (r *renderer) avTransport(name string, args map[string]string, from string)
 				pos = r.seekTo
 			}
 		}
-		return []kv{{"Track", track}, {"TrackDuration", hms(dur)}, {"TrackMetaData", r.cur.meta}, {"TrackURI", shownURI(r.cur, from)},
+		return []kv{{"Track", track}, {"TrackDuration", hms(dur)}, {"TrackMetaData", shownMeta(r.cur, from)}, {"TrackURI", shownURI(r.cur, from)},
 			{"RelTime", hms(pos)}, {"AbsTime", "NOT_IMPLEMENTED"}, {"RelCount", "2147483647"}, {"AbsCount", "2147483647"}}, nil
 	case "GetMediaInfo":
 		r.sync()
@@ -192,8 +194,8 @@ func (r *renderer) avTransport(name string, args map[string]string, from string)
 		if r.cur.uri != "" {
 			n = "1"
 		}
-		return []kv{{"NrTracks", n}, {"MediaDuration", hms(r.cur.dur)}, {"CurrentURI", shownURI(r.cur, from)}, {"CurrentURIMetaData", r.cur.meta},
-			{"NextURI", shownURI(r.next, from)}, {"NextURIMetaData", r.next.meta}, {"PlayMedium", "NETWORK"},
+		return []kv{{"NrTracks", n}, {"MediaDuration", hms(r.cur.dur)}, {"CurrentURI", shownURI(r.cur, from)}, {"CurrentURIMetaData", shownMeta(r.cur, from)},
+			{"NextURI", shownURI(r.next, from)}, {"NextURIMetaData", shownMeta(r.next, from)}, {"PlayMedium", "NETWORK"},
 			{"RecordMedium", "NOT_IMPLEMENTED"}, {"WriteStatus", "NOT_IMPLEMENTED"}}, nil
 	case "GetDeviceCapabilities":
 		return []kv{{"PlayMedia", "NETWORK"}, {"RecMedia", "NOT_IMPLEMENTED"}, {"RecQualityModes", "NOT_IMPLEMENTED"}}, nil
@@ -423,7 +425,7 @@ func (r *renderer) start(ctx context.Context, gen int, s song, sk *seekReq) {
 		if sk != nil {
 			// The song plays on from where it was (paused, it is carried on: Play was what asked, and the
 			// time it was paused is not counted in where it is).
-			slog.Warn("dlna: the song could not be moved", "title", s.title, "to", sk.to.Round(time.Second), "err", err)
+			slog.Warn("dlna: the song could not be moved", "title", s.title, "to", sk.to.Round(time.Second), "err", quietErr(err))
 			r.state, r.seekFetch = stPlaying, nil
 			if !r.pausedAt.IsZero() {
 				r.pausedFor += time.Since(r.pausedAt)
@@ -437,7 +439,7 @@ func (r *renderer) start(ctx context.Context, gen int, s song, sk *seekReq) {
 		} else {
 			r.state = stStopped
 			r.clearSeekLocked()
-			slog.Warn("dlna: the song could not be played", "title", s.title, "err", err)
+			slog.Warn("dlna: the song could not be played", "title", s.title, "err", quietErr(err))
 		}
 		r.mu.Unlock()
 		if resume && media.Get().Receiving() == home.DLNAName {
@@ -476,14 +478,28 @@ func (r *renderer) start(ctx context.Context, gen int, s song, sk *seekReq) {
 		// overtaken by another seek of the same song does: the next takes over from it.
 		keep := sk != nil && r.cur.uri == s.uri && (r.state == stPlaying || r.state == stPaused || r.state == stLoading)
 		var old context.CancelFunc
+		hold := false
 		if keep {
 			// Its fetch is the song's now, until the next lands and replaces it (or fails, and this one
 			// plays on); the one before it went with the source this replaced.
 			old, r.fetching = r.fetching, sk.cancel
+			// The position is this one's too until then: a seek that overtakes it and fails carries
+			// on from where this one is, not from where the song was before it.
+			r.started, r.pausedFor = time.Now().Add(-at), 0
+			r.pausedAt = time.Time{}
+			if r.state == stPaused {
+				// Paused while its place was going to the speaker: the pause reached the source this
+				// one replaced, so this one is paused too, or the song would play on under a
+				// transport that says it is paused.
+				r.pausedAt, hold = time.Now(), true
+			}
 		}
 		r.mu.Unlock()
 		if old != nil {
 			old()
+		}
+		if hold {
+			pauseSpeaker()
 		}
 		if !keep {
 			if sk != nil {
@@ -555,7 +571,7 @@ func fetchSong(ctx context.Context, uri string) (io.Reader, io.ReadCloser, int64
 	}
 	resp, err := fetchClient.Do(req)
 	if err != nil {
-		return nil, nil, 0, false, err
+		return nil, nil, 0, false, quietErr(err) // it names the address, token and all
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
@@ -578,6 +594,9 @@ var speakerState = func() (ours, paused bool) {
 	_, paused = media.Get().ScreenState()
 	return media.Get().Receiving() == home.DLNAName, paused
 }
+
+// pauseSpeaker pauses the renderer's song on the speaker; tests put their own in.
+var pauseSpeaker = func() { media.Get().Pause() }
 
 // playOnSpeaker hands the song to the speaker as the renderer's received track; tests put their own in.
 var playOnSpeaker = func(src *source, s song) {
@@ -636,7 +655,7 @@ func (r *renderer) pause() error {
 		r.gen++
 		r.state, r.pausedAt, r.seeking, r.seekOnPlay = stPaused, time.Now(), true, true
 		r.mu.Unlock()
-		media.Get().Pause()
+		pauseSpeaker()
 		r.f.e.changed()
 		return nil
 	}
@@ -715,6 +734,9 @@ func (r *renderer) sync() string {
 		// go on to the next song from.
 		r.ended = r.endedGen == r.gen
 		r.state = stStopped
+		// A seek asked for and not yet carried out was the song's: left, it would move the next one
+		// (the song queued after it, or this one played again) to its place.
+		r.clearSeekLocked()
 	case r.state == stPlaying && ours && paused:
 		r.state, r.pausedAt = stPaused, time.Now()
 		r.publishPositionLocked(0)
@@ -752,6 +774,7 @@ func (r *renderer) syncVideoLocked(vs video.State) {
 	if r.videoID == 0 || vs.ID != r.videoID || !vs.Active() {
 		r.ended = r.videoID != 0 && vs.Ended == r.videoID
 		r.state, r.videoID = stStopped, 0
+		r.clearSeekLocked() // the video's, as a song's is (sync)
 		return
 	}
 	switch vs.Phase {
@@ -801,6 +824,7 @@ func (r *renderer) watch(ctx context.Context) {
 		advance := st == stStopped && r.ended && r.next.uri != ""
 		if advance {
 			r.cur, r.next, r.ended = r.next, song{}, false
+			r.clearSeekLocked() // the song before's: the next starts at its own start
 			r.clearMapLocked()
 		}
 		r.mu.Unlock()
@@ -960,20 +984,27 @@ func hms(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d:%02d", s/3600, s/60%60, s%60)
 }
 
-// parseHMS reads H:MM:SS with or without a fraction.
+// parseHMS reads H:MM:SS with or without a fraction, 0 for what is not one. A controller writes it,
+// so a value that could overflow a time once multiplied out (hours past hmsMostHours, minutes or
+// seconds of more than two digits, seconds that are no number: "Inf", "NaN", "1e300") is not one. A
+// 75 for the minutes is taken as it always was: that is a controller's slip, not an overflow.
 func parseHMS(v string) time.Duration {
 	parts := strings.Split(strings.TrimSpace(v), ":")
-	if len(parts) != 3 {
+	if len(parts) != 3 || len(parts[0]) > 6 || len(parts[1]) > 2 || len(parts[2]) > 16 {
 		return 0
 	}
 	h, err1 := strconv.Atoi(parts[0])
 	m, err2 := strconv.Atoi(parts[1])
 	sec, err3 := strconv.ParseFloat(parts[2], 64)
-	if err1 != nil || err2 != nil || err3 != nil || h < 0 || m < 0 || sec < 0 {
+	if err1 != nil || err2 != nil || err3 != nil || h < 0 || h > hmsMostHours || m < 0 ||
+		math.IsNaN(sec) || math.IsInf(sec, 0) || sec < 0 || sec >= 100 {
 		return 0
 	}
 	return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec*float64(time.Second))
 }
+
+// hmsMostHours bounds the hours parseHMS takes: longer than any song or film.
+const hmsMostHours = 1000
 
 func remoteHost(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

@@ -79,19 +79,28 @@ func (f *Feature) Entities() []esphome.Entity { return []esphome.Entity{f.sw} }
 func (f *Feature) Restore(c config.Config) { f.sw.Set(c.Streaming.DLNA) }
 
 // Skippable is whether a next or a previous on the device reaches somebody now: the renderer has a
-// song or a video playing, paused or on its way, and a controller is subscribed to the transport's
-// events to hear it (Skip). Otherwise there is nobody to skip for, and the device offers no skip for it.
+// song or a video playing, paused or on its way, and the controller that set it is subscribed to the
+// transport's events and said it acts on a next or a previous asked of it (Skip). Otherwise there is
+// nobody to skip for, and the device offers no skip for it: the next-song word, the video's buttons
+// and a swipe on the Spot do what they do for any other received track.
 func (f *Feature) Skippable() bool {
+	from, ok := f.current()
+	return ok && f.e.listening(askNext|askPrevious, from)
+}
+
+// current is who set the renderer's song or video (song.from), and whether there is one playing,
+// paused or on its way while the renderer is on.
+func (f *Feature) current() (from string, ok bool) {
 	if !On() {
-		return false
+		return "", false
 	}
 	f.r.mu.Lock()
-	st, set := f.r.state, f.r.cur.uri != ""
-	f.r.mu.Unlock()
-	if !set || (st != stPlaying && st != stPaused && st != stLoading) {
-		return false
+	defer f.r.mu.Unlock()
+	st := f.r.state
+	if f.r.cur.uri == "" || (st != stPlaying && st != stPaused && st != stLoading) {
+		return "", false
 	}
-	return f.e.listening()
+	return f.r.cur.from, true
 }
 
 // VideoSkippable is Skippable for the video the player has as id: whether it is the renderer's.
@@ -107,19 +116,24 @@ func (f *Feature) VideoSkippable(id uint64) bool {
 // plays on until it does. It says whether anybody was told; nothing is sent while nobody would hear it.
 func (f *Feature) Skip(t media.Transport) bool {
 	var what string
+	var ask requests
 	switch t {
 	case media.TransportNext:
-		what = "next"
+		what, ask = "next", askNext
 	case media.TransportPrevious:
-		what = "previous"
+		what, ask = "previous", askPrevious
 	default:
 		return false
 	}
-	if !f.Skippable() {
+	from, ok := f.current()
+	if !ok {
 		return false
 	}
-	slog.Info("dlna: a skip pressed on the device, told to the controllers", "request", what)
-	return f.e.request(what)
+	told := f.e.request(ask, what, from)
+	if told {
+		slog.Info("dlna: a skip pressed on the device, told to the controller", "request", what)
+	}
+	return told
 }
 
 // SeekWay is how a seek made on the device's own screen reaches the renderer's song or video.
@@ -140,13 +154,8 @@ const (
 // Only one that says how long it runs has a place to move to, and only one the renderer is playing,
 // paused or starting.
 func (f *Feature) SeekWay() (SeekWay, time.Duration) {
-	if !On() {
-		return SeekNone, 0
-	}
-	f.r.mu.Lock()
-	st, set := f.r.state, f.r.cur.uri != ""
-	f.r.mu.Unlock()
-	if !set || (st != stPlaying && st != stPaused && st != stLoading) {
+	from, set := f.current()
+	if !set {
 		return SeekNone, 0
 	}
 	ok, known, dur := f.r.seekable()
@@ -158,7 +167,7 @@ func (f *Feature) SeekWay() (SeekWay, time.Duration) {
 		return SeekNone, 0
 	case ok:
 		return SeekHere, dur
-	case f.e.seekListening():
+	case f.e.listening(askSeek, from):
 		return SeekAsk, dur
 	}
 	return SeekNone, 0
@@ -225,8 +234,9 @@ func (f *Feature) SeekFromDevice(id uint64, to time.Duration) bool {
 		slog.Info("dlna: moving, from the screen", "to", to.Round(time.Second))
 		return true
 	case SeekAsk:
-		slog.Info("dlna: a seek on the screen, told to the controllers", "to", to.Round(time.Second))
-		return f.e.request("seek:" + strconv.FormatInt(int64(to/time.Second), 10))
+		from, _ := f.current()
+		slog.Info("dlna: a seek on the screen, told to the controller", "to", to.Round(time.Second))
+		return f.e.request(askSeek, "seek:"+strconv.FormatInt(int64(to/time.Second), 10), from)
 	}
 	return false
 }

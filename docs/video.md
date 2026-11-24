@@ -99,13 +99,13 @@ A live stream can't be moved through: the app is told so, and it plays on.
 
 - **Tap** shows the controls for a few seconds: play or pause, stop, quieter and louder, with the
   title and the time. On the Spot they're across the bottom of the circle.
-- **Back and forward** are there too for a DLNA video whose app listens for them (it subscribes to
-  the renderer's events, as most do): the app is told and plays the one before or after, if it acts on
-  it ([how it is told](setup.md#dlna-next-and-previous)). On the Spot, swipe left for the next and
+- **Back and forward** are there too for a DLNA video whose app says it acts on them (it subscribes
+  to the renderer's events and says so, as a Plex add-on does; most apps don't): the app is told and
+  plays the one before or after ([how it is told](setup.md#dlna-next-and-previous)). On the Spot, swipe left for the next and
   right for the one before.
 - **A bar** runs above the controls for a video that can be moved through: one from Home Assistant
-  that says how long it is, or a DLNA video the renderer can move through, or whose app listens (the
-  app is then asked to, [the same way](setup.md#dlna-next-and-previous)). Tap it to go to that place,
+  that says how long it is, or a DLNA video the renderer can move through, or whose app says it acts on
+  seeks (the app is then asked to, [the same way](setup.md#dlna-next-and-previous)). Tap it to go to that place,
   or slide a finger along it: the time shows where you are, and the video moves there when you let
   go. A live stream has no bar.
 - **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was.

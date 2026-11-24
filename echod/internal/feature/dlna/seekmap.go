@@ -83,7 +83,7 @@ func fetchRange(ctx context.Context, client *http.Client, uri string, from, to i
 	req.Header.Set("Range", want)
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, quietErr(err) // it names the address, token and all
 	}
 	if resp.StatusCode != http.StatusPartialContent {
 		resp.Body.Close()
@@ -206,6 +206,11 @@ func (m *seekMap) mapWAV(g *ranger) error {
 	}
 	return errors.New("no samples in the WAV's first chunks")
 }
+
+// flacMostSkip bounds how far past a FLAC's seek point the place moved to may be: what lies between is
+// decoded and dropped, which for a minute is a moment, and for an hour would be minutes of the
+// device's time with nothing heard.
+const flacMostSkip = time.Minute
 
 // flacMostPoints bounds the seek points taken from a FLAC's table, and with them what is fetched of it
 // and kept for the song: far more than any encoder writes (one every ten seconds is usual).
@@ -409,7 +414,8 @@ func (m *seekMap) mapMP3(g *ranger, hint time.Duration) error {
 				}
 				at += n * scale
 			}
-			m.vbriEvery = time.Duration(every * f.samples * int(time.Second) / f.rate)
+			// In 64 bits: an int is 32 on the device, and a second's nanoseconds alone are most of that.
+			m.vbriEvery = time.Duration(int64(every) * int64(f.samples) * int64(time.Second) / int64(f.rate))
 		}
 	}
 	if m.tocBytes <= 0 || m.tocBytes > m.length-m.audioStart {
@@ -482,6 +488,11 @@ func (m *seekMap) place(to time.Duration) (off int64, at time.Duration) {
 // song they start.
 func (m *seekMap) open(ctx context.Context, client *http.Client, to time.Duration) (io.Reader, io.ReadCloser, time.Duration, error) {
 	off, at := m.place(to)
+	if m.kind == "flac" && to-at > flacMostSkip {
+		// A table with no point near the place (a hostile one, or one with points an hour apart) would
+		// have the device decode all that lies between, to drop it: not moved there.
+		return nil, nil, 0, fmt.Errorf("the FLAC's seek table has no point within %v of the place", flacMostSkip)
+	}
 	resp, err := fetchRange(ctx, client, m.uri, off, -1)
 	if err != nil {
 		return nil, nil, 0, err
@@ -505,7 +516,8 @@ func (m *seekMap) open(ctx context.Context, client *http.Client, to time.Duratio
 		// what is decoded between the seek point and the time is dropped.
 		br := bufio.NewReaderSize(io.MultiReader(bytes.NewReader(m.flacHead), resp.Body), 64<<10)
 		if pcm, err = media.DecodeStream(br, "audio/flac"); err == nil {
-			skip := int64(to-at) * speaker.Rate / int64(time.Second) * 4
+			// Counted in samples first, as timeSamples does, so the product cannot overflow.
+			skip := int64(timeSamples(to-at, speaker.Rate)) * 4
 			pcm, at = &skipping{r: pcm, left: skip}, to
 		}
 	}
@@ -544,7 +556,8 @@ func parseSeekTarget(v string) (time.Duration, bool) {
 		if n, d, ok := strings.Cut(f, "/"); ok {
 			a, err1 := digits(n)
 			b, err2 := digits(d)
-			if err1 != nil || err2 != nil || b == 0 || a >= b {
+			// Nine digits at most, so a second's nanoseconds times the numerator stays in 64 bits.
+			if err1 != nil || err2 != nil || len(n) > 9 || len(d) > 9 || b == 0 || a >= b {
 				return 0, false
 			}
 			frac = time.Duration(a * int64(time.Second) / b)
@@ -560,6 +573,13 @@ func parseSeekTarget(v string) (time.Duration, bool) {
 	if len(parts) < 2 || len(parts) > 3 {
 		return 0, false
 	}
+	// No field longer than a time needs, so nothing read can overflow a time once multiplied out:
+	// the hours are bounded below, and minutes on their own (M:SS) as well.
+	for _, p := range parts {
+		if len(p) > 6 {
+			return 0, false
+		}
+	}
 	var n [3]int64
 	for i, p := range parts {
 		x, err := digits(p)
@@ -568,11 +588,14 @@ func parseSeekTarget(v string) (time.Duration, bool) {
 		}
 		n[3-len(parts)+i] = x
 	}
-	if n[2] >= 60 || (len(parts) == 3 && n[1] >= 60) || n[0] > 1000 {
+	if n[2] >= 60 || (len(parts) == 3 && n[1] >= 60) || n[1] > seekMostMinutes || n[0] > 1000 {
 		return 0, false
 	}
 	return time.Duration(n[0])*time.Hour + time.Duration(n[1])*time.Minute + time.Duration(n[2])*time.Second + frac, true
 }
+
+// seekMostMinutes bounds the minutes of a target written M:SS: a thousand hours, as H:MM:SS is.
+const seekMostMinutes = 60000
 
 // digits reads a run of decimal digits, nothing else (no sign, no space).
 func digits(s string) (int64, error) {

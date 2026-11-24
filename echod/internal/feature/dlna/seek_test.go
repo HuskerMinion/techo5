@@ -60,12 +60,13 @@ func TestSeekTargets(t *testing.T) {
 // holding the renderer's song.
 func stubs(t *testing.T) {
 	t.Helper()
-	oldState, oldPlay, oldSeek, oldSeekable, oldCurrent, oldClient := speakerState, playOnSpeaker, seekVideo, videoSeekable, currentVideo, fetchClient
+	oldState, oldPlay, oldPause, oldSeek, oldSeekable, oldCurrent, oldClient := speakerState, playOnSpeaker, pauseSpeaker, seekVideo, videoSeekable, currentVideo, fetchClient
 	t.Cleanup(func() {
-		speakerState, playOnSpeaker, seekVideo, videoSeekable, currentVideo, fetchClient = oldState, oldPlay, oldSeek, oldSeekable, oldCurrent, oldClient
+		speakerState, playOnSpeaker, pauseSpeaker, seekVideo, videoSeekable, currentVideo, fetchClient = oldState, oldPlay, oldPause, oldSeek, oldSeekable, oldCurrent, oldClient
 	})
 	speakerState = func() (bool, bool) { return true, false }
 	playOnSpeaker = func(src *source, _ song) { _ = src.Close() }
+	pauseSpeaker = func() {}
 	currentVideo = func() video.State { return video.State{Phase: video.Idle} }
 	// The tests' servers are on loopback, which the renderer's own client refuses.
 	fetchClient = &http.Client{}

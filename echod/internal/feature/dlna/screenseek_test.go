@@ -104,7 +104,11 @@ func TestAScreenSeekTheRendererCannotMakeIsAskedOfTheController(t *testing.T) {
 	if way, _ := f.SeekWay(); way != SeekNone {
 		t.Errorf("a controller that did not say it seeks: %v", way)
 	}
-	f.e.subs["uuid:avt"].seeks = true
+	f.e.subs["uuid:avt"].asks = askNext | askPrevious
+	if way, _ := f.SeekWay(); way != SeekNone {
+		t.Errorf("a controller that said only next and previous: %v", way)
+	}
+	f.e.subs["uuid:avt"].asks = askSeek
 	if way, dur := f.SeekWay(); way != SeekAsk || dur != 5*time.Minute {
 		t.Fatalf("a controller listening: %v, %v", way, dur)
 	}
@@ -159,12 +163,19 @@ func TestAStreamThatBeginsFurtherIn(t *testing.T) {
 	}
 }
 
-// A controller says which of TECHO5's own requests it acts on when it subscribes; only the transport's
-// subscription that names "seek" is one a seek is passed on to.
-func TestASubscriptionSaysItSeeks(t *testing.T) {
-	for h, want := range map[string]bool{"": false, "next, previous": false, "next, previous, seek": true, "SEEK": true, "seeks": false} {
-		if got := saysSeeks(h); got != want {
-			t.Errorf("%q: %v, want %v", h, got, want)
+// A controller says which of TECHO5's own requests it acts on when it subscribes: a word it does not
+// know, or one close to a name, is not one.
+func TestASubscriptionSaysWhatItActsOn(t *testing.T) {
+	for h, want := range map[string]requests{
+		"":                     0,
+		"next, previous":       askNext | askPrevious,
+		"next, previous, seek": askNext | askPrevious | askSeek,
+		"SEEK":                 askSeek,
+		"seeks, nexts":         0,
+		" Next ,,stop":         askNext,
+	} {
+		if got := namedRequests(h); got != want {
+			t.Errorf("%q: %b, want %b", h, got, want)
 		}
 	}
 }
