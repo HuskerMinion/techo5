@@ -111,6 +111,9 @@ func (s *Sensor) Start(context.Context) error {
 	if layout.AthenaMainline() {
 		return s.startIIO()
 	}
+	if layout.ThinkSmart() {
+		return s.startVCNL4200()
+	}
 	if _, err := os.Stat(misc); os.IsNotExist(err) {
 		path := metrics.Reader{}.LuxPath()
 		if path == "" {

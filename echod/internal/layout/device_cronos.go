@@ -56,23 +56,25 @@ var AnimationScripts = []string{}
 var (
 	Board = showBoard(kernelCmdline(), gatingDir, deviceTreeCompatible())
 	Model = map[string]string{
-		boardCronos:   "Echo Show 5 2nd gen (cronos)",
-		boardCheckers: "Echo Show 5 1st gen (checkers)",
-		boardCrown:    "Echo Show 8 1st gen (crown)",
-		boardAthena:   "Echo Show 8 2nd gen (athena)",
-		boardSkylight: "Skylight Calendar 15 (150-CAL)",
+		boardCronos:     "Echo Show 5 2nd gen (cronos)",
+		boardCheckers:   "Echo Show 5 1st gen (checkers)",
+		boardCrown:      "Echo Show 8 1st gen (crown)",
+		boardAthena:     "Echo Show 8 2nd gen (athena)",
+		boardSkylight:   "Skylight Calendar 15 (150-CAL)",
+		boardThinkSmart: "Lenovo ThinkSmart View (CD-18781Y)",
 	}[Board]
 
 	// DefaultName is the fallback display name when a device has none recorded.
-	DefaultName = map[bool]string{false: "Echo Show", true: "Skylight Calendar"}[Board == boardSkylight]
+	DefaultName = defaultName(Board)
 )
 
 const (
-	boardCronos   = "cronos"
-	boardCheckers = "checkers"
-	boardCrown    = "crown"
-	boardAthena   = "athena"
-	boardSkylight = "skylight"
+	boardCronos     = "cronos"
+	boardCheckers   = "checkers"
+	boardCrown      = "crown"
+	boardAthena     = "athena"
+	boardSkylight   = "skylight"
+	boardThinkSmart = "thinksmart"
 
 	// gatingDir is Amazon's own mute driver, amazon-gating, which the 1st gen Show 5 and the Show 8
 	// both carry; the 2nd gen Show 5 has gpio-privacy instead.
@@ -143,8 +145,8 @@ func Show8() bool { return Crown() || Athena() }
 // 1st gen Show 5. That is the safer way to be wrong about a Show 8, which shares its mute driver
 // and its speaker codec and differs mainly in the panel and the microphone count.
 //
-// The 2nd gen Show 8 and the Skylight come first, from their device trees: neither kernel names a
-// panel on its command line.
+// The 2nd gen Show 8, the Skylight and the ThinkSmart View come first, from their device trees: none
+// of their kernels names a panel on its command line.
 func showBoard(cmdline, gating string, compatible []string) string {
 	for _, c := range compatible {
 		if c == athenaCompatible || strings.HasPrefix(c, athenaCompatible+"-") {
@@ -152,6 +154,9 @@ func showBoard(cmdline, gating string, compatible []string) string {
 		}
 		if c == skylightCompatible {
 			return boardSkylight
+		}
+		if c == thinkSmartCompatible {
+			return boardThinkSmart
 		}
 	}
 	for _, f := range strings.Fields(cmdline) {

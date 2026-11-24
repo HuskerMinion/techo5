@@ -295,6 +295,22 @@ Linux kernel for the Skylight Calendar 15, tools/linux/skylight/kernel
   The Wi-Fi and Bluetooth firmware is not shipped: each unit's own goes into its store at install,
   from its vendor partition.
 
+Linux kernel for the Lenovo ThinkSmart View, tools/linux/thinksmart/kernel
+  Built from msm8953-mainline (https://github.com/msm8953-mainline/linux, tag v7.1.3-r0), GPL-2.0;
+  build.sh writes the prepared source tree with its configuration (techo5-thinksmart.config) as
+  linux-7.1.3-techo5-thinksmart-source.tar.xz, the complete source of boot-thinksmart.img, which a
+  root filesystem built with it carries as usr/share/techo5/kernel/boot-thinksmart.img. No release
+  carries it yet.
+  The TAS5782M amplifier driver in src/ (tas5782m*) is rickx's
+  (https://github.com/rickx/ubuntu-thinksmart), as changed in
+  https://github.com/m0s4ik/thinksmart-view-debian (commit 02821bc), GPL-2.0, with its debug build
+  layer removed here (src/LICENSE.tas5782m). The S5KC505A sensor driver, src/s5kc505a.c, is Jetha
+  Chan's (https://github.com/jethac/lenovo-thinksmart-view) with flip controls from that project,
+  GPL-2.0. patches/0001-0003 (q6asm-dai, by Vladyslav Tymoshchuk) and patches/0004 (the venus HFI
+  parser) come from the same project, GPL-2.0. patches/0005, the front camera in the board device
+  tree, is TECHO5's own, GPL-2.0-only OR BSD-3-Clause like the file it changes; patches/0006, the
+  video decoder's interrupt, is TECHO5's own, GPL-2.0-only like the file it changes.
+
 Light sensor, echod/internal/hardware/ambient/em3071x.go
   The Everlight EM3071X's register addresses and the value that switches it on are the ones Rockchip's
   GPL-2.0 driver uses (drivers/input/sensors/lsensor/ls_em3071x.c in Rockchip's kernel). They are
