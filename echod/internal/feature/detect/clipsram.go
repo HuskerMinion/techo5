@@ -152,6 +152,7 @@ func (c *clips) spill(move func(kind string, at time.Time) bool) {
 	}
 	moved := 0
 	for _, k := range clipKinds {
+		kindMoved := 0
 		sides, _ := filepath.Glob(filepath.Join(c.ram, k, "*.json"))
 		for _, side := range sides {
 			blob, err := os.ReadFile(side)
@@ -173,9 +174,10 @@ func (c *clips) spill(move func(kind string, at time.Time) bool) {
 				slog.Warn("wake clip: not moved from RAM to the device", "err", err)
 				continue
 			}
-			moved++
+			kindMoved++
 		}
-		if moved > 0 {
+		moved += kindMoved
+		if kindMoved > 0 {
 			// Each kind keeps its newest clipsKept, wherever they are; the count is unchanged.
 			c.countMu.Lock()
 			c.counts[k] = c.pruneLocked(k)
@@ -233,13 +235,15 @@ func copyFile(from, to string) error {
 }
 
 // dropSent lets go of a clip in RAM the trainer has: the device's copy was only waiting. The sidecar
-// first, as dropTake does, so a clip whose audio could not be removed is never offered again.
-func (c *clips) dropSent(wav string, kind string) {
+// first, as dropTake does, so a clip whose audio could not be removed is never offered again. It says
+// whether the sidecar went: one that did not is still in the queue, and the sender must not send it
+// again.
+func (c *clips) dropSent(wav string, kind string) bool {
 	c.disk.Lock()
 	defer c.disk.Unlock()
 	if err := os.Remove(sidecar(wav)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		slog.Warn("wake clip: not removed from RAM after it was sent", "err", err)
-		return
+		return false
 	}
 	os.Remove(wav)
 	if slices.Contains(clipKinds, kind) {
@@ -248,6 +252,7 @@ func (c *clips) dropSent(wav string, kind string) {
 		c.countMu.Unlock()
 		c.published()
 	}
+	return true
 }
 
 // pruneLocked keeps the newest keep clips of a kind across both folders, and says how many are left.

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -452,7 +453,21 @@ func (e *Engine) Run(ctx context.Context) error {
 		got         int
 		since       = time.Now()
 		logged      = newFrameTally(since)
+		// first is the first window, whose line is written at once: it says the loop is keeping up
+		// from the start, not ten minutes in.
+		first = true
 	)
+	// What came since the last line is written as the loop stops, so the minutes before a restart or
+	// the microphones going away are in the log too.
+	defer func() {
+		e.mu.Lock()
+		by := maps.Clone(e.spent)
+		e.mu.Unlock()
+		logged.add(got, took, worst, by)
+		if logged.got > 0 {
+			slog.Info("wake frames", logged.attrs(time.Now())...)
+		}
+	}()
 
 	for {
 		select {
@@ -487,9 +502,9 @@ func (e *Engine) Run(ctx context.Context) error {
 				}
 				now := time.Now()
 				logged.add(got, took, worst, by)
-				if logged.due(now) {
+				if first || logged.due(now) {
 					slog.Info("wake frames", logged.attrs(now)...)
-					logged = newFrameTally(now)
+					logged, first = newFrameTally(now), false
 				}
 				took, worst, got, since = 0, 0, 0, now
 			}

@@ -200,6 +200,35 @@ func TestThePruneCountsBothFolders(t *testing.T) {
 	}
 }
 
+// A clip sent from RAM whose sidecar cannot be removed is not sent again on every pass.
+func TestASentClipThatCannotBeRemovedIsNotSentAgain(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root removes from a read-only folder")
+	}
+	got := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		got++
+		fmt.Fprint(w, `{"ok": true}`)
+	}))
+	defer srv.Close()
+	r := ramRig(t, srv.URL)
+	r.whole("nearmiss", 1)
+	dir := filepath.Join(r.c.ram, "nearmiss")
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o700)
+
+	r.drain()
+	r.drain()
+	if got != 1 {
+		t.Fatalf("the trainer got it %d times", got)
+	}
+	if q := r.s.queue(r.cfg); len(q) != 0 {
+		t.Fatalf("still queued: %d", len(q))
+	}
+}
+
 func TestTheRAMCapFollowsTheBoard(t *testing.T) {
 	for _, c := range []struct{ total, want int64 }{
 		{0, 4 << 20}, {256 << 20, 4 << 20}, {512 << 20, 8 << 20}, {1 << 30, 16 << 20}, {2 << 30, 16 << 20},

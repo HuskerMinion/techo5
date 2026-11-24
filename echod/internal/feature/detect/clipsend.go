@@ -455,7 +455,13 @@ func (s *sender) drain(ctx context.Context) {
 			backoff, failures = 0, 0
 			if s.c.inRAM(item.wav) {
 				// Only waiting in RAM until the trainer had it (clipsram.go): nothing is marked, it goes.
-				s.c.dropSent(item.wav, item.meta.Kind)
+				if !s.c.dropSent(item.wav, item.meta.Kind) {
+					// Still in the queue: not sent again this run, as a clip whose sidecar could not be
+					// marked is not (settle).
+					s.mu.Lock()
+					s.done[item.wav] = true
+					s.mu.Unlock()
+				}
 				s.report(n-1, "")
 			} else {
 				s.settle(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) }, n-1)
