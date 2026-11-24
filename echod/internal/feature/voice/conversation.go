@@ -473,18 +473,31 @@ const historyWait = 120 * time.Millisecond
 
 // sendHistory queues a turn's history as sendAudio does a frame, but waits up to historyWait for room
 // rather than dropping it at once.
+//
+// It goes in pieces of confirmChunk samples, as the history of a wake Home Assistant is asked about does
+// (watchAudio): one message of it all broke a turn that had waited on another device's question
+// (#728), since a wake held for the house's decision reaches back mic.Held, three seconds or 96 KB,
+// and one encrypted message to Home Assistant carries at most 65515 bytes, which the wire refuses
+// outright rather than splitting. Single frames would be the other choice, but 150 of them overflow
+// a queue sized for 64. The wait is one for the whole history, so the turn still reads its frames
+// in time; what found no room by then is counted once, and its length logged.
 func (c *conversation) sendHistory(ctx context.Context, be backend, b []byte) {
-	frame := append([]byte(nil), b...)
 	t := time.NewTimer(historyWait)
 	defer t.Stop()
-	select {
-	case c.out <- func() error { return be.Audio(frame) }:
+	for len(b) > 0 {
+		n := min(len(b), 2*confirmChunk)
+		chunk := append([]byte(nil), b[:n]...)
+		select {
+		case c.out <- func() error { return be.Audio(chunk) }:
+			b = b[n:]
+			continue
+		case <-ctx.Done():
+		case <-t.C:
+		}
+		c.audioDropped.Add(1)
+		slog.Warn("a turn's history was not sent: the queue to home assistant stayed full", "ms", len(b)*1000/(2*mic.Rate))
 		return
-	case <-ctx.Done():
-	case <-t.C:
 	}
-	c.audioDropped.Add(1)
-	slog.Warn("a turn's history was not sent: the queue to home assistant stayed full", "ms", len(b)*1000/(2*mic.Rate))
 }
 
 // sends drains the queue. A failure ends the turn through the same path a pipeline error takes, and
