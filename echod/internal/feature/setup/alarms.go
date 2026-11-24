@@ -86,17 +86,22 @@ func alarmsSection(w http.ResponseWriter, token string) {
 
 func timerDrawer(w http.ResponseWriter, token string, c timer.Countdown) {
 	where := "set through Home Assistant"
-	if c.Local {
+	if c.Local && !c.Silent {
 		where = "this device"
 	}
 	fmt.Fprintf(w, `<details><summary><span class="chip tim">Timer</span><span class="when">%s</span><span class="what">%s</span><span class="where">left · %s</span></summary><div class="body">`,
 		timeLeft(c.Left), html.EscapeString(cmpOr(c.Name, "Timer")), where)
-	if c.Local {
+	switch {
+	case c.Silent:
+		// A silent timer is an automation's wait, shown here: the automation cancels it when the wait is
+		// over, and canceling it from this page would only hide the countdown while it waited on.
+		fmt.Fprint(w, `<p class="note">Shown for a Home Assistant automation, which ends it itself.</p>`)
+	case c.Local:
 		fmt.Fprint(w, `<form method="post" action="/setup/save" class="btns">`)
 		hidden(w, token, "timer_cancel")
 		fmt.Fprintf(w, `<input type="hidden" name="id" value="%s"><button type="submit" class="quiet">Cancel timer</button></form>`,
 			html.EscapeString(c.ID))
-	} else {
+	default:
 		fmt.Fprint(w, `<p class="note">Set by voice through Home Assistant, so it is canceled the same way.</p>`)
 	}
 	fmt.Fprint(w, `</div></details>`)

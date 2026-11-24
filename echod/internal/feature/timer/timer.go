@@ -100,7 +100,9 @@ type Timers struct {
 }
 
 // Countdown is a timer as the screen shows it. Local is one of the device's own, which the screen
-// may cancel; Home Assistant's are canceled where they were set.
+// may cancel; Home Assistant's are canceled where they were set. Silent is one of the device's own
+// started with timer_start_silent: it shows a wait an automation keeps, so the automation ends it, and
+// the screen and the assistant leave it alone the way they leave Home Assistant's.
 type Countdown struct {
 	ID     string
 	Name   string
@@ -108,6 +110,7 @@ type Countdown struct {
 	Total  time.Duration
 	Active bool
 	Local  bool
+	Silent bool
 }
 
 // List is every timer, soonest running first and paused ones after.
@@ -115,7 +118,7 @@ func (t *Timers) List(now time.Time) []Countdown {
 	t.mu.Lock()
 	out := make([]Countdown, 0, len(t.held))
 	for id, c := range t.held {
-		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active, Local: c.local})
+		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active, Local: c.local, Silent: c.silent})
 	}
 	t.mu.Unlock()
 	slices.SortFunc(out, func(a, b Countdown) int {

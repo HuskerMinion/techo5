@@ -65,6 +65,9 @@ type ListedTimer struct {
 	// Local is a timer of the device's own, which timer_cancel can cancel. The others are Home
 	// Assistant's, canceled where they were set.
 	Local bool `json:"local"`
+	// Silent is one started with timer_start_silent, which only shows and does not ring: the wait of an
+	// automation, which cancels it itself.
+	Silent bool `json:"silent"`
 }
 
 // listing builds the answer from what the device holds; kept apart from the Alarms so it can be tested
@@ -101,7 +104,7 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 	for _, c := range timers {
 		l.Timers = append(l.Timers, ListedTimer{
 			ID: c.ID, Label: c.Name, Left: int(c.Left.Round(time.Second) / time.Second),
-			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local,
+			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local, Silent: c.Silent,
 		})
 	}
 	return l

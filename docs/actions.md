@@ -1100,6 +1100,7 @@ timers:
     total_seconds: 600
     running: true
     local: true          # false for a timer set by voice through Home Assistant
+    silent: false        # true for one started with timer_start_silent
 ```
 
 ## Start a timer
@@ -1139,8 +1140,11 @@ In YAML, refer to this action as `esphome.<node>_timer_start_silent`.
 A timer that only shows: it counts down on the ring and the screen like `timer_start`'s, in a color
 of its own, and at zero it is gone without ringing. It is for showing a wait that Home Assistant
 keeps, such as a device joining the home: the automation waits for the device itself, cancels the
-timer with `timer_cancel` when it arrives, and says what went wrong when it does not. A silent timer
-is not kept over a restart. Answers with the new timer's `id`, as `timer_start` does.
+timer with `timer_cancel` when it arrives, and says what went wrong when it does not. Since the
+automation ends it, the device's screen, its setup page and its built-in assistant show a silent timer
+without offering to stop it, and "cancel all the timers" leaves it running; `timer_cancel` with its
+`id` (or `all`) still cancels it. A silent timer is not kept over a restart. Answers with the new
+timer's `id`, as `timer_start` does.
 
 ### duration (Required)
 
