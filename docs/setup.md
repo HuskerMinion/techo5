@@ -2805,11 +2805,12 @@ Add-ons are programs others have made for TECHO5, such as
 They run on the device from userdata, so they outlast updates, and are installed, updated and removed
 on the setup page's **Add-ons** card (**System** tab). The card has three parts:
 
-- **Available:** the add-ons in TECHO5's catalog that run on this device, each with its author, what it
-  does, its version and the TECHO5 version it needs, a link to its own page, and what it asks for: the
-  network ports it needs opened, whether it runs as root, and roughly how much memory and storage it
-  uses. One that doesn't run on this model, needs a newer TECHO5, or needs more memory than the device
-  can spare is shown grayed out with the reason.
+- **Available:** the add-ons in TECHO5's catalog, each with its author, what it does, its version and
+  the TECHO5 version it needs, a link to its own page, and what it asks for: the network ports it needs
+  opened, whether it runs as root, and roughly how much memory and storage it uses. One made for
+  another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
+  installed from the card yet, and one that needs more memory than the device can spare are listed
+  too, grayed out with the reason.
 - **Installed:** whether each one is running, **Start** and **Stop**, the last lines of its log, **Update**
   when the catalog has a newer version, **Remove**, and a link to its own page if it has one.
 - **Found on this device, not from the catalog:** programs started by hand from `rc.local` (below).
@@ -2837,7 +2838,7 @@ How the device runs them:
   and the device believes it only with that signature. It names each version's download and its SHA-256,
   and the manifest it ships (`addon.json`) by its hash too: the device refuses a download that doesn't
   match, and an add-on whose manifest asks for more than the catalog shows. A signed catalog expires a
-  month after it was signed (every release signs it again): past that, installed add-ons keep running
+  month after it was signed (every TECHO5 (Show) release signs it again): past that, installed add-ons keep running
   but nothing is offered, and the card says why. A device never goes back to an older catalog than one
   it has seen.
 - **What you agreed to.** The install and update forms carry back what the card showed; if the catalog
@@ -2912,7 +2913,8 @@ one was. A listing that has to come out stays in the catalog marked withdrawn, w
 that have it say it's no longer listed and suggest removing it, but don't remove it themselves.
 
 For the maintainer: `tools/sign-catalog.ps1` checks the catalog (`mkcatalog`), refuses one whose
-`serial` is not above the published one's (a device never takes an older catalog than it has), signs it
+`serial` is below the published one's, or the same serial with different entries (the same entries
+again only renew the expiry; a device never takes an older catalog than it has), signs it
 with the release key, and publishes `catalog.json` and `catalog.json.sig` on the repository's `addons`
 release, which is what devices fetch. `tools/release.ps1` runs it with every release and attaches the
 catalog to the release as well. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins

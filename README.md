@@ -85,10 +85,10 @@ The bigger changes of September to November 2026. Every release lists the rest.
   cache of nearby names lives in memory, the log is saved every few minutes (and at once on a warning),
   the journal commits once a minute, and wake clips bound for a trainer wait in memory. At the old rate
   a cheap eMMC could wear out in a few years; at the new one, even by a pessimistic guess, it should
-  outlast the rest of the device by decades. Add-ons such as the
-  [Plex player](https://github.com/HuskerMinion/techo5-plex) install, update and run from the setup page,
-  each as its own user, from a signed list, with a warning before every install
-  ([docs/setup.md](docs/setup.md#add-ons)).
+  outlast the rest of the device by decades. The setup page has an Add-ons card: a signed list, a warning before
+  every install, each add-on run as its own user ([docs/setup.md](docs/setup.md#add-ons)). The first
+  listing, the [Plex player](https://github.com/HuskerMinion/techo5-plex), is installed from it once its
+  next release is listed; until then it is installed by hand.
 - 📞 **Call by wake word, Hang up bar, repeating alarms** (v1.6.28). A wake word can call a phone book
   contact ([#463](https://github.com/HuskerMinion/techo5/pull/463)), calls can keep the page on screen
   with a Hang up bar ([#459](https://github.com/HuskerMinion/techo5/pull/459)), and the Set an alarm
