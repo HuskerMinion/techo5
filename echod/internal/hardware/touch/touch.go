@@ -113,9 +113,10 @@ type Screen struct {
 	rawH int // panel y range, exclusive
 
 	mu     sync.Mutex
-	down   bool // a finger is on the panel
-	follow bool // every moving finger is followed (Hold, Drag, Release) rather than swiped
-	holds  bool // holds are reported on a device without holdGestures (SetHolds)
+	down   bool    // a finger is on the panel
+	follow bool    // every moving finger is followed (Hold, Drag, Release) rather than swiped
+	holds  bool    // holds are reported on a device without holdGestures (SetHolds)
+	cur    *finger // the finger down now, for Unfollow
 }
 
 // SetHolds reports holds on a device that otherwise does not (holdGestures): a finger that stays put
@@ -135,6 +136,20 @@ func (s *Screen) holding() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.holds
+}
+
+// Unfollow hands the finger down now back to swipes, when follow mode made it a Hold and a Drag: a
+// page that took it for its own as it moved (a bar to seek on) and finds it is a swipe after all (the
+// volume, a swipe down to stop a video) lets it go. From its next move on it is reported as if follow
+// mode had been off all along, its travel since it landed included, so the swipe it is goes out; as
+// it lifts it is a tap or a sideways swipe, never a Release. Follow mode itself is left as it is: the
+// page that turned it on turns it off.
+func (s *Screen) Unfollow() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f := s.cur; f != nil && f.held {
+		f.held, f.unfollowed = false, true
+	}
 }
 
 // SetFollow turns follow mode on or off: while on, a finger that moves is reported as Hold where it
@@ -177,6 +192,7 @@ type finger struct {
 	swiped       bool // a notch went out, so this is not a tap
 	seenX, seenY bool
 	held         bool        // it became a hold: Drag and Release follow
+	unfollowed   bool        // handed back to swipes (Unfollow): follow mode does not take it again
 	holdTimer    *time.Timer // pending hold, stopped by movement or a lift
 }
 
@@ -247,6 +263,7 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 				}
 				s.mu.Unlock()
 				f = nil
+				s.following(nil)
 				s.setDown(false)
 			}
 			dropping = true
@@ -286,6 +303,7 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 				switch {
 				case e.Value >= 0 && f == nil:
 					f = &finger{slot: slot, id: e.Value, at: time.Now(), sx: -1}
+					s.following(f)
 					if q := slots[slot]; q != nil {
 						f.x, f.seenX = int(q.x), q.seenX
 						f.y, f.seenY = int(q.y), q.seenY
@@ -305,6 +323,7 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 					s.mu.Unlock()
 					s.lift(f)
 					f = nil
+					s.following(nil)
 					s.setDown(false)
 				}
 			}
@@ -318,6 +337,7 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 			switch {
 			case e.Value == 1 && f == nil:
 				f = &finger{slot: slot, at: time.Now(), sx: -1}
+				s.following(f)
 				// Seeded as the tracking id's finger is, for a controller that says BTN_TOUCH first.
 				if q := slots[slot]; q != nil {
 					f.x, f.seenX = int(q.x), q.seenX
@@ -338,6 +358,7 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 				s.mu.Unlock()
 				s.lift(f)
 				f = nil
+				s.following(nil)
 				s.setDown(false)
 			}
 		case input.EvSyn:
@@ -371,6 +392,13 @@ func (s *Screen) track(ctx context.Context, path string, read func() (input.Even
 	}
 }
 
+// following makes f the finger down now (nil when none), for Unfollow.
+func (s *Screen) following(f *finger) {
+	s.mu.Lock()
+	s.cur = f
+	s.mu.Unlock()
+}
+
 func (s *Screen) setDown(v bool) {
 	s.mu.Lock()
 	changed := s.down != v
@@ -391,7 +419,7 @@ func (s *Screen) landscape(rx, ry int) (x, y int) {
 // moved or swiped.
 func (s *Screen) holdFired(f *finger) {
 	s.mu.Lock()
-	if !s.down || f.sx < 0 || f.swiped || f.held {
+	if !s.down || f.sx < 0 || f.swiped || f.held || f.unfollowed {
 		s.mu.Unlock()
 		return
 	}
@@ -418,7 +446,7 @@ func (s *Screen) moved(f *finger) {
 	}
 	x0, y0 := s.landscape(f.sx, f.sy)
 	x1, y1 := s.landscape(f.x, f.y)
-	if s.follow && !f.swiped && (abs(x1-x0) > followMove || abs(y1-y0) > followMove) {
+	if s.follow && !f.swiped && !f.unfollowed && (abs(x1-x0) > followMove || abs(y1-y0) > followMove) {
 		f.held = true
 		if f.holdTimer != nil {
 			f.holdTimer.Stop()

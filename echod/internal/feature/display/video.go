@@ -99,8 +99,9 @@ func (d *Display) videoGesture(g touch.Gesture) {
 		d.mu.Unlock()
 		return
 	}
-	// The bar to seek on, while the controls are up: a finger on it is its, and keeps them up.
-	if d.seekGesture(g) {
+	// The bar to seek on, while the controls are up (videoBarUp): a finger on it is its, and keeps them
+	// up. With the controls away, a tap on where the bar was brings them back, as anywhere else.
+	if d.videoBarUp(video.Get().State()) && d.seekGesture(g) {
 		d.showVideoControls()
 		return
 	}

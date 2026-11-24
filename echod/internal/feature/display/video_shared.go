@@ -47,6 +47,17 @@ const (
 	videoTapNext
 )
 
+// videoBarUp is whether a finger on the video page may be its bar's (seekGesture): while the controls
+// it is drawn with are up (as a tap on the page finds them, videoGesture), or while a finger that came
+// down on it is still on it. With the controls away, the bar the last frame drew is not there to the
+// eye, and a tap that brings the controls back must not move the video as well.
+func (d *Display) videoBarUp(st video.State) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	up := time.Now().Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
+	return up || d.seekF.landed || d.seekF.moving
+}
+
 // videoSkippable is whether the video the player has is a DLNA video whose controller hears a next or
 // a previous from the device (dlna.VideoSkippable): only then are they offered, never as buttons that
 // do nothing.

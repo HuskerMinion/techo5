@@ -20,7 +20,10 @@ import (
 //
 // The touchscreen reports a moving finger as swipes, which the pages use for the volume and to stop a
 // video. A finger that comes down on a bar is followed instead (touch.SetFollow, the dashboard's way
-// of dragging), from the moment it lands until it lifts, so the rest of the page keeps its swipes.
+// of dragging), from the moment it lands until it lifts, so the rest of the page keeps its swipes. One
+// that then sets off up or down rather than along the bar is a swipe after all, and is handed back to
+// the touchscreen as one (touch.Unfollow): a swipe for the volume, or to stop a video, may start on
+// the bar as well as anywhere else.
 
 // seekRoute is how a place chosen on a bar reaches what plays.
 type seekRoute int
@@ -126,6 +129,10 @@ func (b *seekBars) begin() { b.next = seekZone{} }
 // drew is the frame having drawn z.
 func (b *seekBars) drew(z seekZone) { b.next = z }
 
+// keep is a frame that keeps the page the last one drew (Rainbow's kept page): its bar is still the
+// one on the panel.
+func (b *seekBars) keep() { b.next = b.zone() }
+
 // publish is the frame done: its bar is the one on the panel.
 func (b *seekBars) publish() {
 	b.mu.Lock()
@@ -144,10 +151,14 @@ func (b *seekBars) zone() seekZone {
 // whether it is sliding along it and to where, and the place last sent, shown until heldUntil.
 type seekFinger struct {
 	zone   seekZone
+	from   image.Point // where it came down
 	landed bool
 	follow bool
 	moving bool
-	to     time.Duration
+	// along is the finger having set off along the bar: decided at its first Drag, and from then on
+	// it slides the bar wherever it wanders.
+	along bool
+	to    time.Duration
 
 	heldRoute seekRoute
 	heldID    uint64
@@ -250,8 +261,10 @@ func (d *Display) seekLanded(at image.Point) {
 	d.mu.Lock()
 	shown := d.pageShown
 	f := &d.seekF
-	f.zone, f.landed, f.moving = seekZone{}, false, false
-	if !z.on(at) || !d.on || !d.seekTakesLocked() {
+	f.zone, f.landed, f.moving, f.along = seekZone{}, false, false, false
+	// A finger that comes down where a pull starts (the drawer's edge) is the pull's: a tap there is
+	// still the bar's (seekGesture), but a finger moving from there is not followed.
+	if !z.on(at) || !d.on || !d.seekTakesLocked() || d.seekPullLocked(at) {
 		d.mu.Unlock()
 		return
 	}
@@ -261,7 +274,7 @@ func (d *Display) seekLanded(at image.Point) {
 		return
 	}
 	d.mu.Lock()
-	f.zone, f.landed = z, true
+	f.zone, f.landed, f.from = z, true, at
 	f.follow = !d.followWantedLocked()
 	turn := f.follow
 	d.mu.Unlock()
@@ -276,12 +289,16 @@ func (d *Display) seekLifted() {
 	d.mu.Lock()
 	f := &d.seekF
 	turn := f.follow && !d.followWantedLocked()
-	f.landed, f.follow, f.moving = false, false, false
+	f.landed, f.follow, f.moving, f.along = false, false, false, false
 	d.mu.Unlock()
 	if turn {
 		touch.Get().SetFollow(false)
 	}
 }
+
+// across is whether a finger that has moved by dx, dy since it came down set off up or down rather
+// than along a bar.
+func across(dx, dy int) bool { return abs(dy) > abs(dx) }
 
 // seekGesture is a finger on the bar as last drawn: a tap moves to the place under it; a finger that
 // came down on the bar and slides along it (Hold, Drag) shows the place it is over, and moves there as
@@ -320,10 +337,26 @@ func (d *Display) seekGesture(g touch.Gesture) bool {
 		d.mu.Lock()
 		f := &d.seekF
 		took := f.moving
-		if took {
+		handBack, turn := false, false
+		switch {
+		case took && !f.along && across(g.X-f.from.X, g.Y-f.from.Y):
+			// Up or down from the start: a swipe, not a seek. The bar lets it go, follow mode goes
+			// off if the bar turned it on, and the touchscreen reports the finger as the swipe it is
+			// from its next move, to the page under it. The place it showed is shown no longer.
+			f.moving, f.landed = false, false
+			handBack, turn = f.follow, f.follow && !d.followWantedLocked()
+			f.follow = false
+		case took:
+			f.along = true
 			f.to = f.zone.at(g.X)
 		}
 		d.mu.Unlock()
+		if turn {
+			touch.Get().SetFollow(false)
+		}
+		if handBack {
+			touch.Get().Unfollow()
+		}
 		if took {
 			d.wake()
 		}

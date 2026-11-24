@@ -694,6 +694,7 @@ func (r *renderer) draw(s scene) {
 		if r.rainbowKept(s) {
 			// The page as it was, its taps as they were: only Rainbow is drawn again.
 			r.keepCallBar()
+			r.seekBars.keep() // the bar it drew too, so it is not drawn as one to seek on that takes no finger
 			r.appsNext = r.appsDrawn.Load()
 			r.turnCue(s)
 			return

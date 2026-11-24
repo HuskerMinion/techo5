@@ -39,8 +39,10 @@ var receivingNow = func() string { return media.Get().Receiving() }
 
 // musicSeekRoute is how a place chosen on Now Playing's bar reaches what plays, for the song rd at pos.
 // A DLNA song is the renderer's to move or its controller's (dlna.SeekWay); a track Music Assistant
-// plays on this device's queue (seekable) is the queue's. Anything else (Spotify Connect, AirPlay, a
-// station, another room's player) has a bar that only shows where it is.
+// plays on this device's queue (seekable) is the queue's. That includes a song Music Assistant sends
+// over DLNA that the renderer cannot move through (a stream with no length in bytes): the queue can,
+// as the back and forward buttons beside the bar already do. Anything else (Spotify Connect, AirPlay,
+// a station, another room's player) has a bar that only shows where it is.
 func musicSeekRoute(rd home.Radio, paused bool, pos media.Position) seekView {
 	if pos.Dur <= 0 || rd.Followed {
 		return seekView{}
@@ -49,7 +51,6 @@ func musicSeekRoute(rd home.Radio, paused bool, pos media.Position) seekView {
 		if way, _ := dlnaSongWay(); way != dlna.SeekNone {
 			return seekView{route: seekDLNA, dur: pos.Dur}
 		}
-		return seekView{}
 	}
 	if seekable(rd, paused) {
 		return seekView{route: seekMusic, dur: pos.Dur}
@@ -106,4 +107,15 @@ func (r *renderer) seekBar(v seekView, x0, x1, y int, pos, dur time.Duration, tr
 	r.disc(done.Max.X, y, knob, fill)
 	reach := r.s(seekReach)
 	r.seekBars.drew(seekZone{view: v, bar: bar, reach: image.Rect(bar.Min.X-r.s(8), y-reach, bar.Max.X+r.s(8), y+reach)})
+}
+
+// seekPullLocked is whether a finger coming down at at is where a pull starts, rather than on the bar:
+// the left and right edges, where a swipe in brings up the dashboard or the drawer (drawerEdge). Not
+// on the video page, which has no drawer and takes every finger. Called with d.mu held.
+func (d *Display) seekPullLocked(at image.Point) bool {
+	if d.videoOnScreen || d.r == nil {
+		return false
+	}
+	edge := d.r.drawerEdge()
+	return at.X < edge || at.X >= d.r.w-edge
 }
