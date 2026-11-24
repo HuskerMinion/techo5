@@ -1920,6 +1920,14 @@ What is sent, and when:
 - The newest 100 clips of each kind are still all the device keeps, so a clip that has not been sent by
   the time it is pushed out is gone, and sending never uses more disk. **Wake clips unsent** shows how
   many are waiting, and **Wake clip sending** the last problem.
+- Where clips wait: on TECHO5 Linux, a new clip of a kind that is sent waits in RAM, not on the
+  device's flash, and is deleted once the trainer has it, so it no longer shows in `wake_clips` or the
+  **Wake clips** counts after that. Kinds you chose not to send, every clip while sending is off, and
+  the takes from **Record wake word** are kept on flash as before. A clip still waiting after 30 minutes
+  (the trainer is down), or once the clips waiting fill their room in RAM (a sixty-fourth of the
+  board's memory, from 4 MB to 16 MB: 8 MB with 512 MB, 16 MB with 1 GB or more), moves to flash and waits there, and so does every clip waiting when the
+  daemon stops for a restart or a reboot. A power cut loses what was waiting in RAM. On Fire OS and a
+  Panel clips always wait on the device.
 - Only to your home network or your Tailscale network. The address has to be a private one
   (`192.168.x.y`, `10.x.y.z`, `172.16.x.y` to `172.31.x.y`, a Tailscale address, `100.64.x.y` to
   `100.127.x.y` or `fd7a:115c:a1e0::`, or another link-local address or `fc00::/7`), or a name, like a
