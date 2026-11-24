@@ -633,6 +633,11 @@ HTTP.
   devices on the network has to check them itself: the question is not asked for them. The device fetches the song or video from the address it is given, which
   cannot be the device itself.
 
+  <a id="plex"></a>**Plex.** Casting from Plex runs this way, as an add-on:
+  [techo5-plex](https://github.com/HuskerMinion/techo5-plex) makes the device a player in Plex apps
+  and hands what they cast to the renderer. It is installed on each device you want to cast to; its
+  README says how. It needs DLNA, Video and DLNA video on.
+
   <a id="dlna-next-and-previous"></a>**Next and previous.** A DLNA renderer has no queue: the app
   or program that sends it songs does. So next and previous pressed on the device, for a song or
   video the renderer is playing (the Now Playing buttons on the Show, a swipe on the Spot, the
