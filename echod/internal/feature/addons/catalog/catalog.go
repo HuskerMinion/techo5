@@ -1,7 +1,8 @@
 // Package catalog is the add-on catalog's format: the list of add-ons TECHO5 has looked over, which a
-// device installs from and nothing else (feature/addons). It is a file in the repository,
-// addons/catalog.json, signed with the release key into catalog.json.sig (cmd/mkcatalog,
-// tools/sign-catalog.ps1), and a device believes it only with that signature (update.FetchSigned).
+// device installs from and nothing else (feature/addons). It is catalog.json in its own repository,
+// github.com/HuskerMinion/techo5-addons, signed with the release key into catalog.json.sig
+// (cmd/mkcatalog, tools/sign-catalog.ps1), and a device believes it only with that signature
+// (update.FetchSigned).
 //
 // The format lives here, apart from the feature that runs add-ons, so that the command that checks and
 // signs the file and the device that reads it parse it with the same definition: a catalog written by

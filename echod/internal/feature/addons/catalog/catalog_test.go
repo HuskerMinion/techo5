@@ -38,15 +38,25 @@ func plex() Addon {
 
 func valid() Catalog { return Catalog{Format: 1, Serial: 3, Addons: []Addon{plex()}} }
 
-// The catalog checked into the repository is one a device would take: it is what gets signed.
-func TestTheRepositorysCatalogParses(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "addons", "catalog.json"))
+// The catalog in a techo5-addons checkout ($TECHO5_ADDONS, or beside this one) is one a device would
+// take: it is what gets signed. It is skipped without one; techo5-addons checks its own catalog with
+// this repository's mkcatalog on every push.
+func TestTheAddonsCatalogParses(t *testing.T) {
+	dir := os.Getenv("TECHO5_ADDONS")
+	if dir == "" {
+		dir = filepath.Join("..", "..", "..", "..", "..", "..", "techo5-addons")
+	}
+	path := filepath.Join(dir, "catalog.json")
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) && os.Getenv("TECHO5_ADDONS") == "" {
+		t.Skipf("no techo5-addons checkout at %s", dir)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	c, err := Parse(b)
 	if err != nil {
-		t.Fatalf("addons/catalog.json: %v", err)
+		t.Fatalf("%s: %v", path, err)
 	}
 	if _, ok := c.Find("techo5-plex"); !ok {
 		t.Error("techo5-plex is not in the catalog")

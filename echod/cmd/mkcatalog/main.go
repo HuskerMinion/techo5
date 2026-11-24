@@ -1,9 +1,10 @@
-// Command mkcatalog checks the add-on catalog (addons/catalog.json) and signs it with the release key,
-// writing catalog.json.sig beside a copy of it. tools/sign-catalog.ps1 runs it on the computer that
-// holds the key, and publishes the two.
+// Command mkcatalog checks the add-on catalog (catalog.json in github.com/HuskerMinion/techo5-addons)
+// and signs it with the release key, writing catalog.json.sig beside a copy of it.
+// tools/sign-catalog.ps1 runs it on the computer that holds the key, and publishes the two;
+// techo5-addons builds it from this repository's main to check its catalog on every push.
 //
 // It parses the file with the same definition a device does (feature/addons/catalog), so a catalog a
-// device would refuse is refused here, before it is signed. What is signed is the repository's catalog
+// device would refuse is refused here, before it is signed. What is signed is techo5-addons' catalog
 // with one thing added, its expiry a month from now (Catalog.Expires), written out as the device will
 // read it; the signature is over update.CatalogDomain and those bytes, so it can never verify as a
 // firmware manifest's. Against the published catalog (-previous) its serial has to go up, and no
@@ -32,7 +33,7 @@ import (
 
 func main() {
 	var (
-		in       = flag.String("in", "addons/catalog.json", "the catalog to check and sign")
+		in       = flag.String("in", "catalog.json", "the catalog to check and sign (a techo5-addons checkout's)")
 		previous = flag.String("previous", "", "the catalog published now, whose serial this one has to be above")
 		out      = flag.String("out", "", "the folder to write catalog.json and catalog.json.sig to")
 		signKey  = flag.String("sign-key", "", "the release signing key file")

@@ -2833,7 +2833,8 @@ setup page.
 
 How the device runs them:
 
-- **Only from the catalog.** The catalog (`addons/catalog.json` in this repository) is signed with the
+- **Only from the catalog.** The catalog (`catalog.json` in
+  [techo5-addons](https://github.com/HuskerMinion/techo5-addons)) is signed with the
   same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
   and the device believes it only with that signature. It names each version's download and its SHA-256,
   and the manifest it ships (`addon.json`) by its hash too: the device refuses a download that doesn't
@@ -2878,8 +2879,11 @@ card.
 
 #### Getting an add-on listed
 
-Open an issue or a pull request on this repository with your add-on's repository and the release to
-list. It needs:
+The catalog has its own repository, [techo5-addons](https://github.com/HuskerMinion/techo5-addons).
+Open its [Submit an add-on](https://github.com/HuskerMinion/techo5-addons/issues/new?template=submit-addon.yml)
+form with your add-on's repository and the release to list. Its
+[README](https://github.com/HuskerMinion/techo5-addons#for-authors-getting-an-add-on-listed) says in
+full what an add-on needs and how it is reviewed. In short, it needs:
 
 - release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux;
 - an `addon.json` in the same release, such as techo5-plex's:
@@ -2903,8 +2907,8 @@ list. It needs:
 
   `command` is the program's name (the binary is installed under it), `{state}` is the add-on's own
   folder for what it keeps, which outlives updates, and `{device}` is the device's address as the
-  browser reached it. A port below 1024, or one of TECHO5's own, is refused unless it runs as root
-  (TECHO5's own are refused always).
+  browser reached it. A port below 1024 is refused unless it runs as root, and one of TECHO5's own is
+  refused always.
 
 We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
 catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
@@ -2912,13 +2916,18 @@ way a device does. Each new version gets a new entry: a version is never trusted
 one was. A listing that has to come out stays in the catalog marked withdrawn, with the reason: devices
 that have it say it's no longer listed and suggest removing it, but don't remove it themselves.
 
-For the maintainer: `tools/sign-catalog.ps1` checks the catalog (`mkcatalog`), refuses one whose
-`serial` is below the published one's, or the same serial with different entries (the same entries
-again only renew the expiry; a device never takes an older catalog than it has), signs it
-with the release key, and publishes `catalog.json` and `catalog.json.sig` on the repository's `addons`
-release, which is what devices fetch. `tools/release.ps1` runs it with every release and attaches the
-catalog to the release as well. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins
-a downloaded file by.
+For the maintainer: `tools/sign-catalog.ps1` signs the catalog from a techo5-addons checkout:
+`-Catalog`, else `$env:TECHO5_ADDONS`, else `techo5-addons` beside this checkout (which also covers a
+worktree beside it), else `E:\projects\techo5-addons`. It signs only a `catalog.json` that is committed
+in a checkout at its `origin/main`, with `mkcatalog` built from a clean checkout of this repository at
+its `origin/main`. It checks the catalog (`mkcatalog`), refuses one whose `serial` is below the
+published one's, or the same serial with different entries (the same entries again only renew the
+expiry; a device never takes an older catalog than it has), signs it with the release key, and
+publishes `catalog.json` and `catalog.json.sig` on this repository's `addons` release, which is what
+devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
+anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
+is passed on as `-Catalog`). `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
+downloaded file by.
 
 ### Running something of your own at boot
 

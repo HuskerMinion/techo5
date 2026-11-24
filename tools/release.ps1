@@ -112,7 +112,10 @@ param(
     # The sources of the programs the images carry built from others' sources (FFmpeg, Shairport Sync,
     # nqptp, librespot; NOTICE), from tools/linux/third-party-sources.sh: their licenses want the source
     # beside the binaries, so every release attaches it, as techo5-third-party-sources-<version>.tar.gz.
-    [string]$ThirdPartySources = ''
+    [string]$ThirdPartySources = '',
+    # The techo5-addons checkout the add-on catalog is signed from (tools/sign-catalog.ps1 -Catalog).
+    # Empty is $env:TECHO5_ADDONS, then techo5-addons beside this checkout, then E:\projects\techo5-addons.
+    [string]$AddonCatalog = ''
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ThirdPartySources -or -not (Test-Path $ThirdPartySources)) {
@@ -400,6 +403,10 @@ if ($skylightGiven) {
 if (-not $SignKey -or -not (Test-Path $SignKey)) { throw "no release signing key: set TECHO5_SIGN_KEY or pass -SignKey" }
 $repo = 'HuskerMinion/techo5'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
+# The add-on catalog is signed and published at the end, once the release is up (below). Its checks run
+# here first as a dry run, so a techo5-addons checkout that is missing or not at its origin/main, or a
+# catalog mkcatalog refuses, stops the release before anything is published rather than after.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Catalog $AddonCatalog -WhatIf
 $bin = Join-Path $root 'bin'
 New-Item -ItemType Directory -Force $bin | Out-Null
 
@@ -697,9 +704,9 @@ if ($missing) {
     throw "published, but these assets have no checksum in SHA256SUMS: $($missing -join ', ')"
 }
 
-# The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed and published on its
-# own "addons" release first when addons/catalog.json has changed since, and attached here either way.
-# After the checks above, which are about the firmware's own files: the catalog carries its own
-# signature and is not in SHA256SUMS.
-& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version
+# The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed from the techo5-addons
+# checkout and published on its own "addons" release, which moves its expiry on even when it has not
+# changed, and attached here as well. After the checks above, which are about the firmware's own files:
+# the catalog carries its own signature and is not in SHA256SUMS.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version -Catalog $AddonCatalog
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

@@ -295,8 +295,9 @@ The standard TECHO5 configuration remains independent of External ASP and its as
 ## Add-ons others have made
 
 The add-ons TECHO5 has looked over are listed in its signed catalog,
-[`addons/catalog.json`](../addons/catalog.json), and installed, updated and removed on the setup page's
-**Add-ons** card: see [Add-ons](setup.md#add-ons), which also says how to get one listed. An add-on
+[`catalog.json`](https://github.com/HuskerMinion/techo5-addons/blob/main/catalog.json) in
+[techo5-addons](https://github.com/HuskerMinion/techo5-addons), and installed, updated and removed on
+the setup page's **Add-ons** card: see [Add-ons](setup.md#add-ons), which also says how to get one listed. An add-on
 that is not in the catalog yet is installed by hand through `rc.local`, as below, and the card lists it
 as found on the device.
 
