@@ -84,6 +84,8 @@ For a device you're giving to someone else. The device forgets the URL and token
 Assistant connects with by a new random one, and restarts. Your Home Assistant can't connect to it again, and the device no longer calls your Home
 Assistant. It also makes a new Sendspin identity and pairing token, so your Music Assistant can't pair
 with it again and the next Music Assistant it meets sees a new player; delete the old one from yours.
+(Updating to v1.6.49, dot-v1.0.76 or spot-v1.4.49 or later makes a new player too, once: see
+[Music](setup.md#5-music).)
 Alarms, radio stations, Wi-Fi and its other settings stay.
 
 A device that was given access to your Home Assistant with an administrator's token deletes its own

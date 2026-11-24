@@ -54,6 +54,13 @@ type Wire interface {
 // server/error, or hung up on it: a server from before encryption, which knows only client/hello.
 var ErrNotEncrypted = errors.New("the server does not speak encrypted Sendspin")
 
+// ErrHungUp is an ErrNotEncrypted from a server that hung up on client/init or said nothing until
+// initTimeout. A server from before encryption does that, but so does a Music Assistant that is
+// restarting or busy, and a network that dropped the connection; a server that answered with
+// something else said in so many words that it is not one. The caller, which knows whether this
+// server has spoken encrypted before, tells the two apart (#721).
+var ErrHungUp = fmt.Errorf("%w: it hung up on client/init or said nothing", ErrNotEncrypted)
+
 // hungUpOrSilent is a wait for server/init that ended as a server from before encryption ends it:
 // the server closed the connection, or said nothing until the deadline.
 func hungUpOrSilent(err error) bool {
@@ -129,7 +136,9 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 	// waits for a hello that never comes. Either is taken as that, and if it was only the network, the
 	// unencrypted connection that follows fails to start and the next one is encrypted again. Any
 	// other failure is the network's. A device paired with a server takes neither as a server from
-	// before encryption: one dropped frame is not to turn its encryption off.
+	// before encryption: one dropped frame is not to turn its encryption off. An unpaired one is told
+	// which it was (ErrHungUp), as a server it has spoken encrypted with is not taken for an old one
+	// on a hang-up either.
 	if err := w.SetReadDeadline(time.Now().Add(initTimeout)); err != nil {
 		return nil, err
 	}
@@ -137,7 +146,7 @@ func Handshake(w Wire, st *Store) (*Conn, error) {
 	_ = w.SetReadDeadline(time.Time{})
 	if err != nil {
 		if hungUpOrSilent(err) && !st.Paired() {
-			return nil, fmt.Errorf("%w: %v", ErrNotEncrypted, err)
+			return nil, fmt.Errorf("%w: %v", ErrHungUp, err)
 		}
 		return nil, fmt.Errorf("waiting for server/init: %w", err)
 	}

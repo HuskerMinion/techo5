@@ -539,6 +539,11 @@ HTTP.
   this device's, so the delay is set here: the device places the group's audio that much later, it
   applies as soon as it is changed, even in a song that is playing, and 0 plays as Music Assistant
   schedules it.
+  Since v1.6.49 (dot-v1.0.76, spot-v1.4.49) the device talks to Music Assistant encrypted, as Sendspin
+  1.0 asks, and is known there by its encryption key, not its MAC address any more. That makes Music
+  Assistant create a new player for the device, unless Music Assistant carries the old one over
+  ([music-assistant/support#7199](https://github.com/music-assistant/support/issues/7199)). Move
+  your automations and groups to the new player, or remove the old one.
 - **Snapcast.** The device can also be a client of a [Snapcast](https://github.com/snapcast/snapcast)
   server, in step with the house's other Snapcast clients. In Home Assistant, set **Snapcast server**
   (Playback, Configuration) to the server's address, `192.168.1.20` or `192.168.1.20:1704` (1704

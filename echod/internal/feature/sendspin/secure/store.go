@@ -38,7 +38,26 @@ type storeFile struct {
 	PrivateKey []byte   `json:"private_key"`
 	PairingPSK []byte   `json:"pairing_psk"`
 	Records    []record `json:"records,omitempty"`
+
+	// Encrypted is the servers this device has completed an encrypted handshake with, paired or not.
+	// Firmware from before it ignores the field, and a file from before it has none.
+	Encrypted []spoke `json:"encrypted,omitempty"`
 }
+
+// spoke is a server that has spoken encrypted Sendspin with the device: its address, as the device
+// knows it before any handshake, and its id, so that a server on a new address takes its own entry
+// along. Failing is when the server first hung up on client/init (or kept silent) since then, zero
+// while it has not.
+type spoke struct {
+	Peer     string    `json:"peer"`
+	ServerID string    `json:"server_id"`
+	Seen     time.Time `json:"seen"`
+	Failing  time.Time `json:"failing,omitzero"`
+}
+
+// seenRefresh is how stale a server's Seen may grow before an encrypted handshake writes it again.
+// Seen orders eviction only, so a write on every reconnection would wear the flash for nothing.
+const seenRefresh = 24 * time.Hour
 
 // record is one paired server: its id and the long-term PSK the two agreed on.
 type record struct {
@@ -177,6 +196,56 @@ func (s *Store) forget(serverID string) error {
 		return nil
 	}
 	return s.save()
+}
+
+// SpokeEncrypted records that the server at peer, whose id is serverID, has just completed an encrypted
+// handshake: a hang-up from it from now on is not taken for a server from before encryption (#721).
+// Its entry replaces any for the same address or the same server, and at capacity the one seen
+// longest ago goes.
+func (s *Store) SpokeEncrypted(peer, serverID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for _, e := range s.file.Encrypted {
+		if e.Peer == peer && e.ServerID == serverID && e.Failing.IsZero() && now.Sub(e.Seen) < seenRefresh {
+			return nil // nothing that matters has changed
+		}
+	}
+	s.file.Encrypted = slices.DeleteFunc(s.file.Encrypted, func(e spoke) bool {
+		return e.Peer == peer || e.ServerID == serverID
+	})
+	if len(s.file.Encrypted) >= capacity {
+		oldest := 0
+		for i, e := range s.file.Encrypted {
+			if e.Seen.Before(s.file.Encrypted[oldest].Seen) {
+				oldest = i
+			}
+		}
+		s.file.Encrypted = slices.Delete(s.file.Encrypted, oldest, oldest+1)
+	}
+	s.file.Encrypted = append(s.file.Encrypted, spoke{Peer: peer, ServerID: serverID, Seen: now})
+	return s.save()
+}
+
+// HungUp records that the server at peer hung up on client/init or kept silent, and reports whether it
+// has spoken encrypted with the device before and, if so, since when it has been failing: the first
+// such hang-up after its last encrypted handshake. Only that first one is written, so a server that
+// keeps hanging up does not keep writing the file.
+func (s *Store) HungUp(peer string) (failingSince time.Time, spoken bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.file.Encrypted {
+		e := &s.file.Encrypted[i]
+		if e.Peer != peer {
+			continue
+		}
+		if e.Failing.IsZero() {
+			e.Failing = time.Now().UTC()
+			_ = s.save() // a failed write only starts the count again after a restart
+		}
+		return e.Failing, true
+	}
+	return time.Time{}, false
 }
 
 // Discard removes the store's file for good: the identity, the pairing token and every server paired
