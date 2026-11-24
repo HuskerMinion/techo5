@@ -5,9 +5,9 @@ package maintenance
 import (
 	"context"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/android/logd"
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/recording"
 )
@@ -17,12 +17,15 @@ import (
 // nothing about the device changes fast enough for the interval to be worth a knob.
 const Period = 5 * time.Minute
 
-// flushPeriod is how often what has been written is pushed out to flash. The daemon's log is
-// written through the shell that started it, so its lines sit in the page cache until something
-// syncs: a device that loses power keeps whatever was flushed and nothing after it, which cost us
-// the last minute before a Show was unplugged mid-fault (2026-09-19). Five seconds bounds that
-// loss; a sync with nothing dirty costs nothing, and the root filesystem is read-only anyway.
-const flushPeriod = 5 * time.Second
+// The daemon's log is written through the shell that started it, so its lines sit in the page cache
+// until something pushes them out: a device that loses power keeps whatever was flushed and nothing
+// after it, which cost us the last minute before a Show was unplugged mid-fault (2026-09-19). A
+// global sync every five seconds bounded that loss, but it made each log line a journal commit, and
+// a Show 8 measured about 20 KB of flash written per line. eMMC wears with what is written to it.
+// So only the log is flushed, with fdatasync: at once after a warning or an error (see urgentGap),
+// which keeps those across a power cut, and on Period when it has grown, which keeps routine lines
+// to within five minutes. Saved settings and the like sync themselves as they are written, and the
+// root filesystem is read-only.
 
 func init() {
 	component.Register(component.Device, Get(), component.Order(80))
@@ -42,13 +45,22 @@ func Get() *Maintenance {
 
 func (m *Maintenance) Name() string { return "maintenance" }
 
-// Run sweeps once at start, so a restart clears its leftovers straight away, then on the period.
+// Run sweeps once at start, so a restart clears its leftovers straight away, then on the period,
+// and flushes the log on the period and after warnings.
 func (m *Maintenance) Run(ctx context.Context) error {
 	t := time.NewTicker(Period)
 	defer t.Stop()
 
-	flush := time.NewTicker(flushPeriod)
-	defer flush.Stop()
+	log := newLogFlush(openStdLog())
+	// again is when a warning that came too soon after the last flush is flushed; nil while none
+	// is waiting.
+	var again <-chan time.Time
+	warned := func() {
+		again = nil
+		if wait := log.warned(time.Now()); wait > 0 {
+			again = time.After(wait)
+		}
+	}
 
 	for {
 		recording.Get().Prune()
@@ -56,10 +68,16 @@ func (m *Maintenance) Run(ctx context.Context) error {
 		for swept := false; !swept; {
 			select {
 			case <-ctx.Done():
+				log.flush()
 				return nil
-			case <-flush.C:
-				syscall.Sync()
+			case <-logd.Warned():
+				if again == nil {
+					warned()
+				}
+			case <-again:
+				warned()
 			case <-t.C:
+				log.flush()
 				swept = true
 			}
 		}
