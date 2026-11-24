@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,10 +49,42 @@ func testWAV(n int) []byte {
 func overFor(t *testing.T) (*Player, *speaker.Driver) {
 	t.Helper()
 	d := speaker.NewDriver(speaker.New())
+	p := &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}
+	var mu sync.Mutex
+	var claims []*speaker.Claim
 	prev := overClaims
-	overClaims = d.ClaimOver
-	t.Cleanup(func() { overClaims = prev })
-	return &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}, d
+	overClaims = func(name string, play func(ctx context.Context, spk *speaker.Player) error) *speaker.Claim {
+		c := d.ClaimOver(name, play)
+		mu.Lock()
+		claims = append(claims, c)
+		mu.Unlock()
+		return c
+	}
+	// Whatever the test left playing is stopped, and every reading it started has ended, before the
+	// next test runs. A claim over the music waits its turn, so a reading can dial its url after the
+	// test that asked for it is over and its server is gone; by then the port can belong to another
+	// test's server, which the reading then held open for good (v1.6.53, a run that timed out in
+	// TestAStationStartedDuringAPausedTurnPlaysAfterIt).
+	t.Cleanup(func() {
+		p.overMu.Lock()
+		sound := p.over
+		p.overMu.Unlock()
+		if sound != nil {
+			p.StopOver(sound.token)
+		}
+		mu.Lock()
+		started := claims
+		mu.Unlock()
+		for _, c := range started {
+			select {
+			case <-c.Done():
+			case <-time.After(10 * time.Second):
+				t.Error("a sound over the music was still playing after its test")
+			}
+		}
+		overClaims = prev
+	})
+	return p, d
 }
 
 // overStream serves a live stream: a second of WAV and then nothing until the reader goes away, which is

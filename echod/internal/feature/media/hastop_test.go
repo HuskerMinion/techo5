@@ -1,8 +1,6 @@
 package media
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -29,14 +27,11 @@ func TestHomeAssistantsStopWithNothingPlayingIsAStop(t *testing.T) {
 // is not told as a stop, and nothing listening forgets what it was playing.
 func TestHomeAssistantsStopWithSomethingPausedIsNoStop(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 	d := speaker.NewDriver(speaker.New())
 	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
 	defer p.stream.Stop()
-	p.stream.Play(srv.URL)
+	p.stream.Play(radio)
 	p.stream.Pause()
 	stopped := 0
 	p.OnStop.Listen(func(struct{}) { stopped++ })
