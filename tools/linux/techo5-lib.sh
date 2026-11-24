@@ -895,7 +895,7 @@ t5_bt_again_pass() {
 # daemon's log is flushed after every warning or error, feature/maintenance). A power cut can lose up to
 # 60 s of writes nothing synced, such as routine log lines. No lazytime: the Dot 2's 3.18 kernel does
 # not know it, and every board mounts userdata the same way. Each initramfs mounts it so; t5_data_commit
-# puts it right on a userdata an older initramfs mounted without it. T5_MOUNTS: another file (tests).
+# puts it right on a userdata an older initramfs mounted without it.
 t5_data_commit() {
 	o=$(awk '$2 == "/data" && $3 == "ext4" { o = $4 } END { print o }' "${T5_MOUNTS:-/proc/mounts}" 2>/dev/null)
 	[ -n "$o" ] || return 0
@@ -919,10 +919,13 @@ t5_data_commit() {
 # so it is removed the first time.
 t5_bt_cache() {
 	a=$(t5_btmgmt 3 -i hci0 info 2>/dev/null | awk '$1 == "addr" { print $2; exit }')
-	case $a in ??:??:??:??:??:??) ;; *) return 0 ;; esac
+	x=[0-9A-F][0-9A-F]
+	case $a in $x:$x:$x:$x:$x:$x) ;; *) return 0 ;; esac
 	[ "$a" = 00:00:00:00:00:00 ] && return 0
 	d=/var/lib/bluetooth/$a/cache
 	mountpoint -q "$d" && return 0
+	# The adapter's folder is 0700, as bluetoothd makes it, when it is made here first.
+	[ -d "${d%/cache}" ] || mkdir -p -m 0700 "${d%/cache}"
 	mkdir -p "$d" && rm -rf "$d"/*
 	mount -t tmpfs -o size=4m,mode=0700 tmpfs "$d" || log "bt: the cache for $a stays on userdata"
 }

@@ -59,8 +59,9 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 . /lib/techo5-lib.sh
 
 # --- Userdata: persistent log, daemon state, Wi-Fi credentials.
-# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit).
-if mount -t ext4 -o noatime,commit=60 $DATA_DEV /data 2>/dev/null; then
+# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit), and the old options if it is refused.
+if mount -t ext4 -o noatime,commit=60 $DATA_DEV /data 2>/dev/null ||
+	mount -t ext4 -o noatime $DATA_DEV /data 2>/dev/null; then
 	mkdir -p /data/techo5-linux
 	LOGDIR=/data/techo5-linux
 	crumb "userdata mounted"
