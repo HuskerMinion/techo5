@@ -235,8 +235,9 @@ func (f *Feature) SeekFromDevice(id uint64, to time.Duration) bool {
 		return true
 	case SeekAsk:
 		from, _ := f.current()
-		slog.Info("dlna: a seek on the screen, told to the controller", "to", to.Round(time.Second))
-		return f.e.request(askSeek, "seek:"+strconv.FormatInt(int64(to/time.Second), 10), from)
+		told := f.e.request(askSeek, "seek:"+strconv.FormatInt(int64(to/time.Second), 10), from)
+		slog.Info("dlna: a seek on the screen, for the controller", "to", to.Round(time.Second), "told", told)
+		return told
 	}
 	return false
 }

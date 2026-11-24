@@ -60,9 +60,10 @@ func TestTheDescriptionHidesItsTokenFromOthers(t *testing.T) {
 		t.Errorf("text came out as markup: %s", shown)
 	}
 
-	// What cannot be read whole is not shown to another at all.
-	for _, bad := range []string{`<a>x</b>`, `<a>`, `<a>&nope;</a>`} {
-		if got := shownMeta(song{meta: bad, from: "127.0.0.1"}, "192.168.1.30"); got != "" {
+	// What cannot be read as XML is shown to another as it came, its addresses' credentials blanked
+	// (TestALooseDescriptionKeepsItsTitle).
+	for _, bad := range []string{`<a>x</b>`, `<a>`, `<a>&nope;</a>`, `<a>http://h/x?token=sekrit</b>`} {
+		if got := shownMeta(song{meta: bad, from: "127.0.0.1"}, "192.168.1.30"); strings.Contains(got, "sekrit") || got == "" {
 			t.Errorf("%q: %q", bad, got)
 		}
 	}
@@ -103,5 +104,20 @@ func TestAFetchErrorHidesTheToken(t *testing.T) {
 	}
 	if e := errors.New("no address in it"); quietErr(e) != e {
 		t.Error("an error with no address in it was changed")
+	}
+}
+
+// A description that is not well-formed (a bare & a controller did not escape, an HTML entity) is
+// kept for the others with its addresses' credentials blanked, so they still see the title.
+func TestALooseDescriptionKeepsItsTitle(t *testing.T) {
+	meta := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item><dc:title>Rock &nbsp; Roll</dc:title>` +
+		`<res>http://192.0.2.10:32400/a.mp3?a=1&X-Plex-Token=sekrit</res>` +
+		`<upnp:albumArtURI>http://192.0.2.10/art?x=1&amp;X-Plex-Token=sekrit</upnp:albumArtURI></item></DIDL-Lite>`
+	got := metaWithoutSecrets(meta)
+	if strings.Contains(got, "sekrit") {
+		t.Errorf("a token was shown: %s", got)
+	}
+	if !strings.Contains(got, "Rock &nbsp; Roll") || !strings.Contains(got, "</res>") {
+		t.Errorf("the description was not kept: %s", got)
 	}
 }

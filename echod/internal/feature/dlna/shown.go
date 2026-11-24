@@ -48,8 +48,29 @@ func shownMeta(s song, host string) string {
 // metaWithoutSecrets is a DIDL-Lite description with each text and attribute value that is an address
 // carrying a query, a fragment or a user (where a credential would be) passed through withoutSecrets.
 // It is read and written again token by token, so whatever else it holds stays as it was, its
-// prefixes too, and nothing in it can come out as markup it was not. "" if it is not well-formed.
+// prefixes too, and nothing in it can come out as markup it was not. One that is not well-formed (a
+// controller that escaped a bare & only once, an HTML entity) is kept as it came, with each address in
+// it passed through withoutSecrets (laxWithoutSecrets): its title and artist still reach the others.
 func metaWithoutSecrets(meta string) string {
+	if out, ok := strictWithoutSecrets(meta); ok {
+		return out
+	}
+	return laxWithoutSecrets(meta)
+}
+
+// anAddressInMeta is an address in a description that is not read as XML: up to the first space,
+// quote or angle bracket, so the tag after it is not taken in.
+var anAddressInMeta = regexp.MustCompile(`(?i)\bhttps?://[^\s"'<>]+`)
+
+// laxWithoutSecrets is a description that could not be read as XML, each address in it passed through
+// withoutSecrets. Its query is read as it stands, so a value after an escaped "&amp;" is still found
+// by its name's ending (secretParam).
+func laxWithoutSecrets(meta string) string {
+	return anAddressInMeta.ReplaceAllStringFunc(meta, secretless)
+}
+
+// strictWithoutSecrets is metaWithoutSecrets for a well-formed description; false if it is not one.
+func strictWithoutSecrets(meta string) (string, bool) {
 	d := xml.NewDecoder(strings.NewReader(meta))
 	var b strings.Builder
 	var open []xml.Name
@@ -59,7 +80,7 @@ func metaWithoutSecrets(meta string) string {
 			break
 		}
 		if err != nil {
-			return ""
+			return "", false
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
@@ -75,7 +96,7 @@ func metaWithoutSecrets(meta string) string {
 			// RawToken does not match end tags with their starts: done here, so what is written is as
 			// well-formed as a decoder that checks would have taken.
 			if len(open) == 0 || open[len(open)-1] != t.Name {
-				return ""
+				return "", false
 			}
 			open = open[:len(open)-1]
 			b.WriteString("</" + rawName(t.Name) + ">")
@@ -89,9 +110,9 @@ func metaWithoutSecrets(meta string) string {
 		// A comment or a directive is dropped: neither is anything a controller reads.
 	}
 	if len(open) != 0 {
-		return ""
+		return "", false
 	}
-	return b.String()
+	return b.String(), true
 }
 
 // rawName is a name as RawToken gives it: its prefix, not its namespace, which is how it was written.

@@ -128,6 +128,12 @@ func (r *renderer) seekNow() {
 
 // carryOutSeek is seekNow with r.mu held, which it lets go.
 func (r *renderer) carryOutSeek() {
+	// Carried out now: a settle timer armed in the moment before (a seekPlace between a caller's
+	// check and this) is no longer the one armed, so it finds nothing of its own when it goes off.
+	if r.seekTimer != nil {
+		r.seekTimer.Stop()
+	}
+	r.seekArm++
 	r.seekTimer = nil
 	if !r.seeking {
 		r.mu.Unlock()

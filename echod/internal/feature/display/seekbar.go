@@ -297,8 +297,9 @@ func (d *Display) seekLifted() {
 }
 
 // across is whether a finger that has moved by dx, dy since it came down set off up or down rather
-// than along a bar.
-func across(dx, dy int) bool { return abs(dy) > abs(dx) }
+// than along a bar: clearly so (twice as far up or down as along), as a finger that slides along the
+// bar often wobbles a little first.
+func across(dx, dy int) bool { return abs(dy) > 2*abs(dx) }
 
 // seekGesture is a finger on the bar as last drawn: a tap moves to the place under it; a finger that
 // came down on the bar and slides along it (Hold, Drag) shows the place it is over, and moves there as
