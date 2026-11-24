@@ -237,3 +237,26 @@ func TestFillHoldsItsPlace(t *testing.T) {
 		t.Errorf("after 200 reads the reference is at %.0f, want it held at %.0f", played.next, want)
 	}
 }
+
+// TestFillFollowsALastingSmallShift: a shift of a few milliseconds that lasts (a speaker underrun's gap,
+// or clocks drifting apart) is followed after moveAfter reads, where a single read that far off is not.
+func TestFillFollowsALastingSmallShift(t *testing.T) {
+	freshRing(t)
+	t0 := time.Now()
+	pushRamp(t0, 120)
+	const n = Rate / 50
+	l, r := make([]float32, n), make([]float32, n)
+	start := Seconds(t0) + 0.2
+	Fill(l, r, start)
+	shift := 0.005 // 5 ms: more than settle, less than a late read's
+	Fill(l, r, start+float64(n)/Rate+shift)
+	if want := placed(start) + 2*n; played.next != want {
+		t.Fatalf("one read 5 ms off moved the reference to %.0f, want it held at %.0f", played.next, want)
+	}
+	for k := 2; k <= moveAfter+1; k++ {
+		Fill(l, r, start+float64(k*n)/Rate+shift)
+	}
+	if want := placed(start+float64((moveAfter+1)*n)/Rate+shift) + n; played.next != want {
+		t.Errorf("after %d reads 5 ms off the reference is at %.0f, want %.0f", moveAfter, played.next, want)
+	}
+}
