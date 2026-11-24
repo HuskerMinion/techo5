@@ -13,7 +13,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin/secure"
 )
 
-var hungUp = fmt.Errorf("%w: %v", secure.ErrHungUp, io.EOF)
+var errServerHungUp = fmt.Errorf("%w: %v", secure.ErrHungUp, io.EOF)
 
 func openStore(t *testing.T, path string) *secure.Store {
 	t.Helper()
@@ -28,7 +28,7 @@ func openStore(t *testing.T, path string) *secure.Store {
 // on a hang-up, or on a reply that is not server/init, as before.
 func TestAServerNeverSeenEncryptedStillFallsBack(t *testing.T) {
 	st := openStore(t, filepath.Join(t.TempDir(), "keys.json"))
-	if !fallBack(st, "192.0.2.1", hungUp) {
+	if !fallBack(st, "192.0.2.1", errServerHungUp) {
 		t.Error("a hang-up from a server never seen encrypted does not fall back")
 	}
 	if !fallBack(st, "192.0.2.1", secure.ErrNotEncrypted) {
@@ -48,11 +48,11 @@ func TestAServerSeenEncryptedIsNotMarkedUnencryptedOnAHangUp(t *testing.T) {
 	}
 	st := openStore(t, path) // a restart
 	for range 3 {
-		if fallBack(st, "192.0.2.1", hungUp) {
+		if fallBack(st, "192.0.2.1", errServerHungUp) {
 			t.Fatal("a hang-up from a server that spoke encrypted falls back")
 		}
 	}
-	if !fallBack(st, "192.0.2.2", hungUp) {
+	if !fallBack(st, "192.0.2.2", errServerHungUp) {
 		t.Error("a hang-up from another server does not fall back")
 	}
 	// A reply that is not server/init says outright that the server is old, as a downgrade would.
@@ -69,12 +69,12 @@ func TestAServerHangingUpForADayFallsBack(t *testing.T) {
 	if err := st.SpokeEncrypted("192.0.2.1", "server-a"); err != nil {
 		t.Fatal(err)
 	}
-	if fallBack(st, "192.0.2.1", hungUp) {
+	if fallBack(st, "192.0.2.1", errServerHungUp) {
 		t.Fatal("the first hang-up falls back")
 	}
 	backdate(t, path, downgradeAfter+time.Minute)
 	st = openStore(t, path)
-	if !fallBack(st, "192.0.2.1", hungUp) {
+	if !fallBack(st, "192.0.2.1", errServerHungUp) {
 		t.Error("a server hanging up for longer than downgradeAfter does not fall back")
 	}
 
@@ -82,7 +82,7 @@ func TestAServerHangingUpForADayFallsBack(t *testing.T) {
 	if err := st.SpokeEncrypted("192.0.2.1", "server-a"); err != nil {
 		t.Fatal(err)
 	}
-	if fallBack(st, "192.0.2.1", hungUp) {
+	if fallBack(st, "192.0.2.1", errServerHungUp) {
 		t.Error("a hang-up after an encrypted handshake falls back")
 	}
 }
