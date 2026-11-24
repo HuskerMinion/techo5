@@ -142,6 +142,20 @@ var langs = map[string]*words{
 			"sunny": "Zonnig", "windy": "Winderig", "windy-variant": "Winderig",
 		},
 	},
+	"pl": {
+		// Months are in the genitive, as a date says them ("5 stycznia"); a month's own heading takes
+		// the nominative from plMonths.
+		days:        [7]string{"niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"},
+		shortDays:   [7]string{"nd", "pn", "wt", "śr", "cz", "pt", "sb"},
+		months:      [12]string{"stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"},
+		shortMonths: [12]string{"sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"},
+		sky: map[string]string{
+			"clear-night": "Bezchmurnie", "cloudy": "Pochmurno", "exceptional": "Groźna pogoda", "fog": "Mgła", "hail": "Grad",
+			"lightning": "Wyładowania", "lightning-rainy": "Burza", "partlycloudy": "Częściowe zachmurzenie",
+			"pouring": "Ulewa", "rainy": "Deszcz", "snowy": "Śnieg", "snowy-rainy": "Deszcz ze śniegiem",
+			"sunny": "Słonecznie", "windy": "Wietrznie", "windy-variant": "Wietrznie",
+		},
+	},
 	"pt": {
 		days:        [7]string{"domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"},
 		shortDays:   [7]string{"dom", "seg", "ter", "qua", "qui", "sex", "sáb"},
@@ -180,6 +194,10 @@ var langs = map[string]*words{
 	},
 }
 
+// plMonths are the Polish months on their own, as a calendar heads one: a date says "5 stycznia",
+// but the month is "Styczeń 2026".
+var plMonths = [12]string{"styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"}
+
 // phrases are the few words written beside a date: today, as the forecast heads its first day, and
 // the next alarm after the clock's date.
 //
@@ -216,6 +234,9 @@ var phrases = map[string]map[string]string{
 	"nl": {"here": "Hier", "today": "Vandaag", "alarm": "Wekker", "snoozed": "Sluimeren tot", "tomorrow": "Morgen", "yesterday": "Gisteren",
 		"now": "Nu", "allday": "Hele dag", "nothing": "Niets in de agenda", "nothingtoday": "Niets vandaag",
 		"nothingelse": "Verder niets vandaag", "upcoming": "BINNENKORT", "nothingsoon": "Niets gepland"},
+	"pl": {"here": "Tutaj", "today": "Dziś", "alarm": "Alarm", "snoozed": "Drzemka do", "tomorrow": "Jutro", "yesterday": "Wczoraj",
+		"now": "Teraz", "allday": "Cały dzień", "nothing": "Kalendarz jest pusty", "nothingtoday": "Dziś nic",
+		"nothingelse": "Dziś nic więcej", "upcoming": "WKRÓTCE", "nothingsoon": "Nic w planach"},
 	"pt": {"here": "Aqui", "today": "Hoje", "alarm": "Alarme", "snoozed": "Adiado até", "tomorrow": "Amanhã", "yesterday": "Ontem",
 		"now": "Agora", "allday": "Dia inteiro", "nothing": "Nada na agenda", "nothingtoday": "Nada hoje",
 		"nothingelse": "Nada mais hoje", "upcoming": "PRÓXIMOS", "nothingsoon": "Nada previsto"},
@@ -285,6 +306,9 @@ func MonthYear(t time.Time, lang string) string {
 	if lang == "ja" {
 		return t.Format("2006年1月")
 	}
+	if lang == "pl" {
+		return up(plMonths[t.Month()-1]) + " " + strconv.Itoa(t.Year())
+	}
 	if w, ok := langs[lang]; ok {
 		return up(w.months[t.Month()-1]) + " " + strconv.Itoa(t.Year())
 	}
@@ -321,7 +345,7 @@ func LongDate(t time.Time, lang string) string {
 		return up(d) + ", " + day(t) + " " + of(m)
 	case "es", "gl", "pt":
 		return up(d) + ", " + day(t) + " de " + m
-	case "ro", "ru", "tr":
+	case "pl", "ro", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m
@@ -340,7 +364,7 @@ func ShortDate(t time.Time, lang string) string {
 	switch lang {
 	case "de":
 		return up(d) + "., " + day(t) + ". " + m
-	case "ca", "ca-valencia", "es", "gl", "pt", "ro", "ru", "tr":
+	case "ca", "ca-valencia", "es", "gl", "pl", "pt", "ro", "ru", "tr":
 		return up(d) + ", " + day(t) + " " + m
 	}
 	return up(d) + " " + day(t) + " " + m

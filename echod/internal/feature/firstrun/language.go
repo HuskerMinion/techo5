@@ -19,7 +19,7 @@ type Lang struct{ Code, Name string }
 // draws in English and is shown as English here.
 var Languages = []Lang{
 	{"en", "English"}, {"ca", "Català"}, {"ca-valencia", "Valencià"}, {"de", "Deutsch"}, {"es", "Español"}, {"fr", "Français"}, {"gl", "Galego"},
-	{"it", "Italiano"}, {"nl", "Nederlands"}, {"pt", "Português"}, {"ro", "Română"}, {"ru", "Русский"}, {"tr", "Türkçe"},
+	{"it", "Italiano"}, {"nl", "Nederlands"}, {"pl", "Polski"}, {"pt", "Português"}, {"ro", "Română"}, {"ru", "Русский"}, {"tr", "Türkçe"},
 	{"ja", "日本語"},
 }
 

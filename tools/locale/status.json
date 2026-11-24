@@ -10,6 +10,7 @@
   "it": {"name": "Italian", "by": "angelor87 (#310, #353)", "device": "Echo Show 5 1st gen (#353)"},
   "ja": {"name": "Japanese", "by": "lem0njuice0 (#270)", "device": "Echo Show 5 2nd gen (#270)"},
   "nl": {"name": "Dutch", "by": "christianschmidt (#365)", "device": "Echo Show 5 1st gen, v1.6.36 (local build)"},
+  "pl": {"name": "Polish", "by": "Szaman", "device": "Echo Show 8 1nd gen, v1.6.50"},
   "ro": {"name": "Romanian", "device": "Echo Show 5 1st gen, v1.6.48 (local build)"},
   "tr": {"name": "Turkish", "by": "senolsun (#349)", "device": "Not yet"}
  }

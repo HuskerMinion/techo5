@@ -35,6 +35,7 @@ var spoken = map[string]struct{ weather, radar, home, camera string }{
 	"it":          {"Che tempo fa?", "Mostra la mappa della pioggia", "Torna all'orologio", "Mostra la porta d'ingresso"},
 	"nl":          {"Hoe is het weer?", "Laat de buienradar zien", "Terug naar de klok", "Laat de voordeur zien"},
 	"pt":          {"Como está o tempo?", "Mostra o mapa de chuva", "Volta pro relógio", "Mostra a porta da frente"},
+	"pl":          {"Jaka będzie jutro pogoda?", "Pokaż mapę opadów", "Wróć do zegara", "Pokaż drzwi wejściowe"},
 	"ro":          {"Cum e vremea mâine?", "Arată-mi harta ploilor", "Înapoi la ceas", "Arată ușa de la intrare"},
 	"ru":          {"Какая погода?", "Покажи карту дождя", "Верни часы", "Покажи входную дверь"},
 }

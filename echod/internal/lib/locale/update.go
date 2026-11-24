@@ -128,6 +128,18 @@ var updateTranslations = map[string]map[string]string{
 		UpdatePowerHint:    "Laat het apparaat aan",
 		UpdateRetryHint:    "Opnieuw proberen via Settings > General > Updates",
 	},
+	"pl": {
+		UpdateSystemTitle:  "Aktualizacja systemu",
+		UpdateFailedTitle:  "Aktualizacja nie powiodła się",
+		UpdateDownloading:  "Pobieranie aktualizacji · %d%%",
+		UpdateInstalling:   "Instalowanie…",
+		UpdateRestartingIn: "Ponowne uruchomienie aplikacji za %d…",
+		UpdateRestarting:   "Ponowne uruchamianie aplikacji…",
+		UpdateRebootingIn:  "Restart urządzenia za %d…",
+		UpdateRebooting:    "Restartowanie urządzenia…",
+		UpdatePowerHint:    "Nie wyłączaj urządzenia",
+		UpdateRetryHint:    "Spróbuj ponownie: Ustawienia > Ogólne > Aktualizacje",
+	},
 	"pt": {
 		UpdateSystemTitle:  "Atualização do sistema",
 		UpdateFailedTitle:  "Falha na atualização",
