@@ -91,6 +91,9 @@ func TestTheLockIsOnTheRowsNotTheDoor(t *testing.T) {
 // row is open only by being named, so every row the Alarms card can show is open, and the Connections,
 // Privacy & Security and General cards are behind the PIN whole.
 func TestWhichRowsAreEveryday(t *testing.T) {
+	set := wakeWordSet
+	t.Cleanup(func() { wakeWordSet = set })
+	wakeWordSet = func() bool { return true }
 	for _, cat := range []category{catConnections, catSecurity, catGeneral} {
 		rows, _ := categoryRows(sheetView{st: settings{cat: cat}})
 		for _, row := range rows {
@@ -101,6 +104,7 @@ func TestWhichRowsAreEveryday(t *testing.T) {
 	}
 	// Other systems, and the voice side: behind the PIN wherever they are drawn.
 	behind := []string{"wakesens", "wakesensplaying", "speakergain", "sendspin", "sendspindelay", "airplayvolume",
+		"follow", "camerasound", "callbutton", "roomlights", "cal_", "cal_some_later_row",
 		"presence", "photofolder", "subfolders", "immichfav", "calendars", "calpopcals", "screenlang", "weather",
 		"timezone", "callring", "recordword", "recordslot", "recordcount", "recordgap", "takes", "airplay", "spotify", "dlna",
 		"settingslock", "ssh", "updates", "restart", "tabletapps",
@@ -155,5 +159,18 @@ func TestLockedRowsAreMarked(t *testing.T) {
 	}
 	if card.rows[0].locked {
 		t.Error("the card's own rows were changed")
+	}
+}
+
+// The wake word is open only while the first slot listens for one: where the owner chose no word,
+// choosing one would turn listening back on, which is the owner's to do.
+func TestTheWakeWordIsOpenOnlyWhileOneIsSet(t *testing.T) {
+	set := wakeWordSet
+	t.Cleanup(func() { wakeWordSet = set })
+	for _, on := range []bool{true, false} {
+		wakeWordSet = func() bool { return on }
+		if everyday("wakeword") != on {
+			t.Errorf("a word set %v: the wake word row open %v", on, everyday("wakeword"))
+		}
 	}
 }
