@@ -77,7 +77,9 @@ crumb "athena init started, kernel $($BB uname -r) $($BB uname -m), eMMC $EMMC"
 
 $BB mkdir -p /dev/pts
 $BB mount -t devpts devpts /dev/pts
-$BB mount -t tmpfs tmpfs /run
+# 0755, not the 1777 a tmpfs gets without a mode: root's scripts and the daemon use fixed names in
+# /run, and the root filesystem runs users other than root (feature/addons).
+$BB mount -t tmpfs -o mode=0755 tmpfs /run
 $BB mount -t tmpfs tmpfs /tmp
 echo 7 4 1 7 > /proc/sys/kernel/printk
 crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes, misc=$([ -b $MISC ] && echo yes || echo no)"

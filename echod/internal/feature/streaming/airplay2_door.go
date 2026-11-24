@@ -23,11 +23,13 @@ var airplay2Jump = "/run/techo5-airplay2-jump"
 
 const airplay2Chain = "TECHO5-AP2"
 
-// iptables runs one iptables command; a variable, for tests.
+// iptables runs one iptables command; a variable, for tests. -w waits for the tables' lock, as the video
+// fence's does (feature/video, fence.go): the add-ons' chain and the firewall's script change the tables
+// too, and a check that could not run would be taken for a door that is shut.
 var iptables = func(tool string, args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, tool, args...).Run()
+	return exec.CommandContext(ctx, tool, append([]string{"-w"}, args...)...).Run()
 }
 
 // airplay2Door puts AirPlay 2's chain in the way (open) or takes it out, for IPv4 and IPv6 alike.

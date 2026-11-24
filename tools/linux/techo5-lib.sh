@@ -15,6 +15,17 @@ t5_tmp() {
 	echo /run/techo5
 }
 
+# t5_private_logs dir name...: the named logs in dir, made root's alone (0600) before anything is
+# written to them. Bluetooth's and the bus's logs name devices and addresses, and /var/log is readable
+# by the users other than root that run here (feature/addons).
+t5_private_logs() {
+	d=$1; shift
+	for n in "$@"; do
+		[ -e "$d/$n" ] || (umask 077; : > "$d/$n")
+		chmod 600 "$d/$n" 2>/dev/null
+	done
+}
+
 # t5_board: which Echo this is, from the panel the bootloader names in the kernel command
 # line. The daemon reads the same thing (internal/layout); this side needs it because one
 # root filesystem serves all three boards, so the defaults below cannot be baked in per
@@ -758,6 +769,7 @@ t5_bt_up() {
 # hci0 from the vendor driver through btbridge and vhci (t5_bt_up).
 t5_bt_bridge() {
 	mod=$1; logdir=${2:-$(t5_tmp)}
+	t5_private_logs "$logdir" btbridge.log
 	[ -e /dev/vhci ] || { log "bt: no /dev/vhci (kernel without Bluetooth); skipping"; return 1; }
 	# BT_UART (device.conf): a Broadcom controller on a tty, which btbridge patches and brings up itself
 	# (the Echo Spot); otherwise the MediaTek driver module and its /dev/stpbt.
@@ -796,6 +808,7 @@ t5_bt_bridge() {
 # BlueZ and bluez-alsa on hci0, however it came up (t5_bt_up).
 t5_bt_stack() {
 	logdir=${1:-$(t5_tmp)}
+	t5_private_logs "$logdir" dbus.log bluetoothd.log bluealsa.log
 	# Pairings and bluez-alsa's state must survive reboots and slot changes: keep
 	# them on userdata (the root is read-only).
 	mkdir -p /run/dbus /data/misc/techo5/bluetooth /data/misc/techo5/bluealsa

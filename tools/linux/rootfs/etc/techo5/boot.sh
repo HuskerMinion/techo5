@@ -67,7 +67,12 @@ if ! mountpoint -q /dev; then
 	mkdir -p /dev/pts
 	mount -t devpts devpts /dev/pts
 fi
-mountpoint -q /run || mount -t tmpfs tmpfs /run
+# /run 0755, root's: a tmpfs made without a mode is 1777, which anyone can write to, and the daemon and
+# these scripts use fixed names in it (a DHCP script, pid files, the receivers' folder) as root. Users
+# other than root run here (feature/addons). An initramfs from before this mounted it 1777: put right
+# here, before anything that is not root starts.
+mountpoint -q /run || mount -t tmpfs -o mode=0755 tmpfs /run
+chown 0:0 /run && chmod 755 /run
 mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
 # /tmp and /var/tmp are memory, and anyone can write to them: bounded, so a program of a user other
 # than root (an add-on) that fills them cannot take the memory the daemon needs. TECHO5's own scripts
@@ -86,7 +91,8 @@ t5_data_commit
 # device leaves "Can't lookup blockdev" in the kernel log.
 mountpoint -q /store || { [ -b "$STORE_DEV" ] && mount -t ext4 -o ro,noatime $STORE_DEV /store; }
 # The root is read-only; what needs writing lives on tmpfs or userdata.
-mount -t tmpfs tmpfs /var/log
+# 0755, and the logs in it root's alone (techo5-lib.sh, t5_private_logs): a tmpfs without a mode is 1777.
+mount -t tmpfs -o mode=0755 tmpfs /var/log
 mount -t tmpfs -o size=16m,mode=1777 tmpfs /var/tmp
 mkdir -p /run/lock /run/techo5 $LOGDIR /data/misc/techo5/models
 # The daemon's state (the Home Assistant key and token, the Wi-Fi's password, the SSH host keys) and the

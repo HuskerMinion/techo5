@@ -501,9 +501,11 @@ cmd_grow() {
 		die "growing to $((sectors / 2048)) MiB needs $gdt_then descriptor blocks and only $((gdt_now + ${rgdt:-0})) are reserved; not growing"
 	writable
 	echo "slotctl: growing $dev ($label) to fill its partition, $groups_now -> $groups_then block groups"
-	if ! resize2fs "$dev" > /tmp/slotctl-grow.log 2>&1; then
+	# Its output in /run, root's, rather than a fixed name in /tmp, which anyone can write to: a link left
+	# there by another user (an add-on) would be written through as root.
+	if ! resize2fs "$dev" > /run/slotctl-grow.log 2>&1; then
 		done_writing
-		cat /tmp/slotctl-grow.log >&2
+		cat /run/slotctl-grow.log >&2
 		die "resize2fs failed; the store is as it was (or check it with e2fsck from TWRP)"
 	fi
 	done_writing
