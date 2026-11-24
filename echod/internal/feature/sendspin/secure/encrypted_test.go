@@ -87,18 +87,95 @@ func TestTheStoreRemembersServersThatSpokeEncrypted(t *testing.T) {
 	}
 }
 
-func TestTheStoreKeepsAtMostCapacityEncryptedServers(t *testing.T) {
+// At capacity the entry seen longest ago goes, but not a paired server's and not one seen in the last
+// day; past twice capacity the oldest unpaired goes anyway, so the list stays bounded.
+func TestTheStoreKeepsBoundedEncryptedServers(t *testing.T) {
 	st := store(t)
+	clock := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	restore := now
+	t.Cleanup(func() { now = restore })
+	now = func() time.Time { return clock }
+	if err := st.remember("server-paired", make([]byte, keySize)); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SpokeEncrypted("192.0.2.100", "server-paired"); err != nil {
+		t.Fatal(err)
+	}
+	// Seen days ago, all but the paired one may go.
+	clock = clock.Add(72 * time.Hour)
 	for i := range capacity + 2 {
+		clock = clock.Add(time.Minute)
 		if err := st.SpokeEncrypted(fmt.Sprintf("192.0.2.%d", i), fmt.Sprintf("server-%d", i)); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(time.Millisecond)
 	}
-	if len(st.file.Encrypted) != capacity {
-		t.Fatalf("%d entries", len(st.file.Encrypted))
+	// All seen in the last day: none is pushed out below twice capacity.
+	if n := len(st.file.Encrypted); n != capacity+3 {
+		t.Fatalf("%d entries, want %d: recent ones were evicted", n, capacity+3)
 	}
-	if _, spoken := st.HungUp("192.0.2.0"); spoken {
-		t.Error("the server seen longest ago was kept")
+	for i := capacity + 2; i < 3*capacity; i++ {
+		clock = clock.Add(time.Minute)
+		if err := st.SpokeEncrypted(fmt.Sprintf("192.0.2.%d", i), fmt.Sprintf("server-%d", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := len(st.file.Encrypted); n > 2*capacity {
+		t.Fatalf("%d entries, more than twice capacity", n)
+	}
+	if _, spoken := st.HungUp("192.0.2.100"); !spoken {
+		t.Error("the paired server's entry was evicted")
+	}
+}
+
+// A server that is not paired is written at most once an hour; a paired one at once.
+func TestUnpairedServersAreWrittenAtMostHourly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "keys.json")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	restore := now
+	t.Cleanup(func() { now = restore })
+	now = func() time.Time { return clock }
+	_ = st.SpokeEncrypted("192.0.2.1", "server-a")
+	clock = clock.Add(time.Minute)
+	_ = st.SpokeEncrypted("192.0.2.2", "server-b")
+	reread := func() int {
+		r, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(r.file.Encrypted)
+	}
+	if n := reread(); n != 1 {
+		t.Errorf("%d written within the hour, want 1", n)
+	}
+	_ = st.remember("server-c", make([]byte, keySize))
+	clock = clock.Add(time.Minute)
+	_ = st.SpokeEncrypted("192.0.2.3", "server-c")
+	if n := reread(); n != 3 {
+		t.Errorf("a paired server's handshake was not written at once: %d written", n)
+	}
+}
+
+// On a clock not set yet no failing streak starts, and one kept from such a clock starts again once
+// the clock is set.
+func TestNoStreakOnAnUnsetClock(t *testing.T) {
+	st := store(t)
+	clock := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	restore := now
+	t.Cleanup(func() { now = restore })
+	now = func() time.Time { return clock }
+	_ = st.SpokeEncrypted("192.0.2.1", "server-a")
+	clock = time.Date(1970, 1, 1, 0, 5, 0, 0, time.UTC)
+	if since, spoken := st.HungUp("192.0.2.1"); !spoken || !since.IsZero() {
+		t.Errorf("on 1970's clock: since %v, spoken %v", since, spoken)
+	}
+	// A streak a build from before kept from 1970.
+	st.file.Encrypted[0].Failing = time.Date(1970, 1, 1, 0, 1, 0, 0, time.UTC)
+	clock = time.Date(2026, 11, 25, 9, 0, 0, 0, time.UTC)
+	if since, _ := st.HungUp("192.0.2.1"); !since.Equal(clock) {
+		t.Errorf("a streak from 1970 was not started again: %v", since)
 	}
 }

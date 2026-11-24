@@ -32,7 +32,23 @@ type Store struct {
 
 	// gone is a store Discard removed: nothing is written back to its file.
 	gone bool
+
+	// spokeSaved is when an entry for a server that spoke encrypted was last written for its own sake.
+	spokeSaved time.Time
 }
+
+// now is the clock; a variable, for tests.
+var now = time.Now
+
+// clockSet is whether the clock is one to keep: these devices start in 1970, and NTP sets it a little
+// after boot. A time from before that is not written, and not counted from.
+func clockSet(t time.Time) bool { return t.Year() >= 2025 }
+
+// spokeEvery is how often an entry for a server that is not paired is written: the encrypted handshake
+// of every new server would otherwise be a write, and anything on the network can make one. A paired
+// server's is written at once. One that is not written yet is still in memory until the next write or
+// the next restart, which only means a server is taken for a new one again after a power cut.
+const spokeEvery = time.Hour
 
 type storeFile struct {
 	PrivateKey []byte   `json:"private_key"`
@@ -200,14 +216,19 @@ func (s *Store) forget(serverID string) error {
 
 // SpokeEncrypted records that the server at peer, whose id is serverID, has just completed an encrypted
 // handshake: a hang-up from it from now on is not taken for a server from before encryption (#721).
-// Its entry replaces any for the same address or the same server, and at capacity the one seen
-// longest ago goes.
+// Its entry replaces any for the same address or the same server.
+//
+// At capacity, the entry seen longest ago goes, but never a paired server's, nor one seen in the last
+// day: a burst of servers on the network (anything on it can do an encrypted handshake, paired or not)
+// would otherwise push out the one the device actually plays from. Past twice capacity the oldest of the
+// unpaired goes whatever its age, so the list stays bounded. The file is written at once for a paired
+// server, and for others at most once an hour (spokeEvery).
 func (s *Store) SpokeEncrypted(peer, serverID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now().UTC()
+	t := now().UTC()
 	for _, e := range s.file.Encrypted {
-		if e.Peer == peer && e.ServerID == serverID && e.Failing.IsZero() && now.Sub(e.Seen) < seenRefresh {
+		if e.Peer == peer && e.ServerID == serverID && e.Failing.IsZero() && t.Sub(e.Seen) < seenRefresh {
 			return nil // nothing that matters has changed
 		}
 	}
@@ -215,16 +236,44 @@ func (s *Store) SpokeEncrypted(peer, serverID string) error {
 		return e.Peer == peer || e.ServerID == serverID
 	})
 	if len(s.file.Encrypted) >= capacity {
-		oldest := 0
-		for i, e := range s.file.Encrypted {
-			if e.Seen.Before(s.file.Encrypted[oldest].Seen) {
-				oldest = i
-			}
+		s.evict(t, false)
+	}
+	if len(s.file.Encrypted) >= 2*capacity {
+		s.evict(t, true)
+	}
+	s.file.Encrypted = append(s.file.Encrypted, spoke{Peer: peer, ServerID: serverID, Seen: t})
+	if !s.pairedLocked(serverID) && !s.spokeSaved.IsZero() && t.Sub(s.spokeSaved) < spokeEvery {
+		return nil
+	}
+	s.spokeSaved = t
+	return s.save()
+}
+
+// evict drops the entry seen longest ago that may go: not a paired server's, and, unless anyway, not one
+// seen in the last day.
+func (s *Store) evict(t time.Time, anyway bool) {
+	oldest := -1
+	for i, e := range s.file.Encrypted {
+		if s.pairedLocked(e.ServerID) || (!anyway && t.Sub(e.Seen) < seenRefresh) {
+			continue
 		}
+		if oldest < 0 || e.Seen.Before(s.file.Encrypted[oldest].Seen) {
+			oldest = i
+		}
+	}
+	if oldest >= 0 {
 		s.file.Encrypted = slices.Delete(s.file.Encrypted, oldest, oldest+1)
 	}
-	s.file.Encrypted = append(s.file.Encrypted, spoke{Peer: peer, ServerID: serverID, Seen: now})
-	return s.save()
+}
+
+// pairedLocked is whether the device holds a record for the server, with s.mu held.
+func (s *Store) pairedLocked(serverID string) bool {
+	for _, r := range s.file.Records {
+		if r.ServerID == serverID {
+			return true
+		}
+	}
+	return false
 }
 
 // HungUp records that the server at peer hung up on client/init or kept silent, and reports whether it
@@ -239,8 +288,14 @@ func (s *Store) HungUp(peer string) (failingSince time.Time, spoken bool) {
 		if e.Peer != peer {
 			continue
 		}
-		if e.Failing.IsZero() {
-			e.Failing = time.Now().UTC()
+		t := now().UTC()
+		// On a clock not set yet, no streak starts: counted from 1970, a day would be up the moment the
+		// clock came right. One kept from such a clock starts again from now, once there is a now.
+		if !clockSet(t) {
+			return time.Time{}, true
+		}
+		if e.Failing.IsZero() || !clockSet(e.Failing) {
+			e.Failing = t
 			_ = s.save() // a failed write only starts the count again after a restart
 		}
 		return e.Failing, true

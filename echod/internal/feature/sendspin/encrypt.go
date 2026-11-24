@@ -128,7 +128,13 @@ func fallBack(st *secure.Store, peer string, err error) bool {
 		return true // it answered client/init with something else
 	}
 	since, spoken := st.HungUp(peer)
-	return !spoken || time.Since(since) >= downgradeAfter
+	switch {
+	case !spoken:
+		return true
+	case since.IsZero():
+		return false // the clock is not set yet, so no streak is being counted
+	}
+	return time.Since(since) >= downgradeAfter
 }
 
 // errTryUnencrypted is a connection spent on a server that does not speak encrypted Sendspin. It has
