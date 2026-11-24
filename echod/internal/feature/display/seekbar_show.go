@@ -119,3 +119,7 @@ func (d *Display) seekPullLocked(at image.Point) bool {
 	edge := d.r.drawerEdge()
 	return at.X < edge || at.X >= d.r.w-edge
 }
+
+// keep is a frame that keeps the page the last one drew (Rainbow's kept page, on the Show only): its
+// bar is still the one on the panel.
+func (b *seekBars) keep() { b.next = b.zone() }

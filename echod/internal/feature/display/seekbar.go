@@ -129,10 +129,6 @@ func (b *seekBars) begin() { b.next = seekZone{} }
 // drew is the frame having drawn z.
 func (b *seekBars) drew(z seekZone) { b.next = z }
 
-// keep is a frame that keeps the page the last one drew (Rainbow's kept page): its bar is still the
-// one on the panel.
-func (b *seekBars) keep() { b.next = b.zone() }
-
 // publish is the frame done: its bar is the one on the panel.
 func (b *seekBars) publish() {
 	b.mu.Lock()
