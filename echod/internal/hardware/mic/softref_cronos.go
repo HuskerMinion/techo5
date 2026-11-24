@@ -82,6 +82,11 @@ func (c *softRefCapture) Read(buf []byte) (int, error) {
 		last := time.Now().Add(-time.Duration(d) * time.Second / Rate)
 		c.clock.Mark(c.got+uint64(frames)-1, last)
 		ok = echoref.Fill(l, r, c.clock.At(c.got))
+	} else {
+		// No delay to place this read by (the device is in a state that has none, as after an xrun
+		// before the restart is noticed): the next read that has one is placed afresh, as after an
+		// overrun, rather than followed on from a placing this gap has made stale.
+		echoref.Rejoin()
 	}
 	if !ok {
 		clear(l)
