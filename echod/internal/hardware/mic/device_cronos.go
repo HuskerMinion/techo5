@@ -103,7 +103,8 @@ var ErrNoMicrophone = errors.New("mic: this device has no microphone")
 
 // openDevice is the capture as the reader sees it: on athena, or on a board of this build that sets
 // its own boardKernel, the microphones and the reference made into one frame (athena.go); anywhere
-// else the one device.
+// else the one device, with the software reference in place of the loopback where that is wanted
+// (softref_cronos.go).
 func openDevice() (capture, error) {
 	if layout.Skylight() {
 		return nil, ErrNoMicrophone
@@ -111,7 +112,11 @@ func openDevice() (capture, error) {
 	if paired() {
 		return openAthena()
 	}
-	return openPlain()
+	c, err := openPlain()
+	if err != nil {
+		return nil, err
+	}
+	return withSoftRef(c), nil
 }
 
 // paired is whether the capture is athena's kind (openAthena): athena itself, or a board whose

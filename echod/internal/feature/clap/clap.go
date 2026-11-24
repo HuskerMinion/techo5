@@ -200,7 +200,9 @@ func (c *Clap) Run(ctx context.Context) error {
 }
 
 // monoOf is one microphone's samples, as captured, from the raw capture, noting when the speaker's
-// loopback in the same capture carries a sound.
+// reference in the same capture carries a sound: the card's loopback, or where the board makes it in
+// software (lib/echoref), what the speaker was sent, after the volume, so a speaker turned all the way
+// down counts as quiet either way.
 func (c *Clap) monoOf(raw <-chan []byte) <-chan []int16 {
 	out := make(chan []int16, 8)
 	go func() {

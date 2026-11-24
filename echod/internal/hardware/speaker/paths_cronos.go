@@ -223,10 +223,11 @@ const athenaTrimDB = 0.0
 // hwBits is the sample width the card is sent: Bits, as everything up to it works.
 const hwBits = Bits
 
-// softRef is whether the speaker may feed the software echo reference (lib/echoref): only athena on
-// the mainline kernel, and there only while the microphones use it (echoref.InUse), which is when the
-// card's own DL1_AWB_Record did not open (mic/athena.go).
-var softRef = layout.AthenaMainline()
+// softRef is whether the speaker may feed the software echo reference (lib/echoref), which it does
+// only while the microphones use it (echoref.InUse): athena on the mainline kernel, when the card's
+// own DL1_AWB_Record did not open (mic/athena.go), and the 1st gen Echo Show 5, whose loopback the
+// canceller cannot use above the bass (mic/softref_cronos.go).
+var softRef = layout.AthenaMainline() || layout.Checkers()
 
 // onMainline picks the value for athena on TECHO5's mainline kernel over any other.
 func onMainline[T any](mainline, other T) T {
