@@ -254,6 +254,52 @@ func killUID(uid uint32) error {
 	return fmt.Errorf("addons: processes of user %d were still running after it was killed", uid)
 }
 
+// killStrays kills every process of the add-on range's users, at the supervisor's start, before it
+// starts anything: nothing of theirs should be running then. A daemon that went down without stopping
+// its add-ons, or an add-on removed with its state kept whose user left something behind, would
+// otherwise leave programs running with no supervisor, no firewall rules and nobody to stop them.
+func killStrays() {
+	for _, uid := range uidsRunning() {
+		if uid >= firstUID && uid <= lastUID {
+			slog.Warn("addons: a process of an add-on's user was running before any was started; killed", "uid", uid)
+			_ = killUID(uid)
+		}
+	}
+}
+
+// uidsRunning is the real user ids of the processes running now, each once.
+func uidsRunning() []uint32 {
+	entries, err := os.ReadDir(procDir)
+	if err != nil {
+		return nil
+	}
+	seen := map[uint32]bool{}
+	var out []uint32
+	for _, e := range entries {
+		if _, err := strconv.Atoi(e.Name()); err != nil {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(procDir, e.Name(), "status"))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			rest, ok := strings.CutPrefix(line, "Uid:")
+			if !ok {
+				continue
+			}
+			if f := strings.Fields(rest); len(f) > 0 {
+				if n, err := strconv.ParseUint(f[0], 10, 32); err == nil && !seen[uint32(n)] {
+					seen[uint32(n)] = true
+					out = append(out, uint32(n))
+				}
+			}
+			break
+		}
+	}
+	return out
+}
+
 // killPID kills one process; a variable, for tests.
 var killPID = func(pid int) error { return syscall.Kill(pid, syscall.SIGKILL) }
 
@@ -295,7 +341,8 @@ func pidsOf(uid uint32) []int {
 
 // tmpDirs are the folders anybody can write to, which an add-on's user may have left files in; a
 // variable, for tests.
-var tmpDirs = []string{"/tmp", "/var/tmp", "/dev/shm"}
+// /run among them: the images mount it 0755 now, but an older initramfs left it writable by anyone.
+var tmpDirs = []string{"/tmp", "/var/tmp", "/dev/shm", "/run"}
 
 // sweepUID deletes what an add-on's user left in the shared temporary folders once it has stopped:
 // they are memory (tmpfs), and what one add-on leaves there would otherwise stay until a reboot. Only

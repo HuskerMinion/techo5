@@ -228,11 +228,33 @@ func (s *catalogStore) state() (time.Time, string) {
 }
 
 // writeWhole writes a file beside itself and renames it into place, so a power cut leaves the old one or
-// the new one, never half of either.
+// the new one, never half of either. The data is synced before the rename and the folder after it: an
+// ext4 that puts the rename on the storage before the file's blocks leaves an empty file at the name,
+// which for a record or the next user id is worse than the old one. These are written rarely (an
+// install, a catalog that changed), so the syncs cost the flash next to nothing.
 func writeWhole(path string, b []byte, mode os.FileMode) error {
 	tmp := path + ".new"
-	if err := os.WriteFile(tmp, b, mode); err != nil {
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	if dir, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = dir.Sync()
+		dir.Close()
+	}
+	return nil
 }

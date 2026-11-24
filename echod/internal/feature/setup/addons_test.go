@@ -110,6 +110,17 @@ func TestAnInstalledAddon(t *testing.T) {
 	}
 }
 
+// One stopped for its storage offers Start, which runs it again, not Stop, which would do nothing.
+func TestAnAddonStoppedForItsStorageOffersStart(t *testing.T) {
+	s := addons.Status{ID: "techo5-plex", Name: "Plex player", Author: "HuskerMinion", Version: "0.1.0", Enabled: true,
+		State: addons.StateTooBig, Problem: "it keeps 900 MB"}
+	w := httptest.NewRecorder()
+	addonsInstalled(w, "tok", addons.Get(), []addons.Status{s})
+	if body := w.Body.String(); !strings.Contains(body, `value="addon-start"`) || strings.Contains(body, `value="addon-stop"`) {
+		t.Errorf("a card stopped for its storage:\n%s", body)
+	}
+}
+
 // A form sent without the box installs nothing, whatever the browser did with the box's required.
 func TestAnInstallWithoutTheBoxIsRefused(t *testing.T) {
 	r := httptest.NewRequest("POST", "/setup/save", strings.NewReader(url.Values{"id": {"techo5-plex"}, "version": {"0.1.0"}}.Encode()))

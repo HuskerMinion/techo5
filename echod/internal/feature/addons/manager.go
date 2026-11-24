@@ -318,8 +318,12 @@ func (m *Manager) writeRecord(dir string, rec record) error {
 func (m *Manager) Run(ctx context.Context) error {
 	m.load()
 	// Whatever a daemon that went down without closing it left open, whether or not anything is
-	// installed now: an add-on removed by hand would otherwise keep its ports.
+	// installed now: an add-on removed by hand would otherwise keep its ports. And whatever it left
+	// running: nothing of an add-on's user's should be, before this starts one.
 	m.fw.reset()
+	if canDrop() {
+		killStrays()
+	}
 	m.mu.Lock()
 	m.ctx = ctx
 	any := len(m.addons) > 0
@@ -383,7 +387,11 @@ func (m *Manager) checkStorage() {
 	for _, a := range running {
 		m.mu.Lock()
 		rec := a.rec
+		trying := m.busy != nil && m.busy.ID == rec.ID
 		m.mu.Unlock()
+		if trying {
+			continue // an update owns it; stopping it here would read as the update failing its trial
+		}
 		used, limit := duMB(filepath.Join(m.dir(rec.ID), "state")), storageMB(rec.DiskMB)
 		if used <= limit {
 			continue
@@ -496,6 +504,11 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 	dir := m.dir(rec.ID)
 	state := filepath.Join(dir, "state")
 	m.modes(rec, man)
+	// Whatever its user still runs from before (a daemon that went down without stopping it, a child
+	// that left its group) goes before it starts: two copies would fight over its ports and its state.
+	if !RunsAsRoot(man.Root) {
+		cleanUp(credFor(rec.UID), rec.ID)
+	}
 	lf, err := openLog(filepath.Join(dir, "log"))
 	if err != nil {
 		m.set(a, StateFailed, "its log cannot be written: "+err.Error())
@@ -1067,11 +1080,26 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 		return err
 	}
 	next := rec
-	next.Version, next.Enabled, next.RolledBack, next.DiskMB = v.Version, true, "", v.DiskMB
+	// It stays as on or off as it was: an update installed while it was stopped is not a Start.
+	next.Version, next.Enabled, next.RolledBack, next.DiskMB = v.Version, wasOn, "", v.DiskMB
 	if len(o.More) > 0 {
 		next.Agreed, next.AgreedAt = merged(rec.Agreed, v.Asks()), m.clock.Now()
 	}
 	m.modes(next, man)
+
+	if !wasOn {
+		// Stopped, it stays stopped: the new version goes in without a trial, which would mean starting
+		// it, and is tried the next time Start is pressed, as any start is.
+		m.mu.Lock()
+		a.rec, a.man = next, man
+		m.mu.Unlock()
+		if err := m.writeRecord(dir, next); err != nil {
+			return err
+		}
+		_ = os.RemoveAll(old)
+		slog.Info("addons: updated while stopped", "id", id, "from", rec.Version, "to", v.Version)
+		return nil
+	}
 
 	m.mu.Lock()
 	a.rec, a.man = next, man
@@ -1172,7 +1200,10 @@ func (m *Manager) Remove(id string, keepState bool) (err error) {
 	if !ok {
 		return fmt.Errorf("addons: %s is not installed", id)
 	}
-	end, err := m.begin(id, a.rec.Version, "removing")
+	m.mu.Lock()
+	version := a.rec.Version
+	m.mu.Unlock()
+	end, err := m.begin(id, version, "removing")
 	if err != nil {
 		return err
 	}

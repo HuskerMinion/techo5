@@ -144,7 +144,7 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 		switch s.State {
 		case addons.StateRunning:
 			cls = ` class="ok"`
-		case addons.StateGaveUp, addons.StateFailed, addons.StateNoMemory:
+		case addons.StateGaveUp, addons.StateFailed, addons.StateNoMemory, addons.StateTooBig:
 			cls = ` class="bad"`
 		}
 		fmt.Fprintf(w, `<p style="margin:.2rem 0"><span%s>%s</span>`, cls, html.EscapeString(capital(state)))
@@ -175,7 +175,7 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 		fmt.Fprint(w, `<div class="deckrow">`)
 		do := "addon-stop"
 		label := "Stop"
-		if !s.Enabled || s.State == addons.StateGaveUp || s.State == addons.StateNoMemory || s.State == addons.StateFailed {
+		if !s.Enabled || s.State == addons.StateGaveUp || s.State == addons.StateNoMemory || s.State == addons.StateFailed || s.State == addons.StateTooBig {
 			do, label = "addon-start", "Start"
 		}
 		fmt.Fprint(w, `<form method="post" action="/setup/save">`)
