@@ -561,8 +561,12 @@ tree, erases the system partition into the slot store and installs the release i
 installer stops there, for example because the unit restarted partway or its USB went away, the unit
 isn't lost. The installer's message says whether anything was erased:
 
-- **Nothing was erased yet** (it stopped while saving the vendor tree): LineageOS is still on the unit.
-  Run the installer again, or put LineageOS back as in "To go back to LineageOS" below.
+- **Nothing was erased yet** (it stopped while saving the vendor tree, or timed out waiting for the
+  rescue console): LineageOS is still on the unit. Either finish by hand as below, or flash the
+  LineageOS boot image the installer kept (`fastboot flash boot backups/<serial>/boot-lineage.img`)
+  and run the installer again. If the wait timed out because the console could not be opened (on
+  Linux, the `dialout` group or ModemManager; see [The quick way](#the-quick-way-one-command)), fix
+  that first.
 - **The system partition may be, or is, erased**: finish by hand as below.
 
 Finish on the unit's USB console: a terminal on the port the installer named, at 115200 (`screen
@@ -585,8 +589,24 @@ tail -100 /data/techo5-linux/rescue.log
    PATH=/usr/local/sbin:$PATH
    STORE=/store slotctl status; ls /store; ls -la /data/techo5-linux /data/media/0/Download
    ```
-2. If `slotctl status` says there is no store (no `/store/.techo5-store`), the store was not made yet.
-   First check that the saved vendor tree is this unit's and whole: the serial is the unit you mean,
+2. If `slotctl status` says there is no store (no `/store/.techo5-store`), the store was not made yet,
+   and the system partition is not erased. See whether the vendor tree was saved, and whether
+   LineageOS's copy is still there to save it from:
+   ```
+   ls -l /data/techo5-linux/vendor.tar
+   ls /android/system/vendor/lib/modules/mt76x8_wlan.ko
+   ```
+   If there is no `vendor.tar` but the driver is listed under `/android`, the install stopped before
+   saving it (for example, it timed out waiting for the console). Save it now:
+   ```
+   mkdir -p /data/techo5-linux
+   tar -cf /data/techo5-linux/vendor.tar -C /android/system vendor
+   ```
+   Run that `tar -cf` line only when there is no `vendor.tar`: over one that is there, it would
+   overwrite the saved copy, which may be the only one left. If neither is there, stop here and open
+   an issue with what step 1 printed.
+
+   Then check that the saved vendor tree is this unit's and whole: the serial is the unit you mean,
    and the list shows the Wi-Fi driver.
    ```
    cat /proc/idme/serial
@@ -597,9 +617,8 @@ tail -100 /data/techo5-linux/rescue.log
    umount /android 2>/dev/null
    slotctl mkstore /dev/mmcblk0p12 --i-know-this-erases-it
    ```
-   Don't run the `tar -cf` line from [step 4](#4-create-the-slot-store-and-install) here: it would
-   overwrite the saved copy, which may be the only one left. If `vendor.tar` is missing or doesn't list
-   the driver, stop here and open an issue with what step 1 printed.
+   If `vendor.tar` doesn't list the driver, don't make the store: stop here and open an issue with
+   what step 1 printed.
 3. If `/store` has no `vendor` folder, put this unit's vendor tree there from the copy the installer
    kept:
    ```
