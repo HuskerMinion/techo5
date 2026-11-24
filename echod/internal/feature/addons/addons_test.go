@@ -262,10 +262,16 @@ func TestRestartsWithABackoffAndGivesUp(t *testing.T) {
 		if r.state("techo5-plex").State == StateGaveUp {
 			break
 		}
-		before := r.clock.Now()
-		for r.clock.pending(time.Hour) > 0 {
+		// Advance only until this wait's restart has happened: on a loaded machine the restarted
+		// process can stop and the next wait be armed before the clock is looked at again, and
+		// advancing on through it would count two waits as one.
+		before, n := r.clock.Now(), r.procs.count()
+		for r.clock.pending(time.Hour) > 0 && r.procs.count() == n {
 			r.clock.Advance(time.Second)
 		}
+		eventually(t, "the restart", func() bool {
+			return r.procs.count() > n || r.state("techo5-plex").State == StateGaveUp
+		})
 		waits = append(waits, r.clock.Now().Sub(before))
 	}
 	if len(waits) != giveUpAfter-1 {
