@@ -114,25 +114,43 @@ func (l *Light) OnColor(f func()) { l.followers = append(l.followers, f) }
 func (l *Light) Base() led.Color { return colorOf(l.light.Get()) }
 
 // Restore puts back the appearance Home Assistant last set. Off unless it was on: a ring that lights
-// the room by itself after a power cut is a surprise, which is why ESPHome makes that opt-in too.
+// the room by itself after a power cut is a surprise, which is why ESPHome makes that opt-in too. The
+// color, brightness and effect come back either way. Off only means nothing is shown: the wake word's
+// effect and the room's take their color from the light (Base), so a ring saved off in blue would
+// otherwise borrow the white it starts in until Home Assistant set a color again.
 func (l *Light) Restore(c config.Config) {
 	saved := c.Ring.Light
 
-	if !saved.On || !led.HasRing {
-		// Off, or no ring: a light saved on before the control was taken away from a device with no
-		// ring would animate nothing for as long as the device is up.
+	if !led.HasRing {
+		// No ring: a light saved on before the control was taken away from a device with no ring would
+		// animate nothing for as long as the device is up.
 		slog.Info("restored", "what", "ring light", "on", false)
 		return
 	}
 
 	s := esphome.LightState{
 		ColorMode:  esphome.ColorModeRGB,
-		On:         true,
+		On:         saved.On,
 		Brightness: saved.Brightness,
 		Red:        saved.Red,
 		Green:      saved.Green,
 		Blue:       saved.Blue,
 		Effect:     offered(l.light.Effects, saved.Effect),
+	}
+
+	if !saved.On {
+		// Taken up without being shown: the claim stays empty, as it does for a ring nobody has set, so
+		// the boot animation is not competing with a dark frame. What a bare "on" or an effect would
+		// light with is filled in as usable fills it in for a command.
+		on := usable(esphome.LightState{On: true, Brightness: s.Brightness, Red: s.Red, Green: s.Green, Blue: s.Blue})
+		s.Brightness, s.Red, s.Green, s.Blue = on.Brightness, on.Red, on.Green, on.Blue
+		l.light.Set(s)
+		for _, f := range l.followers {
+			f()
+		}
+		slog.Info("restored", "what", "ring light", "on", false,
+			"brightness", s.Brightness, "effect", s.Effect)
+		return
 	}
 
 	l.set(s, false)
