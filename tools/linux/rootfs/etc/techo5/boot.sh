@@ -56,7 +56,9 @@ mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
 # devtmpfs make no /dev/shm, and without it the daemon keeps the classic receiver.
 mkdir -p /dev/shm
 mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,size=1m tmpfs /dev/shm
-mountpoint -q /data || mount -t ext4 -o noatime $DATA_DEV /data
+# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit).
+mountpoint -q /data || mount -t ext4 -o noatime,commit=60 $DATA_DEV /data
+t5_data_commit
 # A board with no store (STORE_DEV=none: the Surface RT) skips it: mounting a name that is no block
 # device leaves "Can't lookup blockdev" in the kernel log.
 mountpoint -q /store || { [ -b "$STORE_DEV" ] && mount -t ext4 -o ro,noatime $STORE_DEV /store; }

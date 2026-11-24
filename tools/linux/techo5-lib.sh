@@ -888,6 +888,23 @@ t5_bt_again_pass() {
 	t5_btmgmt 5 discov off >/dev/null 2>&1
 }
 
+# Userdata is mounted with commit=60: ext4 commits its journal every 60 s rather than every 5 s. eMMC
+# wears with what is written to it, and each commit writes journal blocks however little changed: a
+# Show 8 measured about 770 MB a day written to userdata, much of it small writes a commit multiplies.
+# What syncs itself is unaffected (state.json and the alive marker fsync as they are written, and the
+# daemon's log is flushed after every warning or error, feature/maintenance). A power cut can lose up to
+# 60 s of writes nothing synced, such as routine log lines. No lazytime: the Dot 2's 3.18 kernel does
+# not know it, and every board mounts userdata the same way. Each initramfs mounts it so; t5_data_commit
+# puts it right on a userdata an older initramfs mounted without it. T5_MOUNTS: another file (tests).
+t5_data_commit() {
+	o=$(awk '$2 == "/data" && $3 == "ext4" { o = $4 } END { print o }' "${T5_MOUNTS:-/proc/mounts}" 2>/dev/null)
+	[ -n "$o" ] || return 0
+	case ,$o, in *,commit=60,*) return 0 ;; esac
+	# The mount's own flags are given again, so remounting cannot drop noatime, nosuid or nodev.
+	f=$(echo "$o" | tr , '\n' | grep -xE 'rw|ro|noatime|nodiratime|relatime|nosuid|nodev|noexec' | tr '\n' ,)
+	mount -o "remount,${f}commit=60" /data 2>/dev/null || log "data: commit=60 refused; ext4 commits every 5 s"
+}
+
 # t5_bt_cache: bluetoothd's cache of the devices it has heard (/var/lib/bluetooth/<adapter>/cache) in
 # RAM. The BLE proxy scans through BlueZ, and bluetoothd rewrites a device's cache file (a new file,
 # fsynced and renamed over the old one) each time a device nearby advertises another name: a Show 8
