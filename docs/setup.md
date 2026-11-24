@@ -2458,10 +2458,20 @@ back as you left it.
 
 A **settings lock** (Show and Spot, off by default) is a PIN the device asks for before its settings
 change, so guests and children can use the device without changing how it is set up. The settings
-screen still opens without it, and what is part of using the device stays open to everyone: alarms
-and timers, the volume, bass and treble, the headphone output, the microphone, the wake sound, the
-sleep timer, and the brightness. Every other setting shows a padlock after its name and asks for the
-PIN when it is tapped. The PIN pad shows which setting it is for, and the setting changes once the
+screen still opens without it, and how the device looks, sounds and is used here stays open to
+everyone: alarms and timers; the volume, bass and treble, the headphone output and the microphone; the
+wake word (while one is set: where none is, choosing one would turn listening on, so that asks for
+the PIN), the wake sound and the speaking voice; quiet hours, do not disturb and the sleep timer; the
+brightness and the night; the skin, theme, colors, font, text size and clock; and how the clock,
+pop-ups, photos and calendar look. What the device connects to, shares or takes from other systems
+asks for the PIN: everything under Connections, Privacy & Security and General (Wi-Fi, Bluetooth,
+SSH, updates, the time zone, the screen language), streaming and Music Assistant on the Sound card,
+which calendars and photo folders it shows, presence detection, the speaker gain, and the wake word's
+threshold, which decides how much it hears and sends on. So does what reaches past the device: Now
+playing following another player (which puts that player's controls here), a camera's sound on this
+speaker, the call button (which dials the phone book), and Ignore room lights (which changes the
+light Home Assistant's automations see). The voice assistant itself is chosen in Home Assistant. A
+setting behind the lock shows a padlock after its name and asks for the PIN when it is tapped. The PIN pad shows which setting it is for, and the setting changes once the
 PIN is right. Once the PIN is in, the rest stay open until the settings close or are left alone for
 two minutes. Set it under Settings → Privacy & Security, on the setup page (Privacy), or with the
 [settings_lock_pin action](actions.md#set-the-settings-locks-pin). Five wrong tries in a row make
