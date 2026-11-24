@@ -1645,6 +1645,10 @@ What goes and what stays:
 - With Reply delivery set to *Early*, the player is handed the reply as soon as Home Assistant starts
   making its speech, so a long answer starts there while the agent is still writing it, as it does on
   this device. Otherwise the reply is sent once it is written.
+- While a player is chosen, Home Assistant makes the replies at full quality (48 kHz) rather than the
+  16 kHz this device's own speaker needs, so they sound as good on the other speaker as it can play
+  them. Choosing a player or clearing the box has Home Assistant reconnect to the device once it is
+  idle, which is when the change takes effect; a reply that falls back to this device still plays.
 
 Listening again after a reply: this device cannot hear when another speaker finishes. It waits for the
 length of the reply plus two seconds, then listens, so a question gets its answer without the wake

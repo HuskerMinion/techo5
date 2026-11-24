@@ -39,10 +39,20 @@ func replyPlayerSummary(player string) []string {
 }
 
 // saveReplyPlayer keeps the player, or says why it is not one.
+//
+// Choosing a player where there was none, or clearing it, changes what the device tells Home Assistant
+// it is (voice.FeaturesFor, media.FormatsFor), so that replies sent elsewhere are made at full quality
+// (#715). Home Assistant reads both only as it connects, so a reconnect follows once the device is
+// idle (reconnect.go). One player for another changes neither, and needs none.
 func saveReplyPlayer(v string) string {
+	was := config.Get().Brain.RepliesElsewhere()
 	if err := config.Set().Brain().SetReplyPlayer(v); err != nil {
 		return err.Error()
 	}
-	slog.Info("setup page: where replies play was set", "elsewhere", config.Get().Brain.ReplyPlayer != "")
+	elsewhere := config.Get().Brain.RepliesElsewhere()
+	slog.Info("setup page: where replies play was set", "elsewhere", elsewhere)
+	if elsewhere != was {
+		whenIdle.ask()
+	}
 	return ""
 }

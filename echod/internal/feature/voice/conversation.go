@@ -762,8 +762,10 @@ func (c *conversation) turnEvent(e event) {
 		if c.phase == phaseIdle {
 			return
 		}
-		// A player chosen for replies needs the url, whatever the slot's setting is.
-		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" {
+		// A player chosen for replies needs the url, whatever the slot's setting is. So does a reply
+		// on a connection told the device has no speaker of its own (Offer): no streamed copy is
+		// coming, as for a player cleared on the setup page before Home Assistant has reconnected.
+		if wakeword.Delivery(c.slot) == config.DeliveryStream && replyPlayer() == "" && streamedReplies() {
 			return
 		}
 		// Already playing as it is written, here or on the chosen player: this is the same reply, and

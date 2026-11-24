@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/noise"
@@ -590,7 +591,17 @@ func build() *Player {
 	for _, sel := range p.layers {
 		sel.Set(noiseOff)
 	}
+	// What the player asks Home Assistant to convert to changes only while nothing is connected
+	// (component.Between): the setup page reconnects when a reply player is chosen or cleared.
+	component.Between.Listen(func(struct{}) { p.describeFormats(config.Get()) })
 	return p
+}
+
+// describeFormats puts on the player the formats for where replies play now (FormatsFor). A device
+// that cannot hear has no replies to send anywhere, and keeps its own. Only where no connection can
+// be reading them: Restore, before anything serves, and component.Between.
+func (p *Player) describeFormats(c config.Config) {
+	p.mp.SupportedFormats = FormatsFor(layout.HasMicrophone() && c.Brain.RepliesElsewhere())
 }
 
 func (p *Player) Name() string { return "media player" }
@@ -753,6 +764,7 @@ func (p *Player) applyOutputMode(mode config.OutputMode) {
 // Restore puts the volume back where it was, without flashing the arc: nothing happened, the device
 // is starting where it left off.
 func (p *Player) Restore(c config.Config) {
+	p.describeFormats(c)
 	p.applyOutputMode(c.Speaker.OutputMode)
 	if speaker.HasJack {
 		slog.Info("restored", "what", p.output.ObjectID, "using", p.output.Get())
