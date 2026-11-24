@@ -194,6 +194,11 @@ else
 		chmod 644 "$R/lib/firmware/$f"
 	done
 	rm -rf "$WORK/fw"
+	# Their licenses go with them (firmware-licenses/README.md): Qualcomm's for the GPU's microcode,
+	# ISC for the regulatory database.
+	for f in qcom/LICENSE.qcom qcom/NOTICE.qcom LICENSE.wireless-regdb; do
+		install -m 644 "$HERE/firmware-licenses/${f##*/}" "$R/lib/firmware/$f"
+	done
 fi
 install -d "$R/lib/firmware/msm-firmware-loader"
 # techo5-data is made at the first boot (the store's /sbin/init).

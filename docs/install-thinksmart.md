@@ -47,10 +47,14 @@ The hardware notes, and how the unit boots, are in
   ([tools/linux/thinksmart/kernel](../tools/linux/thinksmart/kernel/README.md#building)), and an
   `arm-none-eabi` GCC for lk2nd (Debian and Ubuntu: `gcc-arm-none-eabi`).
 
-None of the vendor's firmware is in the image or comes from anywhere but your unit. The Wi-Fi,
-Bluetooth and GPU firmware are made at every boot from the unit's own modem and vendor partitions,
-which stay where they are, and the speaker amplifier's tuning is taken from the unit's stock kernel
-during the install (into the backup folder, and back onto that unit only).
+The image carries only firmware that may be passed on, with its license beside it: the GPU's
+microcode, from linux-firmware under Qualcomm's redistribution license (`LICENSE.qcom` and
+`NOTICE.qcom`), and the Wi-Fi regulatory database, from wireless-regdb (ISC); see
+[tools/linux/thinksmart/firmware-licenses](../tools/linux/thinksmart/firmware-licenses/README.md).
+The rest comes from your unit only: the Wi-Fi, Bluetooth and audio firmware and the GPU's zap shader
+are made at every boot from the unit's own modem and vendor partitions, which stay where they are,
+and the speaker amplifier's tuning is taken from the unit's stock kernel during the install (into the
+backup folder, and back onto that unit only).
 
 ## Entering EDL
 

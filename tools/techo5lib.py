@@ -676,11 +676,12 @@ def new_api_key():
 
 
 def write_private(path, text):
-    """Writes a secret to a file only its owner can read. The mode is set as the file is created, so
-    there is no moment where it sits on disk readable by everyone else on the machine. Windows mostly
-    ignores POSIX modes, where the file simply inherits the folder's permissions as before."""
+    """Writes a secret, text or bytes, to a file only its owner can read. The mode is set as the file is
+    created, so there is no moment where it sits on disk readable by everyone else on the machine.
+    Windows mostly ignores POSIX modes, where the file simply inherits the folder's permissions as
+    before."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
+    with os.fdopen(fd, 'wb' if isinstance(text, bytes) else 'w') as f:
         f.write(text)
 
 

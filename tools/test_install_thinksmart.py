@@ -92,13 +92,14 @@ def lk2nd_image(signed=True, qcdt=0):
     return img + b'SEANDROIDENFORCE'
 
 
-def devinfo(serial):
+def devinfo(serial, model='ZA690000US'):
     """devinfo's first sector as aboot writes it: the magic, the serial at 228, the model after it."""
     d = bytearray(512)
     d[:13] = b'ANDROID-BOOT!'
     struct.pack_into('<I', d, 224, 1)
     d[228:228 + len(serial)] = serial.encode()
-    d[237:247] = b'ZA690000US'
+    at = 228 + len(serial) + 1
+    d[at:at + len(model)] = model.encode()
     return bytes(d)
 
 
@@ -134,6 +135,8 @@ if cmd == 'rs':
     open(out, 'wb').write(data)
 elif cmd == 'ws':
     start, src = int(args[1]), args[2]
+    if os.environ.get('FAKE_STOP_AT') == str(start):
+        print('main - Waiting for the device'); sys.exit(1)  # the cable pulled before this write
     with open(disk, 'r+b') as d, open(src, 'rb') as s:
         d.seek(start * 512)
         while True:
@@ -201,6 +204,32 @@ class Parts(unittest.TestCase):
             g.entries[51].first, g.entries[51].last = ud.first + it.SYSTEM_SECTORS, ud.last
             ud.last = ud.first + it.SYSTEM_SECTORS - 1
         self.assertIn('by hand', changed(by_hand))
+
+    def test_a_half_written_table_is_read_as_the_run_that_wrote_it(self):
+        g1, g2 = uuid.UUID(int=1), uuid.UUID(int=2)
+        new_last = it.new_layout(self.gpt, (g1, g2)).build()[1]
+        gpt, pending = it.read_table(self.first, new_last)
+        self.assertEqual(it.layout_of(gpt), 'stock')
+        self.assertEqual((pending.named('system').guid, pending.named('techo5-data').guid), (g1, g2))
+        self.assertEqual(pending.build()[1], new_last)
+        self.assertIsNone(it.read_table(self.first, self.last)[1])
+        # A backup copy that is the new table but not of this primary (another userdata end) is not let
+        # through, nor one that is anything else.
+        other = it.GPT(self.first, self.last)
+        other.named('userdata').last -= 8
+        with self.assertRaisesRegex(it.GPTError, 'same partitions'):
+            it.read_table(self.first, it.new_layout(other, (g1, g2)).build()[1])
+        bad = bytearray(new_last)
+        bad[100] ^= 1
+        with self.assertRaises(it.GPTError):
+            it.read_table(self.first, bytes(bad))
+
+    def test_model_from_devinfo(self):
+        self.assertEqual(it.model_of(devinfo('TEST0003')), 'ZA690000US')
+        self.assertEqual(it.model_of(devinfo('R58M12345678', 'SM-T510')), None)
+        self.assertEqual(it.model_of(devinfo('R58M12345678', 'SMT510XX')), 'SMT510XX')
+        self.assertIsNone(it.model_of(bytes(512)))
+        self.assertEqual(it.masked('TEST0003'), 'TES***03')
 
     def test_damaged_tables(self):
         bad = bytearray(self.first)
@@ -345,6 +374,10 @@ class Install(unittest.TestCase):
         with open(key) as f:
             self.assertEqual(m['settings/psk'].decode().strip(), f.read().strip())
         self.assertIn(m['settings/psk'].decode().strip(), out)
+        self.assertIn('unit: ZA690000US, serial TES***01', out)
+        self.assertNotIn('serial ' + SERIAL, out)
+        for left in ('thinksmart-settings.bin', 'thinksmart-devinfo.bin', 'readback.bin'):
+            self.assertFalse(os.path.exists(os.path.join(self.d, 'work', left)), left)
         # The order: lk2nd, the backup table before the primary, the image, the settings; then reset.
         ws = self.writes()
         self.assertEqual([int(w[1]) for w in ws], [boot.first, self.total - 33, 0, sysp.first, data.first])
@@ -362,6 +395,7 @@ class Install(unittest.TestCase):
         self.assertIn('edl ws %d restore/gpt-backup.bin' % (self.total - 33), r)
         self.assertIn('edl ws %d restore/boot.img' % self.gpt.named('boot').first, r)
         self.assertIn('edl ws %d restore/zero-1MiB.bin' % self.gpt.named('userdata').first, r)
+        self.assertNotIn('already held lk2nd', r)
         with open(os.path.join(b, 'restore', 'boot.img'), 'rb') as f:
             self.assertEqual(f.read(8), b'ANDROID!')
 
@@ -378,6 +412,7 @@ class Install(unittest.TestCase):
         self.assertEqual(self.writes(), [])
         self.assertEqual(self.read(0, 34) + self.read(self.gpt.named('boot').first, 16), before)
         self.assertFalse(os.path.exists(os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL, 'emmc.img')))
+        self.assertFalse(os.path.exists(os.path.join(self.d, 'work', 'thinksmart-settings.bin')))
 
     def test_again_on_its_own_install(self):
         self.install('--name', 'Office')
@@ -481,7 +516,7 @@ class Install(unittest.TestCase):
         os.remove(self.log)
         out = self.install('--name', 'Kitchen')
         second = os.path.join(self.d, 'backups', 'thinksmart-TEST0002')
-        self.assertIn('unit: serial TEST0002', out)
+        self.assertIn('unit: ZA690000US, serial TES***02', out)
         self.assertNotIn('there already', out)
         self.assertEqual(it.backup_verified(second, self.gpt, 'TEST0002'), '')
         with open(self.log) as f:
@@ -508,6 +543,53 @@ class Install(unittest.TestCase):
         with self.assertRaisesRegex(Fail, 'cannot be told apart'):
             self.install('--name', 'Office')
         self.assertEqual(self.writes(), [])
+
+    def test_another_model_writes_nothing(self):
+        with open(self.disk, 'r+b') as f:
+            f.seek(self.gpt.named('devinfo').first * S)
+            f.write(devinfo(SERIAL, 'SM8250XX'))
+        with self.assertRaisesRegex(Fail, 'model SM8250XX, not a Lenovo ThinkSmart View'):
+            self.install('--name', 'Office')
+        self.assertEqual(self.writes(), [])
+
+    def test_a_stop_between_the_two_table_writes_is_finished(self):
+        # The first run stops as it goes to write the primary table: the backup copy is new, the
+        # primary still stock. The next run sees that, keeps the first run's table and backup, and
+        # finishes; nothing else is let through as a half-written table.
+        env = dict(self.env, FAKE_STOP_AT='0')
+        with self.assertRaisesRegex(Fail, 'edl ws failed'):
+            self.install('--name', 'Office', env=env)
+        half = self.read(self.total - 33, 33)
+        self.assertEqual(self.read(0, 34), self.first, 'the primary is still stock')
+        gpt, pending = it.read_table(self.first, half)
+        self.assertIsNotNone(pending)
+        os.remove(self.log)
+        out = self.install('--name', 'Office')
+        self.assertIn('stopped between writing the two copies', out)
+        new = it.GPT(self.read(0, 34), self.read(self.total - 33, 33))
+        self.assertEqual(it.layout_of(new), 'techo5')
+        self.assertEqual(self.read(self.total - 33, 33), half, "the first run's table, its ids too")
+        with open(self.log) as f:
+            self.assertNotIn('rf', [l.split()[0] for l in f], 'the first run\'s backup, not a second one')
+        self.assertIn(0, [int(w[1]) for w in self.writes()])
+
+    def test_a_half_written_table_with_no_backup_writes_nothing(self):
+        with self.assertRaises(Fail):
+            self.install('--name', 'Office', env=dict(self.env, FAKE_STOP_AT='0'))
+        shutil.rmtree(os.path.join(self.d, 'backups'))
+        os.remove(self.log)
+        with self.assertRaisesRegex(Fail, 'half of the new partition table'):
+            self.install('--name', 'Office')
+        self.assertEqual(self.writes(), [])
+
+    def test_lk2nd_in_boot_before_the_backup_is_said_in_restore(self):
+        with open(self.disk, 'r+b') as f:
+            f.seek(self.gpt.named('boot').first * S)
+            f.write(lk2nd_image())
+        out = self.install('--name', 'Office')
+        self.assertIn("boot already holds lk2nd", out)
+        with open(os.path.join(self.d, 'backups', 'thinksmart-' + SERIAL, 'restore', 'RESTORE.txt')) as f:
+            self.assertIn('already held lk2nd', f.read())
 
 
 if __name__ == '__main__':

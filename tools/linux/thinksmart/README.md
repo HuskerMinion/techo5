@@ -58,13 +58,14 @@ camera in the device tree, and a configuration trimmed to this board, every driv
 `boot-thinksmart.img`, which a root filesystem carries (`deploy-rootfs.sh KERNEL_IMAGE`), and
 `vmlinuz` and the device tree for `mkimage.sh -K`.
 
-The firmware is the unit's own, made at every boot by `thinksmart-firmware` and never in an image:
+The vendor's firmware is the unit's own, made at every boot by `thinksmart-firmware` and never in an image:
 the audio DSP's and Bluetooth's from the modem partition as they are, the Wi-Fi's (ath10k's
 `firmware-sdio-6.bin` and `board-2.bin`) put together from the modem partition's files the way
 qca-swiss-army-knife's encoders do, the GPU's zap shader from the vendor partition, and the speaker
 amplifier's tuning from what the installer took out of the stock kernel. The store adds what no
 partition has: the GPU's microcode and the Wi-Fi regulatory database, from Alpine's packages
-(`mkstore.sh` without `-F`). `mkstore.sh -F firmware.tar` puts a whole `/lib/firmware` in the store
+(`mkstore.sh` without `-F`), both free to pass on, with their licenses beside them in the image
+([firmware-licenses](firmware-licenses/README.md)). `mkstore.sh -F firmware.tar` puts a whole `/lib/firmware` in the store
 instead, which wins over the unit's. Without the speaker's tuning the amplifier plays untuned: flat,
 and 4.5 dB quieter to stay safe.
 

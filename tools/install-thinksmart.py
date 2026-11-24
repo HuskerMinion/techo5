@@ -13,8 +13,10 @@ Every one of Lenovo's partitions stays where it is. Android's userdata becomes t
 state); Android's own system partition is renamed android-system, its contents untouched, so the
 name system is TECHO5's. lk2nd goes into boot. See tools/linux/thinksmart/README.md.
 
-The firmware is the unit's own and never leaves it except into the backup folder: the Wi-Fi, Bluetooth
-and GPU firmware are made at every boot from the modem and vendor partitions, which stay
+The image carries only firmware anyone may pass on (the GPU's microcode and the Wi-Fi regulatory
+database, their licenses beside them: tools/linux/thinksmart/firmware-licenses). The rest is the unit's
+own and never leaves it except into the backup folder: the Wi-Fi, Bluetooth and audio firmware and the
+GPU's zap shader are made at every boot from the modem and vendor partitions, which stay
 (thinksmart-firmware), and the speaker amplifier's DSP table is taken here from the stock kernel in the
 backup and written onto the unit with the settings.
 
@@ -50,8 +52,9 @@ name and Wi-Fi but no key: on its first start with a network the unit lets a Hom
 --dry-run runs every check and prints every command that would write, and writes nothing.
 
 Linux and macOS (edl needs raw USB access: its udev rules, or sudo; stop ModemManager on Linux, which
-takes the device otherwise). Needs Python 3 and bkerler's edl
-(pip install git+https://github.com/bkerler/edl). The way back is printed at the end, written into the
+takes the device otherwise). Needs Python 3 and bkerler's edl, at the commit the docs name
+(pip install git+https://github.com/bkerler/edl@1cda1a616748d608667b2d13b73a28d3197ceb45).
+The way back is printed at the end, written into the
 backup folder (restore/RESTORE.txt) and in docs/install-thinksmart.md.
 """
 import argparse
@@ -76,6 +79,8 @@ from techo5lib import (CONSOLE_TECHO5, LET_ADD_HELP, LET_ADD_MARKER, Release, as
                        valid_api_key, wifi_conf, write_private)
 
 REPO = 'HuskerMinion/techo5'
+# bkerler's edl at the commit docs/install-thinksmart.md was done with.
+EDL_COMMIT = '1cda1a616748d608667b2d13b73a28d3197ceb45'
 BOARD_NAME = 'Lenovo ThinkSmart View (CD-18781Y)'
 DEFAULT_NAME = 'ThinkSmart View'
 
@@ -247,7 +252,7 @@ class GPT:
     """A GUID partition table, from its primary copy (the first 34 sectors of the disk) and checked
     against its backup copy (the last 33)."""
 
-    def __init__(self, first, last):
+    def __init__(self, first, last, check_backup=True):
         if len(first) != 34 * SECTOR or len(last) != 33 * SECTOR:
             raise GPTError('the partition table reads are %d and %d bytes' % (len(first), len(last)))
         self.mbr = first[:SECTOR]
@@ -267,6 +272,8 @@ class GPT:
         self.disk_guid = uuid.UUID(bytes_le=guid)
         self.total = self.alt + 1
         self.entries = [Entry(raw[i * 128:(i + 1) * 128], i) for i in range(self.count)]
+        if not check_backup:
+            return
         # The backup copy: the same entries, its header in the last sector naming them 32 sectors before.
         bh = last[32 * SECTOR:]
         b = HEADER.unpack_from(bh)
@@ -342,6 +349,32 @@ def new_layout(gpt, guids=None):
     free.name, free.type, free.guid, free.attrs = 'techo5-data', LINUX_DATA, guids[1], 0
     free.first, free.last = data_first, data_last
     return g
+
+
+def read_table(first, last):
+    """(the unit's table, the new table a run before left half written, or None). The table is read
+    from both copies. The one other state let through is a run stopped between its two writes: the
+    backup copy written (it goes first) and the primary still the stock table. Then the backup copy is
+    exactly new_layout of the primary, with its own two new partition ids, and this run writes it
+    again, both copies. Anything else that does not match is a GPTError, as before."""
+    try:
+        return GPT(first, last), None
+    except GPTError as e:
+        why = e
+    try:
+        primary = GPT(first, last, check_backup=False)
+    except GPTError:
+        raise why
+    if layout_of(primary) != 'stock':
+        raise why
+    theirs = [Entry(last[i * 128:(i + 1) * 128], i) for i in range(primary.count)]
+    ids = {e.name: e.guid for e in theirs if not e.free}
+    if 'system' not in ids or 'techo5-data' not in ids:
+        raise why
+    pending = new_layout(primary, (ids['system'], ids['techo5-data']))
+    if pending.build()[1] != last:
+        raise why
+    return primary, pending
 
 
 # ------------------------------------------------------------------------------------------ images
@@ -426,6 +459,26 @@ SERIAL_AT = 228
 SERIAL_RE = re.compile(rb'[A-Z0-9]{6,16}')
 
 
+# The model aboot writes after the serial, as on the unit's label: ZA69 is the ThinkSmart View
+# (CD-18781Y); another Qualcomm device in EDL with a table shaped like this one is not taken for one.
+MODEL_PREFIX = 'ZA69'
+MODEL_RE = re.compile(rb'[A-Z0-9]{6,16}')
+
+
+def model_of(devinfo):
+    """The unit's model from the first sector of its devinfo partition (after the serial), or None."""
+    if devinfo[:len(DEVINFO_MAGIC)] != DEVINFO_MAGIC:
+        return None
+    fields = devinfo[SERIAL_AT:SERIAL_AT + 64].split(b'\0')
+    m = fields[1] if len(fields) > 1 else b''
+    return m.decode('ascii') if MODEL_RE.fullmatch(m) else None
+
+
+def masked(serial):
+    """A serial as it is printed: enough to tell units apart at a glance, not the whole label."""
+    return serial[:3] + '*' * max(len(serial) - 5, 3) + serial[-2:]
+
+
 def serial_of(devinfo):
     """The unit's serial from the first sector of its devinfo partition, or None."""
     if devinfo[:len(DEVINFO_MAGIC)] != DEVINFO_MAGIC:
@@ -438,11 +491,17 @@ def unit_serial(edl, gpt, work):
     dv = gpt.named('devinfo')
     if dv is None:
         fail('this unit has no devinfo partition, so it cannot be told apart from another. Nothing was written.')
-    serial = serial_of(edl.read(dv.first, 1, os.path.join(work, 'thinksmart-devinfo.bin')))
+    sector = edl.read(dv.first, 1, os.path.join(work, 'thinksmart-devinfo.bin'))
+    os.remove(os.path.join(work, 'thinksmart-devinfo.bin'))
+    serial = serial_of(sector)
     if not serial:
         fail("this unit's devinfo holds no serial, so it cannot be told apart from another unit and its "
              "backup\n   cannot be named. Nothing was written.")
-    return serial
+    model = model_of(sector)
+    if not model or not model.startswith(MODEL_PREFIX):
+        fail("this unit's devinfo says model %s, not a %s (%s...). Nothing was written."
+             % (model or 'none', BOARD_NAME, MODEL_PREFIX))
+    return serial, model
 
 
 def backup_name(serial):
@@ -499,7 +558,9 @@ def make_backup(edl, gpt, first, last, folder):
     note('hashing the backup')
     whole = sha256_file(img)
     write_bytes(os.path.join(folder, 'SHA256SUMS'), '%s  emmc.img\n' % whole)
-    write_restore(folder, gpt, img)
+    if write_restore(folder, gpt, img):
+        note("warning: boot already holds lk2nd, not Lenovo's kernel; restore/RESTORE.txt says what that means\n"
+             "   for the way back")
     # Last, so a backup that stopped anywhere above is never taken as verified.
     write_bytes(os.path.join(folder, 'verified'), 'verified %s sectors=%d sha256=%s disk=%s\n'
                 % (time.strftime('%Y-%m-%dT%H:%M:%S'), gpt.total, whole, gpt.disk_guid))
@@ -521,12 +582,25 @@ def write_restore(folder, gpt, img):
             e = gpt.named(name)
             piece(name + '.img', e.first, e.sectors)
     write_bytes(os.path.join(r, 'zero-1MiB.bin'), bytes(1 << 20))
-    write_bytes(os.path.join(r, 'RESTORE.txt'), restore_text(gpt))
+    lk2nd_there = holds_lk2nd(read_file(os.path.join(r, 'boot.img')))
+    write_bytes(os.path.join(r, 'RESTORE.txt'), restore_text(gpt, lk2nd_there))
+    return lk2nd_there
 
 
-def restore_text(gpt):
+def holds_lk2nd(boot):
+    """Whether a boot partition holds lk2nd rather than an Android kernel: someone put it there by hand
+    before this backup was made."""
+    return boot[:8] == b'ANDROID!' and b'lk2nd' in boot[:4 << 20]
+
+
+def restore_text(gpt, lk2nd_there=False):
     b, rc, ud = gpt.named('boot'), gpt.named('recovery'), gpt.named('userdata')
-    return '\n'.join([
+    lk2nd_note = [
+        'NOTE: when this backup was made, boot already held lk2nd, not Lenovo\'s Android kernel (it was put',
+        'there before this installer ran). Both A. and B. put that lk2nd back; Android\'s own boot partition',
+        'has to come from an older backup of this unit or from Lenovo\'s firmware.',
+        ''] if lk2nd_there else []
+    return '\n'.join(lk2nd_note + [
         "The way back to Lenovo's Android for this unit (docs/install-thinksmart.md, \"The way back\").",
         '',
         'EDL: unplug the power, hold Vol+ and Vol- together, plug the power back in, release after 5 to 10',
@@ -695,7 +769,8 @@ def main(argv=None):
 
     # ------------------------------------------------------------------------------------ 1. checks
     step('checks')
-    need(a.edl, "install bkerler's edl: pip install git+https://github.com/bkerler/edl")
+    need(a.edl, "install bkerler's edl, at the commit the docs use: "
+         "pip install git+https://github.com/bkerler/edl@%s" % EDL_COMMIT)
     for path in [x for x in (a.system, a.lk2nd, a.backup) if x]:
         if not os.path.exists(path):
             fail('nothing at %s' % path)
@@ -709,9 +784,12 @@ def main(argv=None):
             raise GPTError('no GPT header at sector 1')
         total = hdr[6] + 1
         last = edl.read(total - 33, 33, os.path.join(a.work, 'thinksmart-gpt-backup.bin'))
-        gpt = GPT(first, last)
+        gpt, pending = read_table(first, last)
     except GPTError as e:
         fail("this unit's partition table cannot be read: %s. Nothing was written." % e)
+    if pending:
+        note('a run before stopped between writing the two copies of the new partition table (the backup\n'
+             '   copy is new, the primary still stock); this run writes the same table again, both copies')
     layout = layout_of(gpt)
     if layout not in ('stock', 'techo5'):
         fail('the partition table is not the stock one of a %s, nor one this installer made: %s.\n'
@@ -720,8 +798,8 @@ def main(argv=None):
     note('eMMC: %d MiB, disk %s; %s' % (gpt.total >> 11, gpt.disk_guid,
                                         'the stock partition table; userdata is %d MiB' % (ud.sectors >> 11)
                                         if ud else 'installed by this installer before: installing again'))
-    serial = unit_serial(edl, gpt, a.work)
-    note('unit: serial %s' % serial)
+    serial, model = unit_serial(edl, gpt, a.work)
+    note('unit: %s, serial %s' % (model, masked(serial)))
     folder = os.path.abspath(a.backup or os.path.join(a.backups, backup_name(serial)))
     key_file = a.key_file or os.path.join(folder, 'home-assistant.key')
     wifi = None
@@ -769,7 +847,7 @@ def main(argv=None):
     lk2nd_padded = os.path.join(a.work, 'thinksmart-lk2nd.bin')
     write_bytes(lk2nd_padded, lk2nd_data.ljust(-(-len(lk2nd_data) // SECTOR) * SECTOR, b'\0'))
     if layout == 'stock':
-        new = new_layout(gpt)
+        new = pending or new_layout(gpt)
         new_first, new_last = new.build()
         GPT(new_first, new_last)  # the table about to be written reads back as a table
     else:
@@ -795,6 +873,9 @@ def main(argv=None):
     elif layout == 'techo5':
         fail('%s, and this unit has TECHO5 on it already, so a backup made now would not be of its stock\n'
              '   firmware. Pass --backup with the folder the first install made.' % why)
+    elif pending:
+        fail('%s, and a run before already wrote half of the new partition table, so a backup made now\n'
+             '   would not be of the stock table. Pass --backup with the folder that run made.' % why)
     else:
         img = make_backup(edl, gpt, first, last, folder)
         note('the whole eMMC is in %s, checked against the unit\'s partition table' % folder)
@@ -826,8 +907,10 @@ def main(argv=None):
                 fail('the key in %s is not 32 bytes of base64' % key_file)
         else:
             psk = new_api_key()
+    # The settings hold the Home Assistant key and the Wi-Fi key: kept in memory until the write, then
+    # in a file only its owner can read, removed once it is on the unit.
+    settings_data = settings_image(settings_files(gift, a.name or '', psk or '', wifi, let_add), dsp)
     settings = os.path.join(a.work, 'thinksmart-settings.bin')
-    write_bytes(settings, settings_image(settings_files(gift, a.name or '', psk or '', wifi, let_add), dsp))
 
     if a.dry_run:
         w = Writer(edl, True)
@@ -879,8 +962,9 @@ def main(argv=None):
         p, b = os.path.join(a.work, 'thinksmart-new-gpt-primary.bin'), os.path.join(a.work, 'thinksmart-new-gpt-backup.bin')
         write_bytes(p, new_first)
         write_bytes(b, new_last)
-        # The backup copy first: a stop between the two leaves a primary that still says stock, which
-        # this installer reads (and a run again picks up), rather than a new primary and a stale backup.
+        # The backup copy first: a stop between the two leaves a primary that still says stock and a
+        # backup copy that is exactly the new table, which a run again recognizes (read_table) and
+        # finishes, rather than a new primary and a stale backup.
         write_checked(w, edl, gpt.total - 33, b, a.work, 'the backup partition table')
         write_checked(w, edl, 0, p, a.work, 'the partition table')
         note('the new partition table is on the unit, both copies, read back')
@@ -899,7 +983,11 @@ def main(argv=None):
         fail('the system image did not read back as written; run this again (the backup is kept)')
     os.remove(rb)
     note('the system image is in system, its boot files and the start and end of the store read back')
-    write_checked(w, edl, data.first, settings, a.work, 'the settings')
+    write_private(settings, settings_data)
+    try:
+        write_checked(w, edl, data.first, settings, a.work, 'the settings')
+    finally:
+        os.remove(settings)
     note('the settings%s are at the start of techo5-data' % (' and the speaker table' if dsp else ''))
 
     # ------------------------------------------------------------------------------------ 7. start
