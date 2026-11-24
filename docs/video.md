@@ -103,6 +103,11 @@ A live stream can't be moved through: the app is told so, and it plays on.
   the renderer's events, as most do): the app is told and plays the one before or after, if it acts on
   it ([how it is told](setup.md#dlna-next-and-previous)). On the Spot, swipe left for the next and
   right for the one before.
+- **A bar** runs above the controls for a video that can be moved through: one from Home Assistant
+  that says how long it is, or a DLNA video the renderer can move through, or whose app listens (the
+  app is then asked to, [the same way](setup.md#dlna-next-and-previous)). Tap it to go to that place,
+  or slide a finger along it: the time shows where you are, and the video moves there when you let
+  go. A live stream has no bar.
 - **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was.
 - A call, an alarm or a timer ringing, the settings, a camera or a voice turn goes on top. The video
   pauses under it and goes on once it's gone.

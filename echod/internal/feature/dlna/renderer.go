@@ -49,7 +49,14 @@ type song struct {
 	class, mime               string // the description's upnp:class and its res's content type
 	video                     bool
 	from                      string
+	// start is where in the whole song or film this stream begins (startNS's start attribute on
+	// res): a controller that sends a film again from a place, as one continuous stream, says so,
+	// so the screen can show the film's own time. Positions and the length stay the stream's own.
+	start time.Duration
 }
+
+// startNS is the namespace of TECHO5's own DIDL-Lite attributes: start, on res.
+const startNS = "urn:techo5:dlna"
 
 type renderer struct {
 	f *Feature
@@ -874,6 +881,10 @@ func parseSong(uri, meta string) song {
 					case "duration":
 						if s.dur == 0 {
 							s.dur = parseHMS(a.Value)
+						}
+					case "start":
+						if a.Name.Space == startNS && s.start == 0 {
+							s.start = parseHMS(a.Value)
 						}
 					case "protocolInfo":
 						// http-get:*:video/mp4:*, the third of four.

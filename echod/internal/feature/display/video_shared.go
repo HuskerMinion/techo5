@@ -72,6 +72,10 @@ type videoAsk struct {
 // picture through.
 var videoStrip = color.RGBA{0x00, 0x00, 0x00, 0xb0}
 
+// videoTrack is the bar to seek on where the video has not reached: white at a third, premultiplied as
+// the canvas is, so the strip shows through it as the picture shows through the strip.
+var videoTrack = color.RGBA{0x55, 0x55, 0x55, 0x55}
+
 // videoTime is a place in a video as a player says it: 4:05, or 1:04:05 past an hour.
 func videoTime(d time.Duration) string {
 	sec := int(max(d, 0) / time.Second)

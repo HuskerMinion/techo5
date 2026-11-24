@@ -261,6 +261,7 @@ type roundScene struct {
 	showVideo     bool
 	videoLive     bool
 	videoControls bool
+	videoSeek     seekView
 	showVideoAsk  bool
 	videoAsk      videoAsk
 
@@ -322,6 +323,8 @@ type roundRenderer struct {
 	// canvas goes over the picture (render_video_spot.go).
 	videoZones []image.Rectangle
 	videoOver  image.Rectangle
+	// seekBars is the video's bar to seek on, as the Show's renderer has it (seekbar.go).
+	seekBars seekBars
 }
 
 func newRoundRenderer(dst *image.RGBA) *roundRenderer {
@@ -362,6 +365,9 @@ func (r *roundRenderer) useFont() {
 func (r *roundRenderer) draw(s roundScene) {
 	r.useFont()
 	r.press = s.press
+	// The video's bar to seek on is only one this frame draws, from when it is done (seekbar.go).
+	r.seekBars.begin()
+	defer r.seekBars.publish()
 	defer r.listeningDot(s) // over everything, however the frame ends
 	if !(s.menuOpen && s.menuMode == modeWeather && s.radarOn) {
 		r.shapes = alertOverlay{} // kept only while the rain map is up

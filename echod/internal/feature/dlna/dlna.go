@@ -18,7 +18,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
+	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
 
@@ -118,6 +120,115 @@ func (f *Feature) Skip(t media.Transport) bool {
 	}
 	slog.Info("dlna: a skip pressed on the device, told to the controllers", "request", what)
 	return f.e.request(what)
+}
+
+// SeekWay is how a seek made on the device's own screen reaches the renderer's song or video.
+type SeekWay int
+
+const (
+	// SeekNone is nobody to act on one: the screen offers no place to tap.
+	SeekNone SeekWay = iota
+	// SeekHere is the renderer moving through it itself, as for a controller's Seek.
+	SeekHere
+	// SeekAsk is the controller being asked to (a "seek" request, events.request): a stream the
+	// renderer cannot move through, a continuous transcode from a Plex add-on say, whose controller can
+	// send it again from the place.
+	SeekAsk
+)
+
+// SeekWay is how a seek on the screen would reach the renderer's song or video, and how long it runs.
+// Only one that says how long it runs has a place to move to, and only one the renderer is playing,
+// paused or starting.
+func (f *Feature) SeekWay() (SeekWay, time.Duration) {
+	if !On() {
+		return SeekNone, 0
+	}
+	f.r.mu.Lock()
+	st, set := f.r.state, f.r.cur.uri != ""
+	f.r.mu.Unlock()
+	if !set || (st != stPlaying && st != stPaused && st != stLoading) {
+		return SeekNone, 0
+	}
+	ok, known, dur := f.r.seekable()
+	switch {
+	case dur <= 0 || !known:
+		// Not known yet (a song still being mapped, a video still being found out): offered once it
+		// is, so that a place tapped meanwhile does not go to the controller when the renderer could
+		// have moved there itself a moment later.
+		return SeekNone, 0
+	case ok:
+		return SeekHere, dur
+	case f.e.seekListening():
+		return SeekAsk, dur
+	}
+	return SeekNone, 0
+}
+
+// VideoSeekWay is SeekWay for the video the player has as id: SeekNone unless it is the renderer's.
+func (f *Feature) VideoSeekWay(id uint64) (SeekWay, time.Duration) {
+	f.r.mu.Lock()
+	ours := f.r.cur.video && id != 0 && f.r.videoID == id
+	f.r.mu.Unlock()
+	if !ours {
+		return SeekNone, 0
+	}
+	return f.SeekWay()
+}
+
+// VideoStart is where in the whole film the renderer's video id begins (song.start): 0 for a stream
+// that is the whole film, or for another video than the renderer's.
+func (f *Feature) VideoStart(id uint64) time.Duration {
+	f.r.mu.Lock()
+	defer f.r.mu.Unlock()
+	if !f.r.cur.video || id == 0 || f.r.videoID != id {
+		return 0
+	}
+	return f.r.cur.start
+}
+
+// SeekFromDevice is a place in the renderer's song or video chosen on the device's own screen: the
+// video the player has as id, or with id 0 a song. The renderer moves there itself when it can
+// (seekPlace), as for a controller's Seek; otherwise a controller that said it acts on seeks is asked
+// to, as TECHO5's own request ("seek:95", then the request's number, events.request). It says whether
+// either happened. A place no longer in what is playing (the renderer moved on between the finger
+// landing and lifting) goes nowhere. The place is in the whole song or film: for a stream that begins
+// further in (song.start), the controller is asked for that place and the renderer moves to it within
+// the stream.
+func (f *Feature) SeekFromDevice(id uint64, to time.Duration) bool {
+	var way SeekWay
+	var dur, start time.Duration
+	if id != 0 {
+		way, dur = f.VideoSeekWay(id)
+		start = f.VideoStart(id)
+	} else {
+		f.r.mu.Lock()
+		song := !f.r.cur.video
+		f.r.mu.Unlock()
+		if !song {
+			return false
+		}
+		way, dur = f.SeekWay()
+	}
+	// A place at the very end would fetch the stream from its last byte and stop at once: the end is
+	// a second short of it, as a long stream's last second is no loss.
+	end := start + dur
+	if end > 2*time.Second {
+		end -= time.Second
+	}
+	to = min(max(to, 0), end)
+	switch way {
+	case SeekHere:
+		if err := f.r.seekPlace(max(to-start, 0)); err != nil {
+			slog.Info("dlna: a seek on the screen was not made", "to", to.Round(time.Second), "err", err)
+			return false
+		}
+		slog.Info("dlna: moving, from the screen", "to", to.Round(time.Second))
+		return true
+	case SeekAsk:
+		slog.Info("dlna: a seek on the screen, told to the controllers", "to", to.Round(time.Second))
+		return f.e.request("seek:" + strconv.FormatInt(int64(to/time.Second), 10))
+	}
+	return false
 }
 
 // On is whether the device is a DLNA renderer now.

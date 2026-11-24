@@ -650,7 +650,19 @@ HTTP.
   `val` is `next` or `previous`, a colon and the press's number: `next:3`, then `previous:4`. The
   number goes up by one with each press, from 1 when the daemon starts, and never repeats while it
   runs, so two presses of next in a row are `next:5` and `next:6`: a controller can take a value
-  that differs from the last one it saw as a new press. The events that follow (the state changing)
+  that differs from the last one it saw as a new press.
+
+  A place chosen on the device's own screen (the bar on Now Playing or under a video's controls) is
+  sent the same way, as `seek`, a colon, the place in whole seconds from the start, and then the
+  number, which is shared with next and previous: `seek:95:7` is "go to 1:35", the seventh request.
+  The number is always after the last colon. It is sent only for a song or video the renderer can't
+  move through itself (a live transcode, as a Plex add-on might send) that says how long it is: one
+  the renderer can move through it moves itself, as for the app's Seek, and the app sees the new
+  place in the position it reads. A seek is passed on only to a controller that said it acts on one:
+  it sends `X-TECHO5-Requests: next, previous, seek` with its AVTransport SUBSCRIBE (most controllers
+  ignore TECHO5's own requests, so a bar that asked them would do nothing). With no such subscriber,
+  a song or video the renderer can't move through has no bar to tap. The controller can send the stream again from that place with
+  `SetAVTransportURI`. The events that follow (the state changing)
   don't carry the request again, and the state sent on subscribing never has one. Only AVTransport
   subscribers are told, and only while one is subscribed: with none, the device offers no back and
   forward on a DLNA video, the next song word only fires its event (`asked: false`), and the
@@ -1021,8 +1033,12 @@ other Shows don't have the switches.
 - **Now playing layout** (Display → Home screen). **Classic** is the default. **Modern** puts
   square artwork beside the track details and transport controls on rectangular screens with room
   for the layout. It takes effect immediately and is saved across restarts. Elapsed time and duration
-  appear when the source reports both, as Music Assistant over Sendspin can. This setting applies
-  to the full page.
+  appear with a bar when the source reports both, as Music Assistant over Sendspin and DLNA can: under
+  the song on Modern, beside the line above the song on Classic. Tap the bar, or slide a finger along
+  it, to move within the song, for a Music Assistant track on this device's queue (it needs the Music
+  Assistant token on the setup page) and a DLNA song that can be moved through (see
+  [DLNA](#dlna-next-and-previous)). For anything else, Spotify Connect and AirPlay included, the bar
+  only shows where the song is. This setting applies to the full page.
 - **Now playing** (the full page, or a strip over the clock). Once the music is
   paused or stopped for 30 seconds, the full page goes by itself: to the strip when the setting uses
   one, otherwise back to the clock, or to the dashboard when **Dashboard when idle** is on (the Spot

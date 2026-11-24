@@ -100,16 +100,13 @@ func (r *renderer) modernNowPlaying(s scene) {
 	}
 
 	if p := s.musicPosition; p.Dur > 0 {
+		// One to seek on when what plays can be moved from here (musicSeekRoute); otherwise it only
+		// shows where the song is, and a tap on it is a tap on the page.
 		elapsed := p.Now(s.now)
-		bar := image.Rect(x, middle+r.s(69), details.Max.X, middle+r.s(75))
-		r.roundRect(bar, bar.Dy()/2, surface)
-		bar.Max.X = bar.Min.X + int(float64(bar.Dx())*float64(elapsed)/float64(p.Dur))
-		if !bar.Empty() {
-			r.roundRect(bar, min(bar.Dy(), bar.Dx())/2, accent)
-		}
+		r.seekBar(s.musicSeek, x, details.Max.X, middle+r.s(72), elapsed, p.Dur, surface, accent)
 		total := musicTime(p.Dur)
 		y := middle + r.s(94)
-		r.text(r.micro, musicTime(elapsed), x, y, quiet)
+		r.text(r.micro, musicTime(s.musicSeek.at(elapsed)), x, y, quiet)
 		r.text(r.micro, total, details.Max.X-r.width(r.micro, total), y, quiet)
 	}
 

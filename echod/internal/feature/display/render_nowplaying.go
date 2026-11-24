@@ -52,7 +52,7 @@ func (r *renderer) nowPlaying(s scene) {
 		label += "  ·  " + station
 		headline, sub = rd.Title, rd.Artist
 	}
-	r.text(r.small, label, r.margin, r.s(150), amber)
+	r.labelRow(s, label, starting == "")
 	if s.hasLyric && rd.Title != "" && starting == "" {
 		r.lyricLines(s.lyric, rd)
 	} else {
@@ -60,6 +60,33 @@ func (r *renderer) nowPlaying(s scene) {
 	}
 
 	r.transportRow(s)
+}
+
+// labelRow is the row over the song: what plays and from where, and to its right, when the song's
+// source says how far into it it is (and bar), the bar the modern page has under its song, with the
+// time gone at its left and the song's length at its right. The page has no room for it between the
+// words and the buttons, which the lyrics fill. It is one to seek on when what plays can be moved from
+// here (musicSeekRoute), and otherwise one that only shows.
+func (r *renderer) labelRow(s scene, label string, bar bool) {
+	y := r.s(150)
+	p := s.musicPosition
+	if !bar || p.Dur <= 0 {
+		r.text(r.small, label, r.margin, y, amber)
+		return
+	}
+	// The label has the left half at least; the bar the rest, starting past the label's end.
+	gap := r.s(32)
+	label = r.clipTo(r.small, label, r.w/2-r.margin-gap)
+	r.text(r.small, label, r.margin, y, amber)
+	x0 := max(r.margin+r.width(r.small, label)+gap, r.w/2)
+	elapsed := p.Now(s.now)
+	total := musicTime(p.Dur)
+	// Both ends as wide as the length, so the bar does not move as the time gone grows.
+	w, room := r.width(r.tiny, total), r.s(14)
+	mid := y - r.s(9) // level with the middle of the label's letters
+	r.seekBar(s.musicSeek, x0+w+room, r.w-r.margin-w-room, mid, elapsed, p.Dur, ember, amber)
+	r.text(r.tiny, musicTime(s.musicSeek.at(elapsed)), x0, mid+r.s(7), dim)
+	r.text(r.tiny, total, r.w-r.margin-w, mid+r.s(7), dim)
 }
 
 // songLines is the middle of the page without words: the song (or the station) large, who plays it under.

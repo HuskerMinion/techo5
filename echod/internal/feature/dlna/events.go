@@ -34,6 +34,24 @@ type subscription struct {
 	callback string
 	seq      uint32
 	until    time.Time
+	// seeks is whether the controller said, subscribing, that it acts on a seek asked of it
+	// (requestsHeader naming "seek"). Most controllers ignore TECHO5's own requests, so the screen
+	// offers to pass a seek on only to one that said so.
+	seeks bool
+}
+
+// requestsHeader is the header a controller subscribing to the transport names TECHO5's own requests
+// it acts on with ("X-TECHO5-Requests: next, previous, seek"). Only "seek" changes anything here.
+const requestsHeader = "X-TECHO5-Requests"
+
+// saysSeeks is whether a subscription's requests header names "seek".
+func saysSeeks(h string) bool {
+	for _, w := range strings.Split(h, ",") {
+		if strings.EqualFold(strings.TrimSpace(w), "seek") {
+			return true
+		}
+	}
+	return false
 }
 
 type events struct {
@@ -104,7 +122,8 @@ func (e *events) subscribe(w http.ResponseWriter, r *http.Request, service strin
 		e.subs = map[string]*subscription{}
 	}
 	sid := newSID()
-	s := &subscription{service: service, callback: cb, until: time.Now().Add(subscribeFor)}
+	s := &subscription{service: service, callback: cb, until: time.Now().Add(subscribeFor),
+		seeks: service == "AVTransport" && saysSeeks(r.Header.Get(requestsHeader))}
 	e.subs[sid] = s
 	w.Header().Set("SID", sid)
 	w.Header().Set("TIMEOUT", "Second-"+strconv.Itoa(int(subscribeFor/time.Second)))
@@ -183,12 +202,29 @@ func (e *events) listening() bool {
 	return false
 }
 
-// request tells the transport's subscribers that next or previous (what) was pressed on the device:
-// UPnP has no state variable for that, and a renderer has no queue to skip through, so it goes as one
-// of TECHO5's own (X_TECHO5_Request) in a LastChange of its own. Its value carries the press's number
-// ("next:3", "previous:4"), one more for each press and never the same twice in a run, so a controller
-// that takes a value differing from the last as a new press sees two nexts in a row as two. The controller that has the queue skips, and
-// sets the next song as it would for any other reason. It says whether anybody was told.
+// seekListening is whether a controller that acts on a seek asked of it (subscription.seeks) is
+// subscribed to the transport's events now.
+func (e *events) seekListening() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.expireLocked()
+	for _, s := range e.subs {
+		if s.service == "AVTransport" && s.seeks {
+			return true
+		}
+	}
+	return false
+}
+
+// request tells the transport's subscribers that next or previous (what) was pressed on the device, or
+// that a place was chosen on its screen in a stream the renderer cannot move through ("seek:95", in
+// whole seconds from the start): UPnP has no state variable for either, and a renderer has no queue to
+// skip through, so it goes as one of TECHO5's own (X_TECHO5_Request) in a LastChange of its own. Its
+// value carries the request's number after a last colon ("next:3", "previous:4", "seek:95:5"), one
+// more for each request and never the same twice in a run, so a controller that takes a value
+// differing from the last as a new press sees two nexts in a row as two. The controller that has the
+// queue skips, or sends the stream again from the place, as it would for any other reason. It says
+// whether anybody was told.
 func (e *events) request(what string) bool {
 	e.mu.Lock()
 	e.expireLocked()

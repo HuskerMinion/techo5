@@ -35,8 +35,8 @@ func subscriber(t *testing.T) (string, chan notified) {
 	return srv.URL + "/event", got
 }
 
-// requestIn reads a request event's X_TECHO5_Request out of its LastChange: what was pressed, and the
-// press's number.
+// requestIn reads a request event's X_TECHO5_Request out of its LastChange: what was asked for, and
+// the request's number after the last colon.
 func requestIn(t *testing.T, body string) (what, seq string) {
 	t.Helper()
 	var ps struct {
@@ -62,10 +62,12 @@ func requestIn(t *testing.T, body string) (what, seq string) {
 	if len(ev.Instance.Request) != 1 {
 		t.Fatalf("%d requests in one event", len(ev.Instance.Request))
 	}
-	what, seq, ok := strings.Cut(ev.Instance.Request[0].Val, ":")
-	if !ok {
-		t.Fatalf("request %q has no number", ev.Instance.Request[0].Val)
+	v := ev.Instance.Request[0].Val
+	i := strings.LastIndex(v, ":")
+	if i < 0 {
+		t.Fatalf("request %q has no number", v)
 	}
+	what, seq = v[:i], v[i+1:]
 	if _, err := strconv.ParseUint(seq, 10, 32); err != nil {
 		t.Errorf("request number %q: %v", seq, err)
 	}

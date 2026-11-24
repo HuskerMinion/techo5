@@ -33,6 +33,11 @@ func TestTheSpotVideoFace(t *testing.T) {
 		"video-spot-loading":  {video: video.State{Phase: video.Loading, ID: 4, Host: "media.example.com"}, showVideo: true, videoControls: true},
 		"video-spot-failed":   {video: video.State{Failed: 5, Err: "Server returned 404 Not Found", ErrAt: at}, showVideo: true},
 		"video-spot-ask":      {showVideoAsk: true, videoAsk: videoAsk{id: 6, from: "192.168.1.30", title: "Holiday 2025.mp4"}},
+		// A video somebody can move through: the bar above the title, and a finger choosing a place.
+		"video-spot-seek": {video: playing, showVideo: true, videoLive: true, videoControls: true,
+			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
+		"video-spot-seek-drag": {video: playing, showVideo: true, videoLive: true, videoControls: true,
+			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur, shown: true, to: 6 * time.Minute}},
 	}
 	for name, s := range scenes {
 		s.now, s.phase = at, "idle"
@@ -64,6 +69,28 @@ func TestTheSpotVideoFace(t *testing.T) {
 			}
 			if got := r.videoTappedSpot(image.Pt(center, 150)); got != videoTapNone {
 				t.Errorf("%s: a tap on the picture gave %v", name, got)
+			}
+			// The bar to seek on only for a video somebody can move through: inside the circle and the
+			// strip, and clear of where a finger meant for a button lands.
+			z := r.seekBars.zone()
+			if (z.view.route != seekNone) != s.videoSeek.tappable() {
+				t.Errorf("%s: bar %+v for a video whose seek is %+v", name, z.view, s.videoSeek)
+			}
+			if s.videoSeek.tappable() {
+				for _, c := range []image.Point{z.reach.Min, {z.reach.Max.X, z.reach.Min.Y}, {z.reach.Min.X, z.reach.Max.Y}, z.reach.Max} {
+					dx, dy := c.X-center, c.Y-center
+					if dx*dx+dy*dy > (center-8)*(center-8) {
+						t.Errorf("%s: the bar's corner %v is under the bezel", name, c)
+					}
+				}
+				if !z.bar.In(r.videoOver) {
+					t.Errorf("%s: the bar %v is outside the strip %v", name, z.bar, r.videoOver)
+				}
+				for _, b := range r.videoButtonsSpot() {
+					if z.reach.Overlaps(b.Inset(-6)) {
+						t.Errorf("%s: the bar's reach %v takes a button's %v", name, z.reach, b)
+					}
+				}
 			}
 		}
 		if dir == "" {

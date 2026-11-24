@@ -158,8 +158,9 @@ var avtVars = []stateVar{
 	{"AbsoluteCounterPosition", "i4", false, nil},
 	{"CurrentTransportActions", "string", false, nil},
 	{"LastChange", "string", true, nil},
-	// TECHO5's own: next or previous pressed on the device, carried in LastChange only (events.request).
-	// Its value is "next" or "previous", a colon and the press's number: "next:3".
+	// TECHO5's own: next or previous pressed on the device, or a place chosen on its screen in a stream
+	// the renderer cannot move through, carried in LastChange only (events.request). Its value is
+	// "next", "previous" or "seek:<seconds>", a colon and the request's number: "next:3", "seek:95:4".
 	{"X_TECHO5_Request", "string", false, nil},
 	{"A_ARG_TYPE_SeekMode", "string", false, []string{"REL_TIME", "ABS_TIME", "TRACK_NR"}},
 	{"A_ARG_TYPE_SeekTarget", "string", false, nil},

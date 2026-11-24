@@ -418,6 +418,8 @@ type Display struct {
 	press     pressState
 	pageShown pageID
 	pressSeq  uint64
+	// seekF is a finger on a bar to seek on (seekbar.go).
+	seekF seekFinger
 
 	// The deck page (deck.go): up while deckUp, on deckPage, with deckPress the press being shown.
 	deckUp    bool
@@ -1575,6 +1577,10 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.calendarUp() {
 		d.calendarGesture(g)
 		d.wake()
+		return
+	}
+	// Now Playing's bar to seek on, where it is one: a finger on it is its, not a play or a pause.
+	if d.seekGesture(g) {
 		return
 	}
 	switch g.Kind {
@@ -3067,6 +3073,13 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.quietAway(now, s.radio, music, wants, s.playing)
 	s.nowPlaying = wants && !d.putAway(s.radio, wants, s.playing)
+	// How a place chosen on Now Playing's bar would be sent (seekbar.go), worked out before d.mu: it
+	// asks the player and the DLNA renderer, which have locks of their own.
+	var musicRoute seekView
+	if s.nowPlaying {
+		pos, _ := home.TrackPosition(s.radio)
+		musicRoute = musicSeekRoute(s.radio, s.paused, pos)
+	}
 	d.mu.Lock()
 	s.musicAway = d.away
 	// Not under the sunrise light, which draws no strip: taps on a strip nobody can see would still act.
@@ -3083,12 +3096,13 @@ func (d *Display) frame() (next time.Duration) {
 		s.lyric, s.hasLyric = home.Get().LyricNow(s.radio, now)
 		s.modernMusic = config.Get().Screen.ModernNowPlaying && d.r.h >= d.r.s(380)
 		pos, _ := home.TrackPosition(s.radio)
-		if s.modernMusic {
-			s.musicPosition = pos
-			if !s.playing || s.paused {
-				s.musicPosition.Rate = 0
-			}
+		// Both styles have the bar now, and it is one to seek on when what plays can be moved through
+		// from here (seekbar.go).
+		s.musicPosition = pos
+		if !s.playing || s.paused {
+			s.musicPosition.Rate = 0
 		}
+		s.musicSeek = d.seekShowLocked(musicRoute, s.musicPosition.Now(now), now)
 		// Skip back and forward, where the track has a length and Music Assistant has it on a queue.
 		s.seek = !s.spoken && pos.Dur > 0 && seekable(s.radio, s.paused)
 	}

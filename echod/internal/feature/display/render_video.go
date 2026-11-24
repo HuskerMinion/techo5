@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 )
@@ -20,6 +21,8 @@ const (
 	videoButtonH = 76
 	videoGap     = 16
 	videoIcon    = 44
+	// videoSeekH is the strip grown above the buttons for the bar to seek on, when the video has one.
+	videoSeekH = 34
 )
 
 // videoButtons are the controls, left to right: play or pause and stop on the left, quieter and louder
@@ -103,7 +106,12 @@ func (r *renderer) videoWords(s scene) {
 
 // videoControls draws the strip of controls and remembers where they are, for a tap.
 func (r *renderer) videoControls(s scene) image.Rectangle {
-	strip := image.Rect(0, r.h-r.s(videoStripH), r.w, r.h)
+	base := r.h - r.s(videoStripH)
+	strip := image.Rect(0, base, r.w, r.h)
+	seek := s.videoSeek.tappable()
+	if seek {
+		strip.Min.Y -= r.s(videoSeekH)
+	}
 	op := draw.Src // over a clear canvas: the panel blends it over the picture
 	if !s.videoLive {
 		op = draw.Over // over the page's own black, which the panel shows as it is
@@ -145,14 +153,20 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	if s.demo && name != "" {
 		name = "A film"
 	}
-	at := videoTime(s.video.Pos)
-	if s.video.Dur > 0 {
-		at += " / " + videoTime(s.video.Dur)
+	at := videoTime(s.videoSeek.at(s.video.Pos))
+	if dur := videoLength(s); dur > 0 {
+		at += " / " + videoTime(dur)
 	}
-	if s.video.Phase == video.Loading || !s.video.Frames {
+	if (s.video.Phase == video.Loading || !s.video.Frames) && !s.videoSeek.shown {
 		at = tr("ui_loading")
 	}
-	mid := strip.Min.Y + strip.Dy()/2
+	mid := base + r.s(videoStripH)/2
+	if seek {
+		// Along the top of the strip, over the buttons and the width of the page: the whole of the
+		// video from one margin to the other, for a finger to place a tap in.
+		r.seekBar(s.videoSeek, r.margin, r.w-r.margin, strip.Min.Y+r.s(videoSeekH)/2+r.s(4), s.video.Pos, s.videoSeek.dur,
+			videoTrack, amber)
+	}
 	r.text(r.small, r.fit(r.small, name, right-left), left, mid-r.s(4), cream)
 	r.text(r.tiny, at, left, mid+r.s(32), dim)
 
@@ -160,6 +174,18 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	r.videoZones = zones
 	r.zmu.Unlock()
 	return strip
+}
+
+// videoLength is how long the video on the page runs: the player's say, or the DLNA renderer's when the
+// player has none (a continuous transcode, whose controller can still be asked to move through it).
+func videoLength(s scene) time.Duration {
+	if s.videoSeek.start > 0 {
+		return s.videoSeek.dur // the whole film's: the stream playing is only the rest of it
+	}
+	if s.video.Dur > 0 {
+		return s.video.Dur
+	}
+	return s.videoSeek.dur
 }
 
 // videoTapped is which control a tap landed on, as last drawn. A finger is a little wider than a

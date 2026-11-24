@@ -52,6 +52,9 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	up := st.Active() && st.Phase != video.Asking
 	s.showVideo = (up || failedRecently) && !videoCovered(*s)
 	video.Get().Covered(up && videoCovered(*s))
+	// How a place chosen on the bar would be sent, worked out before d.mu: it asks the player and the
+	// DLNA renderer, which have locks of their own.
+	route := videoSeekRoute(st)
 	d.mu.Lock()
 	if up {
 		d.videoTried = st.ID
@@ -59,6 +62,8 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	controls := now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
 	s.videoControls = controls
 	s.videoSkip = up && videoSkippable(st)
+	// The bar to seek on, for a video somebody can move through, showing the place a finger is choosing.
+	s.videoSeek = d.seekShowLocked(route, st.Pos, now)
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
 	d.videoLive = s.videoLive
@@ -92,6 +97,11 @@ func (d *Display) videoGesture(g touch.Gesture) {
 		d.mu.Lock()
 		d.videoTried = 0
 		d.mu.Unlock()
+		return
+	}
+	// The bar to seek on, while the controls are up: a finger on it is its, and keeps them up.
+	if d.seekGesture(g) {
+		d.showVideoControls()
 		return
 	}
 	switch g.Kind {

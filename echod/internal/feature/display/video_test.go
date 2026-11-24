@@ -41,6 +41,11 @@ func TestTheVideoPage(t *testing.T) {
 			"video-loading":  {video: loading, showVideo: true, videoControls: true},
 			"video-failed":   {video: failed, showVideo: true},
 			"video-ask":      {showVideoAsk: true, videoAsk: videoAsk{id: 6, from: "192.168.1.30", title: "Holiday 2025.mp4"}},
+			// A video somebody can move through: the bar over the buttons, and a finger choosing a place.
+			"video-seek": {video: playing, showVideo: true, videoLive: true, videoControls: true,
+				videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
+			"video-seek-drag": {video: playing, showVideo: true, videoLive: true, videoControls: true, videoSkip: true,
+				videoSeek: seekView{route: seekDLNA, id: 3, dur: playing.Dur, shown: true, to: 6 * time.Minute}},
 		}
 		for name, s := range scenes {
 			s.now, s.phase = at, "idle"
@@ -86,6 +91,25 @@ func TestTheVideoPage(t *testing.T) {
 				}
 				if next.Max.X+r.s(28) >= quieter.Min.X {
 					t.Errorf("%s%s: forward %v runs into quieter %v", name, panel.name, next, quieter)
+				}
+				// The bar to seek on only for a video somebody can move through, inside what goes over
+				// the picture, and never where a finger meant for a button lands.
+				z := r.seekBars.zone()
+				if (z.view.route != seekNone) != s.videoSeek.tappable() {
+					t.Errorf("%s%s: bar %+v for a video whose seek is %+v", name, panel.name, z.view, s.videoSeek)
+				}
+				if s.videoSeek.tappable() {
+					if !z.bar.In(r.videoOver) {
+						t.Errorf("%s%s: the bar %v is outside the strip %v", name, panel.name, z.bar, r.videoOver)
+					}
+					for _, b := range append([]image.Rectangle{play, stop, quieter, louder}, back, next) {
+						if z.reach.Overlaps(b.Inset(-r.s(8))) {
+							t.Errorf("%s%s: the bar's reach %v takes a button's %v", name, panel.name, z.reach, b)
+						}
+					}
+					if got := z.at(z.bar.Min.X + z.bar.Dx()/2); got != s.videoSeek.dur/2 {
+						t.Errorf("%s%s: the bar's middle is %v of %v", name, panel.name, got, s.videoSeek.dur)
+					}
 				}
 			}
 			if dir == "" {

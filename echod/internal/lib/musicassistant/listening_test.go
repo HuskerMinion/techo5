@@ -108,12 +108,13 @@ func TestInProgressAndAnEpisode(t *testing.T) {
 	}
 }
 
-// The queue's spoken-word controls: a play from a chapter or from the start, a skip, a speed, and what
-// it plays now.
+// The queue's spoken-word controls: a play from a chapter or from the start, a skip, a place to move
+// to (the Now Playing page's bar), a speed, and what it plays now.
 func TestTheQueuesListeningCalls(t *testing.T) {
 	c, got := listenServer(t, map[string]string{
 		"player_queues/play_media":         `null`,
 		"player_queues/skip":               `null`,
+		"player_queues/seek":               `null`,
 		"player_queues/set_playback_speed": `null`,
 		"player_queues/get": `{"queue_id":"q1","active":true,"state":"playing","playback_speed":1.25,
 			"current_item":{"queue_item_id":"x","name":"Book","media_item":{"item_id":"5","provider":"library","media_type":"audiobook","uri":"library://audiobook/5","name":"Book"}}}`,
@@ -124,6 +125,7 @@ func TestTheQueuesListeningCalls(t *testing.T) {
 		c.PlayFrom(ctx, "q1", "rss--a://podcast_episode/e1", -1, true),
 		c.PlayFrom(ctx, "q1", "library://audiobook/5", -1, false),
 		c.Skip(ctx, "q1", -30),
+		c.Seek(ctx, "q1", 95),
 		c.SetSpeed(ctx, "q1", 1.5),
 	} {
 		if err != nil {
@@ -143,6 +145,7 @@ func TestTheQueuesListeningCalls(t *testing.T) {
 		{"player_queues/play_media", map[string]any{"queue_id": "q1", "media": "rss--a://podcast_episode/e1", "option": "replace", "start_from_beginning": true}},
 		{"player_queues/play_media", map[string]any{"queue_id": "q1", "media": "library://audiobook/5", "option": "replace"}},
 		{"player_queues/skip", map[string]any{"queue_id": "q1", "seconds": -30.0}},
+		{"player_queues/seek", map[string]any{"queue_id": "q1", "position": 95.0}},
 		{"player_queues/set_playback_speed", map[string]any{"queue_id": "q1", "speed": 1.5}},
 		{"player_queues/get", map[string]any{"queue_id": "q1"}},
 	}

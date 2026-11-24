@@ -196,6 +196,8 @@ type Display struct {
 	press     pressState
 	pageShown pageID
 	pressSeq  uint64
+	// seekF is a finger on the video's bar to seek on (seekbar.go).
+	seekF seekFinger
 
 	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
 	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which

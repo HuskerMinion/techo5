@@ -52,6 +52,12 @@ func (r *renderer) seek(unit, target string) error {
 	if !ok {
 		return errBadTarget
 	}
+	return r.seekPlace(to)
+}
+
+// seekPlace moves the current song or video to to: a controller's Seek, or a seek on the device's own
+// screen (SeekFromDevice), which go the same way so that a burst from either settles the same.
+func (r *renderer) seekPlace(to time.Duration) error {
 	st := r.sync()
 	ok, known, dur := r.seekable()
 	r.mu.Lock()
