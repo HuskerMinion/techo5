@@ -59,6 +59,11 @@ function Publish-AddonCatalog {
     if ($LASTEXITCODE -ne 0) { throw "addons/catalog.json is not committed: sign only what is on main" }
     & git -C $root diff --quiet HEAD -- addons/catalog.json
     if ($LASTEXITCODE -ne 0) { throw "addons/catalog.json has changes that are not committed: sign only what is on main" }
+    # mkcatalog is built from this tree (go run), so what checks and signs the catalog has to be main's
+    # too: a change to it here, even untracked, would sign with code nobody reviewed.
+    $dirty = & git -C $root status --porcelain -- echod addons tools/sign-catalog.ps1
+    if ($LASTEXITCODE -ne 0) { throw "could not ask git whether the tree is clean" }
+    if ($dirty) { throw "echod, addons or this script have changes that are not committed: sign from a clean checkout of main`n$($dirty -join "`n")" }
     & git -C $root fetch -q origin main
     if ($LASTEXITCODE -ne 0) { throw "could not fetch origin/main to check against" }
     $head = (& git -C $root rev-parse HEAD).Trim()
@@ -77,8 +82,13 @@ function Publish-AddonCatalog {
         & gh release view $AddonCatalogTag --repo $Repo --json tagName 2>$null | Out-Null
         $tagExists = ($LASTEXITCODE -eq 0)
         if ($tagExists) {
-            & gh release download $AddonCatalogTag --repo $Repo -p catalog.json -D $published --clobber 2>$null
-            $have = ($LASTEXITCODE -eq 0) -and (Test-Path (Join-Path $published 'catalog.json'))
+            # The release is there, so its catalog has to come down: signed without it, the serial and
+            # the published versions would go unchecked (mkcatalog -previous). Its errors are shown.
+            & gh release download $AddonCatalogTag --repo $Repo -p catalog.json -D $published --clobber
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $published 'catalog.json'))) {
+                throw "the $AddonCatalogTag release is there but its catalog.json could not be downloaded; not signing without checking against it"
+            }
+            $have = $true
         }
 
         Write-Host "== add-on catalog: checking and signing"

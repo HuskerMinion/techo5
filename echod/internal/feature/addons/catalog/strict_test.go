@@ -21,6 +21,10 @@ func TestAmbiguousJSONIsRefused(t *testing.T) {
 		"unknown":      strings.Replace(good, `"root":false`, `"root":false,"setuid":true`, 1),
 		"nested twice": strings.Replace(good, `"ports":[]`, `"ports":[{"proto":"tcp","port":40000,"port":40001,"why":"x"}]`, 1),
 		"trailing":     good + `{"root":true}`,
+		"long s":       strings.Replace(good, `"ports":[]`, `"ports":[],"portſ":[{"proto":"tcp","port":40000,"why":"x"}]`, 1),
+		"long s alone": strings.Replace(good, `"ports":[]`, `"portſ":[]`, 1),
+		"kelvin":       strings.Replace(good, `"root":false`, `"root":false,"Key":1`, 1),
+		"a dash":       strings.Replace(good, `"root":false`, `"root":false,"x-y":1`, 1),
 	} {
 		if _, err := ParseManifest([]byte(bad)); err == nil {
 			t.Errorf("%s: taken", name)

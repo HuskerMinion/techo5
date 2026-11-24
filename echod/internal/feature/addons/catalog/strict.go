@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -29,6 +30,9 @@ func decodeStrict(b []byte, v any) error {
 	}
 	return nil
 }
+
+// keyPattern is every key a catalog or a manifest has.
+var keyPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 // checkKeys walks the tokens and refuses a key with a capital in it, or one its object already has.
 func checkKeys(b []byte) error {
@@ -57,11 +61,16 @@ func checkKeys(b []byte) error {
 			if !ok {
 				return errors.New("an object key is not a string")
 			}
-			if strings.ToLower(k) != k {
-				return fmt.Errorf("the key %q is not lowercase", k)
+			// ASCII lowercase, digits and underscores only: Go matches a key to a field with Unicode case
+			// folding, so a key with a letter outside ASCII (U+017F, the long s, folds to s) can name the
+			// same field as one spelled otherwise.
+			if !keyPattern.MatchString(k) {
+				return fmt.Errorf("the key %q is not lowercase ASCII letters, digits and underscores", k)
 			}
-			if top.keys[k] {
-				return fmt.Errorf("the key %q is given twice in one object", k)
+			for seen := range top.keys {
+				if strings.EqualFold(seen, k) {
+					return fmt.Errorf("the key %q is given twice in one object", k)
+				}
 			}
 			top.keys[k] = true
 			top.key = false
