@@ -77,9 +77,11 @@ The first video from each address asks on the screen: **Show a video from 192.16
 again for ten minutes. Nobody answering in 30 seconds is Not now. While the question is up, a video
 from another address is turned away rather than put in its place. Home Assistant's `play_video`
 never asks, but Home Assistant's DLNA media player is a DLNA controller like any other: the first
-video it sends asks once too. A program on the Show itself, such as an add-on started from
-`rc.local`, that sends to the renderer at `127.0.0.1` doesn't ask either: whoever put it there
-already had a root shell on it. Such a program speaks for whatever it acts on: one that passes on what
+video it sends asks once too. A program on the Show itself that sends to the renderer at `127.0.0.1` doesn't ask either,
+when it runs as root (one started from `rc.local`: whoever put it there already had a root shell on
+it) or is an add-on installed from the setup page's Add-ons card, which you agreed to and whose
+warning says it can drive the device. A program on the device running as any other user is asked
+about, named as "a program on this device (user N)". Such a program speaks for whatever it acts on: one that passes on what
 other devices on the network ask of it has to decide for itself which of them may put a video on the
 screen, since the question will not be asked for them.
 

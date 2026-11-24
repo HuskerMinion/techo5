@@ -84,6 +84,24 @@ func TestLeftoversAreKilledAtTheStart(t *testing.T) {
 	}
 }
 
+// An installed add-on's user, while it is switched on, is one whose loopback controller is trusted.
+func TestInstalledUID(t *testing.T) {
+	r, _ := plexRig(t)
+	if err := r.m.Install(context.Background(), "techo5-plex", "0.1.0", r.shown("techo5-plex", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	r.waitState("techo5-plex", StateRunning)
+	if !r.m.InstalledUID(firstUID) || r.m.InstalledUID(firstUID+1) || r.m.InstalledUID(0) {
+		t.Error("the installed add-on's user is not the one trusted")
+	}
+	if err := r.m.Stop("techo5-plex"); err != nil {
+		t.Fatal(err)
+	}
+	if r.m.InstalledUID(firstUID) {
+		t.Error("a stopped add-on's user is still trusted")
+	}
+}
+
 // /run is swept with the other shared folders.
 func TestRunIsSwept(t *testing.T) {
 	old := tmpDirs

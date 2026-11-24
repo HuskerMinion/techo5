@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/peeruid"
 )
 
 // The web port side: the device's description, each service's description (its actions), and the
@@ -255,6 +256,40 @@ var (
 	errNotVideo      = soapError{714, "Illegal MIME-type"}
 )
 
+// controller is who a DLNA action came from, as the renderer names and remembers it: the connection's
+// own source address. A controller on loopback is the device's own, and its videos play without the
+// question on the screen (video.FromDevice), only when the program at the other end runs as root or as
+// an add-on the owner installed (lib/peeruid): any other user on the device (an add-on's child that
+// changed user, a receiver, the decoder) is asked about as a controller on the network is, under a name
+// that is not a loopback address.
+func controller(r *http.Request) string {
+	from := remoteHost(r)
+	ip := net.ParseIP(from)
+	if ip == nil || !ip.IsLoopback() {
+		return from
+	}
+	local := ""
+	if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+		local = a.String()
+	}
+	if trusted, uid := loopbackOwner(r.RemoteAddr, local); trusted {
+		return from
+	} else if uid >= 0 {
+		return fmt.Sprintf("a program on this device (user %d)", uid)
+	}
+	return "a program on this device"
+}
+
+// loopbackOwner is whether the program at the other end of a loopback connection stands for the owner,
+// and its user id (-1 when it cannot be read); a variable, for tests, whose connections are not real.
+var loopbackOwner = func(remote, local string) (bool, int) {
+	uid, err := peeruid.Of(remote, local)
+	if err != nil {
+		return false, -1
+	}
+	return peeruid.Owner(remote, local), int(uid)
+}
+
 // control runs one action on a service.
 func (f *Feature) control(w http.ResponseWriter, r *http.Request, service string) {
 	typ := map[string]string{"AVTransport": avtType, "RenderingControl": rcType, "ConnectionManager": cmType}[service]
@@ -270,7 +305,7 @@ func (f *Feature) control(w http.ResponseWriter, r *http.Request, service string
 	var out []kv
 	switch service {
 	case "AVTransport":
-		out, err = f.r.avTransport(name, args, remoteHost(r))
+		out, err = f.r.avTransport(name, args, controller(r))
 	case "RenderingControl":
 		out, err = renderingControl(name, args)
 	case "ConnectionManager":

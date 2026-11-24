@@ -633,8 +633,11 @@ HTTP.
   ([Video](video.md)). A program of your own on the device (one started from `rc.local`, see
   [Running something of your own at boot](#running-something-of-your-own-at-boot)) can use it as
   well, at `http://127.0.0.1:8181/dlna/device.xml`, while the DLNA switch is on: a video sent from
-  the device itself plays without the question on the screen, since only someone with a root shell
-  on the device could have put the program there. A program that passes on requests from other
+  the device itself plays without the question on the screen when the program runs as root (one
+  started from `rc.local`, which only someone with a root shell could have put there) or is an add-on
+  you installed from the [Add-ons](#add-ons) card, whose warning says it can drive the device. A
+  program on the device running as any other user is asked about, as a device on the network is. A
+  program that passes on requests from other
   devices on the network has to check them itself: the question is not asked for them. The device fetches the song or video from the address it is given, which
   cannot be the device itself.
 

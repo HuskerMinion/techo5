@@ -15,8 +15,9 @@ import (
 )
 
 // The address a video is said to come from, which decides whether the screen asks about it
-// (video.FromDevice), is the connection's own: a controller on the device's loopback is the device's,
-// and a header that says otherwise changes nothing either way.
+// (video.FromDevice), is the connection's own: a controller on the device's loopback is the device's
+// when the program behind it runs as root or as an installed add-on, and asked about under a name of its
+// own when it runs as anybody else; a header that says otherwise changes nothing either way.
 func TestAVideoIsFromTheConnectionsAddress(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	exe, _ := os.Executable()
@@ -30,14 +31,19 @@ func TestAVideoIsFromTheConnectionsAddress(t *testing.T) {
 	stopVideoID = func(uint64) {}
 	stopOurSong = func() {}
 
+	oldOwner := loopbackOwner
+	t.Cleanup(func() { loopbackOwner = oldOwner })
 	for _, tc := range []struct {
 		remote, host, want string
 		device             bool
+		uid                int // the loopback peer's user: 0 root, 30000 an installed add-on's, else another
 	}{
-		{"127.0.0.1:40000", "127.0.0.1:8181", "127.0.0.1", true},
-		{"[::1]:40000", "[::1]:8181", "::1", true},
-		{"192.168.1.30:40000", "192.168.1.20:8181", "192.168.1.30", false},
+		{"127.0.0.1:40000", "127.0.0.1:8181", "127.0.0.1", true, 0},
+		{"[::1]:40000", "[::1]:8181", "::1", true, 30000},
+		{"127.0.0.1:40001", "127.0.0.1:8181", "a program on this device (user 88)", false, 88},
+		{"192.168.1.30:40000", "192.168.1.20:8181", "192.168.1.30", false, 0},
 	} {
+		loopbackOwner = func(string, string) (bool, int) { return tc.uid == 0 || tc.uid == 30000, tc.uid }
 		f := &Feature{}
 		f.r.f = f
 		send := func(action, args string) int {

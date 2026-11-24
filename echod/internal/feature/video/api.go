@@ -20,9 +20,14 @@ const (
 )
 
 // FromDevice is whether a DLNA controller's address is the device's own loopback (127.0.0.0/8, ::1):
-// a program the owner put on the device, such as an add-on started from rc.local, driving the
-// renderer on localhost. Putting it there took root on the device, so it already stands for the
-// owner's say: its videos play without asking, as play_video's do.
+// a program on the device driving the renderer on localhost, which plays without asking, as
+// play_video's videos do.
+//
+// Loopback alone used to be enough, as putting a program there took root. With add-ons running as users
+// of their own (feature/addons) it is not: the renderer gives a loopback address as From only when the
+// program at the other end runs as root, or as an add-on the owner installed and agreed to, whose
+// warning says it can drive the device (feature/dlna, controller; lib/peeruid). Any other user on the
+// device comes as "a program on this device (user N)", which is not an address, and is asked about.
 //
 // From is the connection's own source address (the renderer's RemoteAddr), never a header, so a
 // request cannot claim it. Nobody on the network can be it either: the kernel drops a packet that

@@ -1373,6 +1373,18 @@ func (m *Manager) CatalogState() (fetched time.Time, problem string, have bool, 
 	return fetched, problem, have, c.Expires
 }
 
+// InstalledUID is whether uid is the user an installed add-on that is switched on runs as.
+func (m *Manager) InstalledUID(uid uint32) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, a := range m.addons {
+		if a.rec.UID == uid && a.rec.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
 // Tail is the last lines of an installed add-on's log.
 func (m *Manager) Tail(id string, n int) []string {
 	if !catalog.ValidID(id) {

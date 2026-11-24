@@ -21,6 +21,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/peeruid"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
@@ -54,6 +55,9 @@ func Get() *Feature {
 	once.Do(func() {
 		f := &Feature{Manager: newManager(Root, realClock{}, runTool), entities: map[string]*esphome.Update{}}
 		f.changed = f.publish
+		// A loopback controller of the DLNA renderer stands for the owner when it is an installed
+		// add-on's: the owner agreed to it, and its warning says add-ons can drive the device.
+		peeruid.Trusted = f.InstalledUID
 		shared = f
 	})
 	return shared
