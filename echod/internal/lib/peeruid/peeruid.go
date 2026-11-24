@@ -51,8 +51,15 @@ func Of(remote, local string) (uint32, error) {
 		s.Scan() // the heading
 		for s.Scan() {
 			fl := strings.Fields(s.Text())
-			// sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid ...
-			if len(fl) < 8 || !match(fl[1], rs) || !match(fl[2], ls) {
+			// sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid timeout inode
+			if len(fl) < 10 || !match(fl[1], rs) || !match(fl[2], ls) {
+				continue
+			}
+			// Only a live, established socket says who holds it. One its program closed at once
+			// after sending its request (FIN_WAIT2, a time-wait entry) is listed with uid 0 and
+			// inode 0, and on kernels before 4.10 even one still closing reads as root: taken at
+			// its word, that would let any program pass for root by hanging up quickly.
+			if fl[3] != "01" || fl[9] == "0" {
 				continue
 			}
 			uid, err := strconv.ParseUint(fl[7], 10, 32)

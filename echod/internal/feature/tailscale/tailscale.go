@@ -665,7 +665,8 @@ func (logWriter) Write(b []byte) (int, error) {
 // stopLeftovers ends any tailscaled still running on this device's socket - one that outlived the
 // echod that started it - and waits a little for it to let go of the tunnel.
 func stopLeftovers() {
-	want := []byte("--socket=" + sockPath)
+	// The socket moved into /run/techo5 in v1.6.53; one started by an older daemon names the old path.
+	wants := [][]byte{[]byte("--socket=" + sockPath), []byte("--socket=/run/techo5-tailscaled.sock")}
 	entries, _ := os.ReadDir("/proc")
 	var pids []int
 	for _, e := range entries {
@@ -674,7 +675,7 @@ func stopLeftovers() {
 			continue
 		}
 		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, want) {
+		if err != nil || !(bytes.Contains(cmdline, wants[0]) || bytes.Contains(cmdline, wants[1])) {
 			continue
 		}
 		slog.Warn("tailscale: stopping a tailscaled left running", "pid", pid)

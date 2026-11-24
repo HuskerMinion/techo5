@@ -287,7 +287,7 @@ var loopbackOwner = func(remote, local string) (bool, int) {
 	if err != nil {
 		return false, -1
 	}
-	return peeruid.Owner(remote, local), int(uid)
+	return uid == 0 || peeruid.Trusted(uid), int(uid)
 }
 
 // control runs one action on a service.

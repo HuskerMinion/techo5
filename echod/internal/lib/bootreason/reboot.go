@@ -3,6 +3,7 @@ package bootreason
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // What has to be done before the daemon reboots the device itself. A reboot by the system call ends the
@@ -30,10 +31,27 @@ func runHooks() {
 	hooksMu.Lock()
 	list := append([]func(){}, hooks...)
 	hooksMu.Unlock()
-	for _, fn := range list {
-		fn()
+	// Each hook is kept from stopping the reboot: a panic in one is caught, and all of them get at
+	// most hookTime. The reboot comes after a slot was put on trial (update), so a hook that never
+	// returned would leave the device on the old slot until someone pulled the plug.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, fn := range list {
+			func() {
+				defer func() { _ = recover() }()
+				fn()
+			}()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(hookTime):
 	}
 }
+
+// hookTime is how long the hooks before a reboot may take, together.
+const hookTime = 5 * time.Second
 
 // Resetting says the restart coming is a reset for someone else (feature/firstrun), which deletes what
 // the device keeps: nothing is to be saved for it, as it would only be written and then deleted.

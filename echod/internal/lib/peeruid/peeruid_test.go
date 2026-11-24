@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 )
 
 // The other end of a real loopback connection is found in the kernel's table, as this test's own user.
@@ -51,5 +52,32 @@ func TestKey(t *testing.T) {
 	}
 	if Owner("192.0.2.4:1234", "192.0.2.10:8181") {
 		t.Error("a controller on the network was trusted")
+	}
+}
+
+// A program that sends its request and hangs up at once leaves a closing socket, which the kernel lists
+// as root's: it is not taken for root, or for anyone.
+func TestAClosedConnectionIsNotRoots(t *testing.T) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	c, err := net.Dial("tcp4", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := ln.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	c.Close()
+	time.Sleep(100 * time.Millisecond)
+	if uid, err := Of(s.RemoteAddr().String(), s.LocalAddr().String()); err == nil {
+		t.Errorf("a closed client read as user %d", uid)
+	}
+	if Owner(s.RemoteAddr().String(), s.LocalAddr().String()) {
+		t.Error("a closed client was trusted")
 	}
 }
