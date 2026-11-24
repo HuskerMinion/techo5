@@ -118,6 +118,10 @@ func Fetch(ctx context.Context, c Channel) (Manifest, error) {
 // channelURL is Channel.URL, a variable so a test can serve the channel itself.
 var channelURL = Channel.URL
 
+// ErrNotFound is a file the server says is not there, which is not a fault for a file that need not
+// be published yet: the add-on catalog before its first signing (feature/addons).
+var ErrNotFound = errors.New("404 Not Found")
+
 // get fetches a small file through the updater's own client, refusing anything over max bytes.
 func get(ctx context.Context, url string, max int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -129,6 +133,9 @@ func get(ctx context.Context, url string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("update: fetching %s: %w", url, err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("update: fetching %s: %w", url, ErrNotFound)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("update: fetching %s: %s", url, resp.Status)
 	}

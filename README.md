@@ -677,8 +677,10 @@ the backup. Every step: **[docs/install-skylight.md](docs/install-skylight.md)**
   [wakesmith](https://github.com/HuskerMinion/wakesmith), or by hand in any language.
 - [CONTRIBUTING.md](CONTRIBUTING.md): reporting problems, trying a build on your device, and pull requests.
 - [Add-ons others have made](docs/external-asp.md#add-ons-others-have-made): extras made and kept by
-  their authors, not by TECHO5, that run from userdata and outlast updates. Making one of your own:
-  [running something at boot](docs/setup.md#running-something-of-your-own-at-boot).
+  their authors, not by TECHO5, that run from userdata and outlast updates. Those in TECHO5's catalog are
+  installed from the setup page ([Add-ons](docs/setup.md#add-ons)). Making one of your own:
+  [running something at boot](docs/setup.md#running-something-of-your-own-at-boot), and
+  [getting it listed](docs/setup.md#getting-an-add-on-listed).
 
 ## Sister projects
 

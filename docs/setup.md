@@ -2795,7 +2795,134 @@ button, and the Echo Input has only its action and mute buttons. The device acts
   `press`, `triple_press`. An automation for a single press that should stay quiet on a double can
   wait half a second for a `double_press` before it acts.
 
+### Add-ons
+
+Add-ons are programs others have made for TECHO5, such as
+[techo5-plex](https://github.com/HuskerMinion/techo5-plex), which makes a Show a player in Plex apps.
+They run on the device from userdata, so they outlast updates, and are installed, updated and removed
+on the setup page's **Add-ons** card (**System** tab). The card has three parts:
+
+- **Available:** the add-ons in TECHO5's catalog that run on this device, each with its author, what it
+  does, its version and the TECHO5 version it needs, a link to its own page, and what it asks for: the
+  network ports it needs opened, whether it runs as root, and roughly how much memory and storage it
+  uses. One that doesn't run on this model, needs a newer TECHO5, or needs more memory than the device
+  can spare is shown grayed out with the reason.
+- **Installed:** whether each one is running, **Start** and **Stop**, the last lines of its log, **Update**
+  when the catalog has a newer version, **Remove**, and a link to its own page if it has one.
+- **Found on this device, not from the catalog:** programs started by hand from `rc.local` (below).
+
+Every install shows this warning first, and you have to tick the box under it to go on:
+
+> **Add-ons run on this device with access to its microphones, speaker, network and your Home Assistant
+> connection.** They are made and kept by their authors, not by TECHO5. Being listed here means it was
+> looked over when it was added. It doesn't mean it's safe, that it will keep working, or that later
+> versions were checked. Only install add-ons from people you trust.
+>
+> [ ] I understand the risk and want to install **name** by **author**.
+
+Installing is only possible on the setup page, behind its Allow on the device (or the action button on
+a Dot), never from Home Assistant, a voice command or the screen, so the warning is always seen. An
+update that asks for more than the version before (a new port, or root) shows the warning and the box
+again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
+install an update from there only when the update asks for nothing new, and otherwise says to use the
+setup page.
+
+How the device runs them:
+
+- **Only from the catalog.** The catalog (`addons/catalog.json` in this repository) is signed with the
+  same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
+  and the device believes it only with that signature. It names each version's download and its SHA-256,
+  and the manifest it ships (`addon.json`) by its hash too: the device refuses a download that doesn't
+  match, and an add-on whose manifest asks for more than the catalog shows. A signed catalog expires a
+  month after it was signed (every release signs it again): past that, installed add-ons keep running
+  but nothing is offered, and the card says why. A device never goes back to an older catalog than one
+  it has seen.
+- **What you agreed to.** The install and update forms carry back what the card showed; if the catalog
+  changed in between, nothing is installed and the card shows the new listing.
+- **Not as root.** Each add-on runs as a user of its own, never given to another add-on, with its
+  `state` folder as its home, unless its manifest asks for root (something like a VPN, which makes a
+  network interface needs it); the card then says so in bold. It can't gain privileges through a setuid
+  program (no_new_privs), has at most 128 processes and threads and a bounded address space, can't read
+  TECHO5's state or logs, and can't use Bluetooth or publish names through Avahi on the system bus.
+  When it stops or is removed, everything its user still runs is killed, and what it left in `/tmp`
+  and `/dev/shm` goes.
+- **Only its ports.** The ports an add-on declares are opened on Wi-Fi while it runs, one rule each, in
+  a chain of the daemon's own (`TECHO5-ADDONS`) at the top of the firewall, and closed again when it
+  stops or is removed.
+- **Kept running.** It is started after the daemon is up, and restarted if it stops, waiting longer each
+  time; after five quick crashes in a row it is left stopped, and the card says so until **Start**.
+- **A bounded log**, at most about 512 KB on the device's storage, shown on its card. What it keeps in
+  its `state` folder is held to four times the storage its listing gives (at least 64 MB); one that
+  grows past that is stopped, and the card says so.
+- **Memory checked first.** An add-on that would leave less than 100 MB of memory for TECHO5 is not
+  installed or started, and the card says why; one that can't start for memory is tried again, like a
+  crash. An Echo Dot 2nd gen has about 445 MB free.
+- **Updates are tried first.** The new version is downloaded beside the old one and checked, then
+  started; if it doesn't stay up for a minute, the old one goes back, and the card says so.
+- **Remove** stops it, closes its ports and deletes its folder, `/data/techo5-addons/<id>`. What
+  it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
+  the box to delete it too.
+
+An add-on is a program on the device, so TECHO5 trusts it as it trusts itself: a video it sends to the
+device's own DLNA renderer plays without the question on the screen, for example. That is what "access
+to … your Home Assistant connection" in the warning means.
+
+The Echo Show builds (Show 8 2nd gen and Skylight included), the Echo Spot and the TECHO5 Dot builds run
+add-ons; a Dot only while it runs TECHO5's Linux, not Fire OS. TECHO5 Panel doesn't: Android 10 and
+later don't let an app run programs it downloads, and its setup page says so in a line instead of the
+card.
+
+#### Getting an add-on listed
+
+Open an issue or a pull request on this repository with your add-on's repository and the release to
+list. It needs:
+
+- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux;
+- an `addon.json` in the same release, such as techo5-plex's:
+
+  ```json
+  {
+    "id": "techo5-plex",
+    "version": "0.2.0",
+    "command": ["techo5-plex"],
+    "args": ["-data", "{state}"],
+    "ports": [
+      {"proto": "tcp", "port": 32500, "why": "Plex apps control the player"},
+      {"proto": "tcp", "port": 32501, "why": "its link page"},
+      {"proto": "udp", "from": 32410, "to": 32414, "why": "Plex finds players"}
+    ],
+    "root": false,
+    "page": "http://{device}:32501/",
+    "memory_mb": 40
+  }
+  ```
+
+  `command` is the program's name (the binary is installed under it), `{state}` is the add-on's own
+  folder for what it keeps, which outlives updates, and `{device}` is the device's address as the
+  browser reached it. A port below 1024, or one of TECHO5's own, is refused unless it runs as root
+  (TECHO5's own are refused always).
+
+We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
+catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
+way a device does. Each new version gets a new entry: a version is never trusted because an earlier
+one was. A listing that has to come out stays in the catalog marked withdrawn, with the reason: devices
+that have it say it's no longer listed and suggest removing it, but don't remove it themselves.
+
+For the maintainer: `tools/sign-catalog.ps1` checks the catalog (`mkcatalog`), refuses one whose
+`serial` is not above the published one's (a device never takes an older catalog than it has), signs it
+with the release key, and publishes `catalog.json` and `catalog.json.sig` on the repository's `addons`
+release, which is what devices fetch. `tools/release.ps1` runs it with every release and attaches the
+catalog to the release as well. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins
+a downloaded file by.
+
 ### Running something of your own at boot
+
+`rc.local` keeps working exactly as before for anything installed by hand, and is the way to run
+something that isn't in the catalog. The Add-ons card lists what it can see of such programs, under
+**Found on this device, not from the catalog**, with the same warning (and no box): the programs on
+userdata that `rc.local` names, and those running from userdata now. It shows their paths only, and
+can't update or remove them. When an add-on you installed by hand is in the catalog, remove its lines
+from `rc.local` (and its firewall lines), reboot, and install it from the card.
 
 An update replaces the root filesystem, so anything added to it is gone afterwards; userdata is what
 outlives an update. A script at `/data/techo5-linux/rc.local` that is executable is started once at

@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/base64"
@@ -66,6 +67,49 @@ func verify(manifest, sig []byte, key string) error {
 		return errors.New("update: the manifest is not signed by the release key")
 	}
 	return nil
+}
+
+// CatalogDomain is what the add-on catalog's signature is made over, ahead of the catalog's own bytes.
+// The catalog is signed with the same key as the firmware's manifests, and without it a catalog's
+// signature would be a good signature over those bytes for whatever reads them: a JSON file that parsed
+// as both could be passed off as one where the other was asked for. With it, a signature made for a
+// catalog never verifies a manifest, and a manifest's never verifies a catalog.
+const CatalogDomain = "TECHO5 add-on catalog v1\n"
+
+// SignCatalog is Sign for the add-on catalog, over CatalogDomain and the catalog (cmd/mkcatalog).
+func SignCatalog(catalog []byte, seed string) (string, error) {
+	return Sign(append([]byte(CatalogDomain), catalog...), seed)
+}
+
+// VerifyCatalog checks an add-on catalog against its detached signature, for feature/addons, which
+// keeps the catalog it last fetched and checks it again when it reads it back, so a copy changed on the
+// device's storage is not believed either.
+func VerifyCatalog(body, sig []byte) error {
+	return verify(append([]byte(CatalogDomain), body...), sig, releaseKey)
+}
+
+// FetchSignedCatalog is Fetch for the add-on catalog (feature/addons). The file is fetched through the
+// updater's own client, its signature from beside it (url + ".sig"), and it is returned only once the
+// signature is the release key's over CatalogDomain and exactly the bytes served. Nothing is fetched
+// before the clock is set, for the reason Fetch gives.
+func FetchSignedCatalog(ctx context.Context, url string, max int64) (body, sig []byte, err error) {
+	if !clockSet() {
+		return nil, nil, ErrClock
+	}
+	ctx, cancel := context.WithTimeout(ctx, manifestTimeout)
+	defer cancel()
+	body, err = get(ctx, url, max)
+	if err != nil {
+		return nil, nil, err
+	}
+	sig, err = get(ctx, url+".sig", 1<<10)
+	if err != nil {
+		return nil, nil, fmt.Errorf("update: %s has no signature: %w", url, err)
+	}
+	if err := VerifyCatalog(body, sig); err != nil {
+		return nil, nil, err
+	}
+	return body, sig, nil
 }
 
 // Sign is what mkmanifest uses: the signature file's contents for a manifest, from the private key

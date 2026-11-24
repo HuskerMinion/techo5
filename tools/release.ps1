@@ -696,4 +696,10 @@ $missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notco
 if ($missing) {
     throw "published, but these assets have no checksum in SHA256SUMS: $($missing -join ', ')"
 }
+
+# The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed and published on its
+# own "addons" release first when addons/catalog.json has changed since, and attached here either way.
+# After the checks above, which are about the firmware's own files: the catalog carries its own
+# signature and is not in SHA256SUMS.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

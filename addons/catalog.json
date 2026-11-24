@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "serial": 1,
+  "addons": [
+    {
+      "id": "techo5-plex",
+      "name": "Plex player",
+      "author": "HuskerMinion and kevin909867",
+      "summary": "Makes the device a player in Plex apps, so music and films cast from your Plex Media Server play on it.",
+      "repo": "https://github.com/HuskerMinion/techo5-plex",
+      "page": "https://github.com/HuskerMinion/techo5-plex#readme",
+      "versions": [
+        {
+          "version": "0.1.0",
+          "min_techo5": {"show": "v1.6.52"},
+          "binaries": {
+            "arm": {
+              "url": "https://github.com/HuskerMinion/techo5-plex/releases/download/v0.1.0/techo5-plex-arm",
+              "sha256": "841ee529c71b22981f65cf7010f2ec7d2c29328680e27f0dfc1ffd1368eb78a2",
+              "size": 10223776
+            },
+            "arm64": {
+              "url": "https://github.com/HuskerMinion/techo5-plex/releases/download/v0.1.0/techo5-plex-arm64",
+              "sha256": "d5e0bbdacd4db33644cf9a3965749e718db1a2b6ff363c545aed2cb65d870519",
+              "size": 9765024
+            }
+          },
+          "ports": [
+            {"proto": "tcp", "port": 32500, "why": "Plex apps control the player"},
+            {"proto": "tcp", "port": 32501, "why": "its link page"},
+            {"proto": "udp", "from": 32410, "to": 32414, "why": "Plex finds players"}
+          ],
+          "root": false,
+          "memory_mb": 40,
+          "disk_mb": 12,
+          "todo": "TODO: v0.1.0's release carries no addon.json, so no manifest is pinned here and devices list this version without offering to install it. The addon.json on techo5-plex's addon-manifest branch (version 0.2.0) ships with its next release: add that release as a new version entry, pinning its binaries and its addon.json asset with mkcatalog -pin URL=FILE and checking the manifest with mkcatalog -manifest FILE, raise the serial, and sign (tools/sign-catalog.ps1)."
+        }
+      ]
+    }
+  ]
+}
