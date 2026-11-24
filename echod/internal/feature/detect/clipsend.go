@@ -47,6 +47,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 )
 
 const (
@@ -380,8 +381,13 @@ func (s *sender) wake() {
 func (s *sender) run(ctx context.Context) {
 	poll := time.NewTicker(sendPoll)
 	defer poll.Stop()
-	// As the daemon stops, what still waits in RAM goes to eMMC, so a reboot does not lose it.
-	defer s.c.spill(func(string, time.Time) bool { return true })
+	// As the daemon stops, what still waits in RAM goes to eMMC, so a reboot does not lose it; not for a
+	// reset, whose next start deletes the clips with the rest.
+	defer func() {
+		if !bootreason.IsReset() {
+			s.c.spill(func(string, time.Time) bool { return true })
+		}
+	}()
 	for {
 		s.drain(ctx)
 		select {

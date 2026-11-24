@@ -34,7 +34,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -1403,12 +1402,10 @@ func (d *Display) locked(f func()) {
 	f()
 }
 
-// restartDevice reboots; the slot store and the daemon's state are on disk already.
+// restartDevice reboots; the slot store and the daemon's state are on disk already, and what waits in
+// memory is saved first (bootreason.Reboot).
 func restartDevice() {
-	bootreason.Mark(bootreason.Restart)
-	syscall.Sync()
-	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		bootreason.Unmark()
+	if err := bootreason.Reboot(bootreason.Restart); err != nil {
 		slog.Error("restart failed", "err", err)
 	}
 }

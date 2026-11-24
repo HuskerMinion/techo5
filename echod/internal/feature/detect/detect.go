@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -360,6 +361,15 @@ func newDetect() *Detect {
 	d.sender.publish = d.publishSend
 	d.clips.changed = d.sender.wake
 	d.clips.abortSend = d.sender.abortSend
+	// A reboot the daemon makes itself (settings, an update into a slot) ends the process without its
+	// stop, so the clips waiting in RAM, which the sender moves to the storage as it stops, would be lost:
+	// they are moved first. Not for a reset, which deletes them with the rest.
+	clips := d.clips
+	bootreason.BeforeReboot(func() {
+		if !bootreason.IsReset() {
+			clips.spill(func(string, time.Time) bool { return true })
+		}
+	})
 
 	// A cut microphone hands on silence, and running the models over it is work that cannot find
 	// anything. The engines go down with the microphones and come back with them. Not for a panel's
