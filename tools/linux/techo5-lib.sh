@@ -794,6 +794,7 @@ t5_bt_stack() {
 	for d in /var/lib/bluealsa /usr/var/lib/bluealsa; do
 		[ -d "$d" ] && { mountpoint -q "$d" || mount --bind /data/misc/techo5/bluealsa "$d"; }
 	done
+	t5_bt_cache
 	# The daemon starts the bus too, for AirPlay and Spotify Connect (feature/streaming): whichever
 	# holds /run/techo5-dbus-starting starts it, and the other waits for it.
 	if ! pidof dbus-daemon >/dev/null; then
@@ -836,7 +837,8 @@ t5_bt_stack() {
 	# Tried until it takes: written once, it could meet the kernel still adding bluez-alsa's services
 	# (Busy), and a phone that paired then remembers the device as having no type (#105). In the
 	# background, since five tries that time out are half a minute the boot would otherwise wait.
-	(n=1
+	(t5_bt_cache
+	n=1
 	while ! t5_bt_class; do
 		[ $n -lt 5 ] || { log "bt: the loudspeaker class did not take"; break; }
 		sleep 1; n=$((n+1))
@@ -860,6 +862,7 @@ t5_bt_again() {
 	# Busy while this runs: the daemon leaves the controller alone until it is gone (btaudio
 	# secureconn.go), since a power cycle for Secure Connections in the middle would undo it.
 	echo $g > /run/techo5-bt-again.busy
+	t5_bt_cache
 	t5_bt_again_pass $g
 	# A newer pass has written its own number in it: that one removes it.
 	[ "$(cat /run/techo5-bt-again.busy 2>/dev/null)" = "$g" ] && rm -f /run/techo5-bt-again.busy
@@ -883,6 +886,28 @@ t5_bt_again_pass() {
 	[ "$(cat /run/techo5-bt-again 2>/dev/null)" = "$g" ] || return 0
 	t5_bt_class
 	t5_btmgmt 5 discov off >/dev/null 2>&1
+}
+
+# t5_bt_cache: bluetoothd's cache of the devices it has heard (/var/lib/bluetooth/<adapter>/cache) in
+# RAM. The BLE proxy scans through BlueZ, and bluetoothd rewrites a device's cache file (a new file,
+# fsynced and renamed over the old one) each time a device nearby advertises another name: a Show 8
+# measured about 4,800 rewrites a day, some 650 MB of flash and most of what it wrote to userdata.
+# eMMC wears with what is written to it. The cache is only names and services bluetoothd learns again
+# when it next hears a device, so it starts empty at each boot and nothing is copied back; pairings
+# (<adapter>/<device>/info) and the adapter's settings stay on userdata. The adapter's directory is
+# named for its address, which is only certain once hci0 is up, so this runs before bluetoothd starts,
+# again once it has powered the controller (in case the address changed under it), and after each
+# restart of the bridge. 4 MB holds about a thousand devices; past that bluetoothd only fails to cache
+# a name. What the cache held on userdata from before is stale and would lie hidden under the tmpfs,
+# so it is removed the first time.
+t5_bt_cache() {
+	a=$(t5_btmgmt 3 -i hci0 info 2>/dev/null | awk '$1 == "addr" { print $2; exit }')
+	case $a in ??:??:??:??:??:??) ;; *) return 0 ;; esac
+	[ "$a" = 00:00:00:00:00:00 ] && return 0
+	d=/var/lib/bluetooth/$a/cache
+	mountpoint -q "$d" && return 0
+	mkdir -p "$d" && rm -rf "$d"/*
+	mount -t tmpfs -o size=4m,mode=0700 tmpfs "$d" || log "bt: the cache for $a stays on userdata"
 }
 
 # t5_btmgmt <seconds> <command...>: btmgmt under a timeout, with a stdin that stays open while it
