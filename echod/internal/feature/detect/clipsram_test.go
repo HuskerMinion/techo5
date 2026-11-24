@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 )
 
 // ramRig is a sendRig whose recorder has a folder in RAM, as on a Linux device with sending on.
@@ -236,5 +239,50 @@ func TestTheRAMCapFollowsTheBoard(t *testing.T) {
 		if got := ramCapFor(c.total); got != c.want {
 			t.Errorf("ramCapFor(%d) = %d, want %d", c.total, got, c.want)
 		}
+	}
+}
+
+// The folder in RAM is used only if it is root's own: made now, or there already as root would have
+// made it. One another user made first, one anybody can write to, or a link is not where the house's
+// voices wait, and clips are then kept on the device as they are without a tmpfs.
+func TestTheFolderInRAMIsOnlyOneRootWouldHaveMade(t *testing.T) {
+	var st unix.Statfs_t
+	if err := unix.Statfs("/dev/shm", &st); err != nil || int64(st.Type) != tmpfsMagic {
+		t.Skip("no tmpfs at /dev/shm to make the folder in")
+	}
+	base, err := os.MkdirTemp("/dev/shm", "techo5-ramdir-")
+	if err != nil {
+		t.Skip("no folder could be made in /dev/shm:", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+
+	old := rootonly.Owner
+	t.Cleanup(func() { rootonly.Owner = old })
+	rootonly.Owner = os.Getuid()
+
+	clips := filepath.Join(base, "clips")
+	if got := ramDirFor(clips); got != clips {
+		t.Errorf("a new folder in RAM was %q, want %q", got, clips)
+	}
+	if got := ramDirFor(clips); got != clips {
+		t.Errorf("the folder made before was %q the second time, want %q", got, clips)
+	}
+
+	open := filepath.Join(base, "open")
+	_ = os.Mkdir(open, 0o777)
+	_ = os.Chmod(open, 0o777)
+	if got := ramDirFor(open); got != "" {
+		t.Errorf("a folder anybody can write to was used: %q", got)
+	}
+
+	link := filepath.Join(base, "link")
+	_ = os.Symlink(clips, link)
+	if got := ramDirFor(link); got != "" {
+		t.Errorf("a link was used: %q", got)
+	}
+
+	rootonly.Owner = os.Getuid() + 1
+	if got := ramDirFor(clips); got != "" {
+		t.Errorf("another user's folder was used: %q", got)
 	}
 }

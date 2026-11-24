@@ -35,6 +35,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 )
 
 const (
@@ -51,12 +53,16 @@ const (
 const tmpfsMagic = 0x01021994
 
 // ramDirFor is dir if it is on a tmpfs, made if need be; "" otherwise.
+//
+// The folder is used only if it is what root would have made (rootonly): /run/techo5 is root's and
+// nobody else can write there, so nothing else can have made it first, but the clips and what is read
+// back from it are the house's voices, and a folder another user made, or a link, would be theirs.
 func ramDirFor(dir string) string {
 	var st unix.Statfs_t
 	if err := unix.Statfs(filepath.Dir(dir), &st); err != nil || int64(st.Type) != tmpfsMagic {
 		return ""
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if !rootonly.MkdirAll(dir, 0o700) {
 		return ""
 	}
 	return dir
