@@ -1042,12 +1042,7 @@ func (d *Display) libraryTap(x, y int) bool {
 			// A chapter plays its book from the top and is then moved to where the chapter starts.
 			d.libPlayChapter(l, p.entry, e, z.index)
 		default:
-			// A track tapped in a list plays on through the rest of the list. A search hit plays alone.
-			var rest []musicassistant.Entry
-			if p.what != libSearch {
-				rest = libTracksAfter(p.sections[sec], i)
-			}
-			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace, rest...)
+			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace, libTapPlaysOn(p, sec, i)...)
 		}
 	}
 	d.wake()
@@ -1518,6 +1513,17 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 
 // libPlayListMax is how many tracks a tap on one plays on through, itself and those after it.
 const libPlayListMax = 100
+
+// libTapPlaysOn is what a tap on track i of section sec of p queues behind it. A track tapped in a list
+// plays on through the rest of the list. A search hit plays alone, and so does a favorite: the
+// Favorites tab is a row of each kind, not a list someone put in order, and a play-through would also
+// turn shuffle off, where a tap on one favorite song has always left it as it was.
+func libTapPlaysOn(p *libPage, sec, i int) []musicassistant.Entry {
+	if p.what == libSearch || p.what == libFavorites || sec < 0 || sec >= len(p.sections) {
+		return nil
+	}
+	return libTracksAfter(p.sections[sec], i)
+}
 
 // libTracksAfter is the tracks that follow item i of section s, to be queued behind it when it is
 // tapped: only in a list of tracks, and no more than libPlayListMax-1 of them.

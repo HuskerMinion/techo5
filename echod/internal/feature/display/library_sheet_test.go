@@ -1269,6 +1269,14 @@ func TestATrackTapQueuesTheRestOfItsList(t *testing.T) {
 		}
 	}
 
+	// A list page plays on; a search hit and a favorite song play alone (#694).
+	for what, want := range map[int]int{libAlbum: 2, libPlaylist: 2, libSearch: 0, libFavorites: 0} {
+		p := &libPage{what: what, sections: []libSection{{word: -1, show: libShowTracks, kind: "track", entries: tracks[:3]}}}
+		if got := libTapPlaysOn(p, 0, 0); len(got) != want {
+			t.Errorf("page %d: a tap on the first track queued %d after it, want %d", what, len(got), want)
+		}
+	}
+
 	var mu sync.Mutex
 	var plays []map[string]any
 	noLibrary(t)
