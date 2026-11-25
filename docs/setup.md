@@ -254,15 +254,18 @@ screen is out, or while something else has the screen (a request, a call, a ring
 **Hide screensaver** (a button beside it) takes the screensaver down to the clock, as a tap does,
 and the idle wait starts again from the press. It does nothing when no screensaver is up.
 
-To have the screensaver come up only when an automation asks, and never by itself after the wait,
-leave **Slideshow** on **Background** or **Off** and let the automation switch it: set
+To have the screensaver only at the times an automation chooses, and never by itself after the wait
+otherwise, leave **Slideshow** on **Background** or **Off** and let the automation switch it: set
 `select.<node>_slideshow` to **Screensaver**, then press **Show screensaver**; to end it, set
-Slideshow back, which takes the screensaver down and keeps it from coming back by itself. From
+Slideshow back, which takes the screensaver down and keeps it from coming back by itself. While
+Slideshow is on Screensaver it is the ordinary screensaver: after a tap it comes back once the screen
+has been idle for the wait. From
 **Off** the first photo is fetched after the switch, so give it a few seconds before the press (a
 press before a photo has arrived does nothing); from **Background** a photo is already there.
 
 ```yaml
-# Up at 20:00 and down at 23:00, never by itself in between or after.
+# Up at 20:00 and down at 23:00. In between, a tap takes it down and it comes back after the
+# idle wait; after 23:00 it does not come back by itself.
 - alias: Photos in the evening
   triggers:
     - trigger: time
