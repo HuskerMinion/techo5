@@ -18,6 +18,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
@@ -26,11 +27,16 @@ import (
 //
 //	<id>/                0755 root: searchable, as the add-on's user has to reach bin/ and state/
 //	<id>/bin/<program>   the release's binary, 0755 root, not writable by the add-on
+//	<id>/bin/<file>      each extra file its entry pins, 0644 root, under the name addon.json gives it
 //	<id>/addon.json      its manifest, as the catalog pinned it
 //	<id>/installed.json  what was installed and what the owner agreed to
 //	<id>/uid             the user id it runs as, kept with a state folder that outlives a removal
 //	<id>/state/          0700, the add-on's own user's: kept across updates, its home, {state} in its arguments
 //	<id>/log, log.1      what it writes, capped and rotated, root's and 0640
+//
+// The extra files are in bin/ with the program so that everything an update replaces is two names,
+// bin and addon.json: staging, the switch, putting the old version back and recover move bin/ whole,
+// and the files come and go with the program they were pinned with, never one without the other.
 //
 // It is a folder of its own on /data, not under /data/techo5-linux: the Dot's boot keeps that folder
 // 0700 (it holds the Wi-Fi's password and the SSH host keys), and a user other than root could not get
@@ -196,7 +202,8 @@ func (m *Manager) load() {
 }
 
 // modes gives an add-on's folders what they need for its user to run it and nothing more: the folder
-// and bin/ searchable by anyone and root's, state/ its user's alone. Go changes user before it changes
+// and bin/ searchable by anyone and root's, its extra files readable and not writable, state/ its
+// user's alone. Go changes user before it changes
 // to the state folder and runs the program, so a folder on the way that others cannot search stops
 // the add-on before it starts. Set at every start, so a folder made by an older build is put right.
 func (m *Manager) modes(rec record, man catalog.Manifest) {
@@ -204,6 +211,14 @@ func (m *Manager) modes(rec record, man catalog.Manifest) {
 	for _, d := range []string{dir, filepath.Join(dir, "bin")} {
 		if err := os.Chmod(d, 0o755); err != nil && !errors.Is(err, os.ErrNotExist) {
 			slog.Warn("addons: setting a folder's mode", "path", d, "err", err)
+		}
+	}
+	for _, f := range man.Files {
+		// The names were checked when the manifest was read (catalog.ValidFileName), so each is a
+		// file in bin/ and nothing else.
+		p := filepath.Join(dir, "bin", f)
+		if err := os.Chmod(p, 0o644); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("addons: setting an extra file's mode", "path", p, "err", err)
 		}
 	}
 	state := filepath.Join(dir, "state")
@@ -525,8 +540,10 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 		Path: filepath.Join(dir, "bin", man.Command[0]),
 		Args: man.Expand(state),
 		Dir:  state,
+		// TECHO5_ADDON_BIN is where its program and its extra files are, so it finds them by name
+		// whatever the folder add-ons live in.
 		Env: []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + state, "TECHO5_ADDON=" + rec.ID,
-			"TECHO5_ADDON_STATE=" + state},
+			"TECHO5_ADDON_STATE=" + state, "TECHO5_ADDON_BIN=" + filepath.Join(dir, "bin")},
 		Cred: c,
 		Out:  lf,
 	}
@@ -775,23 +792,27 @@ func (m *Manager) clash(id string, ports []catalog.Port) error {
 	return nil
 }
 
-// room checks the disk for a version, with what it downloads on top.
-func (m *Manager) room(v catalog.Version, b update.Binary) error {
+// room checks the disk for a version, with what the build for arch downloads on top: its binary and
+// its extra files.
+func (m *Manager) room(v catalog.Version, arch string) error {
 	free, err := freeMB(m.root)
 	if err != nil {
 		return nil // not knowing is not a reason to refuse
 	}
-	need := int64(v.DiskMB) + b.Size>>20 + 1
+	need := int64(v.DiskMB) + v.Binaries[arch].Size>>20 + 1 + catalog.FilesMB(v.FilesFor(arch))
 	if free < need {
 		return fmt.Errorf("addons: it needs about %d MB of room on the device's storage, and %d MB is free", need, free)
 	}
 	return nil
 }
 
-// fetchVersion downloads a version's manifest and binary into dir, checking both against the catalog.
+// fetchVersion downloads a version's manifest, binary and extra files into dir, checking each against
+// the catalog. Any one that does not check out fails the whole: the caller deletes dir, and nothing of
+// the version is installed.
 func (m *Manager) fetchVersion(ctx context.Context, id string, v catalog.Version, dir string) (catalog.Manifest, error) {
 	d := m.device()
 	b := v.Binaries[d.Arch]
+	files := v.FilesFor(d.Arch)
 	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
 		return catalog.Manifest{}, err
 	}
@@ -814,11 +835,44 @@ func (m *Manager) fetchVersion(ctx context.Context, id string, v catalog.Version
 		return man, err
 	}
 	m.phase("downloading")
+	// One progress over everything downloaded, by size, so the card's percentage does not start over
+	// for each file.
+	total, done := b.Size, int64(0)
+	for _, f := range files {
+		total += f.Size
+	}
+	share := func(size int64) func(float32) {
+		from := done
+		done += size
+		return func(at float32) {
+			if total > 0 {
+				m.progress(float32(float64(from)+float64(at)*float64(size)) / float32(total))
+			}
+		}
+	}
 	prog := filepath.Join(dir, "bin", man.Command[0])
-	if err := m.download(ctx, b, prog, m.progress); err != nil {
+	if err := m.download(ctx, b, prog, share(b.Size)); err != nil {
 		return man, fmt.Errorf("addons: downloading it: %w", err)
 	}
-	return man, os.Chmod(prog, 0o755)
+	if err := os.Chmod(prog, 0o755); err != nil {
+		return man, err
+	}
+	// Under the catalog's names, which Matches has just found are the manifest's, each checked by its
+	// size and hash as the binary is. Root's, as the daemon downloads them, and read-only to the add-on:
+	// they are what was pinned, which the add-on reads and unpacks into its state, never changes.
+	for _, f := range files {
+		p, err := safename.Join(filepath.Join(dir, "bin"), f.Name)
+		if err != nil {
+			return man, err
+		}
+		if err := m.download(ctx, f.Binary, p, share(f.Size)); err != nil {
+			return man, fmt.Errorf("addons: downloading its extra file %s: %w", f.Name, err)
+		}
+		if err := os.Chmod(p, 0o644); err != nil {
+			return man, err
+		}
+	}
+	return man, nil
 }
 
 // allocUID is the user id an add-on is installed as: the one a state folder kept by its last removal
@@ -899,7 +953,7 @@ func (m *Manager) Install(ctx context.Context, id, version, shown string, agreed
 	if err := os.MkdirAll(m.root, 0o755); err != nil {
 		return err
 	}
-	if err := m.room(v, v.Binaries[m.device().Arch]); err != nil {
+	if err := m.room(v, m.device().Arch); err != nil {
 		return err
 	}
 
@@ -1036,7 +1090,7 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 	if err := m.clash(id, v.Ports); err != nil {
 		return err
 	}
-	if err := m.room(v, v.Binaries[m.device().Arch]); err != nil {
+	if err := m.room(v, m.device().Arch); err != nil {
 		return err
 	}
 	m.mu.Lock()
@@ -1172,9 +1226,10 @@ func (m *Manager) restart(a *addon, on bool) {
 	m.mu.Unlock()
 }
 
-// merged is everything agreed to in either.
+// merged is everything agreed to in either, but for the extra files, which are the ones agreed to now:
+// a file is agreed to by its hash, and the ones before are not on the device any more.
 func merged(a, b catalog.Asks) catalog.Asks {
-	out := catalog.Asks{Ports: slices.Clone(a.Ports), Root: a.Root || b.Root}
+	out := catalog.Asks{Ports: slices.Clone(a.Ports), Root: a.Root || b.Root, Files: slices.Clone(b.Files)}
 	for _, p := range b.Ports {
 		covered := false
 		for _, q := range out.Ports {
@@ -1295,10 +1350,12 @@ func (m *Manager) Installed() []Status {
 
 // Listing is an add-on in the catalog, for the card's Available list: the newest version that runs
 // here, or when none does, the newest listed and why it does not. Shown is what the card shows for it
-// (catalog.Shown), which the install form carries back.
+// (catalog.Shown), which the install form carries back. Files are the extra files this device's build
+// of it brings, which the card lists above the box.
 type Listing struct {
 	Addon     catalog.Addon
 	Version   catalog.Version
+	Files     []catalog.File
 	Runs      bool
 	Why       string
 	AsRoot    bool
@@ -1341,6 +1398,7 @@ func (m *Manager) Available() []Listing {
 			l.Runs, l.Why = false, "the catalog this device has is out of date; it offers nothing until a fresh one is fetched"
 		}
 		l.AsRoot = RunsAsRoot(l.Version.Root)
+		l.Files = l.Version.FilesFor(d.Arch)
 		l.Shown = catalog.Shown(a, l.Version)
 		out = append(out, l)
 	}
