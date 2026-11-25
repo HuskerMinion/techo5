@@ -582,9 +582,14 @@ actions:
       node: "{{ device_attr(trigger.device_id, 'name') | slugify }}"
       stop: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
       # The device's Sounding sensor, on for any ring, rather than its Alarm sounding or Timer sounding.
+      # Home Assistant adds _2 to an entity id already taken, so a suffix is allowed (#735).
       sounding: >-
-        {{ device_entities(trigger.device_id) | select('match', 'binary_sensor\.') | select('search', '_sounding$')
-           | reject('search', '_(alarm|timer)_sounding$') | first | default('') }}
+        {{ device_entities(trigger.device_id) | select('match', 'binary_sensor\.')
+           | select('search', '_sounding(_\d+)?$') | reject('search', '_(alarm|timer)_sounding(_\d+)?$')
+           | first | default('') }}
+      # A Sounding sensor renamed past finding leaves the ring unknown: it is pressed and answered as
+      # every ring was before #735, rather than taken for nothing ringing and a running timer canceled.
+      unknown: "{{ sounding == '' }}"
       ringing: "{{ sounding != '' and is_state(sounding, 'on') }}"
       # The wake word, or the device itself on hearing "stop the timer", often ends the ring before this
       # runs (#735): a ring that ended in the last 15 seconds is the one being stopped.
@@ -593,9 +598,9 @@ actions:
            and states[sounding].last_changed > now() - timedelta(seconds=15) }}
       timer: "{{ 'timer' in trigger.sentence | lower }}"
   - choose:
-      - conditions: "{{ ringing or just_rang }}"
+      - conditions: "{{ ringing or just_rang or unknown }}"
         sequence:
-          - if: "{{ ringing }}"
+          - if: "{{ ringing or unknown }}"
             then:
               - action: button.press
                 target:
@@ -613,6 +618,14 @@ actions:
                 {{ listed.timers | default([]) | rejectattr('silent') | sort(attribute='left_seconds')
                    | first | default(none) }}
           - choose:
+              # A timer ringing that the Sounding sensor had not shown yet is stopped, not one still to ring
+              # canceled in its place (#736).
+              - conditions: "{{ listed.ringing | default(none) is not none }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: "{{ stop }}"
+                  - set_conversation_response: "Stopped."
               - conditions: "{{ soonest is none }}"
                 sequence:
                   - set_conversation_response: "There's no timer to stop."
