@@ -294,6 +294,9 @@ func TestTheStationJoinsTheSourceLineOnlyForLiveTracksWithArtist(t *testing.T) {
 			if got := nowPlayingOf(c.s).source; got != c.wantSensorSource {
 				t.Errorf("sensor source = %q, want %q", got, c.wantSensorSource)
 			}
+			if r.NowBase != c.wantSensorSource {
+				t.Errorf("NowBase = %q, want %q, the source without the station", r.NowBase, c.wantSensorSource)
+			}
 		})
 	}
 	if got := maSourceLine("Radio", "Morning News", "Host", "Radio", true); got != "Radio" {
@@ -761,5 +764,21 @@ func TestATitledTrackIsNamedAsItWasTold(t *testing.T) {
 func TestAStationUnderTheTitleIsNotLookedUpForLyrics(t *testing.T) {
 	if _, ok := Get().LyricNow(Radio{Title: "Song", Artist: "SWR3", Stand: true}, time.Now()); ok {
 		t.Error("lyrics were offered for a station standing in for the artist")
+	}
+}
+
+// Whether a Music Assistant track is live comes with its position, which can come after its title, so
+// Now gains the station a moment into the track. NowBase, what the page keys a dismissal and a star on,
+// stays as it was (#676).
+func TestNowBaseStaysWhenTheTrackTurnsOutLive(t *testing.T) {
+	first := playing(playingSnapshot{carried: true, extTitle: "Harbor Lights", extArtist: "The Quartet", extAlbum: "Station 99"})
+	later := first
+	later.extLive = true
+	a, b := carriedFrom(Radio{}, first), carriedFrom(Radio{}, later)
+	if a.Now == b.Now {
+		t.Fatalf("Now did not gain the station: %q", b.Now)
+	}
+	if a.NowBase == "" || a.NowBase != b.NowBase {
+		t.Errorf("NowBase went from %q to %q", a.NowBase, b.NowBase)
 	}
 }

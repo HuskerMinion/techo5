@@ -12,7 +12,7 @@ import (
 // behind after it has stopped the music.
 func swipedAway(d *Display, rd home.Radio, playing bool) {
 	d.mu.Lock()
-	d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, rd.Now, playing
+	d.away, d.awayTrack, d.awayStation, d.awayPlaying = true, rd.Title, nowKey(rd), playing
 	d.mu.Unlock()
 }
 
@@ -88,5 +88,26 @@ func TestNothingPlayingClearsTheDismissal(t *testing.T) {
 	}
 	if d.awayPlaying {
 		t.Error("the away state was cleared but kept the track as playing")
+	}
+}
+
+// A live Music Assistant track gains its station on the source line a moment after it starts, when its
+// position says it is live. A swipe made before that keeps the page away, and a star pressed before it
+// stays lit (#676).
+func TestALateStationKeepsThePageAwayAndTheStar(t *testing.T) {
+	first := home.Radio{Title: "Harbor Lights", Now: "Music Assistant", NowBase: "Music Assistant"}
+	later := home.Radio{Title: "Harbor Lights", Now: "Music Assistant  ·  Station 99", NowBase: "Music Assistant"}
+
+	var d Display
+	swipedAway(&d, first, true)
+	if !d.putAway(later, true, true) {
+		t.Error("the station joining the source line brought the page back")
+	}
+	if favKey(first) != favKey(later) {
+		t.Error("the station joining the source line emptied the star")
+	}
+	// Another track is still another track.
+	if d.putAway(home.Radio{Title: "Other Song", Now: "Music Assistant", NowBase: "Music Assistant"}, true, true) {
+		t.Error("the page stayed away for another track")
 	}
 }

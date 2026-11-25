@@ -55,6 +55,12 @@ type Radio struct {
 	Chosen     string // the station tapped last, until Now catches up
 	Grouped    bool   // this room is playing along with a group, so a stop here stops the group
 
+	// NowBase is Now as it stays for the whole of a Music Assistant track: its name without the live
+	// station maSourceLine puts after it. Whether a track is live comes with its position, which can
+	// come after its title, so Now can change a moment into a track; what keys on the track (a page
+	// put away, a star just pressed) reads this instead (#676). Empty when Now is all there is.
+	NowBase string
+
 	// What the station is playing, when its service says: the song, and a picture for the
 	// background — the cover when there is one, else the station's logo (Logo true).
 	Title, Artist, Album string
@@ -816,6 +822,7 @@ func carriedFrom(r Radio, s playingSnapshot) Radio {
 		// A remote's track paused from here is still the page's, with play on it, after the remote
 		// has let it go.
 		r.Playing, r.Now = false, maSourceLine(maScreenName(s.maService), s.heldTitle, s.heldArtist, s.heldAlbum, s.heldLive)
+		r.NowBase = maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.heldTitle, byline(s.heldArtist, s.heldAlbum), s.heldAlbum
 		r.Stand = s.heldArtist == "" && r.Artist != ""
 		r.Art, r.Thumb = remoteArt()
@@ -827,6 +834,7 @@ func carriedFrom(r Radio, s playingSnapshot) Radio {
 		// went on reading "Starting…" for it for as long as the remote carried on.
 		r.Chosen = ""
 		r.Playing, r.Now = true, maSourceLine(maScreenName(s.maService), s.extTitle, s.extArtist, s.extAlbum, s.extLive)
+		r.NowBase = maScreenName(s.maService)
 		r.Title, r.Artist, r.Album = s.extTitle, byline(s.extArtist, s.extAlbum), s.extAlbum
 		r.Stand = s.extArtist == "" && r.Artist != ""
 		// Music Assistant's own picture for the track when it sent one. Without one the page draws a

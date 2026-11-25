@@ -1892,7 +1892,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		// still has a page, and a dismissal made on one of those is over too.
 		playing, _ := media.Get().ScreenState()
 		d.mu.Lock()
-		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, playing, false
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, nowKey(rd), playing, false
 		d.mu.Unlock()
 		d.wake()
 	}
@@ -1917,7 +1917,7 @@ func (d *Display) favorite() {
 	}
 	rd := home.Get().Radio()
 	d.mu.Lock()
-	d.favedKey = rd.Title + "\x00" + rd.Now
+	d.favedKey = favKey(rd)
 	d.mu.Unlock()
 	d.wake()
 }
@@ -1941,10 +1941,24 @@ func (d *Display) endMusic() {
 	rd := home.Get().Radio()
 	d.musicPendingEnd()
 	d.mu.Lock()
-	d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, false, false
+	d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, nowKey(rd), false, false
 	d.mu.Unlock()
 	d.wake()
 }
+
+// nowKey is the part of what the page names that stays for the whole track: Music Assistant's name
+// without the live station that can join it a moment after the track starts (home.Radio.NowBase). Keyed
+// on Now itself, that late station brought a page just swiped away back and emptied a star just
+// pressed (#676).
+func nowKey(rd home.Radio) string {
+	if rd.NowBase != "" {
+		return rd.NowBase
+	}
+	return rd.Now
+}
+
+// favKey is the track the star is pressed for: its title and nowKey.
+func favKey(rd home.Radio) string { return rd.Title + "\x00" + nowKey(rd) }
 
 // putAway is whether the now-playing page is staying out of the way. A swipe puts it away and it stays
 // away only for the track it was put away on: a dismissal is temporary without needing a timer, and the
@@ -1960,7 +1974,7 @@ func (d *Display) putAway(rd home.Radio, wanted, playing bool) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !wanted || !d.away || rd.Title != d.awayTrack || rd.Now != d.awayStation {
+	if !wanted || !d.away || rd.Title != d.awayTrack || nowKey(rd) != d.awayStation {
 		d.away, d.awayTrack, d.awayStation, d.awayPlaying = false, "", "", false
 		return false
 	}
@@ -1984,7 +1998,7 @@ func (d *Display) quietAway(now time.Time, rd home.Radio, music, wants, playing 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.musicQuiet.over(now, music, playing) && wants {
-		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, rd.Now, false, true
+		d.away, d.awayTrack, d.awayStation, d.awayPlaying, d.awayQuiet = true, rd.Title, nowKey(rd), false, true
 	}
 }
 
@@ -3113,7 +3127,7 @@ func (d *Display) frame() (next time.Duration) {
 	if wants && d.stripDue(now, s.radio, s.nowPlaying) && d.wakeLight(now) == 0 {
 		s.nowPlaying, s.strip = false, true
 	}
-	s.faved = d.favedKey != "" && d.favedKey == s.radio.Title+"\x00"+s.radio.Now
+	s.faved = d.favedKey != "" && d.favedKey == favKey(s.radio)
 	if s.nowPlaying || s.strip {
 		// The Library button, on the page and in the strip both.
 		s.libraryWord = nowPlayingLibraryWord()
