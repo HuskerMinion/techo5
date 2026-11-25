@@ -1,4 +1,4 @@
-//go:build !panel && !(dot && donut)
+//go:build !panel && !(dot && (donut || cannoli))
 
 package speaker
 

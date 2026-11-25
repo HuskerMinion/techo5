@@ -1,4 +1,4 @@
-//go:build dot && donut
+//go:build dot && (donut || cannoli)
 
 package privacy
 
@@ -13,7 +13,11 @@ import (
 // button lets the microphones back (echo-dot-assist, devices/donut/README.md; the sysfs files read on
 // unit 1, 2026-10-23). The Echo Input (cupcake) has the same driver and the same files: its device
 // trees put the latch on another GPIO by board revision, which the kernel hides from sysfs
-// (echo-dot-assist, docs/re-cupcake.md).
+// (echo-dot-assist, docs/re-cupcake.md). The Echo Dot 5th gen (cannoli) has Amazon's 5.4 port of the
+// same driver with the same two files (drivers/input/keyboard/gpio_privacy.c in its GPL tree, enable
+// refusing 0 the same way); its lines are on the CPLD (SLG4BZ45575): the state on MUTE_STATE_L, the
+// button on BTN_MUTE_L and the cut on SW_MUTE_SET, a 50 ms pulse. Its state and button are two input
+// devices, gpio-privacy-state (SW_MUTE_DEVICE) and gpio-privacy-button (KEY_MUTE).
 const (
 	gpioDir   = "/sys/devices/platform/gpio-privacy"
 	gpioState = gpioDir + "/state"

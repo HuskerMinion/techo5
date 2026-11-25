@@ -2,7 +2,10 @@
 
 package all
 
-import "github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+import (
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
+)
 
 // notOnThisDevice is what the Echo Dot does not put up: it has no screen and no camera.
 var notOnThisDevice = []string{
@@ -27,7 +30,24 @@ var notOnThisDevice = []string{
 // all_test.go's stand-in for a missing TAS5805M comes too late for the media player, built before it.
 // louder_top_volume is put up where a tuning set has a lift for it (hardware/speaker/louder_top.go):
 // the Dot 2nd gen's, not the Dot 3rd gen's (donut), which plays untuned.
-var deviceSpecific = append(append([]string{"button_action", "airplay", "airplay_sets_volume", "audio_output", "speaker_gain", "spotify_connect"}, louderTop()...), jackSleep()...)
+var deviceSpecific = append(append(append(append([]string{"button_action", "airplay", "airplay_sets_volume", "speaker_gain", "spotify_connect"}, louderTop()...), jackSleep()...), audioOutput()...), presence()...)
+
+// audio_output is put up where there is a jack to choose (feature/media): not on the Echo Dot 5th gen.
+func audioOutput() []string {
+	if speaker.HasJack {
+		return []string{"audio_output"}
+	}
+	return nil
+}
+
+// presence, presence_detection and presence_sensitivity are put up where the speaker and the microphones
+// can see motion by ultrasound (feature/ultrasound): the Echo Dot 5th gen.
+func presence() []string {
+	if layout.Cannoli() {
+		return []string{"presence", "presence_detection", "presence_sensitivity"}
+	}
+	return nil
+}
 
 // headphone_jack_sleep is put up where there is a jack (hardware/speaker/jack.go): not on the Echo Input.
 func jackSleep() []string {

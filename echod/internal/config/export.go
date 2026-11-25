@@ -399,6 +399,8 @@ func KeepOwn(c *Config, from Config) {
 	c.Wake.Send = from.Wake.Send
 	c.Presence.On, c.Presence.Gestures = from.Presence.On, from.Presence.Gestures
 	c.Presence.Person = from.Presence.Person
+	// How readily motion turns the presence sensor on, which the remote API may not change either.
+	c.Presence.Sensitivity = from.Presence.Sensitivity
 	// AirPlay sets the volume moves no door: only the rest of streaming, which is what listens on the network,
 	// is the device's own.
 	setsVolume := c.Streaming.AirPlaySetsVolume

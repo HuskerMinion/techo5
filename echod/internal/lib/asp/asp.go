@@ -45,6 +45,13 @@ type Set struct {
 	// has either.
 	PEQ    string
 	TrimDB float64
+
+	// IIR is the driver EQ's file where the chain is IIR rather than FIR (the Echo Dot 5th gen, iir.go):
+	// then VolEQ are its volume-dependent EQs, Limits the AFE.cfg its limiters are read from, and EQ,
+	// MBCL and Taps are unused.
+	IIR    string
+	VolEQ  []Bucket
+	Limits string
 }
 
 // Bucket is one EQ file and the fraction of full volume it reaches up to.
@@ -136,6 +143,20 @@ var (
 		PEQ:    "ParametricEQ.cfg",
 		TrimDB: 3,
 	}
+
+	// Cannoli is the Echo Dot 5th gen: sixteen biquads for the driver, a volume EQ of four in front of
+	// them in ten steps ("Volume Levels": [10, 20, ..., 100]), and two limiters (iir.go). Its directory
+	// holds an EQ_100.cfg its AFE.cfg never names, so it is asked for by name too (LoadSet).
+	Cannoli = Set{
+		Name: "cannoli",
+		IIR:  "Singleton_DEQ.cfg",
+		VolEQ: []Bucket{
+			{0.1, "VolEQ_10.cfg"}, {0.2, "VolEQ_20.cfg"}, {0.3, "VolEQ_30.cfg"}, {0.4, "VolEQ_40.cfg"},
+			{0.5, "VolEQ_50.cfg"}, {0.6, "VolEQ_60.cfg"}, {0.7, "VolEQ_70.cfg"}, {0.8, "VolEQ_80.cfg"},
+			{0.9, "VolEQ_90.cfg"}, {1.0, "VolEQ_100.cfg"},
+		},
+		Limits: "AFE.cfg",
+	}
 )
 
 // SetFor is the tuning a directory holds, told apart by a file only one of them has, and where no
@@ -181,6 +202,13 @@ type Tuning struct {
 	peq     []peqFilter
 	mbcl    mbcl
 	dir     string // where its files are: AFE.cfg's volume table (VolumeTable) is read from there
+
+	// An IIR set's (iir.go): the driver EQ and the file it came from, a volume EQ per bucket, and the
+	// limiters.
+	driver     []iirSection
+	driverFile string
+	volEQ      [][]iirSection
+	limits     limits
 }
 
 // Load reads the tuning a directory holds, normally VendorDir: whichever set it is, with a filter
@@ -199,7 +227,7 @@ func VendorSet(dir, name string) (*Tuning, error) {
 	if name == "" {
 		return Load(dir)
 	}
-	for _, s := range []Set{Dot, Show, Crown, Spot, Radar} {
+	for _, s := range []Set{Dot, Show, Crown, Spot, Radar, Cannoli} {
 		if s.Name == name {
 			return LoadSet(dir, s)
 		}
@@ -211,6 +239,12 @@ func VendorSet(dir, name string) (*Tuning, error) {
 // not say which they are.
 func LoadSet(dir string, set Set) (*Tuning, error) {
 	t := &Tuning{set: set, dir: dir}
+	if set.IIR != "" {
+		if err := t.loadCannoli(dir); err != nil {
+			return nil, err
+		}
+		return t, nil
+	}
 	for _, e := range set.EQ {
 		h, err := readFloats(filepath.Join(dir, e.Name), set.Taps)
 		if err != nil {
@@ -235,7 +269,7 @@ func LoadSet(dir string, set Set) (*Tuning, error) {
 	return t, nil
 }
 
-// Name is which set this is: "dot", "show", "crown", "spot" or "radar".
+// Name is which set this is: "dot", "show", "crown", "spot", "radar" or "cannoli".
 func (t *Tuning) Name() string { return t.set.Name }
 
 // Bucket is which filter a fraction of full volume uses: the first one the volume reaches up to, and
@@ -256,8 +290,20 @@ type Chain struct {
 	tone   *tone
 	fir    *fir
 	peq    []*biquad
-	comp   *mbclState
+	comp   dynamics
 	trim   float32
+
+	// An IIR set's: the volume EQ, whose coefficients follow the volume, and the driver EQ.
+	volEQ  cascade
+	bucket int
+	driver cascade
+}
+
+// dynamics is what holds the tuning's lift off the driver: the compressor on the FIR sets, the two
+// limiters on the Echo Dot 5th gen.
+type dynamics interface {
+	process(x []float32)
+	reset()
 }
 
 // Chain builds the processing state for a stream of the given block size. Every call to Process must
@@ -265,6 +311,18 @@ type Chain struct {
 func (t *Tuning) Chain(block int) (*Chain, error) {
 	if block <= 0 {
 		return nil, fmt.Errorf("asp: a block is %d samples", block)
+	}
+	if t.set.IIR != "" {
+		top := len(t.volEQ) - 1
+		return &Chain{
+			tuning: t,
+			tone:   newTone(Tone{}, Rate),
+			volEQ:  newCascade(t.volEQ[top]),
+			bucket: top,
+			driver: newCascade(t.driver),
+			comp:   newLimited(t.limits, Rate),
+			trim:   1,
+		}, nil
 	}
 	if t.mbcl.Bypass {
 		return nil, fmt.Errorf("asp: %s asks to be bypassed", t.set.MBCL)
@@ -288,7 +346,44 @@ func (t *Tuning) Chain(block int) (*Chain, error) {
 // meant for it. On the Show the quieter buckets are not the same shape turned down: they carry more
 // bass and treble, which is the loudness compensation the tuning exists for. The Dot's are one shape
 // at different gains (Set).
-func (c *Chain) Volume(of float64) { c.fir.use(c.tuning.Bucket(of)) }
+func (c *Chain) Volume(of float64) {
+	if c.fir == nil {
+		if b := c.tuning.volBucket(of); b != c.bucket {
+			c.volEQ.use(c.tuning.volEQ[b])
+			c.bucket = b
+		}
+		// The Echo Dot 5th gen's full-band ceiling goes by the same steps (limits, iir.go).
+		if l, ok := c.comp.(*limited); ok {
+			l.volume(c.bucket)
+		}
+		return
+	}
+	c.fir.use(c.tuning.Bucket(of))
+}
+
+// UltrasoundLevel is how loud, as a linear peak, a tone may go under what this tuning plays at a
+// fraction of full volume without the sum passing the full-band limiter's own ceiling: the headroom
+// the Echo Dot 5th gen's USPD FBL Throttling table keeps for presence detection's ultrasound (limits,
+// iir.go). -13.4 dBFS up to 80 %, -16.6 at 90 % and -20.2 at the top. False for a tuning without the
+// table.
+func (t *Tuning) UltrasoundLevel(of float64) (float64, bool) {
+	u := t.limits.USPD
+	if len(u) == 0 {
+		return 0, false
+	}
+	b := max(0, min(t.volBucket(of), len(u)-1))
+	return max(0, dbToLinear(t.limits.Fullband.ThresholdDB)-dbToLinear(u[b])), true
+}
+
+// Throttle tells the chain how hot the unit is, as the kernel's audio_cooler state: 0 for not at all,
+// up to 3. On the Echo Dot 5th gen that lowers the limiters as Fire OS does (limits, iir.go); the other
+// sets have no table for it, and nothing changes. It is called between blocks, from whoever owns the
+// chain.
+func (c *Chain) Throttle(state int) {
+	if l, ok := c.comp.(*limited); ok {
+		l.throttle(state)
+	}
+}
 
 // SetTone puts the listener's own shelves in front of the tuning, or takes them out. It is called
 // between blocks, from whoever owns the chain.
@@ -298,7 +393,12 @@ func (c *Chain) SetTone(t Tone) { c.tone = newTone(t, Rate) }
 // compressor's thresholds are in dB of.
 func (c *Chain) Process(x []float32) {
 	c.tone.process(x)
-	c.fir.process(x)
+	if c.fir != nil {
+		c.fir.process(x)
+	} else {
+		c.volEQ.process(x)
+		c.driver.process(x)
+	}
 	for _, f := range c.peq {
 		for i, v := range x {
 			x[i] = f.step(v)
@@ -321,7 +421,12 @@ func (c *Chain) Process(x []float32) {
 // then, and starting from silence is better than smearing that across what is playing now.
 func (c *Chain) Reset() {
 	c.tone.reset()
-	c.fir.reset()
+	if c.fir != nil {
+		c.fir.reset()
+	} else {
+		c.volEQ.reset()
+		c.driver.reset()
+	}
 	for _, f := range c.peq {
 		f.z1, f.z2 = 0, 0
 	}
