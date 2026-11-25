@@ -135,6 +135,8 @@ func TestFetchSignedCatalogNeedsItsOwnSignatureAndTheClock(t *testing.T) {
 	sig = ""
 	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); err == nil {
 		t.Error("an unsigned file was taken")
+	} else if errors.Is(err, ErrNotFound) {
+		t.Errorf("a missing signature reads as a missing catalog: %v", err)
 	}
 	sig = good
 	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 4); err == nil {

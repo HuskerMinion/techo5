@@ -81,6 +81,7 @@ type catalogStore struct {
 	format  int // the format of the catalog believed
 	have    bool
 	highest int64
+	v2      bool      // a format 2 catalog has been believed, ever (catalog-format2)
 	fetched time.Time // when the last fetch succeeded
 	problem string    // why the last fetch did not, for the card
 	logged  string    // the failure last logged, so the same one is logged once
@@ -100,8 +101,12 @@ func (s *catalogStore) paths(format int) (body, sig, serial string) {
 	return filepath.Join(s.dir, name), filepath.Join(s.dir, name+".sig"), filepath.Join(s.dir, "catalog-serial")
 }
 
+// v2Path is the record that this device has believed a format 2 catalog. It is kept apart from the
+// catalog, as the serial is, so a kept catalog that goes missing or is swapped does not take it along.
+func (s *catalogStore) v2Path() string { return filepath.Join(s.dir, "catalog-format2") }
+
 // load reads the highest serial seen and the kept catalog, if there is one, it still verifies, and it
-// is not older than that serial.
+// is not older than that serial. Once a format 2 catalog has been believed, a kept format 1 copy is not.
 func (s *catalogStore) load() {
 	_, _, np := s.paths(catalog.Format)
 	if b, err := os.ReadFile(np); err == nil {
@@ -111,7 +116,15 @@ func (s *catalogStore) load() {
 			s.mu.Unlock()
 		}
 	}
+	if _, err := os.Stat(s.v2Path()); err == nil {
+		s.mu.Lock()
+		s.v2 = true
+		s.mu.Unlock()
+	}
 	for _, format := range formats {
+		if format == catalog.FormatV1 && s.v2Believed() {
+			continue
+		}
 		bp, sp, _ := s.paths(format)
 		body, err1 := os.ReadFile(bp)
 		sig, err2 := os.ReadFile(sp)
@@ -130,7 +143,35 @@ func (s *catalogStore) load() {
 		s.cat, s.body, s.format, s.have = c, body, format, true
 		s.mu.Unlock()
 		s.raise(c.Serial)
+		if format != catalog.FormatV1 {
+			s.markV2()
+		}
 		return
+	}
+}
+
+func (s *catalogStore) v2Believed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.v2
+}
+
+// markV2 records that a format 2 catalog has been believed, once, synced as the serial is: from then on
+// the format 1 catalog is never fallen back to. It lists less (no version that requires anything, nor
+// its withdrawal), so taken in place of a format 2 one at the same serial it would quietly drop what
+// the device was shown, and keeping it would delete the format 2 copy.
+func (s *catalogStore) markV2() {
+	s.mu.Lock()
+	if s.v2 {
+		s.mu.Unlock()
+		return
+	}
+	s.v2 = true
+	s.mu.Unlock()
+	if err := os.MkdirAll(s.dir, 0o755); err == nil {
+		if err := writeWhole(s.v2Path(), []byte("2\n"), 0o644); err != nil {
+			slog.Warn("addons: keeping that a format 2 catalog was believed", "err", err)
+		}
 	}
 }
 
@@ -185,15 +226,22 @@ func (s *catalogStore) due() bool {
 // bring back a version withdrawn since. It says whether anything the card or Home Assistant shows
 // changed: the catalog, or why the last fetch failed.
 //
-// The format 2 catalog is asked for first. Until it is published there is none (update.ErrNotFound),
-// and the format 1 one is taken instead, quietly: that is how things stand until it is, not a failure.
-// Anything else wrong with the format 2 one is a failure, not a reason to take the other.
+// The format 2 catalog is asked for first. Until it is published there is none (update.ErrNotFound,
+// for the catalog itself; a missing signature is not that), and the format 1 one is taken instead,
+// quietly: that is how things stand until it is, not a failure. Anything else wrong with the format 2
+// one is a failure, not a reason to take the other; and once a format 2 catalog has been believed, its
+// absence is a failure too (markV2).
 func (s *catalogStore) refresh(ctx context.Context) (changed bool, err error) {
 	format := catalog.Format
 	body, sig, err := fetchSigned(ctx, format, catalogV2URL, maxCatalog)
 	if errors.Is(err, update.ErrNotFound) {
-		format = catalog.FormatV1
-		body, sig, err = fetchSigned(ctx, format, catalogURL, maxCatalog)
+		if s.v2Believed() {
+			// Not wrapped: this is not "nothing published yet", which is logged quietly.
+			err = fmt.Errorf("addons: the format 2 catalog is not there, though this device has believed one; not taking the format 1 catalog in its place: %v", err)
+		} else {
+			format = catalog.FormatV1
+			body, sig, err = fetchSigned(ctx, format, catalogURL, maxCatalog)
+		}
 	}
 	var c catalog.Catalog
 	if err == nil {
@@ -237,6 +285,9 @@ func (s *catalogStore) refresh(ctx context.Context) (changed bool, err error) {
 		s.keep(format, body, sig)
 	}
 	s.raise(c.Serial)
+	if format != catalog.FormatV1 {
+		s.markV2()
+	}
 	return changed, nil
 }
 

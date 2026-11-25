@@ -106,7 +106,8 @@ func VerifyCatalogV2(body, sig []byte) error {
 // FetchSignedCatalog is Fetch for the add-on catalog (feature/addons). The file is fetched through the
 // updater's own client, its signature from beside it (url + ".sig"), and it is returned only once the
 // signature is the release key's over CatalogDomain and exactly the bytes served. Nothing is fetched
-// before the clock is set, for the reason Fetch gives. A catalog that is not there is ErrNotFound.
+// before the clock is set, for the reason Fetch gives. A catalog that is not there is ErrNotFound; one
+// whose signature is not there is not.
 func FetchSignedCatalog(ctx context.Context, url string, max int64) (body, sig []byte, err error) {
 	return fetchSignedCatalog(ctx, url, max, VerifyCatalog)
 }
@@ -128,7 +129,9 @@ func fetchSignedCatalog(ctx context.Context, url string, max int64, check func(b
 	}
 	sig, err = get(ctx, url+".sig", 1<<10)
 	if err != nil {
-		return nil, nil, fmt.Errorf("update: %s has no signature: %w", url, err)
+		// Not wrapped: a catalog published without its signature is a failure, never ErrNotFound, which
+		// a caller may take for the file not being published at all, and fall back from.
+		return nil, nil, fmt.Errorf("update: %s has no signature: %v", url, err)
 	}
 	if err := check(body, sig); err != nil {
 		return nil, nil, err

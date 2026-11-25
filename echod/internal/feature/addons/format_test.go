@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 func (r *rig) askedFor() []string {
@@ -78,48 +79,52 @@ func TestTheFormat1CatalogIsTakenUntilFormat2IsPublished(t *testing.T) {
 	}
 }
 
-// One serial runs across both formats: once a format 2 catalog is believed, a format 1 one below it is
+// One serial runs across both formats: once a format 1 catalog is believed, a format 2 one below it is
 // older, and one at it is taken; and the kept copy is the format last taken, checked under its own
 // domain when read back.
 func TestTheSerialHoldsAcrossFormats(t *testing.T) {
 	r := newRig(t)
 	v := r.version("techo5-plex", "0.1.0", nil)
 	ctx := context.Background()
-	r.serve(catalog.Catalog{Format: 2, Serial: 5, Addons: []catalog.Addon{entry("techo5-plex", v)}})
+	r.serve(catalog.Catalog{Format: 1, Serial: 5, Addons: []catalog.Addon{entry("techo5-plex", v)}})
 	if _, err := r.m.cat.refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	r.mu.Lock()
-	v2Body, v2Sig := r.servedV2, r.sigV2
-	r.mu.Unlock()
+	if _, err := os.Stat(filepath.Join(r.m.root, "catalog.json")); err != nil {
+		t.Fatalf("the format 1 catalog is not kept: %v", err)
+	}
 
-	r.unpublishV2()
-	r.serve(catalog.Catalog{Format: 1, Serial: 4, Addons: []catalog.Addon{entry("techo5-plex", v)}})
+	r.serve(catalog.Catalog{Format: 2, Serial: 4, Addons: []catalog.Addon{entry("techo5-plex", v)}})
 	if _, err := r.m.cat.refresh(ctx); !errors.Is(err, errOlder) {
-		t.Errorf("an older format 1 catalog: %v", err)
-	}
-	if c, _ := r.m.cat.get(); c.Format != 2 || c.Serial != 5 {
-		t.Errorf("believed format %d serial %d", c.Format, c.Serial)
-	}
-
-	r.serve(catalog.Catalog{Format: 1, Serial: 5, Addons: []catalog.Addon{entry("techo5-plex", v)}})
-	if _, err := r.m.cat.refresh(ctx); err != nil {
-		t.Fatalf("a format 1 catalog of the same serial: %v", err)
+		t.Errorf("an older format 2 catalog: %v", err)
 	}
 	if c, _ := r.m.cat.get(); c.Format != 1 || c.Serial != 5 {
 		t.Errorf("believed format %d serial %d", c.Format, c.Serial)
 	}
-	if _, err := os.Stat(filepath.Join(r.m.root, "catalog-v2.json")); !os.IsNotExist(err) {
-		t.Errorf("the format 2 copy kept before is still there: %v", err)
+
+	r.serve(catalog.Catalog{Format: 2, Serial: 5, Addons: []catalog.Addon{entry("techo5-plex", v)}})
+	if _, err := r.m.cat.refresh(ctx); err != nil {
+		t.Fatalf("a format 2 catalog of the same serial: %v", err)
+	}
+	if c, _ := r.m.cat.get(); c.Format != 2 || c.Serial != 5 {
+		t.Errorf("believed format %d serial %d", c.Format, c.Serial)
+	}
+	if _, err := os.Stat(filepath.Join(r.m.root, "catalog.json")); !os.IsNotExist(err) {
+		t.Errorf("the format 1 copy kept before is still there: %v", err)
 	}
 	fresh := &catalogStore{dir: r.m.root, clock: r.clock}
 	fresh.load()
-	if c, ok := fresh.get(); !ok || c.Format != 1 || c.Serial != 5 {
+	if c, ok := fresh.get(); !ok || c.Format != 2 || c.Serial != 5 {
 		t.Errorf("read back as format %d serial %d (%v)", c.Format, c.Serial, ok)
 	}
 
-	// The format 2 file and its signature put in the format 1 copy's place do not verify there: each
-	// is checked under its own domain.
+	// The format 2 file and its signature put in the format 1 copy's place do not verify there, each
+	// being checked under its own domain; and with no format 2 copy, after one was believed, a format 1
+	// copy is not believed at all.
+	r.mu.Lock()
+	v2Body, v2Sig, v1Body, v1Sig := r.servedV2, r.sigV2, r.served, r.sig
+	r.mu.Unlock()
+	_ = os.Remove(filepath.Join(r.m.root, "catalog-v2.json"))
 	_ = os.WriteFile(filepath.Join(r.m.root, "catalog.json"), v2Body, 0o644)
 	_ = os.WriteFile(filepath.Join(r.m.root, "catalog.json.sig"), []byte(v2Sig), 0o644)
 	swapped := &catalogStore{dir: r.m.root, clock: r.clock}
@@ -127,14 +132,47 @@ func TestTheSerialHoldsAcrossFormats(t *testing.T) {
 	if _, ok := swapped.get(); ok {
 		t.Error("a format 2 catalog kept as format 1 was believed")
 	}
+	_ = os.WriteFile(filepath.Join(r.m.root, "catalog.json"), v1Body, 0o644)
+	_ = os.WriteFile(filepath.Join(r.m.root, "catalog.json.sig"), []byte(v1Sig), 0o644)
+	stale := &catalogStore{dir: r.m.root, clock: r.clock}
+	stale.load()
+	if _, ok := stale.get(); ok {
+		t.Error("a kept format 1 catalog was believed after a format 2 one had been")
+	}
+}
 
-	// Kept where it belongs, it is believed, and preferred over a format 1 copy beside it.
-	_ = os.WriteFile(filepath.Join(r.m.root, "catalog-v2.json"), v2Body, 0o644)
-	_ = os.WriteFile(filepath.Join(r.m.root, "catalog-v2.json.sig"), []byte(v2Sig), 0o644)
-	both := &catalogStore{dir: r.m.root, clock: r.clock}
-	both.load()
-	if c, ok := both.get(); !ok || c.Format != 2 {
-		t.Errorf("the kept format 2 copy: format %d (%v)", c.Format, ok)
+// Once a format 2 catalog has been believed, it is never given up for the format 1 one: not when
+// catalog-v2.json goes missing, nor after a restart. The format 1 file lists less (no version that
+// requires anything, nor its withdrawal), and at the same serial it would replace what was shown.
+func TestNoFallBackToFormat1AfterFormat2(t *testing.T) {
+	r := newRig(t)
+	plain := r.version("techo5-plex", "0.1.0", nil)
+	files := r.withFiles("techo5-plex", r.version("techo5-plex", "0.2.0", nil), map[string]string{"a.bin": "a"})
+	r.serve(catalog.Catalog{Format: 1, Serial: 3, Addons: []catalog.Addon{entry("techo5-plex", plain)}})
+	r.serve(catalog.Catalog{Format: 2, Serial: 3, Addons: []catalog.Addon{entry("techo5-plex", plain, files)}})
+	ctx := context.Background()
+	if _, err := r.m.cat.refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r.unpublishV2()
+	r.askedFor()
+	for _, s := range []*catalogStore{r.m.cat, func() *catalogStore {
+		fresh := &catalogStore{dir: r.m.root, clock: r.clock}
+		fresh.load()
+		return fresh
+	}()} {
+		if _, err := s.refresh(ctx); err == nil || errors.Is(err, update.ErrNotFound) {
+			t.Errorf("a missing format 2 catalog after one was believed: %v", err)
+		}
+		if asked := r.askedFor(); !slices.Equal(asked, []string{catalogV2URL}) {
+			t.Errorf("asked for %v", asked)
+		}
+		if c, ok := s.get(); !ok || c.Format != 2 {
+			t.Errorf("believed format %d (%v)", c.Format, ok)
+		}
+		if _, err := os.Stat(filepath.Join(r.m.root, "catalog-v2.json")); err != nil {
+			t.Errorf("the kept format 2 copy is gone: %v", err)
+		}
 	}
 }
 
