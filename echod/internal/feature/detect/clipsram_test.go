@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,9 +44,10 @@ const nowhere = "http://127.0.0.1:1"
 // A clip of a kind that is sent waits in RAM, is counted and listed there, and is let go of once the
 // trainer has it: it is never written to the device's folder.
 func TestASentClipIsNeverWrittenToTheDevicesFolder(t *testing.T) {
-	got := 0
+	// The server counts in its own goroutine, so the count is atomic for the race detector.
+	var got atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		got++
+		got.Add(1)
 		fmt.Fprint(w, `{"ok": true}`)
 	}))
 	defer srv.Close()
@@ -71,8 +73,8 @@ func TestASentClipIsNeverWrittenToTheDevicesFolder(t *testing.T) {
 	}
 
 	r.drain()
-	if got != 1 {
-		t.Fatalf("the trainer got %d clips", got)
+	if got.Load() != 1 {
+		t.Fatalf("the trainer got %d clips", got.Load())
 	}
 	if wavs(t, r.c.dir, "nearmiss") != 0 || wavs(t, r.c.ram, "nearmiss") != 0 {
 		t.Fatalf("after it was sent: on the device %d, in RAM %d; want none", wavs(t, r.c.dir, "nearmiss"), wavs(t, r.c.ram, "nearmiss"))
@@ -208,9 +210,10 @@ func TestASentClipThatCannotBeRemovedIsNotSentAgain(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root removes from a read-only folder")
 	}
-	got := 0
+	// The server counts in its own goroutine, so the count is atomic for the race detector.
+	var got atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		got++
+		got.Add(1)
 		fmt.Fprint(w, `{"ok": true}`)
 	}))
 	defer srv.Close()
@@ -224,8 +227,8 @@ func TestASentClipThatCannotBeRemovedIsNotSentAgain(t *testing.T) {
 
 	r.drain()
 	r.drain()
-	if got != 1 {
-		t.Fatalf("the trainer got it %d times", got)
+	if got.Load() != 1 {
+		t.Fatalf("the trainer got it %d times", got.Load())
 	}
 	if q := r.s.queue(r.cfg); len(q) != 0 {
 		t.Fatalf("still queued: %d", len(q))
