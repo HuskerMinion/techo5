@@ -78,6 +78,12 @@ func Redactor() *redact.Redactor {
 	if from, ok := phonePlaying(media.Get().Receiving()); ok {
 		r.Known("bluetooth", from)
 	}
+	// The phones that have cast here are named by their owners, and the log says each one.
+	for _, name := range castNames() {
+		if !commonName(name) && name != "A phone" {
+			r.Known("phone", name)
+		}
+	}
 	// This device's name and address on its tailnet (feature/tailscale): the name is often a person's
 	// or a room's, and the tailnet's own name is part of it.
 	for _, name := range TailnetNames() {
@@ -152,7 +158,7 @@ func otherDevices(c config.Config) []string {
 func secrets(c config.Config) []string {
 	all := []string{c.CamStream.Pass, c.Remote.Secret, c.Home.HouseWord, c.Home.Immich.Key, c.Wake.Send.Token, c.Home.Reolink.Pass,
 		c.Brain.Key, c.Dashboard.Key, c.MusicAssistant.Token, c.Deck.OBS.Password, c.Realtime.Key, c.Realtime.MCPToken,
-		c.Security.ScreenKey, c.Security.BabyKey, c.Security.LockPIN, c.TalkBack.Pass}
+		c.Security.ScreenKey, c.Security.BabyKey, c.Security.LockPIN, c.TalkBack.Pass, c.Cast.Key}
 	for _, pc := range c.Deck.Computers {
 		all = append(all, pc.Key) // each computer's pairing key
 	}

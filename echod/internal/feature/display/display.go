@@ -40,6 +40,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/babymon"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/btaudio"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/camstream"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/cast"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/deck"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/doorbell"
@@ -238,6 +239,7 @@ type Display struct {
 	dashFollow    bool
 	dashEdge      int // edgeNone, or the edge the finger on it started at
 	dashEdgeAt    image.Point
+	castShowing   bool         // the cast page is up: every finger is its
 	dashKbd       dashKeyboard // the keyboard over a streamed page (dash_keyboard.go)
 	dashKbdWake   *time.Timer  // to look again when that keyboard has been left long enough
 	dashAwayUntil time.Time    // the idle dashboard put away, the clock up until then
@@ -528,8 +530,10 @@ type Display struct {
 	videoOver     image.Rectangle
 	vp            videoPainter
 	vask          askLatch
+	cask          askLatch // the cast question drawn (castScene), so a tap answers that one once it has settled
 	pask          askLatch // the setup page's asking, drawn (pageAsk)
 	videoLit      uint64   // the last video that lit the panel (frame)
+	castAskLit    bool     // the question a phone is waiting behind has lit the panel (castLights)
 
 	// notifyLit is the last notification that lit the panel (frame), once per notification like
 	// videoLit. notifySeen is the notification the screen may show at night: the one that came up by
@@ -685,6 +689,7 @@ func build() *Display {
 	home.Get().Changed.Listen(func(struct{}) { d.wake() })
 	d.watchRoom()
 	dashboard.Get().Changed.Listen(func(struct{}) { d.wake() })
+	cast.Get().Changed.Listen(func(struct{}) { d.wake() })
 	tessera.Changed.Listen(func(struct{}) { d.wake() })
 	tessCams.mu.Lock()
 	tessCams.wake = d.wake
@@ -1210,7 +1215,9 @@ func (d *Display) gesture(g touch.Gesture) {
 	_, _, _, asking := video.Get().Asking()
 	// Not on the video page either: its controls work at night as by day (the night light's rule is
 	// the clock's, a hand in the dark more likely a knock than a request).
-	glowing := d.nightGlow && !d.wifiOpen && !asksAtDevice() && !asking && !d.videoOnScreen
+	// Nor on a phone waiting to be accepted: the night light is lit for the question (castLights), and a
+	// tap on Accept is the answer, not a request to lift the night light.
+	glowing := d.nightGlow && !d.wifiOpen && !asksAtDevice() && !asking && !d.videoOnScreen && cast.Get().Asking() == ""
 	// A dashboard a tap on the night light opened is used as by day, at the night light's level. Only
 	// that one: a dashboard left up from the day, or put up by Home Assistant, stays under the night.
 	// And only while it is what is drawn: the settings or the drawer opened from it are not shown over
@@ -1495,6 +1502,16 @@ func (d *Display) gesture(g touch.Gesture) {
 		}
 		// Up but not on the screen: something else is drawn there, and the finger is for it.
 		d.closeAppsPop()
+	}
+
+	// The cast page: nothing on it to press, and a swipe in from the left takes it away.
+	d.mu.Lock()
+	castUp := d.castShowing
+	d.mu.Unlock()
+	if castUp {
+		d.castGesture(g)
+		d.wake()
+		return
 	}
 
 	// The dashboard: every finger is its, including the one that takes it away; unless the drawer has
@@ -2727,6 +2744,7 @@ func (d *Display) lightForEvents(now time.Time, on, night bool, call phone.State
 		on = true
 	}
 	on = d.noticeLights(on, night)
+	on = d.castLights(on, night)
 	if vs := video.Get().State(); vs.Active() && vs.ID != d.videoLit && (vs.Phase != video.Asking || !nightNow(now)) {
 		// A video starting lights a dark panel, day or night: somebody asked for it to be watched. Once
 		// per video, so a screen turned off while one plays stays off. A DLNA video asking first lights it
@@ -3153,14 +3171,16 @@ func (d *Display) frame() (next time.Duration) {
 	// boring is the plain idle page — the same set of pages draw() checks before falling through to
 	// bigClock/nowPlaying. Background mode rides along with it; Screensaver only takes over once it
 	// has held for the configured wait, tracked by how long it has run continuously.
+	d.castAsked(&s)
+	d.castScene(&s, s.showSheet || ring.any() || s.callPageUp())
 	d.deckScene(&s, now)
 	d.customScene(&s, now)
 	// A call drawn over the page leaves the page as it was: the dashboard, the photos, the
 	// screensaver.
-	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp())
+	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp() || s.showCast)
 	boring := s.phase == "idle" && !s.callPageUp() && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
-		!s.showDash && !s.showDeck && s.custom.name == ""
+		!s.showDash && !s.showCast && !s.showDeck && s.custom.name == ""
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
 	// still standing in it. It was set only on the idle page once, and the press could not be given
@@ -3179,6 +3199,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.pask.drawn(drawnPage, now)
 	d.videoScene(&s, now)
+	d.castLatch(&s, cast.Get().AskID(), now) // after the scene says what is over the question
 	if s.showVideo {
 		boring = false
 	}
@@ -3339,6 +3360,9 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	if s.showCamera {
 		return 250 * time.Millisecond // frames arrive as they are fetched; this keeps up
+	}
+	if s.showCast {
+		return time.Second // a frame wakes it as it arrives
 	}
 	if s.showDash {
 		return time.Second // a streamed picture wakes it as it arrives
