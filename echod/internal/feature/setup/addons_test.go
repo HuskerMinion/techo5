@@ -10,6 +10,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 // The warning, word for word as it was agreed. Changing it is a decision, not an edit: this test is
@@ -72,6 +73,31 @@ func TestAnAvailableAddonShowsTheWarningAndTheBox(t *testing.T) {
 	addonsAvailable(w, "tok", []addons.Listing{plexListing(false, "needs TECHO5 v9.0.0 or later", false)})
 	if body := w.Body.String(); strings.Contains(body, "<form") || !strings.Contains(body, "needs TECHO5 v9.0.0 or later") {
 		t.Errorf("an add-on that does not run here:\n%s", body)
+	}
+}
+
+// The extra files an install downloads are listed by name and size above the box; a listing without
+// any says nothing of them.
+func TestAnAvailableAddonListsItsExtraFiles(t *testing.T) {
+	l := plexListing(true, "", true)
+	l.Files = []catalog.File{
+		{Name: "netbird.tar.gz", Binary: update.Binary{Size: 14_900_000}},
+		{Name: "a<b>.bin", Binary: update.Binary{Size: 300}},
+	}
+	w := httptest.NewRecorder()
+	addonsAvailable(w, "tok", []addons.Listing{l})
+	body := strings.Join(strings.Fields(w.Body.String()), " ")
+	want := "Downloads beside its program, checked as the program is: <code>netbird.tar.gz</code> (14.2 MB), <code>a&lt;b&gt;.bin</code> (1 kB)."
+	if !strings.Contains(body, want) {
+		t.Errorf("lacks %q:\n%s", want, body)
+	}
+	if i, j := strings.Index(body, "netbird.tar.gz"), strings.Index(body, "I understand the risk"); i < 0 || j < i {
+		t.Error("the files are not listed above the box")
+	}
+	w = httptest.NewRecorder()
+	addonsAvailable(w, "tok", []addons.Listing{plexListing(true, "", false)})
+	if strings.Contains(w.Body.String(), "Downloads beside") {
+		t.Error("a listing without extra files mentions them")
 	}
 }
 
