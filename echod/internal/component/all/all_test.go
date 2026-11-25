@@ -279,6 +279,7 @@ var registered = []string{
 	"sounding_what",
 	"speaker",
 	"speaker_eq",
+	"stop_word",
 	"stop_word_sensitivity",
 	"talk_back",
 	"tessera_screen",

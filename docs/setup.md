@@ -1574,6 +1574,24 @@ close it came there is what says whether to lower the threshold. How close a "st
 answer came is also in the log, one line an answer (see
 [Watching the wake word scores](#watching-the-wake-word-scores)).
 
+**Stop word**, beside the threshold, picks the word: **Stop**, the English one that comes with the
+device and the default, or one of the wake word models the device has, such as a "Stopp" of your own
+trained on German voices, sent the way [a wake word of your own](#a-wake-word-of-your-own) is. The
+word chosen does everything the built-in one does, at the same threshold and with the same allowance
+over a ring or an answer, and the built-in one isn't listened for while it does. The list leaves out
+the wake words chosen now (a word can't open a turn and stop one at once) and a model of your own
+called "Stop", which couldn't be told from the built-in one: give it another name. If the model
+chosen goes from the device, or is chosen as a wake word, the built-in **Stop** listens in its place,
+the list shows **Stop** and the device's log says why. The choice is kept, so the word comes back with
+the model. Like the [hang-up word](phone.md#a-hang-up-word), it is the device's own: a settings file
+doesn't change it, and the remote API can read it but not change it.
+
+With the wake word first, a ringing alarm or timer stops when what's heard is a stop and nothing
+else: "stop", "turn off the timer", "stop the alarm, please", or the same in the screen's languages
+and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
+"выключи будильник"). A sentence with anything more in it ("stop the music") goes to Home Assistant
+as any other.
+
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
 for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history, as plain text
@@ -1760,10 +1778,10 @@ Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
 is listening for can't be removed or sent again either: pick another one first. Neither can one
-chosen as the [volume down word](#the-volume-down-word), the [volume up or next song
-word](#the-volume-up-and-next-song-words) or the [hang-up word](phone.md#a-hang-up-word), even while
-it's off (for being a wake word too, or with no music or call): set that word's list to **None** or
-another word first. The page says "listening for that wake word" in each case.
+chosen as the [stop word](#two-wake-words-two-assistants), the [volume down
+word](#the-volume-down-word), the [volume up or next song word](#the-volume-up-and-next-song-words)
+or the [hang-up word](phone.md#a-hang-up-word), even while it's off (for being a wake word too, or
+with no music or call): set that word's list to **None**, **Stop** or another word first. The page says "listening for that wake word" in each case.
 
 Or, through Home Assistant:
 

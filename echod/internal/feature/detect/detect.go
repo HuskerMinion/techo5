@@ -70,6 +70,11 @@ type Detect struct {
 	// words, and a model the engine refuses refuses again.
 	refused *refusal
 
+	// stopWord is the stop word's select, and stopMu keeps one load of the stop slot at a time: see
+	// stopword.go and loadStop.
+	stopWord *stopWord
+	stopMu   sync.Mutex
+
 	// hangup is the hang-up word's select and threshold, and its loading with the call: see hangup.go.
 	hangup *hangup
 
@@ -325,6 +330,7 @@ func newDetect() *Detect {
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.stopWord = newStopWord(d)
 	d.hangup = newHangup(d)
 	// What the words scored during each call, said as it ends (#484). Read as it runs, as the hang-up
 	// word's loading is: two changes close together may run out of order.
@@ -405,7 +411,9 @@ func newDetect() *Detect {
 		// what every later start loads too (#657).
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(voice.SavedWakeWords(d.library().Ours())))
-		d.loadStop()
+		// The load above has usually put the stop word in already (loadFrom); quiet, so a start says
+		// "stop word listening" once.
+		d.followStop()
 		// A call already up when the engine starts has its hang-up word, as one that starts later does.
 		d.hangup.follow(hangupListens(phone.Get().State()))
 		// Back in if music is playing: the start emptied their slots.
@@ -630,6 +638,11 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 	if d.hangup != nil {
 		d.hangup.refreshOptions()
 		d.hangup.follow(hangupListens(phone.Get().State()))
+	}
+	// And so does the stop word's: one chosen as a wake word now has the built-in word listen in its place.
+	if d.stopWord != nil {
+		d.stopWord.refreshOptions()
+		d.followStop()
 	}
 
 	// Only the slots that took a wake word are waited on. A selection that loaded nothing has nothing to

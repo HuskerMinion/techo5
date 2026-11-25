@@ -33,6 +33,9 @@ var readOnly = []string{
 	"wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
 	"wake_playing_threshold_1", "wake_playing_threshold_2", "confirm_threshold", "confirm_below_nearest_score",
 	"max_listen_1", "max_listen_2",
+	// Which model the stop word listens with (#741): what the microphones listen for, as the hang-up
+	// word's select is. Its threshold stays writable, as it has been.
+	"stop_word",
 	// New uses of the microphones and the camera: measuring the room, listening for claps, a finger held
 	// on the clock, serving the camera, and which device answers a wake word.
 	"ambient_noise_sensor", "clap_gesture", "clap_sensitivity", "clock_hold_gesture", "camera_streaming", "camera_login_from_ha",

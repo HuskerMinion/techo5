@@ -389,6 +389,10 @@ func KeepOwn(c *Config, from Config) {
 	// And what may place one: a contact called by voice.
 	c.Home.CallByVoiceOff = from.Home.CallByVoiceOff
 	c.Wake.Hangup = from.Wake.Hangup
+	// Which word stops a ring is the device's own too, as the hang-up word is: it names a model sent to
+	// this device, and it is what the microphones are listening for. The threshold still comes with a
+	// file, as before.
+	c.Wake.Stop.ID = from.Wake.Stop.ID
 	c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm = from.Wake.OnHA.Stream, from.Wake.OnHA.Confirm
 	c.Wake.KeepClips = from.Wake.KeepClips
 	// Where kept clips are uploaded to, and with what token: the device's own, never a file's.
