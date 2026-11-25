@@ -15311,6 +15311,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_nobody_to_call_yet":                     "nie ma do kogo dzwonić",
 		"drawer_microphone_is_off":                      "mikrofon wyłączony",
 		"drawer_microphone_is_on":                       "mikrofon włączony",
+		"mute_lifted_by_button":                         "Przycisk wyciszenia zdjął też wyciszenie ustawione z Home Assistant lub z ekranu.",
 		"drawer_playing_pick_a_station":                 "gra · wybierz stację",
 		"drawer_paused_pick_a_station":                  "pauza · wybierz stację",
 		"drawer_radio_stations":                         "stacje radiowe",
