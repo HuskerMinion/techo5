@@ -1388,6 +1388,31 @@ actions:
       entity_id: light.kitchen
 ```
 
+## Timers set here in Home Assistant's timer list
+
+Home Assistant 2026.12 gives the device a timer list, `timer_list.<node>_timers`. Timers set by voice,
+on a dashboard or by an automation with `timer_list.create_timer` are in it, and are counted down and
+rung here. The device's own timers, set on the screen, on the setup page, by the assistant or with
+`timer_start`, are not: they run from the device's clock so they ring with Home Assistant away.
+
+Turn on **Timers set here in Home Assistant** (`switch.<node>_timers_set_here_in_home_assistant`) to
+put them in the list too. Each one then gets a stand-in there, and dashboards, automations and voice
+see it beside Home Assistant's own:
+
+- Pausing, resuming, adding or removing time and canceling it in Home Assistant does the same to the
+  timer here, and doing it here does it there.
+- The timer here still counts down and rings, once, also when the stand-in finishes first.
+- A timer set while Home Assistant is away is added once it is back, one changed or canceled
+  meanwhile is changed or canceled there, and one whose stand-in is gone gets a new one. Right after
+  Home Assistant is back, the device's timer wins over what Home Assistant had before it went.
+- Silent timers (`timer_start_silent`) stay out: they show a wait that an automation keeps.
+
+The device adds the stand-ins through actions, so this needs **Allow the device to perform Home
+Assistant actions** on in the device's ESPHome options (Settings > Devices & services > ESPHome >
+the device > Configure). Without it, Home Assistant raises a repair for every timer set here. Older
+Home Assistant versions are not asked.
+
+
 ## Follow Home Assistant helpers as alarms
 
 In YAML, refer to this action as `esphome.<node>_alarms_follow`.
