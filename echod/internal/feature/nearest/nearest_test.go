@@ -53,6 +53,7 @@ func newHouse(t *testing.T) *house {
 	n.score = func() float64 { return 20 }
 	n.hears = func() bool { return true }
 	n.onCall = func() bool { return false }
+	n.interrupting = func() bool { return false }
 	n.peers = func() []announce.Peer { return []announce.Peer{{Name: "Kitchen", Address: "192.0.2.1", Port: 8181}} }
 	n.fanout = func(_ []announce.Peer, mine *pending) { h.sent = append(h.sent, mine.claim); h.mine = mine }
 	n.now = func() time.Time { return h.now }
