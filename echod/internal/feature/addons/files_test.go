@@ -17,7 +17,7 @@ import (
 // withFiles is v bringing extra files beside its arm build, served with these contents, and its
 // manifest naming them (or, with names, naming those instead).
 func (r *rig) withFiles(id string, v catalog.Version, contents map[string]string, names ...string) catalog.Version {
-	v.Files = map[string][]catalog.File{}
+	v.Files, v.Requires = map[string][]catalog.File{}, []string{"files"}
 	var listed []string
 	for _, name := range slices.Sorted(maps.Keys(contents)) {
 		pin := r.assets.put("/"+id+"/"+v.Version+"/"+name, []byte(contents[name]))
@@ -39,7 +39,7 @@ func (r *rig) withFiles(id string, v catalog.Version, contents map[string]string
 func filesRig(t *testing.T, contents map[string]string, names ...string) (*rig, catalog.Version) {
 	r := newRig(t)
 	v := r.withFiles("techo5-plex", r.version("techo5-plex", "0.1.0", nil), contents, names...)
-	r.serve(catalog.Catalog{Format: 1, Serial: 1, Addons: []catalog.Addon{entry("techo5-plex", v)}})
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("techo5-plex", v)}})
 	r.run()
 	return r, v
 }
@@ -112,7 +112,7 @@ func TestAWrongExtraFileRefusesTheInstall(t *testing.T) {
 	r := newRig(t)
 	v := r.withFiles("techo5-plex", r.version("techo5-plex", "0.1.0", nil), map[string]string{"netbird.tar.gz": "netbird's archive"})
 	r.assets.put("/techo5-plex/0.1.0/netbird.tar.gz", []byte("someone's archive"))
-	r.serve(catalog.Catalog{Format: 1, Serial: 1, Addons: []catalog.Addon{entry("techo5-plex", v)}})
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("techo5-plex", v)}})
 	r.run()
 	err := r.m.Install(context.Background(), "techo5-plex", "0.1.0", r.shown("techo5-plex", "0.1.0"), true)
 	if err == nil || !strings.Contains(err.Error(), "netbird.tar.gz") {
@@ -164,7 +164,7 @@ func filesUpdateRig(t *testing.T, next map[string]string) *rig {
 	if next != nil {
 		v2 = r.withFiles("techo5-plex", v2, next)
 	}
-	r.serve(catalog.Catalog{Format: 1, Serial: 2, Addons: []catalog.Addon{entry("techo5-plex", v1, v2)}})
+	r.serve(catalog.Catalog{Format: 2, Serial: 2, Addons: []catalog.Addon{entry("techo5-plex", v1, v2)}})
 	if err := r.m.Refresh(context.Background()); err != nil {
 		t.Fatal(err)
 	}

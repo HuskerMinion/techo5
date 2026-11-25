@@ -256,15 +256,22 @@ func addonsAvailable(w http.ResponseWriter, token string, available []addons.Lis
 		}
 		fmt.Fprintf(w, `<div%s><h4>%s <span class="note">%s, by %s</span></h4><p style="margin:.2rem 0">%s</p>`, style,
 			html.EscapeString(a.Name), html.EscapeString(v.Version), html.EscapeString(a.Author), html.EscapeString(a.Summary))
+		page := a.Page
+		if page == "" {
+			page = a.Repo
+		}
+		if l.NeedsNewer {
+			// Nothing of the version was read but its number, so there is nothing of what it asks to show:
+			// only that a newer TECHO5 lists it in full.
+			fmt.Fprintf(w, `<p class="note">Not on this device: %s. <a href="%s">Its page</a>.</p></div>`,
+				html.EscapeString(l.Why), html.EscapeString(page))
+			continue
+		}
 		needs := []string{}
 		for _, fam := range catalog.Families {
 			if min, ok := v.MinTECHO5[fam]; ok {
 				needs = append(needs, map[string]string{"show": "Echo Show", "spot": "Echo Spot", "dot": "Echo Dot"}[fam]+" "+min)
 			}
-		}
-		page := a.Page
-		if page == "" {
-			page = a.Repo
 		}
 		fmt.Fprintf(w, `<p class="note" style="margin:.2rem 0">Needs TECHO5 %s or later. <a href="%s">Its page</a>.</p>`,
 			html.EscapeString(strings.Join(needs, ", ")), html.EscapeString(page))

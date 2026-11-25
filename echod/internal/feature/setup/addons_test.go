@@ -101,6 +101,30 @@ func TestAnAvailableAddonListsItsExtraFiles(t *testing.T) {
 	}
 }
 
+// An add-on whose every version needs a newer TECHO5 is shown grayed, with its newest version's number
+// and that it needs a newer TECHO5, and nothing of what it asks, which this build did not read.
+func TestAnAddonForANewerTECHO5IsShownGrayed(t *testing.T) {
+	l := addons.Listing{
+		Addon: catalog.Addon{ID: "techo5-next", Name: "Next thing", Author: "HuskerMinion", Summary: "Does the next thing.",
+			Repo: "https://github.com/HuskerMinion/techo5-next", Skipped: []string{"1.0.0"}},
+		Version: catalog.Version{Version: "1.0.0"}, Why: "needs a newer TECHO5", NeedsNewer: true,
+	}
+	w := httptest.NewRecorder()
+	addonsAvailable(w, "tok", []addons.Listing{l})
+	body := strings.Join(strings.Fields(w.Body.String()), " ")
+	for _, want := range []string{`style="opacity:.6"`, "Next thing <span class=\"note\">1.0.0, by HuskerMinion</span>",
+		"Not on this device: needs a newer TECHO5.", `href="https://github.com/HuskerMinion/techo5-next"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("lacks %q:\n%s", want, body)
+		}
+	}
+	for _, not := range []string{"<form", "Needs TECHO5 ", "memory", "Runs as"} {
+		if strings.Contains(body, not) {
+			t.Errorf("has %q:\n%s", not, body)
+		}
+	}
+}
+
 // An installed add-on has Stop, Remove (keeping its state unless asked), and an update that asks for
 // more shows the warning and the box again; one that asks for nothing more does not.
 func TestAnInstalledAddon(t *testing.T) {

@@ -36,7 +36,7 @@ func plex() Addon {
 		Repo: "https://github.com/example/techo5-plex", Versions: []Version{plexVersion("0.1.0")}}
 }
 
-func valid() Catalog { return Catalog{Format: 1, Serial: 3, Addons: []Addon{plex()}} }
+func valid() Catalog { return Catalog{Format: 2, Serial: 3, Addons: []Addon{plex()}} }
 
 // The catalog in a techo5-addons checkout ($TECHO5_ADDONS, or beside this one) is one a device would
 // take: it is what gets signed. It is skipped without one; techo5-addons checks its own catalog with

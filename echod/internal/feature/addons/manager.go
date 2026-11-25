@@ -1361,6 +1361,21 @@ type Listing struct {
 	AsRoot    bool
 	Installed bool
 	Shown     string
+
+	// NeedsNewer is an add-on with no version this build can read (catalog.Addon.NeedsNewer): Version
+	// is only the newest one's number, and the card says it needs a newer TECHO5.
+	NeedsNewer bool
+}
+
+// newestOf is the newest of versions.
+func newestOf(versions []string) string {
+	best := ""
+	for _, v := range versions {
+		if best == "" || (v != best && update.Newer(v, best)) {
+			best = v
+		}
+	}
+	return best
 }
 
 // Available is the catalog's add-ons, listed ones only, by name.
@@ -1391,6 +1406,11 @@ func (m *Manager) Available() []Listing {
 		} else if v, ok := a.Latest(); ok {
 			_, l.Why = v.RunsOn(d)
 			l.Version = v
+		} else if a.NeedsNewer() {
+			// Every version requires something this build does not know: the add-on is listed for a
+			// newer TECHO5, which says so rather than leaving it out as though it were not there.
+			l.NeedsNewer, l.Why = true, "needs a newer TECHO5"
+			l.Version = catalog.Version{Version: newestOf(a.Skipped)}
 		} else {
 			continue
 		}

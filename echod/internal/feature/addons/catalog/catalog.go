@@ -1,8 +1,16 @@
 // Package catalog is the add-on catalog's format: the list of add-ons TECHO5 has looked over, which a
 // device installs from and nothing else (feature/addons). It is catalog.json in its own repository,
-// github.com/HuskerMinion/techo5-addons, signed with the release key into catalog.json.sig
-// (cmd/mkcatalog, tools/sign-catalog.ps1), and a device believes it only with that signature
-// (update.FetchSigned).
+// github.com/HuskerMinion/techo5-addons, and a device believes it only with the release key's
+// signature (update.FetchSignedCatalogV2, update.FetchSignedCatalog).
+//
+// The source is format 2, and cmd/mkcatalog publishes it twice: whole, as catalog-v2.json, and as
+// catalog.json, in format 1, with only the versions a format 1 device can read. A format 1 device reads
+// its catalog strictly and refuses all of it for one field it does not know, so a version that uses
+// anything format 1 has no word for (extra files, today) is left out of its copy rather than breaking
+// it. Format 2 is how that never has to happen again: a version names in "requires" the features it
+// needs, and a device skips a version that needs one it does not know, instead of refusing the catalog.
+// A field is still refused where nothing names it: a version that uses a feature has to require it,
+// and a device that knows the feature reads its fields as strictly as the rest.
 //
 // The format lives here, apart from the feature that runs add-ons, so that the command that checks and
 // signs the file and the device that reads it parse it with the same definition: a catalog written by
@@ -15,6 +23,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -27,9 +36,20 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
-// Format is the catalog format this build reads. A catalog of a newer format is refused rather than
-// half read: a field this build does not know could be one that limits what an add-on may do.
-const Format = 1
+// Format is the newest catalog format this build reads, and FormatV1 the first, which devices before
+// format 2 read and nothing else. A catalog of a newer format is refused rather than half read: a field
+// this build does not know could be one that limits what an add-on may do. Format 2 grows by Features
+// rather than by new formats; a new format is for a change a version's requires cannot carry, and goes
+// out under a file name of its own beside these.
+const (
+	FormatV1 = 1
+	Format   = 2
+)
+
+// Features are what a format 2 version can require that this build knows: "files", the extra files a
+// version brings (Version.Files). A version that requires anything else is for a newer TECHO5, and is
+// skipped. Each feature here is a field a version may use only when it requires the feature.
+var Features = []string{"files"}
 
 // Catalog is the whole file.
 type Catalog struct {
@@ -68,12 +88,25 @@ type Addon struct {
 	Withdrawn string `json:"withdrawn,omitempty"`
 
 	Versions []Version `json:"versions"`
+
+	// Skipped are the versions this build left out as needing a feature it does not know (Parse), by
+	// version: an add-on with nothing else is shown as needing a newer TECHO5, not hidden.
+	Skipped []string `json:"-"`
 }
+
+// NeedsNewer is whether every version of the add-on needs a newer TECHO5 than this build to read.
+func (a Addon) NeedsNewer() bool { return len(a.Versions) == 0 && len(a.Skipped) > 0 }
 
 // Version is one release of an add-on, as it was looked over. A new release is a new entry: a version
 // is never trusted because an earlier one was.
 type Version struct {
 	Version string `json:"version"`
+
+	// Requires names the features the version needs (Features), in format 2: a device that does not
+	// know one skips the version, rather than refusing the catalog over a field it cannot read. A
+	// version that uses a feature names it, so a device that knows it reads it strictly. Format 1 has
+	// none, and its copy of the catalog leaves out every version that requires anything (V1).
+	Requires []string `json:"requires,omitempty"`
 
 	// MinTECHO5 is the oldest TECHO5 each family runs it on, by family ("show", "spot", "dot"). A
 	// family it does not name is one it does not run on.
@@ -250,14 +283,138 @@ var Reserved = []Port{
 	{Proto: "tcp", Port: 7000}, {Proto: "udp", From: 319, To: 320}, {Proto: "udp", Port: 68}, {Proto: "udp", Port: 546},
 }
 
-// Parse reads a catalog and checks every entry in it, refusing the whole file for one bad entry: a
-// catalog is signed as a whole, and one that does not read as intended was not signed as intended.
-func Parse(b []byte) (Catalog, error) {
+// Parse reads a catalog, as a device does, and checks every entry in it, refusing the whole file for
+// one bad entry: a catalog is signed as a whole, and one that does not read as intended was not signed
+// as intended. The one thing it leaves out rather than refuses is a format 2 version that requires a
+// feature this build does not know (Addon.Skipped): that version is for a newer TECHO5, and is not
+// read at all, so a field only it has is no reason to refuse the rest.
+func Parse(b []byte) (Catalog, error) { return parse(b, true) }
+
+// ParseKnown is Parse for the command that signs the catalog (cmd/mkcatalog), which is built from the
+// newest TECHO5 and has to check every version it signs: a version requiring a feature it does not know
+// is refused, not skipped.
+func ParseKnown(b []byte) (Catalog, error) { return parse(b, false) }
+
+func parse(b []byte, skip bool) (Catalog, error) {
 	var c Catalog
+	// The whole document is held to the strict reading first, skipped versions and all: one key given
+	// twice, or in another case, or anything after the value, refuses it wherever it is.
+	if err := checkKeys(b); err != nil {
+		return c, fmt.Errorf("catalog: %w", err)
+	}
+	if !json.Valid(b) {
+		return c, errors.New("catalog: not one JSON value")
+	}
+	var head struct {
+		Format int `json:"format"`
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return c, fmt.Errorf("catalog: %w", err)
+	}
+	var skipped map[int][]string
+	if head.Format == Format {
+		var err error
+		if b, skipped, err = dropUnknown(b, skip); err != nil {
+			return c, err
+		}
+	}
 	if err := decodeStrict(b, &c); err != nil {
 		return c, fmt.Errorf("catalog: %w", err)
 	}
+	for i, versions := range skipped {
+		c.Addons[i].Skipped = versions
+	}
 	return c, c.Valid()
+}
+
+// dropUnknown takes out of a format 2 catalog every version that requires a feature this build does not
+// know, before the rest is read strictly; with skip false it refuses the catalog for one instead. Only
+// requires (and the version, to say which) is read from a version before it is dropped: whatever else
+// it has is a newer TECHO5's to read. What is dropped is returned by the add-on's place in the list.
+func dropUnknown(b []byte, skip bool) ([]byte, map[int][]string, error) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(b, &top); err != nil {
+		return nil, nil, fmt.Errorf("catalog: %w", err)
+	}
+	var addons []map[string]json.RawMessage
+	if raw, ok := top["addons"]; ok {
+		if err := json.Unmarshal(raw, &addons); err != nil {
+			return nil, nil, fmt.Errorf("catalog: the add-ons: %w", err)
+		}
+	}
+	skipped := map[int][]string{}
+	for i, a := range addons {
+		raw, ok := a["versions"]
+		if !ok {
+			continue
+		}
+		var versions []json.RawMessage
+		if err := json.Unmarshal(raw, &versions); err != nil {
+			return nil, nil, fmt.Errorf("catalog: add-on %d's versions: %w", i+1, err)
+		}
+		kept := []json.RawMessage{}
+		for _, v := range versions {
+			var peek struct {
+				Version  string   `json:"version"`
+				Requires []string `json:"requires"`
+			}
+			if err := json.Unmarshal(v, &peek); err != nil {
+				return nil, nil, fmt.Errorf("catalog: add-on %d's versions: %w", i+1, err)
+			}
+			unknown := slices.DeleteFunc(slices.Clone(peek.Requires), func(f string) bool { return slices.Contains(Features, f) })
+			if len(unknown) == 0 {
+				kept = append(kept, v)
+				continue
+			}
+			if !skip {
+				var id string
+				_ = json.Unmarshal(a["id"], &id)
+				return nil, nil, fmt.Errorf("catalog: %s %s requires %s, which this build does not know (%s)", id, peek.Version, strings.Join(unknown, ", "), strings.Join(Features, ", "))
+			}
+			skipped[i] = append(skipped[i], peek.Version)
+		}
+		if len(kept) == len(versions) {
+			continue
+		}
+		if a["versions"], ok = marshalRaw(kept); !ok {
+			return nil, nil, errors.New("catalog: rewriting the versions")
+		}
+	}
+	if len(skipped) == 0 {
+		return b, nil, nil
+	}
+	var ok bool
+	if top["addons"], ok = marshalRaw(addons); !ok {
+		return nil, nil, errors.New("catalog: rewriting the add-ons")
+	}
+	out, err := json.Marshal(top)
+	return out, skipped, err
+}
+
+func marshalRaw(v any) (json.RawMessage, bool) {
+	b, err := json.Marshal(v)
+	return b, err == nil
+}
+
+// V1 is the catalog as a format 1 device is given it (catalog.json): every version that requires
+// nothing, and every add-on with one left. Such a device refuses a whole catalog for one field it does
+// not know, so a version that uses anything newer is left out of its copy, not written into it.
+func (c Catalog) V1() Catalog {
+	out := Catalog{Format: FormatV1, Serial: c.Serial, Expires: c.Expires, Addons: []Addon{}}
+	for _, a := range c.Addons {
+		var versions []Version
+		for _, v := range a.Versions {
+			if len(v.Requires) == 0 {
+				versions = append(versions, v)
+			}
+		}
+		if len(versions) == 0 {
+			continue
+		}
+		a.Versions, a.Skipped = versions, nil
+		out.Addons = append(out.Addons, a)
+	}
+	return out
 }
 
 // Valid checks the whole catalog.
@@ -276,15 +433,15 @@ func (c Catalog) Valid() error {
 			return fmt.Errorf("catalog: %s is listed twice", a.ID)
 		}
 		seen[a.ID] = true
-		if err := a.Valid(); err != nil {
+		if err := a.valid(c.Format); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Valid checks one add-on and every version of it.
-func (a Addon) Valid() error {
+// valid checks one add-on and every version of it, in a catalog of the format given.
+func (a Addon) valid(format int) error {
 	switch {
 	case !ValidID(a.ID):
 		return fmt.Errorf("catalog: %q is not an add-on id (lowercase letters, digits and dashes)", a.ID)
@@ -298,7 +455,7 @@ func (a Addon) Valid() error {
 		return fmt.Errorf("catalog: %s's repository is not an https link", a.ID)
 	case a.Page != "" && !webLink(a.Page):
 		return fmt.Errorf("catalog: %s's page is not an https link", a.ID)
-	case len(a.Versions) == 0:
+	case len(a.Versions) == 0 && len(a.Skipped) == 0:
 		return fmt.Errorf("catalog: %s has no versions", a.ID)
 	}
 	seen := map[string]bool{}
@@ -307,17 +464,20 @@ func (a Addon) Valid() error {
 			return fmt.Errorf("catalog: %s %s is listed twice", a.ID, v.Version)
 		}
 		seen[v.Version] = true
-		if err := v.valid(a.ID); err != nil {
+		if err := v.valid(a.ID, format); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (v Version) valid(id string) error {
+func (v Version) valid(id string, format int) error {
 	what := id + " " + v.Version
 	if err := update.ValidVersion(v.Version); err != nil {
 		return fmt.Errorf("catalog: %s: %w", what, err)
+	}
+	if err := v.validRequires(what, format); err != nil {
+		return err
 	}
 	if len(v.MinTECHO5) == 0 {
 		return fmt.Errorf("catalog: %s names no family it runs on", what)
@@ -362,6 +522,49 @@ func (v Version) valid(id string) error {
 		return fmt.Errorf("catalog: %s gives no memory use", what)
 	case v.DiskMB <= 0:
 		return fmt.Errorf("catalog: %s gives no disk use", what)
+	}
+	return nil
+}
+
+// uses is the features the version's fields use, which it has to require.
+func (v Version) uses() []string {
+	var f []string
+	if len(v.Files) > 0 {
+		f = append(f, "files")
+	}
+	return f
+}
+
+// validRequires checks what a version requires against what it uses. Format 1 has no requires, nor any
+// field that would need one: a format 1 device cannot read either. In format 2 each requirement is a
+// feature this build knows, named once; each feature the version uses is required, so a device that
+// does not know it skips the version rather than reading it without the part it cannot see; and
+// nothing is required that is not used, which would keep the version from format 1 devices for nothing.
+func (v Version) validRequires(what string, format int) error {
+	uses := v.uses()
+	if format < Format {
+		switch {
+		case len(v.Requires) > 0:
+			return fmt.Errorf("catalog: %s requires %s, which format %d cannot say", what, strings.Join(v.Requires, ", "), format)
+		case len(uses) > 0:
+			return fmt.Errorf("catalog: %s uses %s, which format %d cannot carry", what, strings.Join(uses, ", "), format)
+		}
+		return nil
+	}
+	for i, f := range v.Requires {
+		switch {
+		case !slices.Contains(Features, f):
+			return fmt.Errorf("catalog: %s requires %q, which this build does not know (%s)", what, f, strings.Join(Features, ", "))
+		case slices.Contains(v.Requires[:i], f):
+			return fmt.Errorf("catalog: %s requires %s twice", what, f)
+		case !slices.Contains(uses, f):
+			return fmt.Errorf("catalog: %s requires %s but does not use it, which would keep it from older devices for nothing", what, f)
+		}
+	}
+	for _, f := range uses {
+		if !slices.Contains(v.Requires, f) {
+			return fmt.Errorf("catalog: %s uses %s but does not require it: a device that does not know %s would read the version without them", what, f, f)
+		}
 	}
 	return nil
 }

@@ -18,6 +18,7 @@ func netbirdVersion() Version {
 	v := plexVersion("0.2.0")
 	v.Ports, v.Root = nil, true
 	v.Files = map[string][]File{"arm": {extra("netbird.tar.gz")}, "arm64": {extra("netbird.tar.gz")}}
+	v.Requires = []string{"files"}
 	return v
 }
 
@@ -112,7 +113,7 @@ func TestExtraFilesForTheOneBuild(t *testing.T) {
 	v := netbirdVersion()
 	v.Binaries = map[string]update.Binary{"arm": bin("arm")}
 	delete(v.Files, "arm64")
-	if err := v.valid("x"); err != nil {
+	if err := v.valid("x", Format); err != nil {
 		t.Error(err)
 	}
 }
