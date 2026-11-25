@@ -258,6 +258,7 @@ func TestManifest(t *testing.T) {
 		"hidden":     strings.Replace(good, `"command":["techo5-plex"]`, `"command":[".x"]`, 1),
 		"no command": strings.Replace(good, `"command":["techo5-plex"]`, `"command":[]`, 1),
 		"own port":   strings.Replace(good, `"port":32500`, `"port":6053`, 1),
+		"cast port":  strings.Replace(good, `"port":32500`, `"port":8940`, 1),
 		"bad page":   strings.Replace(good, `http://{device}:32501/`, `javascript:alert(1)`, 1),
 		"no memory":  strings.Replace(good, `"memory_mb":40`, `"memory_mb":0`, 1),
 	} {

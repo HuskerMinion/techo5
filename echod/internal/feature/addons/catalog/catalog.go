@@ -300,7 +300,7 @@ func ValidID(id string) bool { return idPattern.MatchString(id) }
 // listing that seemed to open one would say something about the device that is not so.
 var Reserved = []Port{
 	{Proto: "tcp", Port: 22}, {Proto: "tcp", Port: 6053}, {Proto: "udp", Port: 5353}, {Proto: "tcp", Port: 8928},
-	{Proto: "tcp", Port: 8181}, {Proto: "tcp", Port: 5000}, {Proto: "udp", From: 6001, To: 6010},
+	{Proto: "tcp", Port: 8940}, {Proto: "tcp", Port: 8181}, {Proto: "tcp", Port: 5000}, {Proto: "udp", From: 6001, To: 6010},
 	{Proto: "tcp", Port: 4070}, {Proto: "tcp", Port: 8554}, {Proto: "udp", Port: 3702}, {Proto: "udp", Port: 1900},
 	{Proto: "tcp", Port: 7000}, {Proto: "udp", From: 319, To: 320}, {Proto: "udp", Port: 68}, {Proto: "udp", Port: 546},
 }
