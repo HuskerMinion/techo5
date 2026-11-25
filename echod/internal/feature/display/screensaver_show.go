@@ -45,6 +45,30 @@ func (d *Display) showScreensaver() {
 	d.wake()
 }
 
+// hideScreensaver is the Hide screensaver button (#744): the screensaver goes down to the page under
+// it, the clock, as a tap takes it down, so an automation that put it up can end it too. The idle wait
+// starts again from the press, so it comes back by itself only after the whole wait, as after a tap;
+// an automation that wants it never to come by itself sets Slideshow back to Background or Off, which
+// also takes it down. A press with no screensaver up does nothing, so a wait already running is left
+// to run.
+func (d *Display) hideScreensaver() {
+	now := time.Now()
+	d.mu.Lock()
+	since := d.slideshowIdleSince
+	up := !since.IsZero() && now.Sub(since) >= home.Get().SlideshowIdleTimeout() && screensaverToShow()
+	if up {
+		d.slideshowIdleSince = now
+		d.saverUp = false // a swipe straight after is the clock's again, not the photos'
+	}
+	d.mu.Unlock()
+	if !up {
+		slog.Info("screen: screensaver hide asked, none up")
+		return
+	}
+	slog.Info("screen: screensaver down, as Home Assistant asked")
+	d.wake()
+}
+
 // saverStart is when the idle wait has to have begun for the screensaver to be due at now.
 func saverStart(now time.Time, wait time.Duration) time.Time { return now.Add(-wait) }
 
@@ -63,5 +87,13 @@ func screensaverButton(d *Display) *esphome.Button {
 	return &esphome.Button{
 		Base:    esphome.Base{ObjectID: "slideshow_screensaver_show", Name: "Show screensaver", Icon: "mdi:image-multiple"},
 		OnPress: d.showScreensaver,
+	}
+}
+
+// screensaverHideButton is Home Assistant's Hide screensaver button.
+func screensaverHideButton(d *Display) *esphome.Button {
+	return &esphome.Button{
+		Base:    esphome.Base{ObjectID: "slideshow_screensaver_hide", Name: "Hide screensaver", Icon: "mdi:image-off"},
+		OnPress: d.hideScreensaver,
 	}
 }

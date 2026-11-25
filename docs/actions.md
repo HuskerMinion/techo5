@@ -2926,7 +2926,10 @@ as the screen's own folder picker. Screen devices only. Whether the photos show 
 clock (Background mode) or take over the whole screen after a wait (Screensaver mode), and options
 like shuffle, subfolders and time per photo, are set separately as entities
 (`select.<node>_slideshow`, `switch.<node>_slideshow_shuffle`, `number.<node>_slideshow_interval`,
-and so on), not by this action. Needs `home_assistant` set up first, or no photos will show.
+and so on), not by this action. Needs `home_assistant` set up first, or no photos will show. The
+screensaver is put up and taken down by two buttons, `button.<node>_show_screensaver` and
+`button.<node>_hide_screensaver`; [the slideshow setup](setup.md#2-photos) has an automation
+that runs it only when asked.
 
 ### source (Required)
 

@@ -251,6 +251,38 @@ screensaver up now, as if the screen had been idle for the whole wait, for an au
 "everybody left" or "movie time". A tap takes it down as usual. A press does nothing when there is
 no screensaver to show (Slideshow is not on Screensaver, or no photo has arrived yet), when the
 screen is out, or while something else has the screen (a request, a call, a ring, the settings).
+**Hide screensaver** (a button beside it) takes the screensaver down to the clock, as a tap does,
+and the idle wait starts again from the press. It does nothing when no screensaver is up.
+
+To have the screensaver come up only when an automation asks, and never by itself after the wait,
+leave **Slideshow** on **Background** or **Off** and let the automation switch it: set
+`select.<node>_slideshow` to **Screensaver**, then press **Show screensaver**; to end it, set
+Slideshow back, which takes the screensaver down and keeps it from coming back by itself. From
+**Off** the first photo is fetched after the switch, so give it a few seconds before the press (a
+press before a photo has arrived does nothing); from **Background** a photo is already there.
+
+```yaml
+# Up at 20:00 and down at 23:00, never by itself in between or after.
+- alias: Photos in the evening
+  triggers:
+    - trigger: time
+      at: "20:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: Screensaver }
+    - delay: 10
+    - action: button.press
+      target: { entity_id: button.office_show_screensaver }
+- alias: Photos off at night
+  triggers:
+    - trigger: time
+      at: "23:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: "Off" }
+```
 
 The same settings are entities in Home Assistant, and the folder can be set with the
 [`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is
