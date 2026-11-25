@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -21,12 +22,14 @@ type recSink struct {
 	frames []color.Color
 	audio  int
 	ended  chan struct{}
+	begins int // how many times a phone got as far as being asked about
 }
 
 func (s *recSink) Begin(h Hello) (Welcome, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.hello = h
+	s.begins++
 	if s.refuse != nil {
 		return Welcome{}, s.refuse
 	}
@@ -55,13 +58,19 @@ func (s *recSink) count() (frames, audio int) {
 
 func start(t *testing.T, sink *recSink) string {
 	t.Helper()
+	return startWith(t, sink, "pairing-key")
+}
+
+// startWith is start with the device's key set to key.
+func startWith(t *testing.T, sink *recSink, key string) string {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	r := &Receiver{Key: func() string { return "pairing-key" }, Sink: sink}
+	r := &Receiver{Key: func() string { return key }, Sink: sink}
 	go r.Serve(ctx, ln)
 	return ln.Addr().String()
 }
@@ -78,7 +87,23 @@ func solid(w, h int, shade uint8) []byte {
 
 func connect(t *testing.T, addr, key string, h Hello) (*secure, Welcome) {
 	t.Helper()
-	raw, err := net.DialTimeout("tcp", addr, time.Second)
+	return connectFrom(t, "", addr, key, h)
+}
+
+// from dials from a loopback address of its own (127.0.0.2 and on), so the receiver sees another
+// phone: it counts connections by where they come from. Empty is any address.
+func dialFrom(from, addr string) (net.Conn, error) {
+	d := net.Dialer{Timeout: time.Second}
+	if from != "" {
+		d.LocalAddr = &net.TCPAddr{IP: net.ParseIP(from)}
+	}
+	return d.Dial("tcp", addr)
+}
+
+// connectFrom is connect from the address from.
+func connectFrom(t *testing.T, from, addr, key string, h Hello) (*secure, Welcome) {
+	t.Helper()
+	raw, err := dialFrom(from, addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,18 +206,177 @@ func TestMediaBeforeTheClockAndOversizeFramesAreDropped(t *testing.T) {
 	}
 }
 
-func TestSecondPhoneIsTurnedAway(t *testing.T) {
+// A second phone with the key, while one casts, is told the Show is busy rather than closed on as if
+// its key were wrong, and nobody is asked about it.
+func TestSecondPhoneIsToldTheShowIsBusy(t *testing.T) {
 	sink := &recSink{ended: make(chan struct{})}
 	addr := start(t, sink)
 	c, _ := connect(t, addr, "pairing-key", Hello{Name: "first", Video: true})
-	raw, err := net.Dial("tcp", addr)
+	_, w := connect(t, addr, "pairing-key", Hello{Name: "second", Video: true})
+	if w.OK || w.Reason != reasonBusy {
+		t.Fatalf("welcome %+v, want busy", w)
+	}
+	sink.mu.Lock()
+	begins := sink.begins
+	sink.mu.Unlock()
+	if begins != 1 {
+		t.Fatalf("%d phones asked about, want only the first", begins)
+	}
+	Write(c, KindBye)
+}
+
+// closedAtOnce is whether the receiver closes c without a word, well inside handshakeFor.
+func closedAtOnce(c net.Conn) bool {
+	c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, err := c.Read(make([]byte, 1))
+	var ne net.Error
+	return err != nil && !(errors.As(err, &ne) && ne.Timeout())
+}
+
+// The bug this guards against: a stranger without the key reconnecting every few milliseconds held the
+// one cast's slot, so the owner's phone was closed on and told its key did not match.
+func TestAReconnectFloodCannotKeepAPhoneWithTheKeyOut(t *testing.T) {
+	sink := &recSink{ended: make(chan struct{})}
+	addr := start(t, sink)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var held []net.Conn
+		defer func() {
+			for _, c := range held {
+				c.Close()
+			}
+		}()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			// Silent: it never sends a byte. Some are held open, some closed at once.
+			if c, err := dialFrom("127.0.0.2", addr); err == nil {
+				if len(held)%2 == 0 {
+					held = append(held, c)
+				} else {
+					c.Close()
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+	defer func() { close(stop); wg.Wait() }()
+	time.Sleep(100 * time.Millisecond)
+
+	c, w := connectFrom(t, "127.0.0.3", addr, "pairing-key", Hello{Name: "owner", Video: true})
+	if !w.OK {
+		t.Fatalf("the owner's phone was refused during a flood: %+v", w)
+	}
+	Write(c, KindBye)
+}
+
+func TestOneAddressHasOnePlaceInTheHandshake(t *testing.T) {
+	sink := &recSink{ended: make(chan struct{})}
+	addr := start(t, sink)
+	first, err := dialFrom("127.0.0.2", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer raw.Close()
-	raw.SetReadDeadline(time.Now().Add(time.Second))
-	if _, err := raw.Read(make([]byte, 1)); err == nil {
-		t.Fatal("the second phone was answered")
+	defer first.Close()
+	time.Sleep(50 * time.Millisecond) // the receiver has taken it
+	second, err := dialFrom("127.0.0.2", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	if !closedAtOnce(second) {
+		t.Fatal("a second connection from one address was let into the handshake")
+	}
+	if closedAtOnce(first) {
+		t.Fatal("the first connection from the address was closed at once")
+	}
+	// Another address still has a place, up to pendingMax in all.
+	var others []net.Conn
+	defer func() {
+		for _, c := range others {
+			c.Close()
+		}
+	}()
+	for i := 3; i < 3+pendingMax-1; i++ {
+		c, err := dialFrom("127.0.0."+strconv.Itoa(i), addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		others = append(others, c)
+	}
+	time.Sleep(50 * time.Millisecond)
+	for _, c := range others {
+		if closedAtOnce(c) {
+			t.Fatal("a connection within pendingMax was closed at once")
+		}
+	}
+	over, err := dialFrom("127.0.0.20", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer over.Close()
+	if !closedAtOnce(over) {
+		t.Fatalf("a connection past the %d in the handshake was let in", pendingMax)
+	}
+}
+
+func TestADeclinedAddressIsTurnedAwayWithoutAsking(t *testing.T) {
+	was := declineFor
+	declineFor = 300 * time.Millisecond
+	t.Cleanup(func() { declineFor = was })
+	sink := &recSink{ended: make(chan struct{}), refuse: Declined("declined")}
+	addr := start(t, sink)
+	begins := func() int {
+		sink.mu.Lock()
+		defer sink.mu.Unlock()
+		return sink.begins
+	}
+
+	if _, w := connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "guest"}); w.OK || w.Reason != "declined" {
+		t.Fatalf("welcome %+v, want declined", w)
+	}
+	if _, w := connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "guest"}); w.OK || w.Reason != reasonDeclined {
+		t.Fatalf("welcome %+v, want the address turned away", w)
+	}
+	if begins() != 1 {
+		t.Fatalf("asked %d times, want once: a declined phone must not put the question up again", begins())
+	}
+	// Another address is asked as usual, and so is this one once the time is up.
+	connectFrom(t, "127.0.0.3", addr, "pairing-key", Hello{Name: "other"})
+	if begins() != 2 {
+		t.Fatalf("asked %d times, want another phone asked", begins())
+	}
+	time.Sleep(declineFor)
+	connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "guest"})
+	if begins() != 3 {
+		t.Fatalf("asked %d times, want the address asked again after declineFor", begins())
+	}
+}
+
+// A refusal that is not the person's (the screen not ready, in a call) is no reason to turn the phone
+// away when it tries again.
+func TestOtherRefusalsDoNotTurnTheAddressAway(t *testing.T) {
+	sink := &recSink{ended: make(chan struct{}), refuse: errors.New("in a call")}
+	addr := start(t, sink)
+	connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "x"})
+	if _, w := connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "x"}); w.Reason != "in a call" {
+		t.Fatalf("welcome %+v, want asked again", w)
+	}
+}
+
+// A key of 8 characters, which cast_key took before it wanted 16, still pairs.
+func TestAShortKeySavedEarlierStillWorks(t *testing.T) {
+	sink := &recSink{ended: make(chan struct{})}
+	addr := startWith(t, sink, "8charkey")
+	c, w := connect(t, addr, "8charkey", Hello{Name: "x", Video: true})
+	if !w.OK {
+		t.Fatalf("welcome %+v", w)
 	}
 	Write(c, KindBye)
 }

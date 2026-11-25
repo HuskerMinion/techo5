@@ -279,11 +279,11 @@ func (f *Feature) consent(name string, gone <-chan struct{}) error {
 	case yes := <-ch:
 		if !yes {
 			f.idle()
-			return errors.New("declined")
+			return Declined("declined")
 		}
 	case <-time.After(askTimeout):
 		f.idle()
-		return errors.New("nobody accepted it on the device")
+		return Declined("nobody accepted it on the device")
 	case <-ctx.Done():
 		f.idle()
 		//lint:ignore ST1005 it starts with the feature's name, which the phone shows as it is
@@ -306,8 +306,8 @@ func (f *Feature) Actions() []*esphome.Action {
 		Args: []esphome.Arg{{Name: "key", Type: esphome.ArgString}},
 		Run: func(c esphome.Call) (any, error) {
 			key := strings.TrimSpace(c.String("key"))
-			if key != "" && len(key) < KeyMin {
-				return nil, errors.New("the cast key has to be at least 8 characters, or empty to make a new random one")
+			if err := CheckKey(key); err != nil {
+				return nil, err
 			}
 			if key == "" {
 				key = NewKey()
@@ -390,6 +390,14 @@ func (f *Feature) rethink() {
 // Run holds the port for as long as the switch is on.
 func (f *Feature) Run(ctx context.Context) error {
 	defer f.close()
+	if !config.Get().Cast.Enabled {
+		// The firewall's rules outlive the daemon: one that died with Cast on left the port open, and
+		// close() only shuts what this run opened. Where there is no such firewall (a panel, the Linux
+		// image) this does nothing.
+		if err := closePort(firewall.Cast); err != nil {
+			slog.Warn("closing the cast port failed", "err", err)
+		}
+	}
 	for {
 		f.settle(ctx)
 		select {
@@ -458,10 +466,13 @@ func (f *Feature) close() {
 		// port still taken.
 		_ = ln.Close()
 	}
-	if err := firewall.Close(firewall.Cast); err != nil {
+	if err := closePort(firewall.Cast); err != nil {
 		slog.Warn("closing the cast port failed", "err", err)
 	}
 }
+
+// closePort shuts the port; a variable so that a test does not run iptables.
+var closePort = firewall.Close
 
 // advertise publishes the device for phones to find, and again when its addresses change.
 func advertise(ctx context.Context, name string) {

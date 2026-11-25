@@ -48,6 +48,55 @@ type Receiver struct {
 	mu   sync.Mutex
 	busy bool
 	cur  *secure // the phone being served, once it has proved the key
+
+	// The connections that have not proved the key yet, in all and by address. They are counted apart
+	// from the cast itself: a stranger who keeps reconnecting can take these, but never the cast's slot,
+	// which only a phone with the key gets into.
+	pending     int
+	pendingFrom map[string]bool
+
+	// Where a phone was turned away by the person at the device, and when, for declineFor.
+	declined map[string]time.Time
+}
+
+// ErrDeclined is what a Sink's refusal is (errors.Is) when the person at the device said no, or let
+// the question go unanswered. The receiver then turns that address away for declineFor without asking
+// again, so a phone that once had the key cannot keep the question up on somebody's screen.
+var ErrDeclined = errors.New("cast: declined")
+
+// Declined is a refusal that is ErrDeclined, saying reason to the phone.
+func Declined(reason string) error { return declined(reason) }
+
+type declined string
+
+func (d declined) Error() string      { return string(d) }
+func (declined) Is(target error) bool { return target == ErrDeclined }
+
+// pendingMax is how many connections may be in the handshake at once, and from one address it is one.
+// A phone on its way in needs one, so a flood from one address leaves room for the owner's phone, and
+// each of these is closed after handshakeFor whatever it does.
+const pendingMax = 4
+
+// declineFor is how long an address the person declined is turned away without asking again. A
+// variable so that a test need not wait it out.
+var declineFor = 30 * time.Second
+
+// Reasons the receiver itself gives a phone that has the key, in a Welcome the app shows as "refused".
+const (
+	reasonBusy     = "busy with another phone"
+	reasonDeclined = "declined a moment ago; try again in a little while"
+)
+
+// remoteIP is the address a connection came from, without the port: what the per-address limits count.
+func remoteIP(c net.Conn) string {
+	a := c.RemoteAddr()
+	if t, ok := a.(*net.TCPAddr); ok {
+		return t.IP.String()
+	}
+	if host, _, err := net.SplitHostPort(a.String()); err == nil {
+		return host
+	}
+	return a.String()
 }
 
 // Stop ends the cast in progress, telling the phone why.
@@ -146,9 +195,8 @@ const (
 	queueBytes = 8 << 20
 )
 
-// handshakeFor is how long a connection has to prove it knows the key and say hello. One cast is
-// taken at a time, so a stranger holding the slot this long keeps the owner's phone out; a phone on
-// the same network answers in well under a second.
+// handshakeFor is how long a connection has to prove it knows the key and say hello. Until it has, it
+// holds one of the pendingMax places; a phone on the same network answers in well under a second.
 const handshakeFor = 3 * time.Second
 
 // Serve accepts phones on ln until ctx ends.
@@ -165,13 +213,16 @@ func (r *Receiver) Serve(ctx context.Context, ln net.Listener) error {
 			}
 			return err
 		}
-		if !r.take() {
-			c.Close() // one cast at a time, and no handshake spent on the second
+		ip := remoteIP(c)
+		if !r.enter(ip) {
+			c.Close() // too many on their way in, or this address already has one: no handshake spent on it
 			continue
 		}
 		go func() {
-			defer r.give()
-			if err := r.session(ctx, c); err != nil && ctx.Err() == nil {
+			// Left as soon as the key is proved (session calls it), or when the connection ends without.
+			leave := sync.OnceFunc(func() { r.leave(ip) })
+			defer leave()
+			if err := r.session(ctx, c, ip, leave); err != nil && ctx.Err() == nil {
 				// A connection that never proved the key is a port scan or a phone on another key: one
 				// line each at Debug, not a log full of them at Info.
 				if errors.As(err, new(handshakeErr)) {
@@ -184,6 +235,30 @@ func (r *Receiver) Serve(ctx context.Context, ln net.Listener) error {
 	}
 }
 
+// enter takes a place for a connection that has yet to prove the key: false when all pendingMax are
+// taken, or ip already has one.
+func (r *Receiver) enter(ip string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pending >= pendingMax || r.pendingFrom[ip] {
+		return false
+	}
+	if r.pendingFrom == nil {
+		r.pendingFrom = map[string]bool{}
+	}
+	r.pending++
+	r.pendingFrom[ip] = true
+	return true
+}
+
+func (r *Receiver) leave(ip string) {
+	r.mu.Lock()
+	r.pending--
+	delete(r.pendingFrom, ip)
+	r.mu.Unlock()
+}
+
+// take is the one cast's slot, which covers the question at the screen as well as the cast.
 func (r *Receiver) take() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -196,32 +271,60 @@ func (r *Receiver) take() bool {
 
 func (r *Receiver) give() {
 	r.mu.Lock()
-	r.busy = false
+	r.busy, r.cur = false, nil
 	r.mu.Unlock()
 }
 
-func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
+// decline remembers that the person turned ip away, and forgets those whose time is up.
+func (r *Receiver) decline(ip string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	for k, at := range r.declined {
+		if now.Sub(at) >= declineFor {
+			delete(r.declined, k)
+		}
+	}
+	if r.declined == nil {
+		r.declined = map[string]time.Time{}
+	}
+	r.declined[ip] = now
+}
+
+// recentlyDeclined is whether ip was turned away by the person less than declineFor ago.
+func (r *Receiver) recentlyDeclined(ip string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	at, ok := r.declined[ip]
+	return ok && time.Since(at) < declineFor
+}
+
+// refuse answers a hello with a refusal, for a phone that has the key but is not let in.
+func refuse(raw net.Conn, c *secure, reason string) error {
+	out, _ := json.Marshal(Welcome{OK: false, Reason: reason})
+	_ = raw.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err := Write(c, KindWelcome, out); err != nil {
+		return err
+	}
+	return errors.New("refused: " + reason)
+}
+
+// session serves one connection. proved is called once it has shown it has the key and said hello,
+// which frees its place among those on their way in.
+func (r *Receiver) session(ctx context.Context, raw net.Conn, ip string, proved func()) error {
 	defer raw.Close()
 	stop := context.AfterFunc(ctx, func() { raw.Close() })
 	defer stop()
 
 	_ = raw.SetDeadline(time.Now().Add(handshakeFor))
 	key := r.Key()
-	if len(key) < KeyMin {
+	if len(key) < KeyLeast {
 		return errors.New("no pairing key set")
 	}
 	c, err := accept(raw, key)
 	if err != nil {
 		return handshakeErr{err}
 	}
-	r.mu.Lock()
-	r.cur = c
-	r.mu.Unlock()
-	defer func() {
-		r.mu.Lock()
-		r.cur = nil
-		r.mu.Unlock()
-	}()
 	kind, payload, err := Read(c)
 	if err != nil {
 		return err
@@ -229,6 +332,20 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	if kind != KindHello {
 		return errors.New("the first message was not a hello")
 	}
+	proved()
+
+	// Only a phone with the key gets this far, so it is told why it is not let in, where a stranger is
+	// only ever closed on. The app shows the reason as the Show's refusal.
+	if r.recentlyDeclined(ip) {
+		return refuse(raw, c, reasonDeclined)
+	}
+	if !r.take() {
+		return refuse(raw, c, reasonBusy)
+	}
+	defer r.give()
+	r.mu.Lock()
+	r.cur = c
+	r.mu.Unlock()
 	var h Hello
 	if err := json.Unmarshal(payload, &h); err != nil {
 		return errors.New("a hello that is not JSON")
@@ -252,6 +369,9 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	stopWatch() // only Begin waits on a person: the read loop notices a closed phone from here on
 	if err != nil {
 		w = Welcome{OK: false, Reason: err.Error()}
+		if errors.Is(err, ErrDeclined) {
+			r.decline(ip)
+		}
 	}
 	out, _ := json.Marshal(w)
 	_ = raw.SetWriteDeadline(time.Now().Add(10 * time.Second))

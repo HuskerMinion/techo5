@@ -4,9 +4,14 @@ package cast
 
 import (
 	"context"
+	"errors"
 	"net"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/android/firewall"
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
 // open is a feature with its port open, as settle leaves it; close shuts it.
@@ -57,7 +62,7 @@ func TestConsentDeclineRefuses(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- f.consent("Stranger", nil) }()
 	answer(t, f, "Stranger", false)
-	if err := <-done; err == nil || err.Error() != "declined" {
+	if err := <-done; err == nil || err.Error() != "declined" || !errors.Is(err, ErrDeclined) {
 		t.Fatalf("got %v, want declined", err)
 	}
 	// Declined is not remembered: the next try asks again.
@@ -188,4 +193,21 @@ func TestCloseFreesThePortAtOnce(t *testing.T) {
 		t.Fatalf("the port was still taken after close: %v", err)
 	}
 	again.Close()
+}
+
+// A daemon that died with Cast on left the firewall's rule behind; the next one, with Cast off, takes it
+// out once at the start.
+func TestRunWithCastOffClosesALeftOverPort(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	var closed []string
+	was := closePort
+	closePort = func(chain string) error { closed = append(closed, chain); return nil }
+	t.Cleanup(func() { closePort = was })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	build().Run(ctx)
+	if len(closed) != 1 || closed[0] != firewall.Cast {
+		t.Fatalf("closed %v, want the cast chain once", closed)
+	}
 }

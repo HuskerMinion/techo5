@@ -3,6 +3,7 @@ package cast
 import (
 	"crypto/rand"
 	"encoding/base32"
+	"errors"
 	"net"
 	"net/url"
 	"strconv"
@@ -24,8 +25,22 @@ func PairingURL(host string, port int, key, name string) string {
 
 var keyEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-// KeyMin is the shortest key the receiver takes and the cast_key action sets. NewKey makes 16.
-const KeyMin = 8
+// KeyMin is the shortest key the cast_key action sets, as long as the one NewKey makes: anyone on the
+// network who guesses the key can ask to cast, so a chosen one has to be as hard to guess.
+const KeyMin = 16
+
+// KeyLeast is the shortest key the receiver still takes. The cast_key action took 8 characters before
+// it took 16, and a key saved then keeps working rather than unpairing every phone that has it.
+const KeyLeast = 8
+
+// CheckKey says whether key can be set by the cast_key action: empty (a new random one) or KeyMin
+// characters and more.
+func CheckKey(key string) error {
+	if key != "" && len(key) < KeyMin {
+		return errors.New("the cast key has to be at least 16 characters, long and random, or empty to make a new random one")
+	}
+	return nil
+}
 
 // NewKey is a fresh pairing key: 16 characters, 80 bits, from letters and digits a person can read
 // off a screen if the QR code will not scan.

@@ -3172,8 +3172,9 @@ throw the old one away. Either way every paired phone has to scan the pairing co
 
 *string*
 
-The key: at least 8 characters. Left empty, the device makes a new random one instead, which is also what
-you want to rotate it.
+The key: at least 16 characters, and it should be long and random, like the one the device makes (anyone on
+the network who guesses it can ask to cast). Left empty, the device makes a new random one instead, which is
+also what you want to rotate it. A shorter key set before this was required keeps working.
 
 ```yaml
 action: esphome.office_cast_key

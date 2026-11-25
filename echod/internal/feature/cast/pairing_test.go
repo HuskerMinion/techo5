@@ -41,3 +41,17 @@ func TestHostOfPrefersIPv4(t *testing.T) {
 		t.Fatal("an IPv6-only device has no address a phone can use here")
 	}
 }
+
+func TestCheckKeyWantsSixteenOrNone(t *testing.T) {
+	for key, ok := range map[string]bool{
+		"":                 true, // a new random one
+		"8charkey":         false,
+		"fifteen-chars-x":  false,
+		"sixteen-chars-xy": true,
+		NewKey():           true,
+	} {
+		if err := CheckKey(key); (err == nil) != ok {
+			t.Errorf("CheckKey(%q) = %v", key, err)
+		}
+	}
+}
