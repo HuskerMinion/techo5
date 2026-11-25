@@ -37,8 +37,15 @@
 
   The key never leaves the computer that holds it ($env:TECHO5_SIGN_KEY), as for releases.
 
+  -FirstFormat2 is for the one signing that first publishes catalog-v2.json, and only then. Once the
+  "addons" release has catalog.json, this script refuses to sign without catalog-v2.json beside it to
+  check against: compared with catalog.json alone, a version only catalog-v2.json lists (one that
+  requires anything) could change unnoticed. The first time there is none yet, and -FirstFormat2 says
+  that is expected; given when catalog-v2.json is already there, it is refused.
+
 .EXAMPLE
   .\tools\sign-catalog.ps1
+  .\tools\sign-catalog.ps1 -FirstFormat2    # once: the signing that first publishes catalog-v2.json
   .\tools\sign-catalog.ps1 -SignKey C:\keys\techo5-release.key -WhatIf
   .\tools\sign-catalog.ps1 -Catalog D:\src\techo5-addons
 #>
@@ -51,7 +58,10 @@ param(
     [string]$Release = '',
     # The techo5-addons checkout, or its catalog.json. Empty is $env:TECHO5_ADDONS, then techo5-addons
     # beside this checkout, then E:\projects\techo5-addons.
-    [string]$Catalog = ''
+    [string]$Catalog = '',
+    # The first signing that publishes catalog-v2.json, when the release has catalog.json and no
+    # catalog-v2.json yet to check against (see the description). Refused once it has one.
+    [switch]$FirstFormat2
 )
 $ErrorActionPreference = 'Stop'
 
@@ -108,6 +118,7 @@ function Publish-AddonCatalog {
         # A release to attach the catalog to as well, as release.ps1 does with each one.
         [string]$Release = '',
         [string]$Catalog = '',
+        [switch]$FirstFormat2,
         [switch]$DryRun
     )
     $root = Split-Path -Parent $PSScriptRoot
@@ -155,12 +166,20 @@ function Publish-AddonCatalog {
         $tagExists = ($LASTEXITCODE -eq 0)
         if ($tagExists) {
             $assets = @((($assetsJson -join "`n") | ConvertFrom-Json).assets | ForEach-Object { $_.name })
-            # The release is there, so its catalog.json has to come down, and catalog-v2.json too once it
-            # has been published: signed without them, the serial and the published versions would go
-            # unchecked (mkcatalog -previous). Before the first format 2 signing there is no
-            # catalog-v2.json, and catalog.json alone is checked against. Their errors are shown.
+            # The release is there, so its catalog.json has to come down, and catalog-v2.json with it:
+            # signed without them, the serial and the published versions would go unchecked (mkcatalog
+            # -previous), and catalog.json alone does not hold the versions only catalog-v2.json lists.
+            # Only the first format 2 signing, said with -FirstFormat2, goes ahead without
+            # catalog-v2.json, there being none yet. Their errors are shown.
             $want = @('catalog.json')
-            if ($assets -contains 'catalog-v2.json') { $want += 'catalog-v2.json' }
+            $hasV2 = $assets -contains 'catalog-v2.json'
+            if ($hasV2 -and $FirstFormat2) {
+                throw "-FirstFormat2 is for the first signing of catalog-v2.json, and the $AddonCatalogTag release has one already: sign without it"
+            }
+            if (-not $hasV2 -and -not $FirstFormat2) {
+                throw "the $AddonCatalogTag release has no catalog-v2.json to check against; if this is the first signing that publishes it, pass -FirstFormat2"
+            }
+            if ($hasV2) { $want += 'catalog-v2.json' }
             foreach ($name in $want) {
                 & gh release download $AddonCatalogTag --repo $Repo -p $name -D $published --clobber
                 if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $published $name))) {
@@ -172,6 +191,9 @@ function Publish-AddonCatalog {
 
         Write-Host "== add-on catalog: checking and signing"
         $mk = @('run', './cmd/mkcatalog', '-in', $catalog, '-out', $signed, '-sign-key', $SignKey) + $previous
+        # mkcatalog holds the same line: given catalog.json alone it signs only when told this is the
+        # first format 2 signing.
+        if ($tagExists -and $FirstFormat2) { $mk += '-first-format2' }
         Push-Location (Join-Path $root 'echod')
         try {
             & $Go @mk
@@ -204,4 +226,4 @@ function Publish-AddonCatalog {
     }
 }
 
-Publish-AddonCatalog -SignKey $SignKey -Go $Go -Repo $Repo -Release $Release -Catalog $Catalog -DryRun:$WhatIfPreference
+Publish-AddonCatalog -SignKey $SignKey -Go $Go -Repo $Repo -Release $Release -Catalog $Catalog -FirstFormat2:$FirstFormat2 -DryRun:$WhatIfPreference

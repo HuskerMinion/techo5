@@ -41,13 +41,13 @@ func TestSignsTheCatalogWithItsExpiry(t *testing.T) {
 	t.Cleanup(func() { now = restore })
 	now = func() time.Time { return signedAt }
 
-	if err := run(in, []string{write(t, dir, "prev.json", `{"format":1,"serial":3,"addons":[]}`)}, out, key); err == nil {
+	if err := run(in, []string{write(t, dir, "prev.json", `{"format":1,"serial":3,"addons":[]}`)}, true, out, key); err == nil {
 		t.Error("signed a catalog with a serial below the published one")
 	}
-	if err := run(in, []string{write(t, dir, "prevsame.json", `{"format":1,"serial":2,"addons":[]}`)}, out, key); err != nil {
+	if err := run(in, []string{write(t, dir, "prevsame.json", `{"format":1,"serial":2,"addons":[]}`)}, true, out, key); err != nil {
 		t.Errorf("signing the published catalog again for a fresh expiry: %v", err)
 	}
-	if err := run(in, []string{write(t, dir, "prev1.json", `{"format":1,"serial":1,"addons":[]}`)}, out, key); err != nil {
+	if err := run(in, []string{write(t, dir, "prev1.json", `{"format":1,"serial":1,"addons":[]}`)}, true, out, key); err != nil {
 		t.Fatal(err)
 	}
 	pub := k.Public().(ed25519.PublicKey)
@@ -88,19 +88,19 @@ func TestSignsTheCatalogWithItsExpiry(t *testing.T) {
 		 "ports":[{"proto":"tcp","port":` + fmt.Sprint(port) + `,"why":"x"}],"root":false,"memory_mb":10,"disk_mb":1` + w + `}]}`
 	}
 	prev := []string{write(t, dir, "prev2.json", `{"format":1,"serial":1,"addons":[`+entry(40000, "")+`]}`)}
-	if err := run(write(t, dir, "changed.json", `{"format":2,"serial":2,"addons":[`+entry(40001, "")+`]}`), prev, out, key); err == nil {
+	if err := run(write(t, dir, "changed.json", `{"format":2,"serial":2,"addons":[`+entry(40001, "")+`]}`), prev, true, out, key); err == nil {
 		t.Error("signed a catalog that changes a published version")
 	}
-	if err := run(write(t, dir, "withdrawn.json", `{"format":2,"serial":2,"addons":[`+entry(40000, "it broke")+`]}`), prev, out, key); err != nil {
+	if err := run(write(t, dir, "withdrawn.json", `{"format":2,"serial":2,"addons":[`+entry(40000, "it broke")+`]}`), prev, true, out, key); err != nil {
 		t.Errorf("withdrawing a published version: %v", err)
 	}
-	if err := run(write(t, dir, "bad.json", `{"format":2,"serial":0}`), nil, out, key); err == nil {
+	if err := run(write(t, dir, "bad.json", `{"format":2,"serial":0}`), nil, false, out, key); err == nil {
 		t.Error("signed a catalog a device would refuse")
 	}
-	if err := run(write(t, dir, "v1.json", `{"format":1,"serial":2,"addons":[]}`), nil, out, key); err == nil {
+	if err := run(write(t, dir, "v1.json", `{"format":1,"serial":2,"addons":[]}`), nil, false, out, key); err == nil {
 		t.Error("signed a format 1 source")
 	}
-	if err := run(in, nil, "", ""); err != nil {
+	if err := run(in, nil, false, "", ""); err != nil {
 		t.Errorf("a check without signing: %v", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestWritesBothFormats(t *testing.T) {
 	}
 	in := source(2, addon("mixed", version("1.0.0", ""), version("1.1.0", files)), addon("files-only", version("1.0.0", files)))
 	out := filepath.Join(dir, "out")
-	if err := run(in, nil, out, key); err != nil {
+	if err := run(in, nil, false, out, key); err != nil {
 		t.Fatal(err)
 	}
 	read := func(name string) catalog.Catalog {
@@ -239,36 +239,61 @@ func TestWritesBothFormats(t *testing.T) {
 
 	// Against the published files: the same serial and entries again is a fresh expiry, from either.
 	published := []string{filepath.Join(out, "catalog-v2.json"), filepath.Join(out, "catalog.json")}
-	if err := run(in, published, filepath.Join(dir, "again"), key); err != nil {
+	if err := run(in, published, false, filepath.Join(dir, "again"), key); err != nil {
 		t.Errorf("signing the published catalog again: %v", err)
 	}
 	// A version only the format 2 file has is held as one the format 1 file has.
 	changed := source(3, addon("mixed", version("1.0.0", ""), version("1.1.0", strings.Replace(files, `"size":1}`, `"size":2}`, 1))),
 		addon("files-only", version("1.0.0", files)))
-	if err := run(changed, published, filepath.Join(dir, "changed"), key); err == nil {
+	if err := run(changed, published, false, filepath.Join(dir, "changed"), key); err == nil {
 		t.Error("signed a change to a version only the format 2 file has")
 	}
-	if err := run(changed, published[1:], filepath.Join(dir, "changed1"), key); err != nil {
+	if err := run(changed, published[1:], true, filepath.Join(dir, "changed1"), key); err != nil {
 		t.Errorf("against the format 1 file alone, which never had it: %v", err)
 	}
 	// A version once in the format 1 file cannot come to require something, which would take it away
 	// from format 1 devices that installed it.
 	moved := source(4, addon("mixed", version("1.0.0", files), version("1.1.0", files)), addon("files-only", version("1.0.0", files)))
-	if err := run(moved, published[1:], filepath.Join(dir, "moved"), key); err == nil {
+	if err := run(moved, published[1:], true, filepath.Join(dir, "moved"), key); err == nil {
 		t.Error("signed a version of the format 1 file that came to require files")
 	}
 	// A new version only the format 2 file has needs a new serial against the format 2 file, though
 	// the format 1 file it would write is the same.
 	added := source(2, addon("mixed", version("1.0.0", ""), version("1.1.0", files), version("1.2.0", files)), addon("files-only", version("1.0.0", files)))
-	if err := run(added, published[1:], filepath.Join(dir, "added1"), key); err != nil {
+	if err := run(added, published[1:], true, filepath.Join(dir, "added1"), key); err != nil {
 		t.Errorf("against the format 1 file, whose entries are the same: %v", err)
 	}
-	if err := run(added, published, filepath.Join(dir, "added"), key); err == nil {
+	if err := run(added, published, false, filepath.Join(dir, "added"), key); err == nil {
 		t.Error("signed new entries under the format 2 file's serial")
 	}
 	// A requirement this build does not know is refused, not skipped: what is signed is read whole.
 	future := source(5, addon("mixed", version("1.0.0", ""), version("2.0.0", `"requires":["sandbox"],`)))
-	if err := run(future, nil, "", ""); err == nil || !strings.Contains(err.Error(), "sandbox") {
+	if err := run(future, nil, false, "", ""); err == nil || !strings.Contains(err.Error(), "sandbox") {
 		t.Errorf("a requirement this build does not know: %v", err)
+	}
+}
+
+// Against catalog.json alone, a version only catalog-v2.json lists could change unnoticed, so the
+// published catalog-v2.json is wanted too, except at the signing that first publishes it, which says so
+// with -first-format2; that switch is refused once a catalog-v2.json is given.
+func TestThePublishedFormat2CatalogIsWanted(t *testing.T) {
+	dir := t.TempDir()
+	in := write(t, dir, "in.json", small)
+	v1 := write(t, dir, "catalog.json", `{"format":1,"serial":1,"addons":[]}`)
+	v2 := write(t, dir, "catalog-v2.json", `{"format":2,"serial":1,"addons":[]}`)
+	if err := run(in, []string{v1}, false, "", ""); err == nil || !strings.Contains(err.Error(), "-first-format2") {
+		t.Errorf("against catalog.json alone: %v", err)
+	}
+	if err := run(in, []string{v1}, true, "", ""); err != nil {
+		t.Errorf("the first format 2 signing: %v", err)
+	}
+	if err := run(in, []string{v1, v2}, false, "", ""); err != nil {
+		t.Errorf("against both: %v", err)
+	}
+	if err := run(in, []string{v1, v2}, true, "", ""); err == nil {
+		t.Error("-first-format2 with a catalog-v2.json given was taken")
+	}
+	if err := run(in, nil, false, "", ""); err != nil {
+		t.Errorf("nothing published yet: %v", err)
 	}
 }

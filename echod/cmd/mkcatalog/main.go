@@ -13,7 +13,9 @@
 // update.CatalogDomain ahead of those bytes, so neither verifies as the other or as a firmware
 // manifest's. Against the published catalogs (-previous, either format, given once for each) its
 // serial has to go up, and no version entry once published may change except to be withdrawn
-// (catalog.Unchanged).
+// (catalog.Unchanged). The published catalog-v2.json has to be among them whenever any is given, as
+// catalog.json alone does not hold every version, except at the one signing that first publishes it
+// (-first-format2).
 //
 // With -pin it measures a downloaded file instead, and prints the url, sha256 and size an entry pins it
 // by, so an entry is never typed by hand; with -file as well, the pin is an extra file's, under that
@@ -41,6 +43,7 @@ func main() {
 	var (
 		in       = flag.String("in", "catalog.json", "the catalog to check and sign (a techo5-addons checkout's)")
 		previous previousList
+		firstV2  = flag.Bool("first-format2", false, "the first signing of catalog-v2.json: -previous may then be catalog.json alone, there being no catalog-v2.json published yet")
 		out      = flag.String("out", "", "the folder to write catalog-v2.json, catalog.json and their .sig files to")
 		signKey  = flag.String("sign-key", "", "the release signing key file")
 		pin      = flag.String("pin", "", "URL=FILE: print the url, sha256 and size an entry pins FILE by, and nothing else")
@@ -68,7 +71,7 @@ func main() {
 		}
 		return
 	}
-	if err := run(*in, previous, *out, *signKey); err != nil {
+	if err := run(*in, previous, *firstV2, *out, *signKey); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -101,7 +104,7 @@ var now = time.Now
 
 // run checks the catalog, against the published ones when given, and writes both formats of it and
 // their signatures.
-func run(in string, previous []string, out, keyFile string) error {
+func run(in string, previous []string, firstV2 bool, out, keyFile string) error {
 	body, err := os.ReadFile(in)
 	if err != nil {
 		return err
@@ -114,6 +117,7 @@ func run(in string, previous []string, out, keyFile string) error {
 	if c.Format != catalog.Format {
 		return fmt.Errorf("mkcatalog: %s is format %d; the source catalog is format %d, which the format %d file is written from", in, c.Format, catalog.Format, catalog.FormatV1)
 	}
+	sawV2 := false
 	for _, path := range previous {
 		old, err := os.ReadFile(path)
 		if err != nil {
@@ -123,6 +127,7 @@ func run(in string, previous []string, out, keyFile string) error {
 		if err != nil {
 			return fmt.Errorf("mkcatalog: reading the published catalog %s: %w", path, err)
 		}
+		sawV2 = sawV2 || p.Format == catalog.Format
 		// A version a device installed from either file stays as it read it there.
 		if err := catalog.Unchanged(p, c); err != nil {
 			return err
@@ -140,6 +145,15 @@ func run(in string, previous []string, out, keyFile string) error {
 		if c.Serial < p.Serial || (c.Serial == p.Serial && !sameEntries(next, p)) {
 			return fmt.Errorf("mkcatalog: the serial is %d and the published catalog's (%s) is %d: raise it", c.Serial, filepath.Base(path), p.Serial)
 		}
+	}
+	// Against catalog.json alone, a version only catalog-v2.json lists (one that requires anything) could
+	// change unnoticed, so the published catalog-v2.json is wanted too, except at the one signing that
+	// first publishes it, which says so.
+	switch {
+	case len(previous) > 0 && !sawV2 && !firstV2:
+		return errors.New("mkcatalog: -previous names no format 2 catalog to check against; give the published catalog-v2.json too, or -first-format2 if this signing first publishes it")
+	case sawV2 && firstV2:
+		return errors.New("mkcatalog: -first-format2 is for the first signing of catalog-v2.json, and one is given in -previous")
 	}
 	for _, a := range c.Addons {
 		for _, v := range a.Versions {

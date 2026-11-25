@@ -3004,7 +3004,10 @@ either file, writes `catalog-v2.json` and `catalog.json` from it, signs both wit
 publishes the four files (with `catalog-v2.json.sig` and `catalog.json.sig`) on this repository's
 `addons` release, which is what devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
 anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
-is passed on as `-Catalog`). `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
+is passed on as `-Catalog`). Once the `addons` release has `catalog.json`, it checks against
+`catalog-v2.json` as well and refuses to sign without it, as `catalog.json` alone doesn't hold every
+version; the one signing that first publishes `catalog-v2.json` says so with `-FirstFormat2`
+(`release.ps1 -FirstFormat2Catalog`), which is refused once it is published. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
 downloaded file by; with `-file NAME` as well, it prints an extra file's pin under that name.
 
 ### Running something of your own at boot
