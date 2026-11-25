@@ -1720,7 +1720,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			case at.In(d.r.stripCloseHit()):
 				go d.endMusic()
 			case libraryWord != "" && at.In(d.r.stripLibrary()):
-				d.reopenLibrary()
+				d.reopenLibrary(false)
 			case spokenOn && at.In(back):
 				spokenSkipBy(-spokenSkip)
 			case spokenOn && at.In(next):
@@ -1747,15 +1747,18 @@ func (d *Display) gesture(g touch.Gesture) {
 			if d.r != nil {
 				back, _, next := d.r.musicButtons(modernMusic)
 				back, next = d.r.buttonReach(back), d.r.buttonReach(next)
+				fav, queue := d.r.musicSideButtons(libraryWord, spokenOn)
 				seekBackBtn, seekFwdBtn := d.r.seekButtons(modernMusic)
 				at := image.Pt(g.X, g.Y)
 				switch {
 				case at.In(d.r.buttonReach(d.r.doneButton())):
 					go d.endMusic()
-				case at.In(d.r.buttonReach(d.r.favButton())):
+				case at.In(d.r.buttonReach(fav)):
 					go d.favorite()
 				case libraryWord != "" && at.In(d.r.buttonReach(d.r.libraryButton(libraryWord, modernMusic))):
-					d.reopenLibrary()
+					d.reopenLibrary(false)
+				case !queue.Empty() && at.In(d.r.buttonReach(queue)):
+					d.reopenLibrary(true)
 				case spokenOn && at.In(d.r.buttonReach(d.r.speedButton(speedShown, libraryWord, modernMusic))):
 					d.spokenSpeedUp()
 				case spokenOn && at.In(back):

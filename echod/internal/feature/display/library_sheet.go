@@ -484,11 +484,17 @@ func libWord(i int) string {
 // sheet's own; from a card, target is empty and the player is found for entity, the card's media
 // player, or for this device when the card names none.
 func (d *Display) openLibrary(target, entity string, fromCard bool) {
+	d.openLibraryOn(target, entity, fromCard, libArtists)
+}
+
+// openLibraryOn is openLibrary on tab. The queue tab needs the player's queue, so from a card it is read
+// once the player is found.
+func (d *Display) openLibraryOn(target, entity string, fromCard bool, tab int) {
 	c, set := libClient()
 	// The player and the sheet's entity are Home Assistant entity ids (they can carry a room or a name),
 	// kept out of the log and so out of a diagnostics bundle.
 	slog.Info("dashboard music library", "set", set)
-	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1}
+	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1, tab: tab}
 	for i := range l.roots {
 		l.roots[i] = newLibPage(i, musicassistant.Entry{})
 	}
@@ -508,10 +514,13 @@ func (d *Display) openLibrary(target, entity string, fromCard bool) {
 				}
 			})
 			d.wake()
+			if set && tab == libQueue {
+				d.libLoad(l.roots[tab].id)
+			}
 		}()
 	}
-	if set {
-		d.libLoad(l.roots[libArtists].id)
+	if set && !(fromCard && tab == libQueue) {
+		d.libLoad(l.roots[tab].id)
 	}
 }
 
@@ -1385,18 +1394,23 @@ func nowPlayingLibraryWord() string {
 // reopenLibrary is the Now Playing page's Library button: the dashboard up with the library over it,
 // as the last play on this device left it, on the page and at the place it was; a fresh library on
 // this device's player when there is none to go back to. What moves on by itself (the favorites, what
-// was played lately, the queue) is read afresh if that is what it shows.
-func (d *Display) reopenLibrary() {
+// was played lately, the queue) is read afresh if that is what it shows. With queue it opens on the
+// queue tab, what plays next, in place of where it was left (the Queue button).
+func (d *Display) reopenLibrary(queue bool) {
 	if !d.openDashboard() {
 		return
 	}
 	last := libLast.Load()
 	if last == nil {
-		slog.Info("dashboard music library from now playing", "back", false)
-		d.openLibrary("", "", true)
+		slog.Info("dashboard music library from now playing", "back", false, "queue", queue)
+		if queue {
+			d.openLibraryOn("", "", true, libQueue)
+		} else {
+			d.openLibrary("", "", true)
+		}
 		return
 	}
-	slog.Info("dashboard music library from now playing", "back", true)
+	slog.Info("dashboard music library from now playing", "back", true, "queue", queue)
 	l := *last
 	l.opening = libOpenings.Add(1)
 	l.menu, l.typing, l.drag, l.lit = libMenu{}, false, libDrag{}, -1
@@ -1414,9 +1428,14 @@ func (d *Display) reopenLibrary() {
 	for i := range l.stack {
 		unstick(&l.stack[i])
 	}
+	if queue {
+		// The queue tab, read afresh, as a tap on the tab would.
+		l.tab, l.stack = libQueue, nil
+		l.roots[libQueue].loaded, l.roots[libQueue].sections, l.roots[libQueue].problem, l.roots[libQueue].scroll = false, nil, "", 0
+	}
 	cur := l.current()
 	// How far a book or an episode was listened to has moved on too.
-	id, fresh := cur.id, len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue) || libListening(cur.what) && cur.loaded
+	id, fresh := cur.id, !queue && len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue) || libListening(cur.what) && cur.loaded
 	ask := !cur.loaded && (len(l.stack) > 0 || l.tab != libSearch) // a search not yet typed waits
 	libPics.setChanged(d.wake)
 	d.mu.Lock()

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
@@ -247,7 +249,7 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	const target = "media_player.ma_kitchen"
 
 	d := &Display{poke: make(chan struct{}, 1)}
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	if libUp(d) == nil || libUp(d).tab != libArtists || !d.dash {
 		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
 	}
@@ -266,7 +268,7 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 		t.Fatal("the play did not put the library away")
 	}
 	before := len(sent())
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	l := libUp(d)
 	if l == nil || !d.dash {
 		t.Fatal("the button did not bring the library back")
@@ -288,8 +290,92 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 	setLibUp(d, &queue)
 	d.libLeave(target, "")
 	before = len(sent())
-	d.reopenLibrary()
+	d.reopenLibrary(false)
 	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
+}
+
+// The Now Playing page's Queue button opens the library on the queue tab, read afresh, whether a library
+// was left behind with another tab and an album opened, or there is none.
+func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
+	noLibrary(t)
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Screen().Welcomed(true); err != nil {
+		t.Fatal(err)
+	}
+	_ = config.Set().Dashboard().Mode(config.DashboardDrawn)
+	t.Cleanup(func() { _ = config.Set().Dashboard().Mode(config.DashboardOff); libLast.Store(nil) })
+	libLast.Store(nil)
+	sent := libFakeMA(t)
+	libIsOwn = func(string) bool { return true }
+	libQueueOf = func(string) string { return "up0a1b2c3d" }
+	const target = "media_player.ma_kitchen"
+
+	d := &Display{
+		r:                  newRenderer(image.NewRGBA(image.Rect(0, 0, show8Wide, show8High))),
+		poke:               make(chan struct{}, 1),
+		on:                 true,
+		view:               voice.State{Phase: "idle"},
+		showingPlaying:     true,
+		showingLibraryWord: libWords["fr"][libWordLibrary],
+	}
+	tapQueue := func(modern bool) {
+		d.showingModernMusic = modern
+		_, queue := d.r.musicSideButtons(d.showingLibraryWord, false)
+		hit := d.r.buttonReach(queue)
+		d.gesture(touch.Gesture{Kind: touch.Tap, X: hit.Max.X - 1, Y: queue.Min.Y + queue.Dy()/2})
+	}
+	tapQueue(false)
+	if l := libUp(d); l == nil || l.tab != libQueue || !d.dash {
+		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
+	}
+	waitUntil(t, "the queue asked for", func() bool { return asked(sent(), "player_queues/get", "player_queues/items") })
+
+	sheet := libSheetWith(libAlbums, libEntries("album", 30), target)
+	opened := newLibPage(libAlbum, libEntries("album", 4)[3])
+	opened.loaded = true
+	sheet.stack = []libPage{opened}
+	setLibUp(d, &sheet)
+	d.libLeave(target, "")
+	before := len(sent())
+	tapQueue(true)
+	l := libUp(d)
+	if l == nil || l.tab != libQueue || len(l.stack) != 0 || l.target != target {
+		t.Fatalf("came back to %+v, want the queue tab with no page opened", l)
+	}
+	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
+}
+
+// The Queue button and its full tap area fit in the footer in both layouts and every library language.
+func TestTheQueueButtonHasItsOwnPlace(t *testing.T) {
+	for _, panel := range showPanels() {
+		screen := image.Rect(0, 0, panel.wide, panel.high)
+		r := newRenderer(image.NewRGBA(screen))
+		for lang, words := range libWords {
+			word := words[libWordLibrary]
+			fav, queue := r.musicSideButtons(word, false)
+			q := r.buttonReach(queue)
+			if queue.Empty() || !q.In(screen) || !queue.In(r.favButton()) {
+				t.Errorf("%s %q: Queue button %v (tap area %v) must fit beside Favorites", panel.name, lang, queue, q)
+			}
+			_, withoutLibrary := r.musicSideButtons("", false)
+			_, forSpoken := r.musicSideButtons(word, true)
+			if !withoutLibrary.Empty() || !forSpoken.Empty() {
+				t.Error("the Queue button shows without Library or during spoken playback")
+			}
+			for _, modern := range []bool{false, true} {
+				back, play, next := r.musicButtons(modern)
+				seekBack, seekForward := r.seekButtons(modern)
+				others := map[string]image.Rectangle{"done": r.doneButton(), "star": fav,
+					"library": r.libraryButton(word, modern), "back": back, "play": play, "next": next,
+					"seek back": seekBack, "seek forward": seekForward}
+				for name, b := range others {
+					if hit := r.buttonReach(b); q.Overlaps(hit) {
+						t.Errorf("%s %q modern %v: the Queue tap area %v meets %s %v", panel.name, lang, modern, q, name, hit)
+					}
+				}
+			}
+		}
+	}
 }
 
 // Add to favorites marks the item at the server and on the page, so its sheet then offers to remove it,
