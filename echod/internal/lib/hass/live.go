@@ -292,7 +292,7 @@ func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(Li
 	case <-l.done:
 		return errors.New("hass: the connection ended")
 	}
-	go l.firstStatesOrRead(first, firstStatesWait, ids, func(list []LiveEntity) {
+	go l.firstStatesOrRead(ctx, first, firstStatesWait, ids, func(list []LiveEntity) {
 		// Only what no event has brought in the meantime, since what an event brought is newer. changed
 		// is called with mu held, so a change taken after this is passed on after it.
 		mu.Lock()
@@ -309,17 +309,21 @@ func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(Li
 }
 
 // firstStatesOrRead waits for a subscription's first event, and if it has not come after
-// wait, reads the states of ids once and gives them to fill.
-func (l *Live) firstStatesOrRead(first <-chan struct{}, wait time.Duration, ids []string, fill func([]LiveEntity)) {
+// wait, reads the states of ids once and gives them to fill. ctx is the one FollowEntities was given:
+// a follower that gave up in the meantime (a page closed as it opened) has nobody left to fill, and
+// reading every state in the house for it would be work for nothing, with fill run after it has gone.
+func (l *Live) firstStatesOrRead(ctx context.Context, first <-chan struct{}, wait time.Duration, ids []string, fill func([]LiveEntity)) {
 	select {
 	case <-first:
 		return
 	case <-l.done:
 		return
+	case <-ctx.Done():
+		return
 	case <-time.After(wait):
 	}
 	slog.Warn("hass: no first states came for the followed entities; reading them", "entities", len(ids))
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	raw, err := l.Call(ctx, map[string]any{"type": "get_states"})
 	if err != nil {

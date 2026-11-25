@@ -139,3 +139,31 @@ func TestFirstStatesThatComeAreNotReadAgain(t *testing.T) {
 		t.Errorf("got %v, want the first event's off, not get_states' on", g)
 	}
 }
+
+// A follower that gives up before the first event was waited out is not read for: nobody is left to
+// fill.
+func TestFirstStatesAreNotReadForAFollowerThatGaveUp(t *testing.T) {
+	was := firstStatesWait
+	firstStatesWait = 50 * time.Millisecond
+	t.Cleanup(func() { firstStatesWait = was })
+
+	l := fakeLive(t, "", `[{"entity_id":"switch.kettle","state":"on","attributes":{}}]`)
+	ctx, cancel := context.WithCancel(context.Background())
+	var mu sync.Mutex
+	filled := 0
+	err := l.FollowEntities(ctx, []string{"switch.kettle"}, func(LiveEntity) {
+		mu.Lock()
+		filled++
+		mu.Unlock()
+	}, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	time.Sleep(200 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if filled != 0 {
+		t.Errorf("filled %d states for a follower that gave up", filled)
+	}
+}
