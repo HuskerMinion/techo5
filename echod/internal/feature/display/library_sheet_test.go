@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -449,6 +450,29 @@ func TestTheLibrarysTaps(t *testing.T) {
 	tap(libFind(t, zones, libPartDone, -1))
 	if d.libraryViewNow() != nil {
 		t.Error("Done left the library up")
+	}
+}
+
+func TestATrackTapInSearchPlaysOnlyTheHit(t *testing.T) {
+	noLibrary(t)
+	asked := recordTaps(t)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	const target = "media_player.ma_kitchen"
+	tracks := libEntries("track", 3)
+	sheet := libSheetWith(libSearch, nil, target)
+	search := &sheet.roots[libSearch]
+	search.query = "harbor"
+	search.sections = []libSection{{word: libTracks, show: libShowTracks, kind: "track", entries: tracks}}
+	setLibUp(d, &sheet)
+
+	zones, _ := libDraw(r, sheet)
+	d.libraryTap(libMiddle(libFind(t, zones, libPartItem, 1)))
+	waitUntil(t, "the search hit to play", func() bool { return len(asked()) > 0 })
+	want := []dashboard.Action{{Entity: target, Service: "music_assistant.play_media",
+		Data: map[string]any{"media_id": tracks[1].URI, "media_type": "track", "enqueue": libEnqueueReplace}}}
+	if got := asked(); !reflect.DeepEqual(got, want) {
+		t.Errorf("asked %v, want %v", got, want)
 	}
 }
 
@@ -1237,7 +1261,7 @@ func TestATrackTapQueuesTheRestOfItsList(t *testing.T) {
 	}
 	for _, s := range []libSection{
 		{show: libShowGrid, kind: "track", entries: tracks},
-		{show: libShowTracks, kind: "", entries: tracks}, // mixed results, as in a search
+		{show: libShowTracks, kind: "", entries: tracks}, // mixed results, as in Recent or Browse
 		{show: libShowTracks, kind: "chapter", entries: tracks},
 	} {
 		if got := libTracksAfter(s, 0); got != nil {

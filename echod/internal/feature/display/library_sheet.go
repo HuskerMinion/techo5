@@ -1033,9 +1033,12 @@ func (d *Display) libraryTap(x, y int) bool {
 			// A chapter plays its book from the top and is then moved to where the chapter starts.
 			d.libPlayChapter(l, p.entry, e, z.index)
 		default:
-			// A track tapped in a list plays on through the rest of the list, as in Plexamp and the Music
-			// Assistant app, rather than alone.
-			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace, libTracksAfter(p.sections[sec], i)...)
+			// A track tapped in a list plays on through the rest of the list. A search hit plays alone.
+			var rest []musicassistant.Entry
+			if p.what != libSearch {
+				rest = libTracksAfter(p.sections[sec], i)
+			}
+			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace, rest...)
 		}
 	}
 	d.wake()
