@@ -192,7 +192,7 @@ func TestNowPlayingsBarIsOnlyTappableWhereItSeeks(t *testing.T) {
 				drawer bool
 				want   bool
 			}{{"shows only", seekView{}, false, false}, {"seeks", seeks, false, true}, {"under the drawer", seeks, true, false}} {
-				s := scene{now: at, phase: "idle", nowPlaying: true, modernMusic: modern, playing: true, libraryWord: "Library", seek: true,
+				s := scene{now: at, phase: "idle", nowPlaying: true, modernMusic: modern, playing: true, libraryWord: "Library", queue: true, seek: true,
 					radio:         home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true},
 					musicPosition: pos, musicSeek: c.seek, showDrawer: c.drawer}
 				r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))

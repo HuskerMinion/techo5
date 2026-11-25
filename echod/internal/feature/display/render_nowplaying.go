@@ -175,7 +175,7 @@ func (r *renderer) musicFooter(s scene) {
 	r.text(doneFace, word, done.Min.X+(done.Dx()-r.width(doneFace, word))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
 
 	// The star saves what is playing to favorites, and fills in once it has.
-	fav, queue := r.musicSideButtons(s.libraryWord, s.spoken)
+	fav, queue := r.musicSideButtons(s.queue, s.spoken)
 	r.buttonFace(fav, float64(fav.Dy())/2, btnSecondary)
 	// The icon font's star, not one drawn as a polygon: the same outline the rest of the program would
 	// draw, and filled in once the station is saved.
@@ -217,11 +217,19 @@ func (r *renderer) libraryButton(word string, modern bool) image.Rectangle {
 	return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
 }
 
+// queueShown is whether the page has the Queue button: Library is there (libraryWord) and what plays
+// is a Music Assistant track, whose queue is what comes next. AirPlay, Bluetooth and a station of this
+// device's own have nothing in that queue, so the button opened an empty or unrelated list (#700). A
+// followed player keeps it, as it had it: the library may be what started that player's music.
+func queueShown(libraryWord string, rd home.Radio) bool {
+	return libraryWord != "" && (rd.MA || rd.Followed)
+}
+
 // musicSideButtons gives drawing and touch the same Favorites and Queue positions. When Queue is
-// available, the two icons share the Favorites button's usual space beside Done.
-func (r *renderer) musicSideButtons(libraryWord string, spoken bool) (fav, queue image.Rectangle) {
+// shown (queueShown), the two icons share the Favorites button's usual space beside Done.
+func (r *renderer) musicSideButtons(queueOn, spoken bool) (fav, queue image.Rectangle) {
 	fav = r.favButton()
-	if libraryWord == "" || spoken {
+	if !queueOn || spoken {
 		return fav, queue
 	}
 	gap := r.s(12)

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
@@ -317,10 +318,11 @@ func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 		view:               voice.State{Phase: "idle"},
 		showingPlaying:     true,
 		showingLibraryWord: libWords["fr"][libWordLibrary],
+		showingQueue:       true,
 	}
 	tapQueue := func(modern bool) {
 		d.showingModernMusic = modern
-		_, queue := d.r.musicSideButtons(d.showingLibraryWord, false)
+		_, queue := d.r.musicSideButtons(d.showingQueue, false)
 		hit := d.r.buttonReach(queue)
 		d.gesture(touch.Gesture{Kind: touch.Tap, X: hit.Max.X - 1, Y: queue.Min.Y + queue.Dy()/2})
 	}
@@ -345,6 +347,28 @@ func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
 }
 
+// The Queue button is for Music Assistant's music, whose queue is what plays next. AirPlay, Bluetooth
+// and a station of this device's own have the Library button but no Queue (#700).
+func TestTheQueueButtonIsForMusicAssistantsMusic(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		word string
+		rd   home.Radio
+		want bool
+	}{
+		{"Music Assistant", "Library", home.Radio{Now: "Music Assistant", Title: "Some Jazz", MA: true}, true},
+		{"a followed player", "Library", home.Radio{Now: "Kitchen", Title: "Some Jazz", Followed: true}, true},
+		{"AirPlay", "Library", home.Radio{Now: "AirPlay", Title: "Some Jazz"}, false},
+		{"Bluetooth", "Library", home.Radio{Now: "Phone", Title: "Some Jazz"}, false},
+		{"a station of this device's", "Library", home.Radio{Now: "KXYZ 101.1"}, false},
+		{"no library", "", home.Radio{Now: "Music Assistant", Title: "Some Jazz", MA: true}, false},
+	} {
+		if got := queueShown(c.word, c.rd); got != c.want {
+			t.Errorf("%s: Queue shown %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // The Queue button and its full tap area fit in the footer in both layouts and every library language.
 func TestTheQueueButtonHasItsOwnPlace(t *testing.T) {
 	for _, panel := range showPanels() {
@@ -352,15 +376,15 @@ func TestTheQueueButtonHasItsOwnPlace(t *testing.T) {
 		r := newRenderer(image.NewRGBA(screen))
 		for lang, words := range libWords {
 			word := words[libWordLibrary]
-			fav, queue := r.musicSideButtons(word, false)
+			fav, queue := r.musicSideButtons(true, false)
 			q := r.buttonReach(queue)
 			if queue.Empty() || !q.In(screen) || !queue.In(r.favButton()) {
 				t.Errorf("%s %q: Queue button %v (tap area %v) must fit beside Favorites", panel.name, lang, queue, q)
 			}
-			_, withoutLibrary := r.musicSideButtons("", false)
-			_, forSpoken := r.musicSideButtons(word, true)
-			if !withoutLibrary.Empty() || !forSpoken.Empty() {
-				t.Error("the Queue button shows without Library or during spoken playback")
+			_, withoutQueue := r.musicSideButtons(false, false)
+			_, forSpoken := r.musicSideButtons(true, true)
+			if !withoutQueue.Empty() || !forSpoken.Empty() {
+				t.Error("the Queue button shows when it is not wanted or during spoken playback")
 			}
 			for _, modern := range []bool{false, true} {
 				back, play, next := r.musicButtons(modern)

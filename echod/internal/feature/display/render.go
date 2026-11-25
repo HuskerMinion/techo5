@@ -281,6 +281,9 @@ type scene struct {
 	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
 	// empty for no button (no Music Assistant set up).
 	libraryWord string
+	// queue is the Queue button beside the star: Library is there and what plays is Music Assistant's
+	// (queueShown).
+	queue bool
 	// spoken is an audiobook or a podcast episode playing, as Music Assistant says (listening.go): the
 	// page's back and forward go 30 seconds, and Now Playing has its speed, as fast as speed.
 	spoken bool

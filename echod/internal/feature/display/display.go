@@ -503,6 +503,8 @@ type Display struct {
 	// showingLibraryWord is the Now Playing page's Library button as last drawn: its word, or empty
 	// for none.
 	showingLibraryWord string
+	// showingQueue is the Queue button as last drawn.
+	showingQueue bool
 	// showingSpoken is an audiobook or a podcast episode on the page or the strip as last drawn, with
 	// back and forward 30 seconds, and showingSpeed the speed button's word.
 	showingSpoken bool
@@ -1699,7 +1701,7 @@ func (d *Display) gesture(g touch.Gesture) {
 		// page's own button, and a tap made to look at the song should not stop it.
 		d.mu.Lock()
 		showing, away, inStrip, word := d.showingPlaying, d.away, d.showingStrip, d.showingWord
-		modernMusic, libraryWord := d.showingModernMusic, d.showingLibraryWord
+		modernMusic, libraryWord, queueOn := d.showingModernMusic, d.showingLibraryWord, d.showingQueue
 		spokenOn, speedShown, seekOn := d.showingSpoken, d.showingSpeed, d.showingSeek
 		d.mu.Unlock()
 		// Only while the word is really drawn, and only when the page is really away: this is the way back
@@ -1764,7 +1766,7 @@ func (d *Display) gesture(g touch.Gesture) {
 			if d.r != nil {
 				back, _, next := d.r.musicButtons(modernMusic)
 				back, next = d.r.buttonReach(back), d.r.buttonReach(next)
-				fav, queue := d.r.musicSideButtons(libraryWord, spokenOn)
+				fav, queue := d.r.musicSideButtons(queueOn, spokenOn)
 				seekBackBtn, seekFwdBtn := d.r.seekButtons(modernMusic)
 				at := image.Pt(g.X, g.Y)
 				switch {
@@ -3131,6 +3133,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.nowPlaying || s.strip {
 		// The Library button, on the page and in the strip both.
 		s.libraryWord = nowPlayingLibraryWord()
+		s.queue = queueShown(s.libraryWord, s.radio)
 		s.spoken, s.speed = d.spokenWord(s.radio, s.paused, now)
 	}
 	if s.nowPlaying {
@@ -3150,7 +3153,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.showingPlaying, d.showingStrip, d.showingWord = s.nowPlaying, s.strip, playingWord(s) != ""
 	d.showingPaused = s.paused
 	d.showingModernMusic = s.modernMusic
-	d.showingLibraryWord = s.libraryWord
+	d.showingLibraryWord, d.showingQueue = s.libraryWord, s.queue
 	d.showingSpoken, d.showingSpeed, d.showingSeek = s.spoken, speedWord(s.speed), s.seek
 	d.mu.Unlock()
 	if s.modernMusic {

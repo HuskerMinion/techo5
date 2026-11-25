@@ -37,7 +37,7 @@ func TestNowPlayingButtonsHaveAFingersRoom(t *testing.T) {
 		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
 		for _, modern := range []bool{false, true} {
 			back, play, next := r.musicButtons(modern)
-			fav, queue := r.musicSideButtons("Library", false)
+			fav, queue := r.musicSideButtons(true, false)
 			all := map[string]image.Rectangle{
 				"done": r.doneButton(), "star": fav, "library": r.libraryButton("Library", modern),
 				"back": back, "play": play, "next": next, "queue": queue,
