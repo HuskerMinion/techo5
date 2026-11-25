@@ -56,5 +56,8 @@ func TestAnUnfinishedUpdateIsUndoneAtTheNextStart(t *testing.T) {
 		if exists(old) {
 			t.Errorf("kept %v: .old is still there", kept)
 		}
+		// The next pass makes a rig of its own, which swaps the package's fakes in again: this one's
+		// supervisor has to be stopped first, or it reads them as they are written.
+		r.stopRun()
 	}
 }
