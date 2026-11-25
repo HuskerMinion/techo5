@@ -2863,7 +2863,8 @@ setup page.
 How the device runs them:
 
 - **Only from the catalog.** The catalog (`catalog.json` in
-  [techo5-addons](https://github.com/HuskerMinion/techo5-addons)) is signed with the
+  [techo5-addons](https://github.com/HuskerMinion/techo5-addons), published as `catalog-v2.json` and
+  `catalog.json`, below) is signed with the
   same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
   and the device believes it only with that signature. It names each version's download and its SHA-256,
   and the manifest it ships (`addon.json`) by its hash too, as well as any extra files it brings: the
@@ -2950,6 +2951,7 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   archive lists that archive under `arm`:
 
   ```json
+  "requires": ["files"],
   "binaries": {
     "arm": {"url": "https://github.com/example/techo5-netbird/releases/download/v0.2.0/techo5-netbird-arm", "sha256": "…", "size": 9000000}
   },
@@ -2966,7 +2968,23 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   `TECHO5_ADDON_BIN`, and its `state` folder in `TECHO5_ADDON_STATE`. Names are plain file names
   (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not the program's own name), at most
   8 of them and 128 MB together, and every build lists the same names, since one `addon.json` serves
-  them all. An add-on downloads nothing else at run time: what it runs is what was looked over.
+  them all. An add-on downloads nothing else at run time: what it runs is what was looked over. A
+  version with extra files says so in `"requires": ["files"]` (below).
+
+- **`requires`**, the features a version needs beyond the catalog's first format (today only
+  `files`). The catalog is format 2: a device skips a version that requires a feature it doesn't know,
+  rather than refusing the whole catalog, and an add-on with no version it can read is shown grayed out
+  as needing a newer TECHO5. Everything else stays strict: a key the format doesn't know is refused
+  anywhere but in a version skipped this way, so a version that uses a new field has to require the
+  feature that brings it, and one that requires a feature has to use it.
+
+  Devices up to v1.6.53 read only format 1, and refuse the whole catalog for one field they don't
+  know. So the catalog is published as two files from the one source: `catalog-v2.json`, everything in
+  format 2, which newer devices fetch first, and `catalog.json`, format 1 as before, with every version
+  that requires anything left out (and an add-on with nothing left, left out too), which older devices
+  go on reading. A newer device takes `catalog.json` only while `catalog-v2.json` isn't published.
+  Both carry one serial, so a device that has believed one never takes an older one of either, and
+  each is signed under its own text, so neither's signature passes for the other's.
 
 We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
 catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
@@ -2980,9 +2998,10 @@ worktree beside it), else `E:\projects\techo5-addons`. It signs only a `catalog.
 in a checkout at its `origin/main`, with `mkcatalog` built from a clean checkout of this repository at
 its `origin/main`. It checks the catalog (`mkcatalog`), refuses one whose `serial` is below the
 published one's, or the same serial with different entries (the same entries again only renew the
-expiry; a device never takes an older catalog than it has), signs it with the release key, and
-publishes `catalog.json` and `catalog.json.sig` on this repository's `addons` release, which is what
-devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
+expiry; a device never takes an older catalog than it has) or that changes a version published in
+either file, writes `catalog-v2.json` and `catalog.json` from it, signs both with the release key, and
+publishes the four files (with `catalog-v2.json.sig` and `catalog.json.sig`) on this repository's
+`addons` release, which is what devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
 anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
 is passed on as `-Catalog`). `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
 downloaded file by; with `-file NAME` as well, it prints an extra file's pin under that name.
