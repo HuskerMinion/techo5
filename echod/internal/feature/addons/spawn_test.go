@@ -15,7 +15,14 @@ func TestSpawnStops(t *testing.T) {
 	if err != nil {
 		t.Skip("no /bin/sh here:", err)
 	}
-	eventually(t, "its first line", func() bool { return strings.Contains(out.String(), "up") })
+	// A real shell, so a busy machine running every package's tests at once may take a while to start
+	// it: the wait for its first line is generous, and only the stop is timed.
+	for end := time.Now().Add(30 * time.Second); !strings.Contains(out.String(), "up"); time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(end) {
+			p.Stop()
+			t.Fatal("waited too long for its first line")
+		}
+	}
 	start := time.Now()
 	p.Stop()
 	_ = p.Wait()

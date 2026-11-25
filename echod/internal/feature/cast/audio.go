@@ -267,6 +267,7 @@ func (o *audioOut) Duck(db int) {
 // Requeue has nothing to do: the level is applied as frames are rendered.
 func (o *audioOut) Requeue() {}
 
+//lint:ignore U1000 read by the Show's receiver (feature.go), which the Spot and Dot builds leave out
 func (o *audioOut) misses() (late, dropped int) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
