@@ -42,6 +42,7 @@ show/library-queue-menu-1280x800.png
 show/nowplaying-show8.png
 show/nowplaying-modern-show8.png
 show/nowplaying-music-assistant-show8.png
+show/nowplaying-music-assistant-radio-show8.png
 show/nowplaying-lyrics-show8.png
 show/nowplaying-library-show8.png
 show/nowplaying-modern-library-show8.png
@@ -129,6 +130,7 @@ spot/clock-timer.png
 spot/clock-alert.png
 spot/nowplaying.png
 spot/nowplaying-music-assistant.png
+spot/nowplaying-music-assistant-radio.png
 spot/nowplaying-paused.png
 spot/announcement.png
 spot/announcement-voice.png

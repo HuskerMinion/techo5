@@ -773,7 +773,10 @@ func (f *Feature) Radio() Radio {
 //
 // Whose song it is comes from whosePlaying, the order the now-playing sensors go by too.
 func carried(r Radio) Radio {
-	s := snapshotOf(media.Get())
+	return carriedFrom(r, snapshotOf(media.Get()))
+}
+
+func carriedFrom(r Radio, s playingSnapshot) Radio {
 	switch whosePlaying(s, false) {
 	case playingOwn:
 		if s.titled {
@@ -812,7 +815,7 @@ func carried(r Radio) Radio {
 	case playingHeld:
 		// A remote's track paused from here is still the page's, with play on it, after the remote
 		// has let it go.
-		r.Playing, r.Now = false, maScreenName(s.maService)
+		r.Playing, r.Now = false, maSourceLine(maScreenName(s.maService), s.heldTitle, s.heldArtist, s.heldAlbum, s.heldLive)
 		r.Title, r.Artist, r.Album = s.heldTitle, byline(s.heldArtist, s.heldAlbum), s.heldAlbum
 		r.Stand = s.heldArtist == "" && r.Artist != ""
 		r.Art, r.Thumb = remoteArt()
@@ -823,7 +826,7 @@ func carried(r Radio) Radio {
 		// just before Music Assistant took the speaker never plays - the remote ends it - and the list
 		// went on reading "Starting…" for it for as long as the remote carried on.
 		r.Chosen = ""
-		r.Playing, r.Now = true, maScreenName(s.maService)
+		r.Playing, r.Now = true, maSourceLine(maScreenName(s.maService), s.extTitle, s.extArtist, s.extAlbum, s.extLive)
 		r.Title, r.Artist, r.Album = s.extTitle, byline(s.extArtist, s.extAlbum), s.extAlbum
 		r.Stand = s.extArtist == "" && r.Artist != ""
 		// Music Assistant's own picture for the track when it sent one. Without one the page draws a
@@ -834,6 +837,23 @@ func carried(r Radio) Radio {
 		r.Music = true
 	}
 	return r
+}
+
+// maSourceLine appends the radio station name (album) to source when a live Music Assistant stream
+// carries both a song title and an artist. Stations without an artist already show the station
+// under the title via byline (#666), and tracks with a known duration keep source alone.
+func maSourceLine(source, title, artist, album string, live bool) string {
+	if !live || title == "" || artist == "" {
+		return source
+	}
+	a := strings.TrimSpace(album)
+	if a == "" || strings.EqualFold(a, strings.TrimSpace(title)) || strings.EqualFold(a, strings.TrimSpace(source)) {
+		return source
+	}
+	if source == "" {
+		return a
+	}
+	return source + "  ·  " + a
 }
 
 // byline is the line under a Music Assistant track's title: its artist, else its album. Radio over

@@ -115,6 +115,8 @@ func TestRoundScenesDraw(t *testing.T) {
 		"nowplaying-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, radio: home.Radio{Chosen: "Morning News"}},
 		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		"nowplaying-music-assistant-radio": {now: at, phase: "idle", nowPlaying: true, playing: true,
+			radio: home.Radio{Playing: true, Now: "Music Assistant  ·  YES 933", Title: "Take It Easy", Artist: "Eagles", Music: true}},
 		"radio-list":    {now: at, phase: "idle", playing: true, menuOpen: true, menuMode: modeRadio, radioSel: 2, radio: home.Radio{Configured: true, Source: "local", Sources: 2, Now: "KXYZ 101.1", Stations: []string{"KAAA 90.1", "KXYZ 101.1", "The Mountain 99.5 Classic Rock and More", "KBBB 104.3"}}},
 		"radar-loading": {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Loading: true}},
 		"radar":         {now: at, phase: "idle", menuOpen: true, menuMode: modeWeather, radarOn: true, radar: home.RadarView{Frames: []home.RadarFrame{{Image: testPicture(), At: at}}}},
@@ -375,5 +377,19 @@ func TestIdleRingHidden(t *testing.T) {
 	countdown := []timer.Countdown{{Left: 30 * time.Second, Total: time.Minute}}
 	if got := rimAt(roundScene{now: at, phase: "idle", noIdleRing: true, timers: countdown}); got == colBackground {
 		t.Errorf("a timer's rim was hidden with the idle ring")
+	}
+}
+
+// On the Spot's 330 px label row, a compound source like "Music Assistant  ·  YES 933" would clip
+// the station off the end, so musicLabel falls back to only the station after the last separator.
+func TestSpotMusicLabelFallsBackToStation(t *testing.T) {
+	previewFont(t)
+	r := newRoundRenderer(image.NewRGBA(image.Rect(0, 0, side, side)))
+
+	if got, want := r.musicLabel("PLAYING", "Music Assistant  ·  YES 933"), "PLAYING · YES 933"; got != want {
+		t.Errorf("musicLabel(compound) = %q, want %q", got, want)
+	}
+	if got, want := r.musicLabel("PLAYING", "Music Assistant"), "PLAYING · MUSIC ASSISTANT"; got != want {
+		t.Errorf("musicLabel(plain) = %q, want %q", got, want)
 	}
 }
