@@ -59,7 +59,10 @@ setup page's **Screen** tab has the same settings, except which dashboard to sho
 - **Dashboard**: *Off*, *Drawn on the device* or *Streamed*, and on the Show, the Skylight and the Panel app *Tessera*
   ([Tessera screens](#tessera-screens-preview)).
 - **Dashboard to show**: which dashboard, from a list of yours and their views. The list updates by
-  itself within five minutes of a dashboard being added, renamed or removed. *Automatic* is the Rooms
+  itself within about five minutes of a dashboard being added, renamed or removed, when the device
+  reconnects to Home Assistant for a moment to show it. Each view is a choice of its own, and the list
+  holds 100: past that, every dashboard still has its first view listed, and some later views are
+  left out (`dashboard_path` reaches any of them). *Automatic* is the Rooms
   dashboard when drawn, and your default dashboard when streamed. Home Assistant's built-in pages are
   at the end, marked *(streamed only)*, and after them the web pages your dashcast server lists, as
   *Web: name* ([Web pages](#web-pages)).

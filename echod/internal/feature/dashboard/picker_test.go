@@ -3,6 +3,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -168,6 +169,47 @@ func TestTheListIsAskedForWhileThereIsNothingCached(t *testing.T) {
 		if got := wantsList(c.mode, c.known); got != c.want {
 			t.Errorf("%s: wantsList = %v, want %v", c.what, got, c.want)
 		}
+	}
+}
+
+// A dashboard made after the list filled up is still in it (#743). Home Assistant lists a new
+// dashboard last, and every view is an option, so a few dashboards of many views used to fill the list
+// and cut each new dashboard, however long one waited. Each dashboard now has a place, its first
+// view, before more views take the room left; the chosen view stays whatever is cut.
+func TestANewDashboardHasAPlaceInAFullList(t *testing.T) {
+	var known []config.DashboardChoice
+	for d := range 4 {
+		for v := range 30 {
+			known = append(known, config.DashboardChoice{
+				Label: fmt.Sprintf("Big %d · View %d", d, v),
+				Path:  fmt.Sprintf("dashboard-big%d/%d", d, v),
+			})
+		}
+	}
+	known = append(known, config.DashboardChoice{Label: "New", Path: "dashboard-new"},
+		config.DashboardChoice{Label: "Energy (streamed only)", Path: "energy", Streamed: true})
+
+	opts, chosen := boardOptions(config.Dashboard{Known: known, Path: "dashboard-big3/29"})
+	if len(opts) > boardsMax {
+		t.Errorf("%d options, more than the cap of %d", len(opts), boardsMax)
+	}
+	for _, want := range []string{"New", "Energy (streamed only)", "Big 1 · View 0", "Big 3 · View 0", "Big 3 · View 29"} {
+		if !slices.Contains(opts, want) {
+			t.Errorf("%q left out of a full list", want)
+		}
+	}
+	if chosen != "Big 3 · View 29" {
+		t.Errorf("chosen = %q, want the chosen view", chosen)
+	}
+	// Kept in Home Assistant's order: the views that fit, then the new one, then the built-in page.
+	if i, j := slices.Index(opts, "New"), slices.Index(opts, "Energy (streamed only)"); i > j || opts[1] != "Big 0 · View 0" {
+		t.Errorf("options out of order: %q", opts)
+	}
+
+	// A list with room for all of it is all of it.
+	opts, _ = boardOptions(config.Dashboard{Known: known[100:]})
+	if len(opts) != len(known[100:])+1 {
+		t.Errorf("a list with room left out %d", len(known[100:])+1-len(opts))
 	}
 }
 
