@@ -2835,7 +2835,8 @@ on the setup page's **Add-ons** card (**System** tab). The card has three parts:
 
 - **Available:** the add-ons in TECHO5's catalog, each with its author, what it does, its version and
   the TECHO5 version it needs, a link to its own page, and what it asks for: the network ports it needs
-  opened, whether it runs as root, and roughly how much memory and storage it uses. One made for
+  opened, whether it runs as root, any extra files it downloads beside its program (by name and
+  size), and roughly how much memory and storage it uses. One made for
   another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
   installed from the card yet, and one that needs more memory than the device can spare are listed
   too, grayed out with the reason.
@@ -2854,8 +2855,8 @@ Every install shows this warning first, and you have to tick the box under it to
 
 Installing is only possible on the setup page, behind its Allow on the device (or the action button on
 a Dot), never from Home Assistant, a voice command or the screen, so the warning is always seen. An
-update that asks for more than the version before (a new port, or root) shows the warning and the box
-again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
+update that asks for more than the version before (a new port, root, or an extra file that is new or
+changed) shows the warning and the box again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
 install an update from there only when the update asks for nothing new, and otherwise says to use the
 setup page.
 
@@ -2865,8 +2866,9 @@ How the device runs them:
   [techo5-addons](https://github.com/HuskerMinion/techo5-addons)) is signed with the
   same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
   and the device believes it only with that signature. It names each version's download and its SHA-256,
-  and the manifest it ships (`addon.json`) by its hash too: the device refuses a download that doesn't
-  match, and an add-on whose manifest asks for more than the catalog shows. A signed catalog expires a
+  and the manifest it ships (`addon.json`) by its hash too, as well as any extra files it brings: the
+  device refuses a download that doesn't match, and an add-on whose manifest asks for more than the
+  catalog shows or names other extra files than the catalog pins. A signed catalog expires a
   month after it was signed (every TECHO5 (Show) release signs it again): past that, installed add-ons keep running
   but nothing is offered, and the card says why. A device never goes back to an older catalog than one
   it has seen.
@@ -2891,7 +2893,9 @@ How the device runs them:
   installed or started, and the card says why; one that can't start for memory is tried again, like a
   crash. An Echo Dot 2nd gen has about 445 MB free.
 - **Updates are tried first.** The new version is downloaded beside the old one and checked, then
-  started; if it doesn't stay up for a minute, the old one goes back, and the card says so.
+  started; if it doesn't stay up for a minute, the old one goes back, its extra files with it, and the
+  card says so. A device that loses power in the middle of an update puts the old version back when it
+  starts again.
 - **Remove** stops it, closes its ports and deletes its folder, `/data/techo5-addons/<id>`. What
   it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
   the box to delete it too.
@@ -2913,7 +2917,8 @@ form with your add-on's repository and the release to list. Its
 [README](https://github.com/HuskerMinion/techo5-addons#for-authors-getting-an-add-on-listed) says in
 full what an add-on needs and how it is reviewed. In short, it needs:
 
-- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux;
+- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux,
+  and any extra files the program needs beside it (below);
 - an `addon.json` in the same release, such as techo5-plex's:
 
   ```json
@@ -2938,6 +2943,31 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   browser reached it. A port below 1024 is refused unless it runs as root, and one of TECHO5's own is
   refused always.
 
+- **Extra files**, when the program needs more than itself: another project's release it unpacks, a
+  model. `addon.json` names them, `"files": ["netbird.tar.gz"]`, and the catalog entry pins each one
+  as it pins the binary (an https URL, its SHA-256 and its size), under the TECHO5 build that gets it,
+  `arm` or `arm64`, whatever is inside: an `arm` program that unpacks another project's `linux_arm64`
+  archive lists that archive under `arm`:
+
+  ```json
+  "binaries": {
+    "arm": {"url": "https://github.com/example/techo5-netbird/releases/download/v0.2.0/techo5-netbird-arm", "sha256": "…", "size": 9000000}
+  },
+  "files": {
+    "arm": [
+      {"name": "netbird.tar.gz", "url": "https://github.com/netbirdio/netbird/releases/download/vX.Y.Z/netbird_X.Y.Z_linux_arm64.tar.gz", "sha256": "…", "size": 15000000}
+    ]
+  }
+  ```
+
+  The device downloads and checks each one as it does the program, and installs them read-only (root's,
+  `0644`) in the add-on's `bin` folder beside the program, under those names; an update, going back,
+  and removal treat them as part of the program. The program finds that folder in
+  `TECHO5_ADDON_BIN`, and its `state` folder in `TECHO5_ADDON_STATE`. Names are plain file names
+  (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not the program's own name), at most
+  8 of them and 128 MB together, and every build lists the same names, since one `addon.json` serves
+  them all. An add-on downloads nothing else at run time: what it runs is what was looked over.
+
 We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
 catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
 way a device does. Each new version gets a new entry: a version is never trusted because an earlier
@@ -2955,7 +2985,7 @@ publishes `catalog.json` and `catalog.json.sig` on this repository's `addons` re
 devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
 anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
 is passed on as `-Catalog`). `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
-downloaded file by.
+downloaded file by; with `-file NAME` as well, it prints an extra file's pin under that name.
 
 ### Running something of your own at boot
 
