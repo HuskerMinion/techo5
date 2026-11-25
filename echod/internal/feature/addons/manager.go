@@ -799,11 +799,40 @@ func (m *Manager) room(v catalog.Version, arch string) error {
 	if err != nil {
 		return nil // not knowing is not a reason to refuse
 	}
-	need := int64(v.DiskMB) + v.Binaries[arch].Size>>20 + 1 + catalog.FilesMB(v.FilesFor(arch))
+	need, ok := neededMB(v, arch)
+	if !ok {
+		return errors.New("addons: its listing gives sizes that do not add up to an amount of storage")
+	}
 	if free < need {
 		return fmt.Errorf("addons: it needs about %d MB of room on the device's storage, and %d MB is free", need, free)
 	}
 	return nil
+}
+
+// maxPartMB bounds each size room adds up, a petabyte: far past any device, and small enough that a few
+// of them cannot overflow the sum.
+const maxPartMB = 1 << 30
+
+// neededMB is the room a version takes on the device, in whole megabytes, and whether its sizes make
+// one. The catalog checks them (catalog.Version.valid), but this is the last word before writing to the
+// storage, so a size that is negative, or so large the sum would wrap, refuses rather than passing as
+// little or no room.
+func neededMB(v catalog.Version, arch string) (int64, bool) {
+	parts := []int64{int64(v.DiskMB), v.Binaries[arch].Size >> 20, 1}
+	for _, f := range v.FilesFor(arch) {
+		if f.Size < 0 || f.Size > maxPartMB<<20 {
+			return 0, false
+		}
+		parts = append(parts, (f.Size+1<<20-1)>>20)
+	}
+	var need int64
+	for _, p := range parts {
+		if p < 0 || p > maxPartMB {
+			return 0, false
+		}
+		need += p
+	}
+	return need, true
 }
 
 // fetchVersion downloads a version's manifest, binary and extra files into dir, checking each against

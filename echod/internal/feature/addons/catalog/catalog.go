@@ -218,6 +218,12 @@ func (v Version) validFiles(what string) error {
 			if err := pinned(f.Binary); err != nil {
 				return fmt.Errorf("catalog: %s's extra file %s for %s: %w", what, f.Name, arch, err)
 			}
+			// Each one is held to the cap on its own before it is added: a few sizes near 2^63 would
+			// otherwise wrap the total negative and pass the check below, and the room asked of the
+			// device with it.
+			if f.Size > MaxFilesMB<<20 {
+				return fmt.Errorf("catalog: %s's extra file %s for %s is larger than %d MB", what, f.Name, arch, MaxFilesMB)
+			}
 			total += f.Size
 		}
 		if total > MaxFilesMB<<20 {

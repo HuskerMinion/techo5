@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
+	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
 // withFiles is v bringing extra files beside its arm build, served with these contents, and its
@@ -274,5 +275,29 @@ func TestAnUnfinishedUpdateWithFilesIsUndone(t *testing.T) {
 				t.Error(".old is still there")
 			}
 		})
+	}
+}
+
+// The room a version needs is refused, not taken as little, when its sizes are negative or would wrap
+// the sum: the catalog refuses such sizes too, but this is the last check before the storage is written.
+func TestRoomRefusesSizesThatDoNotAddUp(t *testing.T) {
+	v := catalog.Version{DiskMB: 12, Binaries: map[string]update.Binary{"arm": {Size: 10 << 20}}}
+	if need, ok := neededMB(v, "arm"); !ok || need != 12+10+1 {
+		t.Errorf("a plain version: %d %v", need, ok)
+	}
+	for name, files := range map[string][]catalog.File{
+		"negative": {{Name: "a", Binary: update.Binary{Size: -1 << 40}}},
+		"wrapping": {{Name: "a", Binary: update.Binary{Size: 1 << 62}}, {Name: "b", Binary: update.Binary{Size: 1 << 62}}},
+		"huge":     {{Name: "a", Binary: update.Binary{Size: 1<<63 - 1}}},
+	} {
+		w := v
+		w.Files = map[string][]catalog.File{"arm": files}
+		if _, ok := neededMB(w, "arm"); ok {
+			t.Errorf("%s: taken", name)
+		}
+		r := newRig(t)
+		if err := r.m.room(w, "arm"); err == nil {
+			t.Errorf("%s: room found", name)
+		}
 	}
 }

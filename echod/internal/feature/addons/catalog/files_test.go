@@ -81,10 +81,16 @@ func TestABadExtraFileRefusesTheCatalog(t *testing.T) {
 		"too many":           set("arm", many...),
 		"too large":          set("arm", huge),
 		"too large together": func(v *Version) { v.Files = map[string][]File{"arm": {half, half2, extra("c")}} },
-		"http":               func(v *Version) { f := extra("x"); f.URL = "http://example.com/x"; v.Files["arm"] = []File{f} },
-		"short hash":         func(v *Version) { f := extra("x"); f.SHA256 = "abc"; v.Files["arm"] = []File{f} },
-		"no size":            func(v *Version) { f := extra("x"); f.Size = 0; v.Files["arm"] = []File{f} },
-		"odd arch":           func(v *Version) { v.Files["amd64"] = []File{extra("netbird.tar.gz")} },
+		// Two sizes of 2^62 add up to a negative total, which would pass the cap on the total alone.
+		"sizes that wrap": func(v *Version) {
+			a, b := extra("a"), extra("b")
+			a.Size, b.Size = 1<<62, 1<<62
+			v.Files = map[string][]File{"arm": {a, b}, "arm64": {a, b}}
+		},
+		"http":       func(v *Version) { f := extra("x"); f.URL = "http://example.com/x"; v.Files["arm"] = []File{f} },
+		"short hash": func(v *Version) { f := extra("x"); f.SHA256 = "abc"; v.Files["arm"] = []File{f} },
+		"no size":    func(v *Version) { f := extra("x"); f.Size = 0; v.Files["arm"] = []File{f} },
+		"odd arch":   func(v *Version) { v.Files["amd64"] = []File{extra("netbird.tar.gz")} },
 		"no binary for it": func(v *Version) {
 			v.Binaries = map[string]update.Binary{"arm": bin("arm")}
 		},
