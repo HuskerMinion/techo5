@@ -294,11 +294,25 @@ The standard TECHO5 configuration remains independent of External ASP and its as
 
 ## Add-ons others have made
 
+The add-ons TECHO5 has looked over are listed in its signed catalog,
+[`catalog.json`](https://github.com/HuskerMinion/techo5-addons/blob/main/catalog.json) in
+[techo5-addons](https://github.com/HuskerMinion/techo5-addons), and installed, updated and removed on
+the setup page's **Add-ons** card: see [Add-ons](setup.md#add-ons), which also says how to get one listed. An add-on
+that is not in the catalog yet is installed by hand through `rc.local`, as below, and the card lists it
+as found on the device.
+
 These are made and kept by their authors, not by TECHO5, and TECHO5 does not test them. Read each one's own
-instructions and notes before you install it.
+instructions and notes before you install it. Those not in the catalog yet, run by hand:
 
 - [techo5-sound-ai](https://github.com/calin2k/techo5-sound-ai) by calin2k: an on-device room sound classifier
   (Google's YAMNet) with an activity alarm, run from `/data` through `rc.local` and this interface, so it
   outlasts updates. Its sound classes are for information only; it is not a life-safety device.
 - [techo5-netbird](https://github.com/tioan/techo5-netbird) by tioan: NetBird's own client, run from `/data`
   through `rc.local`, so it outlasts updates.
+
+In the catalog:
+
+- [techo5-plex](https://github.com/HuskerMinion/techo5-plex): a player for Plex apps on the Echo Show
+  builds. Its first release, v0.1.0, carries no manifest, so the card lists it without offering to
+  install it, and it is installed by hand as its README says. A release of it that carries one is
+  installed from the card once the catalog lists it.

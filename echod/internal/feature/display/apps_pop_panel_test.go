@@ -94,16 +94,21 @@ func TestTheAppsListKeepsItsFingersWhileAFrameIsDrawn(t *testing.T) {
 	s := appsListScene(styleDashboard)
 	d.r.draw(s)
 	var done atomic.Bool
+	drawn := make(chan struct{})
 	go func() {
+		defer close(drawn)
 		defer done.Store(true)
 		for range 20 {
 			d.r.draw(s)
 		}
 	}()
-	for !done.Load() {
-		if !d.r.appsDrawn.Load() {
-			t.Fatal("while a frame with the list was drawn, the list on the screen had no fingers")
-		}
+	lost := false
+	for !done.Load() && !lost {
+		lost = !d.r.appsDrawn.Load()
+	}
+	<-drawn // the frames end before the test's cleanup does
+	if lost {
+		t.Fatal("while a frame with the list was drawn, the list on the screen had no fingers")
 	}
 }
 

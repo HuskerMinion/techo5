@@ -825,8 +825,9 @@ func (c *conversation) watchTimeout() <-chan time.Time {
 	return nil
 }
 
-// confirmChunk is how much of what came before goes in one message: the queue to Home Assistant is
-// sized for frames, and two seconds at once would overflow it.
+// confirmChunk is how much of what came before goes in one message, in samples: the queue to Home
+// Assistant is sized for frames, and two seconds at once would overflow it. A turn's history goes in
+// the same pieces (sendHistory), well under the 65515 bytes one encrypted message carries (#728).
 const confirmChunk = mic.Rate / 2
 
 // watchAudio sends the microphones to a run at the wake word stage until told to stop. Nothing is sent

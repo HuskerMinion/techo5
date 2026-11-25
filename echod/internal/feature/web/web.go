@@ -2,9 +2,10 @@
 // the setup page, each behind its own switch and all of them off on a device nobody has told
 // otherwise.
 //
-// The port is only listening while at least one of those is switched on. With all of them off there
-// is nothing on the network to find, which is the same behavior the camera's own server had before
-// this became a place several features share.
+// The port is only served while at least one of those is switched on. With all of them off there is
+// nothing on the network to find: the port stays held, so that nothing else can take it, but every
+// connection to it is reset as it arrives, as one to a port nobody listens on is, which is how the
+// camera's own server behaved before this became a place several features share (Run).
 //
 // It lives on its own rather than inside the camera feature because a Dot has no camera, so that
 // server never started there — and the setup page is the only way to configure a device with no
@@ -211,8 +212,18 @@ func allowed(open func() bool, h, closed http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Run keeps the port open while anything is switched on and shut while nothing is.
+// Run holds the port for as long as the daemon runs, and serves it while anything is switched on.
+//
+// While nothing is, the port stays bound and every connection to it is dropped as it arrives, which is
+// all a closed port gave before. It is not let go: the firewall lets the house and the tailnet in to
+// 8181 whatever is switched on, and an add-on runs as a user that can bind any port above 1023, so a
+// port given back while nothing is open would be one an add-on could take, and serve a setup page of
+// its own there to whoever came to type the PIN.
 func (f *Feature) Run(ctx context.Context) error {
+	return f.run(ctx, func() (net.Listener, error) { return net.Listen("tcp", ":"+strconv.Itoa(Port)) })
+}
+
+func (f *Feature) run(ctx context.Context, listen func() (net.Listener, error)) error {
 	mux := f.mux()
 
 	changed := make(chan struct{}, 1)
@@ -223,30 +234,43 @@ func (f *Feature) Run(ctx context.Context) error {
 		}
 	})()
 
+	var ln net.Listener
 	var srv *http.Server
+	var handed *handoff
 	defer func() {
 		if srv != nil {
 			_ = srv.Close()
 		}
+		if ln != nil {
+			_ = ln.Close()
+		}
 	}()
 	for {
-		switch want := f.anyOpen(); {
-		case want && srv == nil:
-			ln, err := net.Listen("tcp", ":"+strconv.Itoa(Port))
+		if ln == nil {
+			l, err := listen()
 			if err != nil {
 				slog.Error("web port", "port", Port, "err", err)
-				break
+			} else {
+				ln = l
+				handed = newHandoff(ln.Addr())
+				go handed.accept(ln)
 			}
+		}
+		switch want := f.anyOpen(); {
+		case ln == nil:
+		case want && srv == nil:
 			// No ReadTimeout: the intercom takes its connection over, and a deadline set here would
 			// stay on it and end the call. Idle keep-alive connections are let go.
 			srv = &http.Server{Handler: tailnetGate(mux), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+			served := handed.open()
 			go func(srv *http.Server) {
-				if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				if err := srv.Serve(served); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					slog.Error("web port", "err", err)
 				}
 			}(srv)
 			slog.Info("web port open", "port", Port)
 		case !want && srv != nil:
+			handed.shut()
 			_ = srv.Close() // streams in progress end here too
 			srv = nil
 			slog.Info("web port closed", "port", Port)
@@ -260,3 +284,96 @@ func (f *Feature) Run(ctx context.Context) error {
 		}
 	}
 }
+
+// handoff takes every connection the bound port accepts and gives it to the server while the port is
+// open, or drops it while it is not.
+type handoff struct {
+	addr net.Addr
+	mu   sync.Mutex
+	to   *served // nil while the port is closed
+}
+
+func newHandoff(addr net.Addr) *handoff { return &handoff{addr: addr} }
+
+// accept runs until the port is let go, which is the daemon stopping.
+func (h *handoff) accept(ln net.Listener) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			// Out of descriptors, say: whatever it is, it is not the port being let go, and trying again
+			// at once would only spin.
+			slog.Warn("web port: accept", "err", err)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		h.mu.Lock()
+		to := h.to
+		h.mu.Unlock()
+		if to == nil || !to.give(c) {
+			drop(c)
+		}
+	}
+}
+
+// open starts handing connections to a new server and returns the listener it serves.
+func (h *handoff) open() net.Listener {
+	s := &served{addr: h.addr, conns: make(chan net.Conn), done: make(chan struct{})}
+	h.mu.Lock()
+	h.to = s
+	h.mu.Unlock()
+	return s
+}
+
+// shut has connections dropped again from now on.
+func (h *handoff) shut() {
+	h.mu.Lock()
+	h.to = nil
+	h.mu.Unlock()
+}
+
+// drop ends a connection the port is not serving with a reset, which is what a client of a port
+// nobody listens on is answered with too: nothing of it is read, and nothing is written to it.
+func drop(c net.Conn) {
+	if tc, ok := c.(*net.TCPConn); ok {
+		_ = tc.SetLinger(0)
+	}
+	_ = c.Close()
+}
+
+// served is the listener one server is given while the port is open. Closing it is the server being
+// closed, and ends that server's share of the port, not the port.
+type served struct {
+	addr  net.Addr
+	conns chan net.Conn
+	done  chan struct{}
+	once  sync.Once
+}
+
+// give hands c to the server, and reports false if the server has closed meanwhile.
+func (s *served) give(c net.Conn) bool {
+	select {
+	case s.conns <- c:
+		return true
+	case <-s.done:
+		return false
+	}
+}
+
+func (s *served) Accept() (net.Conn, error) {
+	select {
+	case c := <-s.conns:
+		return c, nil
+	case <-s.done:
+		return nil, net.ErrClosed
+	}
+}
+
+func (s *served) Close() error {
+	s.once.Do(func() { close(s.done) })
+	return nil
+}
+
+func (s *served) Addr() net.Addr { return s.addr }

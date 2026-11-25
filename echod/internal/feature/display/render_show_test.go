@@ -99,6 +99,20 @@ func TestShowScenesDraw(t *testing.T) {
 		"nowplaying-modern-seek": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
 			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
+		// How far into the song it is, on the classic page: beside the label, with the time each side.
+		// Spotify's only shows; Music Assistant's is one to seek on, here with a finger choosing a place
+		// on it (the knob, and the time it would go to). The modern page's the same way.
+		"nowplaying-position": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
+			radio:         home.Radio{Playing: true, Now: "Spotify", Title: "Take It Easy", Artist: "Eagles", Music: true},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
+		"nowplaying-seekbar": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+			radio:         home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1},
+			musicSeek:     seekView{route: seekMusic, dur: 222 * time.Second, shown: true, to: 160 * time.Second}},
+		"nowplaying-modern-seekbar": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1},
+			musicSeek:     seekView{route: seekMusic, dur: 222 * time.Second, shown: true, to: 160 * time.Second}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		// A station tapped and not playing yet: the page is up at once and says so.

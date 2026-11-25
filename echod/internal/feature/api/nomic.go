@@ -149,10 +149,10 @@ func dropCallActions(acts []*esphome.Action) []*esphome.Action {
 }
 
 // voiceFeatures is what the device says it can do as a voice assistant: nothing, where it cannot
-// hear.
+// hear. Asked for each connection, since where replies play changes it (voice.Offer).
 func voiceFeatures() esphome.VoiceFeature {
 	if !layout.HasMicrophone() {
 		return 0
 	}
-	return voice.Features
+	return voice.Offer()
 }

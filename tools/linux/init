@@ -43,7 +43,9 @@ $BB mount -t sysfs sysfs /sys
 $BB mount -t tmpfs -o mode=0755 tmpfs /dev
 $BB mkdir -p /dev/pts /dev/graphics /run /tmp /store /data /android /newroot
 $BB mount -t devpts devpts /dev/pts
-$BB mount -t tmpfs tmpfs /run
+# 0755, not the 1777 a tmpfs gets without a mode: root's scripts and the daemon use fixed names in
+# /run, and the root filesystem runs users other than root (feature/addons).
+$BB mount -t tmpfs -o mode=0755 tmpfs /run
 $BB mount -t tmpfs tmpfs /tmp
 $BB mdev -s
 $BB mknod -m 600 /dev/mmcblk0p8 b 179 8 2>/dev/null
@@ -59,7 +61,9 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 . /lib/techo5-lib.sh
 
 # --- Userdata: persistent log, daemon state, Wi-Fi credentials.
-if mount -t ext4 -o noatime $DATA_DEV /data 2>/dev/null; then
+# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit), and the old options if it is refused.
+if mount -t ext4 -o noatime,commit=60 $DATA_DEV /data 2>/dev/null ||
+	mount -t ext4 -o noatime $DATA_DEV /data 2>/dev/null; then
 	mkdir -p /data/techo5-linux
 	LOGDIR=/data/techo5-linux
 	crumb "userdata mounted"

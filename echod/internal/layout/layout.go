@@ -125,6 +125,10 @@ var RecordingDir = StateDir + "/recordings"
 // WakeClipDir holds the kept wake word clips, a folder for each kind (feature/detect, clips.go).
 var WakeClipDir = StateDir + "/wake-clips"
 
+// WakeClipRAMDir is where clips that are being sent wait instead, when it is on a tmpfs (Linux's /run),
+// so that a clip that only passes through is never written to eMMC (feature/detect, clipsram.go).
+var WakeClipRAMDir = "/run/techo5/wake-clips"
+
 // MAC normalizes an address into the form Home Assistant compares against, and reports "" for
 // anything that would not identify a device. idme writes twelve hex digits with no separators.
 func MAC(raw string) string {

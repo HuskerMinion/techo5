@@ -1,0 +1,383 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# lk2nd-ab: the boot layer of the Lenovo ThinkSmart View, run by the store's /sbin/init (init) before
+# it starts a slot. POSIX sh and busybox (sha256sum, od, gunzip, head, tail, dd); bootctl beside it.
+#
+# On athena the boot layer is U-Boot: it reads the A/B record, picks the slot, counts its tries and
+# starts that slot's own kernel (tools/linux/README.md, "The boot layer"). The ThinkSmart View's
+# bootloader, lk2nd, does none of that: it starts the one entry of extlinux/extlinux.conf on system1,
+# or, in recovery mode, the Android boot image in the recovery partition, once (the bootloader clears
+# the reboot reason as it reads it). So the kernel lk2nd starts normally does the boot layer's work
+# here, as the first thing its init does, and restarts when the slot to boot needs another kernel:
+#
+#   - The record is bootctl's, in a file on system1 (RECORD, a misc partition's first 4 KiB: the board
+#     has no misc partition), so bootctl, slotctl and boot.sh keep it as on athena.
+#   - A good slot (successful 1) boots from system1: its kernel and device tree there, extlinux.conf
+#     naming them with ab.slot=<x> on the command line. If system1 holds another kernel, this puts
+#     the slot's there and restarts.
+#   - A slot on trial is started once from recovery: this takes a try from the record, writes the
+#     slot's image to recovery with ab.slot=<x> added to its command line, and restarts into recovery
+#     mode. Whatever ends that boot (boot.sh's reboot at its trial timeout, a panic, a power cut) is
+#     back on system1, where the next try is taken, until there are none and the record falls back
+#     to the other slot. A trial that settles is committed by boot.sh (slotctl commit: bootctl
+#     mark-good), and the next start from system1 moves that slot's kernel there.
+#   - A kernel in recovery starts a slot only while the record has that slot on trial (bootable, not
+#     yet good). One left there from an earlier trial, started later from lk2nd's menu, is stale: it
+#     restarts, back on system1, and boots nothing. And a trial kernel starts only once: before its
+#     slot runs, recovery gets system1's good kernel as the fallback (or is cleared), since a slot
+#     out of tries is still unsettled in the record, and a start by hand takes no try.
+#   - The kernel that moves to system1 at a commit has only ever started from recovery. If lk2nd's
+#     extlinux path fails it, every start is that failing kernel again, and nothing on the unit can
+#     count those starts: the bootloader counts nothing, and a kernel that never reaches its init
+#     runs none of this. So when it moves, the kernel it replaces (the slot that was good before,
+#     still in the store) goes into recovery, marked techo5.kernel=fallback. Started from there (lk2nd's
+#     menu, "Recovery"), it marks the committed slot bad, puts its own slot's kernel back on system1
+#     and boots its own slot: the update undone, the unit as it was before it.
+#     If that kernel cannot be written, recovery is cleared and status says there is no way back.
+#
+# The slot's kernel is slots/<x>/boot/boot.img (slotctl links the rootfs's
+# usr/share/techo5/kernel/boot-thinksmart.img there): kernel/build.sh's boot image, header version 0,
+# Image.gz with the device tree after it, the command line ending in techo5.kernel=trial. lk2nd's
+# extlinux loader (the units' 20.0, January 2025) starts a kernel taking at most 32 MiB in memory; one
+# bigger than that would boot from recovery and then never from system1, so a slot with one is marked
+# bad before its trial.
+#
+#   lk2nd-ab boot          the slot to start now, on stdout (exit 0); exit 3 without a record (the
+#                          boot layer is not installed: init decides as before); exit 1 with no slot
+#                          bootable. Restarts (REBOOT) when another kernel has to start the slot.
+#   lk2nd-ab install <x>   put slot x's kernel on system1 and make it lk2nd's entry, now
+#   lk2nd-ab status        the record and what system1 holds
+#
+# Environment (defaults for the store's init): BOOT system1's mount point (/boot), STORE the store
+# (/), RECOVERY the recovery partition's device (by its GPT name), CMDLINE (/proc/cmdline), REBOOT
+# the command that restarts, with "recovery" as its argument for recovery mode (rebootto).
+
+BOOT=${BOOT:-/boot}
+STORE=${STORE:-/}
+RECORD=${RECORD:-$BOOT/techo5-ab}
+CMDLINE=${CMDLINE:-/proc/cmdline}
+REBOOT=${REBOOT:-/usr/local/bin/rebootto}
+TRIAL_WORD=techo5.kernel=trial
+FALLBACK_WORD=techo5.kernel=fallback
+KERNEL_MAX=33554432	# 32 MiB
+DTB=apq8053-lenovo-cd-18781y.dtb
+HERE=$(dirname "$0")
+BOOTCTL=$HERE/bootctl
+[ -f "$BOOTCTL" ] || BOOTCTL=/usr/local/sbin/bootctl
+export BOOTCTL_MISC=$RECORD
+
+say() { echo "lk2nd-ab: $*" >&2; }
+bootctl() { sh "$BOOTCTL" "$@"; }
+
+recovery_dev() {
+	[ -n "${RECOVERY:-}" ] && { echo "$RECOVERY"; return 0; }
+	for u in /sys/class/block/*/uevent; do
+		grep -qx "PARTNAME=recovery" "$u" 2>/dev/null || continue
+		d=${u%/uevent}
+		echo "/dev/${d##*/}"
+		return 0
+	done
+	return 1
+}
+
+# u32 <file> <offset>: a little-endian 32-bit number
+u32() { od -An -tu4 -j"$2" -N4 "$1" | tr -d ' '; }
+
+# hdr_cmdline <image>: the header's command line
+hdr_cmdline() { dd if="$1" bs=64 skip=1 count=8 2>/dev/null | tr -d '\000'; }
+
+# without_trial <words>: the words without the trial word
+without_trial() {
+	o=
+	for w in $1; do [ "$w" = $TRIAL_WORD ] || o="${o:+$o }$w"; done
+	echo "$o"
+}
+
+# check_image <image>: a header version 0 boot image whose kernel part is a gzip stream and a device
+# tree; sets KSZ (the kernel part's size), PAGE and DTBAT (where the device tree starts in it).
+check_image() {
+	[ "$(dd if="$1" bs=8 count=1 2>/dev/null)" = "ANDROID!" ] || { say "$1: not a boot image"; return 1; }
+	[ "$(u32 "$1" 40)" = 0 ] || { say "$1: not header version 0"; return 1; }
+	KSZ=$(u32 "$1" 8) PAGE=$(u32 "$1" 36)
+	[ "$PAGE" = 2048 ] && [ "$KSZ" -gt 0 ] || { say "$1: page size $PAGE, kernel $KSZ"; return 1; }
+	[ "$(dd if="$1" bs=$PAGE skip=1 count=1 2>/dev/null | head -c 2 | od -An -tx1 | tr -d ' ')" = 1f8b ] ||
+		{ say "$1: its kernel is not Image.gz"; return 1; }
+	# The device tree is the end of the kernel part: the last FDT magic whose totalsize reaches it.
+	win=524288
+	[ $win -gt $KSZ ] && win=$KSZ
+	at=$(kpart "$1" | tail -c $win | od -An -v -tu1 | awk -v W=$win '
+		{ for (i = 1; i <= NF; i++) b[n++] = $i }
+		END {
+			for (i = n - 8; i >= 0; i--)
+				if (b[i] == 208 && b[i+1] == 13 && b[i+2] == 254 && b[i+3] == 237 &&
+				    ((b[i+4] * 256 + b[i+5]) * 256 + b[i+6]) * 256 + b[i+7] == W - i) { print i; exit }
+		}')
+	[ -n "$at" ] || { say "$1: no device tree at the end of its kernel"; return 1; }
+	DTBAT=$((KSZ - win + at))
+}
+
+kpart() { dd if="$1" bs=2048 skip=1 2>/dev/null | head -c "$KSZ"; }
+
+# image_size <image>: the memory its kernel takes (the arm64 header's image_size), checked with
+# check_image first. Images below 4 GiB only: the high word must be 0.
+image_size() {
+	h=$(kpart "$1" | head -c "$DTBAT" | gunzip -c 2>/dev/null | head -c 24 | od -An -v -tu4 | tr -s ' \n' ' ')
+	set -- $h
+	[ $# = 6 ] && [ "$6" = 0 ] || { echo 0; return; }
+	echo "$5"
+}
+
+# fits <image>: whether lk2nd can start it from system1
+fits() {
+	check_image "$1" || return 1
+	sz=$(image_size "$1")
+	[ "$sz" -gt 0 ] || { say "$1: no arm64 Image in its kernel"; return 1; }
+	[ "$sz" -le $KERNEL_MAX ] || { say "$1: the kernel takes $sz bytes in memory; lk2nd starts one of $KERNEL_MAX at most"; return 1; }
+}
+
+sum() { sha256sum "$1" | cut -d' ' -f1; }
+
+# The record, one slot at a time: P_x priority, T_x tries, S_x successful
+read_record() {
+	out=$(bootctl -q status 2>/dev/null) || return 3
+	for x in a b; do
+		l=$(echo "$out" | sed -n "s/^slot $x: priority \([0-9]*\), tries \([0-9]*\), successful \([01]\).*/\1 \2 \3/p")
+		[ -n "$l" ] || return 1
+		set -- $l
+		eval "P_$x=$1 T_$x=$2 S_$x=$3"
+	done
+}
+
+# pick: the slot the record boots: the bootable one (priority > 0, and successful or tries left) of the
+# higher priority, a before b on a tie, as the boot layer picks
+pick() {
+	best= bp=0
+	for x in a b; do
+		eval "p=\$P_$x t=\$T_$x s=\$S_$x"
+		[ "$p" -gt 0 ] && { [ "$s" = 1 ] || [ "$t" -gt 0 ]; } || continue
+		[ "$p" -gt $bp ] && { best=$x bp=$p; }
+	done
+	[ -n "$best" ] && echo "$best"
+}
+
+booted() {
+	for w in $(cat "$CMDLINE" 2>/dev/null); do
+		case $w in ab.slot=a|ab.slot=b) echo "${w#ab.slot=}"; return 0;; esac
+	done
+	return 1
+}
+on_trial_kernel() { grep -qw $TRIAL_WORD "$CMDLINE" 2>/dev/null; }
+on_fallback_kernel() { grep -qw $FALLBACK_WORD "$CMDLINE" 2>/dev/null; }
+
+# The entry lk2nd starts: extlinux.conf's kernel directory (k-<sum>, the image it came from) and slot
+entry_dir() { sed -n 's|^[[:space:]]*kernel /\(k-[0-9a-f]*\)/vmlinuz$|\1|p' "$BOOT/extlinux/extlinux.conf" 2>/dev/null | head -1; }
+entry_slot() { sed -n 's/.* ab\.slot=\([ab]\)\( .*\)\{0,1\}$/\1/p' "$BOOT/extlinux/extlinux.conf" 2>/dev/null | head -1; }
+
+# install <slot>: the slot's kernel and device tree into k-<sum> on system1, then extlinux.conf naming
+# them, written beside and renamed over the old one, so a power cut leaves one entry or the other
+# whole. Directories nothing names any more go last.
+install() {
+	img=$STORE/slots/$1/boot/boot.img
+	[ -f "$img" ] || { say "slot $1 has no kernel (boot/boot.img)"; return 1; }
+	fits "$img" || return 1
+	k=k-$(sum "$img" | cut -c1-16)
+	d=$BOOT/$k
+	if [ ! -s "$d/vmlinuz" ] || [ ! -s "$d/$DTB" ]; then
+		rm -rf "$d.new" && mkdir -p "$d.new" || return 1
+		kpart "$img" | head -c "$DTBAT" > "$d.new/vmlinuz" &&
+			kpart "$img" | tail -c +$((DTBAT + 1)) > "$d.new/$DTB" &&
+			[ "$(wc -c < "$d.new/vmlinuz")" = "$DTBAT" ] &&
+			[ "$(wc -c < "$d.new/$DTB")" = $((KSZ - DTBAT)) ] || { say "copying slot $1's kernel to system1 failed"; rm -rf "$d.new"; return 1; }
+		sync
+		rm -rf "$d" && mv "$d.new" "$d" || return 1
+	fi
+	append="$(without_trial "$(hdr_cmdline "$img")") ab.slot=$1"
+	mkdir -p "$BOOT/extlinux"
+	cat > "$BOOT/extlinux/extlinux.conf.new" <<EOF || return 1
+timeout 1
+default techo5
+menu title ThinkSmart View (TECHO5)
+label techo5
+	kernel /$k/vmlinuz
+	fdt /$k/$DTB
+	append $append
+EOF
+	sync
+	mv -f "$BOOT/extlinux/extlinux.conf.new" "$BOOT/extlinux/extlinux.conf" || return 1
+	sync
+	for o in "$BOOT"/k-*; do
+		[ -d "$o" ] && [ "${o##*/}" != "$k" ] && rm -rf "$o"
+	done
+	sync
+	say "system1: slot $1's kernel ($k)"
+}
+
+# to_recovery <slot> <command line>: the slot's image into recovery with that command line in its
+# header, read back
+to_recovery() {
+	img=$STORE/slots/$1/boot/boot.img
+	dev=$(recovery_dev) || { say "no recovery partition"; return 1; }
+	cl=$2
+	[ ${#cl} -lt 512 ] || { say "slot $1: the command line would be too long"; return 1; }
+	isz=$(wc -c < "$img")
+	if ! { head -c 64 "$img"; printf '%s' "$cl" | head -c 512; dd if=/dev/zero bs=1 count=$((512 - ${#cl})) 2>/dev/null; tail -c +577 "$img"; } > /tmp/lk2nd-ab.img ||
+		! dd if=/tmp/lk2nd-ab.img of="$dev" bs=1M conv=fsync 2>/dev/null ||
+		! head -c "$isz" "$dev" | cmp -s - /tmp/lk2nd-ab.img; then
+		rm -f /tmp/lk2nd-ab.img
+		say "writing slot $1's kernel to recovery failed"
+		return 1
+	fi
+	rm -f /tmp/lk2nd-ab.img
+}
+
+# trial <slot>: take a try, and the slot's image to recovery with ab.slot=<slot> on its command line
+trial() {
+	img=$STORE/slots/$1/boot/boot.img
+	eval "t=\$T_$1"
+	cl="$(hdr_cmdline "$img") ab.slot=$1"
+	[ ${#cl} -lt 512 ] || { say "slot $1: the command line would be too long"; return 1; }
+	recovery_dev >/dev/null || { say "no recovery partition"; return 1; }
+	bootctl -q set "$1" tries=$((t - 1)) >/dev/null || { say "taking a try for slot $1 failed"; return 1; }
+	to_recovery "$1" "$cl" || return 1
+	say "slot $1 on trial: its kernel in recovery, $((t - 1)) tries left after this one"
+}
+
+# fallback <slot>: the slot's image to recovery as the way back from the kernel replacing it on
+# system1. No try is taken, and nothing changes if it cannot be written.
+fallback() {
+	img=$STORE/slots/$1/boot/boot.img
+	[ -f "$img" ] && fits "$img" 2>/dev/null || { say "slot $1 has no kernel to fall back to"; return 1; }
+	to_recovery "$1" "$(without_trial "$(hdr_cmdline "$img")") ab.slot=$1 $FALLBACK_WORD" || return 1
+	say "recovery: slot $1's kernel, to fall back to"
+}
+
+# clear_recovery: no boot image in recovery, so lk2nd's Recovery entry starts nothing
+clear_recovery() {
+	dev=$(recovery_dev) || return 1
+	dd if=/dev/zero of="$dev" bs=4096 count=1 conv=fsync 2>/dev/null
+}
+
+# retire_trial <slot>: a trial kernel was started: recovery must not start it again (a try is taken
+# only by trial(), so a second start from lk2nd's menu would cost none). The kernel on system1, when
+# its slot is good, goes there as the way back; otherwise recovery is cleared.
+retire_trial() {
+	w=$(entry_slot)
+	if [ -n "$w" ] && [ "$w" != "$1" ]; then
+		eval "wp=\$P_$w ws=\$S_$w"
+		[ "$wp" -gt 0 ] && [ "$ws" = 1 ] && fallback "$w" && return 0
+	fi
+	clear_recovery && say "recovery cleared: slot $1's trial kernel starts only once" && return 0
+	say "slot $1's trial kernel could not be taken out of recovery"
+	return 1
+}
+
+restart() {
+	sync
+	say "restarting${1:+ into $1}"
+	$REBOOT $1
+	exit 1	# REBOOT did not restart
+}
+
+cmd_boot() {
+	read_record
+	case $? in 0) ;; 3) return 3;; *) say "the record could not be read"; return 1;; esac
+	b=$(booted)
+	# A kernel on trial: the try was taken before the restart into it. Only while the record still has
+	# that slot on trial: a kernel left in recovery and started again later is stale.
+	if on_trial_kernel; then
+		[ -n "$b" ] || { say "a kernel on trial without ab.slot="; return 1; }
+		eval "p=\$P_$b s=\$S_$b"
+		if [ "$p" -gt 0 ] && [ "$s" = 0 ]; then
+			# Taken out of recovery before it runs: started again from lk2nd's menu after its
+			# tries are used up, it would count as on trial and could still be committed.
+			retire_trial "$b" || { say "not starting slot $b's trial; back to system1"; restart; }
+			echo "$b"
+			return 0
+		fi
+		say "a stale kernel in recovery: slot $b is not on trial (priority $p, successful $s); back to system1"
+		restart
+	fi
+	# The kernel that was good before the last commit, started from recovery by hand because the one
+	# on system1 fails: undo the commit.
+	if on_fallback_kernel; then
+		[ -n "$b" ] || { say "a fallback kernel without ab.slot="; return 1; }
+		o=$( [ "$b" = a ] && echo b || echo a )
+		img=$STORE/slots/$b/boot/boot.img
+		eval "p=\$P_$b s=\$S_$b"
+		if [ "$p" -gt 0 ] && [ "$s" = 1 ] && [ -f "$img" ]; then
+			say "falling back to slot $b: slot $o's kernel fails from system1; slot $o marked bad"
+			bootctl -q mark-bad "$o" >/dev/null || { say "marking slot $o bad failed"; return 1; }
+			install "$b" || say "slot $b's kernel could not go back to system1"
+			echo "$b"
+			return 0
+		fi
+		say "a fallback kernel for slot $b, which is not good in the record (priority $p, successful $s); back to system1"
+		restart
+	fi
+	n=0
+	while [ $n -lt 3 ]; do
+		n=$((n + 1))
+		p=$(pick) || { say "no bootable slot in the record"; return 1; }
+		img=$STORE/slots/$p/boot/boot.img
+		eval "s=\$S_$p"
+		# The usual boot: a good slot, started from system1 with its own kernel. Nothing more to check.
+		if [ "$s" = 1 ] && [ "$b" = "$p" ] && [ -f "$img" ] && [ "$(entry_slot)" = "$p" ] &&
+			[ "$(entry_dir)" = "k-$(sum "$img" | cut -c1-16)" ]; then
+			echo "$p"
+			return 0
+		fi
+		if [ ! -f "$img" ] || ! fits "$img"; then
+			say "slot $p: no kernel lk2nd can start; marked bad"
+			bootctl -q mark-bad "$p" >/dev/null
+			read_record || return 1
+			continue
+		fi
+		if [ "$s" = 1 ]; then
+			# Good, but system1 holds another kernel: its own goes there. When that replaces the
+			# other slot's kernel (a commit, or a switch back), the other slot's goes to recovery, the
+			# way back if this one fails from system1.
+			was=$(entry_slot)
+			install "$p" || { say "slot $p's kernel could not go to system1"; [ "$b" = "$p" ] && { echo "$p"; return 0; }; return 1; }
+			if [ -n "$was" ] && [ "$was" != "$p" ]; then
+				eval "wp=\$P_$was ws=\$S_$was"
+				if [ "$wp" -gt 0 ] && [ "$ws" = 1 ] && ! fallback "$was"; then
+					# Recovery would hold an image the boot layer refuses: clear it, so lk2nd's
+					# Recovery entry plainly does nothing, and say so in status.
+					clear_recovery
+					say "NO WAY BACK: slot $was's kernel could not go to recovery; if slot $p's kernel fails from system1, reinstall"
+				fi
+			fi
+			restart
+		fi
+		trial "$p" && restart recovery
+		# The trial could not be set up: the slot this kernel is for, if it is bootable.
+		[ -n "$b" ] && { say "starting slot $b, system1's"; echo "$b"; return 0; }
+		return 1
+	done
+	return 1
+}
+
+# recovery_holds: what lk2nd's Recovery entry starts
+recovery_holds() {
+	dev=$(recovery_dev) || { echo "no recovery partition"; return; }
+	[ "$(head -c 8 "$dev" 2>/dev/null)" = "ANDROID!" ] || { echo "nothing"; return; }
+	cl=$(hdr_cmdline "$dev")
+	x=$(echo "$cl" | sed -n 's/.*ab\.slot=\([ab]\).*/\1/p')
+	if echo "$cl" | grep -qw $FALLBACK_WORD; then echo "slot $x's kernel, to fall back to"
+	elif echo "$cl" | grep -qw $TRIAL_WORD; then echo "slot $x's kernel, on trial"
+	else echo "an image TECHO5 did not put there"; fi
+}
+
+cmd_status() {
+	bootctl status
+	echo "system1: slot $(entry_slot) ($(entry_dir)); booted: $(booted || echo none)$(on_trial_kernel && echo ', from recovery (on trial)')"
+	echo "recovery: $(recovery_holds)"
+}
+
+case "${1:-}" in
+boot) cmd_boot;;
+install) [ $# = 2 ] && case $2 in a|b) ;; *) false;; esac || { echo "usage: lk2nd-ab install a|b" >&2; exit 2; }
+	install "$2";;
+status) cmd_status;;
+*) echo "usage: lk2nd-ab boot|install <a|b>|status" >&2; exit 2;;
+esac

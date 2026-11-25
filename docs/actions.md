@@ -84,6 +84,8 @@ For a device you're giving to someone else. The device forgets the URL and token
 Assistant connects with by a new random one, and restarts. Your Home Assistant can't connect to it again, and the device no longer calls your Home
 Assistant. It also makes a new Sendspin identity and pairing token, so your Music Assistant can't pair
 with it again and the next Music Assistant it meets sees a new player; delete the old one from yours.
+(Updating to v1.6.49, dot-v1.0.76 or spot-v1.4.49 or later makes a new player too, once: see
+[Music](setup.md#5-music).)
 Alarms, radio stations, Wi-Fi and its other settings stay.
 
 A device that was given access to your Home Assistant with an administrator's token deletes its own
@@ -1100,6 +1102,7 @@ timers:
     total_seconds: 600
     running: true
     local: true          # false for a timer set by voice through Home Assistant
+    silent: false        # true for one started with timer_start_silent
 ```
 
 ## Start a timer
@@ -1139,8 +1142,11 @@ In YAML, refer to this action as `esphome.<node>_timer_start_silent`.
 A timer that only shows: it counts down on the ring and the screen like `timer_start`'s, in a color
 of its own, and at zero it is gone without ringing. It is for showing a wait that Home Assistant
 keeps, such as a device joining the home: the automation waits for the device itself, cancels the
-timer with `timer_cancel` when it arrives, and says what went wrong when it does not. A silent timer
-is not kept over a restart. Answers with the new timer's `id`, as `timer_start` does.
+timer with `timer_cancel` when it arrives, and says what went wrong when it does not. Since the
+automation ends it, the device's screen, its setup page and its built-in assistant show a silent timer
+without offering to stop it, and "cancel all the timers" leaves it running; `timer_cancel` with its
+`id` (or `all`) still cancels it. A silent timer is not kept over a restart. Answers with the new
+timer's `id`, as `timer_start` does.
 
 ### duration (Required)
 
@@ -3139,8 +3145,9 @@ data:
 In YAML, refer to this action as `esphome.<node>_settings_lock_pin`.
 
 Sets the PIN the device asks for before its settings change (Show and Spot). Everything else on the
-device works without it: the clock, music, the voice assistant, calls, and the everyday settings
-(alarms and timers, the volume, the brightness; see [the settings lock](setup.md#8-settings-lock)).
+device works without it: the clock, music, the voice assistant, calls, and the settings for how it
+looks, sounds and is used (alarms and timers, the volume, the brightness, the theme and the clock;
+see [the settings lock](setup.md#8-settings-lock) for the full line).
 The **Settings lock** switch shows whether a PIN is set; turning it off removes the PIN, which is
 the way back in if it is forgotten. The PIN can also be set on the device (Settings → Privacy &
 Security → Settings lock) and on the setup page.

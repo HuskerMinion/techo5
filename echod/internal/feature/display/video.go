@@ -52,12 +52,18 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	up := st.Active() && st.Phase != video.Asking
 	s.showVideo = (up || failedRecently) && !videoCovered(*s)
 	video.Get().Covered(up && videoCovered(*s))
+	// How a place chosen on the bar would be sent, worked out before d.mu: it asks the player and the
+	// DLNA renderer, which have locks of their own.
+	route := videoSeekRoute(st)
 	d.mu.Lock()
 	if up {
 		d.videoTried = st.ID
 	}
 	controls := now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
 	s.videoControls = controls
+	s.videoSkip = up && videoSkippable(st)
+	// The bar to seek on, for a video somebody can move through, showing the place a finger is choosing.
+	s.videoSeek = d.seekShowLocked(route, st.Pos, now)
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
 	d.videoLive = s.videoLive
@@ -93,6 +99,12 @@ func (d *Display) videoGesture(g touch.Gesture) {
 		d.mu.Unlock()
 		return
 	}
+	// The bar to seek on, while the controls are up (videoBarUp): a finger on it is its, and keeps them
+	// up. With the controls away, a tap on where the bar was brings them back, as anywhere else.
+	if d.videoBarUp(video.Get().State()) && d.seekGesture(g) {
+		d.showVideoControls()
+		return
+	}
 	switch g.Kind {
 	case touch.SwipeDown:
 		slog.Info("screen: video stopped by a swipe")
@@ -121,6 +133,12 @@ func (d *Display) videoGesture(g touch.Gesture) {
 			d.showVideoControls()
 		case videoTapLouder:
 			go media.Get().Adjust(+1)
+			d.showVideoControls()
+		case videoTapBack:
+			go videoSkip(media.TransportPrevious)
+			d.showVideoControls()
+		case videoTapNext:
+			go videoSkip(media.TransportNext)
 			d.showVideoControls()
 		default:
 			// Off the controls: they go, and the picture is the whole screen again.

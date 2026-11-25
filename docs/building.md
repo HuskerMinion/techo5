@@ -83,9 +83,12 @@ have no SFTP server, which `scp` uses by default since OpenSSH 9, so `-O` asks f
 
 ```
 DEVICE=192.168.x.y   # the device's IP address
-scp -O bin/echod-arm root@$DEVICE:/tmp/echod-test
-ssh root@$DEVICE 'mount --bind /tmp/echod-test /usr/local/bin/techo5 && killall techo5'
+scp -O bin/echod-arm root@$DEVICE:/run/echod-test
+ssh root@$DEVICE 'mount --bind /run/echod-test /usr/local/bin/techo5 && killall techo5'
 ```
+
+It goes in `/run`, which is memory, root's alone and not capped, rather than `/tmp`: `/tmp` is bounded
+at 32 MB, which is less than a daemon, and anyone on the device can write to it.
 
 ## 4. The root filesystem
 

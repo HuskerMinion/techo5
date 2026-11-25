@@ -34,7 +34,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -196,6 +195,8 @@ type Display struct {
 	press     pressState
 	pageShown pageID
 	pressSeq  uint64
+	// seekF is a finger on the video's bar to seek on (seekbar.go).
+	seekF seekFinger
 
 	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
 	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which
@@ -1401,12 +1402,10 @@ func (d *Display) locked(f func()) {
 	f()
 }
 
-// restartDevice reboots; the slot store and the daemon's state are on disk already.
+// restartDevice reboots; the slot store and the daemon's state are on disk already, and what waits in
+// memory is saved first (bootreason.Reboot).
 func restartDevice() {
-	bootreason.Mark(bootreason.Restart)
-	syscall.Sync()
-	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		bootreason.Unmark()
+	if err := bootreason.Reboot(bootreason.Restart); err != nil {
 		slog.Error("restart failed", "err", err)
 	}
 }

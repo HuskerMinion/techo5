@@ -302,6 +302,38 @@ class NoFastboot:
         return False
 
 
+class RescueTimeout(unittest.TestCase):
+    """A rescue console that never answers (#729): the install has erased nothing by then, and the
+    message says so, with the cause when the console could not be opened and the two ways on."""
+
+    def fail_text(self, console, los_boot):
+        with self.assertRaises(lib.Fail) as c, contextlib.redirect_stdout(io.StringIO()):
+            inst.wait_for_rescue(console, FakeAdb(''), NoFastboot, [False], los_boot, seconds=0)
+        return str(c.exception)
+
+    def test_a_console_that_cannot_be_opened_names_the_cause_and_says_nothing_was_erased(self):
+        console = lib.Console('SERIAL1', IDS)
+        console.blocked = '/dev/ttyACM0: Permission denied'
+        with tempfile.TemporaryDirectory() as d:
+            los_boot = os.path.join(d, 'boot-lineage.img')
+            open(los_boot, 'wb').close()
+            text = self.fail_text(console, los_boot)
+        self.assertIn('timed out after 0 s waiting for the rescue console on USB', text)
+        self.assertIn('/dev/ttyACM0: Permission denied', text)
+        self.assertIn("'dialout'", text)
+        self.assertIn('ModemManager', text)
+        self.assertIn('Nothing was erased', text)
+        self.assertIn('#if-the-install-stops-at-the-slot-store', text)
+        self.assertIn('fastboot flash boot ' + los_boot, text)
+        self.assertEqual(text.count('dialout'), 1)
+
+    def test_without_the_backup_it_points_to_where_backups_go(self):
+        text = self.fail_text(FakeConsole([]), '/nonexistent/boot-lineage.img')
+        self.assertIn('Nothing was erased', text)
+        self.assertIn('backups/<serial>/boot-lineage.img', text)
+        self.assertNotIn('/nonexistent/', text)
+
+
 class FirstBoot(unittest.TestCase):
     def watch(self, answers):
         console = FakeConsole(answers)

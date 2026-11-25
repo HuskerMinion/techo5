@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
@@ -113,12 +112,9 @@ func stackAddress() string {
 }
 
 // restart reboots the device the plain way; the slot store and the daemon's state are on disk
-// already, so nothing needs saying goodbye to.
+// already, and what waits in memory (the wake clips) is saved first (bootreason.Reboot).
 func restart() {
-	bootreason.Mark(bootreason.Restart)
-	syscall.Sync()
-	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		bootreason.Unmark()
+	if err := bootreason.Reboot(bootreason.Restart); err != nil {
 		slog.Error("restart failed", "err", err)
 	}
 }

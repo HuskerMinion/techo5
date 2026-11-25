@@ -12,6 +12,7 @@ import (
 // and a script of its own when the boot left none; one that is running is left alone.
 func TestADHCPClientIsStartedWhenNoneRuns(t *testing.T) {
 	dir := t.TempDir()
+	_ = os.Chmod(dir, 0o755) // as root's /run/techo5 is: not writable by others
 	wp, ws, wo, wst, wi := dhcpPid, dhcpScripts, dhcpOwn, startDHC, iface
 	t.Cleanup(func() { dhcpPid, dhcpScripts, dhcpOwn, startDHC, iface = wp, ws, wo, wst, wi })
 	dhcpPid = filepath.Join(dir, "udhcpc.pid")

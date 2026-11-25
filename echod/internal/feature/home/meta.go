@@ -16,6 +16,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/radiometa"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // What the station is playing, for the now-playing screen: the song, and a picture for the
@@ -48,7 +49,9 @@ type meta struct {
 	fromEntity bool
 }
 
-var artClient = &http.Client{Timeout: 10 * time.Second}
+// artClient fetches station logos and covers, which come from the station's own servers as often as
+// not: named as the stream is (useragent, #730).
+var artClient = &http.Client{Timeout: 10 * time.Second, Transport: useragent.Transport(nil)}
 
 // playingStation is the station name to follow, or empty when the radio is not running.
 func (f *Feature) playingStation() string {

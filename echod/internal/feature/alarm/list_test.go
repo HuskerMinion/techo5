@@ -26,7 +26,8 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 		},
 		Followed: []Followed{{Entity: "input_datetime.school", Label: "School run", Armed: true}},
 	}
-	timers := []timer.Countdown{{ID: "local:x", Name: "Pasta", Left: 272 * time.Second, Total: 600 * time.Second, Active: true, Local: true}}
+	timers := []timer.Countdown{{ID: "local:x", Name: "Pasta", Left: 272 * time.Second, Total: 600 * time.Second, Active: true, Local: true},
+		{ID: "local:y", Name: "Pairing", Left: time.Minute, Total: 2 * time.Minute, Active: true, Local: true, Silent: true}}
 
 	l := listing(now, v, timers)
 
@@ -49,6 +50,10 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 	}
 	if got := l.Timers[0]; got.ID != "local:x" || got.Left != 272 || got.Total != 600 || !got.Local || !got.Running {
 		t.Errorf("timer = %+v", got)
+	}
+	// A silent timer says so, for an automation that lists the timers and leaves its own waits be (#723).
+	if l.Timers[0].Silent || !l.Timers[1].Silent {
+		t.Errorf("silent = %v, %v; want only the timer_start_silent one silent", l.Timers[0].Silent, l.Timers[1].Silent)
 	}
 	if got := l.Followed[0]; got.Next != "" || got.Label != "School run" {
 		t.Errorf("a helper with no usable time has no next: %+v", got)

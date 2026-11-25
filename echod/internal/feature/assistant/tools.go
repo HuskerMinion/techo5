@@ -62,6 +62,33 @@ func argNumber(args map[string]any, k string) (float64, bool) {
 	return 0, false
 }
 
+// cancelTimers is cancel_timers: the timer with this label, or every one for an empty label, through
+// cancel. It reports how many went and how many silent ones it left. A silent timer (timer_start_silent)
+// is the wait of an automation, which cancels it when the wait is over; canceling it here would only take
+// the countdown away while the automation went on waiting, so the assistant leaves it alone even when
+// its label is said, as the screen does.
+func cancelTimers(list []timer.Countdown, label string, cancel func(id string) bool) (n, kept int) {
+	label = strings.ToLower(label)
+	var own []timer.Countdown
+	for _, t := range list {
+		if t.Silent {
+			kept++
+			continue
+		}
+		own = append(own, t)
+	}
+	for _, t := range own {
+		if (label == "" || strings.ToLower(t.Name) == label) && cancel(t.ID) {
+			n++
+		}
+	}
+	// "Cancel the timer" with one running means that one, whatever the model took its label to be.
+	if n == 0 && len(own) == 1 && cancel(own[0].ID) {
+		n = 1
+	}
+	return n, kept
+}
+
 // toolList is the tools a turn may use; a variable for the tests.
 var toolList = tools
 
@@ -104,7 +131,12 @@ func deviceTools() []tool {
 					if t.Name == "" {
 						name = "a timer with no label"
 					}
-					s = append(s, fmt.Sprintf("%s with %s left", name, words(t.Left)))
+					line := fmt.Sprintf("%s with %s left", name, words(t.Left))
+					if t.Silent {
+						// Said so the model does not offer to cancel what cancel_timers leaves alone.
+						line += ", shown for a Home Assistant automation, which ends it"
+					}
+					s = append(s, line)
 				}
 				return strings.Join(s, "; "), nil
 			}},
@@ -112,20 +144,9 @@ func deviceTools() []tool {
 		{llm.Tool{Name: "cancel_timers", Description: "Cancel timers: the one with this label, or all of them.",
 			Parameters: object(map[string]any{"label": str("The timer's label; empty cancels all.")})},
 			func(a map[string]any) (string, error) {
-				label := strings.ToLower(argString(a, "label"))
-				list := timer.Get().List(time.Now())
-				n := 0
-				for _, t := range list {
-					if label == "" || strings.ToLower(t.Name) == label {
-						if timer.Get().Cancel(t.ID) {
-							n++
-						}
-					}
-				}
-				// "Cancel the timer" with one running means that one, whatever the model took its
-				// label to be.
-				if n == 0 && len(list) == 1 && timer.Get().Cancel(list[0].ID) {
-					n = 1
+				n, kept := cancelTimers(timer.Get().List(time.Now()), argString(a, "label"), timer.Get().Cancel)
+				if n == 0 && kept > 0 {
+					return "no timer matched, and none was canceled; what is counting down is shown for a Home Assistant automation, which ends it itself", nil
 				}
 				switch n {
 				case 0:

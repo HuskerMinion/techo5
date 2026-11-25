@@ -282,6 +282,23 @@ first and the mute let go after a short settle, before the next sound goes out
 (`echod/internal/hardware/speaker/idle.go`). The Show 8 1st gen (crown) has the same switch but has
 not been tried, so its amplifier stays on.
 
+### The 1st gen Show 5's loopback is aliased
+
+On checkers the two loopback channels the FPGA packs beside the microphones are brought down to
+16 kHz without being filtered first: what the speaker is sent between 8 and 24 kHz folds back under
+8 kHz. The loopback carries as much at 7.9 kHz as at 2 kHz, while the microphones hear the music
+fall away above 1 kHz. Measured on a unit with music at a normal listening level, its coherence with
+the microphones was 0.93 at 150-300 Hz and under 0.06 from 1.2 to 4 kHz, so an echo canceller
+reading it removes the bass and nothing of the band a wake word is heard in. The two channels are
+also identical, left and right.
+
+So on checkers the daemon replaces them with the reference made in software from what the speaker
+sends (`echod/internal/lib/echoref`, `echod/internal/hardware/mic/softref_cronos.go`), as athena does
+on the mainline kernel. On the same music the canceller then took 17 dB off 0.6-1.2 kHz and 5 to
+7 dB off 1.2-8 kHz, and the wake word over music was heard 8 times in two minutes where it had been
+heard twice. Cronos and crown read their loopback through what looks like the same FPGA and may have
+the same fault; theirs has not been measured, so they keep the card's loopback.
+
 ### Android's audio stack cannot share the devices
 
 With the daemon holding `pcmC0D22c`/`pcmC0D23p` on LineageOS, the vendor HAL fails to open

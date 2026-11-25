@@ -88,3 +88,63 @@ func TestFetchNeedsTheSignatureAndTheClock(t *testing.T) {
 		t.Errorf("fetched on an unset clock: %v", err)
 	}
 }
+
+// The add-on catalog is taken only with the release key's signature over its domain and exactly what
+// was served, and not before the clock is set; VerifyCatalog checks a kept copy the same way. A
+// signature made over the bare bytes, as a firmware manifest's is, does not verify a catalog, and a
+// catalog's does not verify as a manifest's.
+func TestFetchSignedCatalogNeedsItsOwnSignatureAndTheClock(t *testing.T) {
+	seed, pub := testKey(t)
+	body := []byte(`{"serial":1}`)
+	good, _ := SignCatalog(body, seed)
+	sig := good
+	mux := http.NewServeMux()
+	mux.HandleFunc("/catalog.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) })
+	mux.HandleFunc("/catalog.json.sig", func(w http.ResponseWriter, _ *http.Request) {
+		if sig == "" {
+			http.NotFound(w, nil)
+			return
+		}
+		_, _ = w.Write([]byte(sig))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	restoreKey, restoreClock := releaseKey, clockSet
+	t.Cleanup(func() { releaseKey, clockSet = restoreKey, restoreClock })
+	releaseKey = pub
+	clockSet = func() bool { return true }
+
+	got, gotSig, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10)
+	if err != nil || string(got) != string(body) {
+		t.Fatalf("a signed catalog: %q, %v", got, err)
+	}
+	if err := VerifyCatalog(got, gotSig); err != nil {
+		t.Errorf("the kept copy does not verify: %v", err)
+	}
+	if err := VerifyCatalog([]byte(`{"serial":2}`), gotSig); err == nil {
+		t.Error("a changed copy verified")
+	}
+	if err := verify(body, gotSig, pub); err == nil {
+		t.Error("a catalog's signature verified as a manifest's")
+	}
+	sig, _ = Sign(body, seed)
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); err == nil {
+		t.Error("a manifest-style signature was taken for a catalog")
+	}
+	sig = ""
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); err == nil {
+		t.Error("an unsigned file was taken")
+	}
+	sig = good
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 4); err == nil {
+		t.Error("a file over the limit was taken")
+	}
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/nothing.json", 1<<10); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a missing file: %v, want ErrNotFound", err)
+	}
+	clockSet = func() bool { return false }
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); !errors.Is(err, ErrClock) {
+		t.Errorf("fetched on an unset clock: %v", err)
+	}
+}

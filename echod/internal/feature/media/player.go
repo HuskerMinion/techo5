@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/asp"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/noise"
@@ -590,7 +591,17 @@ func build() *Player {
 	for _, sel := range p.layers {
 		sel.Set(noiseOff)
 	}
+	// What the player asks Home Assistant to convert to changes only while nothing is connected
+	// (component.Between): the setup page reconnects when a reply player is chosen or cleared.
+	component.Between.Listen(func(struct{}) { p.describeFormats(config.Get()) })
 	return p
+}
+
+// describeFormats puts on the player the formats for where replies play now (FormatsFor). A device
+// that cannot hear has no replies to send anywhere, and keeps its own. Only where no connection can
+// be reading them: Restore, before anything serves, and component.Between.
+func (p *Player) describeFormats(c config.Config) {
+	p.mp.SupportedFormats = FormatsFor(layout.HasMicrophone() && c.Brain.RepliesElsewhere())
 }
 
 func (p *Player) Name() string { return "media player" }
@@ -753,6 +764,7 @@ func (p *Player) applyOutputMode(mode config.OutputMode) {
 // Restore puts the volume back where it was, without flashing the arc: nothing happened, the device
 // is starting where it left off.
 func (p *Player) Restore(c config.Config) {
+	p.describeFormats(c)
 	p.applyOutputMode(c.Speaker.OutputMode)
 	if speaker.HasJack {
 		slog.Info("restored", "what", p.output.ObjectID, "using", p.output.Get())
@@ -1084,7 +1096,7 @@ func (p *Player) SkipReaches() bool {
 		return true
 	}
 	from := p.Receiving()
-	return from != "" && receiverControl(from) != nil
+	return from != "" && (receiverControl(from) != nil || receiverSkipReaches(from))
 }
 
 func (p *Player) Transport(t Transport) {
@@ -1153,8 +1165,13 @@ func (p *Player) Transport(t Transport) {
 	case TransportNext, TransportPrevious:
 		// A received track's sender has a queue of its own, and one that can be reached is asked to skip
 		// (ReceiverControl). Otherwise there is nothing to skip to: the tracks this player has are its own
-		// stations, and it plays one stream at a time.
+		// stations, and it plays one stream at a time. A receiver that takes the skip itself
+		// (ReceiverSkip: DLNA's renderer, which tells its controllers) is asked while somebody hears it.
 		if from := p.Receiving(); from != "" {
+			if sk, ok := receiverSkipFor(from); ok && sk.reaches() {
+				sk.skip(t)
+				return
+			}
 			p.tellSender(from, t)
 		}
 	}
@@ -1545,6 +1562,36 @@ func receiverControl(name string) func(Transport) func() bool {
 		return ctl.(func(Transport) func() bool)
 	}
 	return nil
+}
+
+// receiverSkips holds, for the received sources that take a next or a previous themselves rather than
+// through a sender's ReceiverControl, how to ask them (ReceiverSkip).
+var receiverSkips sync.Map // name → receiverSkip
+
+type receiverSkip struct {
+	reaches func() bool
+	skip    func(Transport)
+}
+
+// ReceiverSkip gives the received source name a next and a previous of its own: DLNA's renderer, which
+// has no queue to skip through but tells the controllers listening to it that one was pressed, so one of
+// them can. reaches says whether anybody would hear it now (SkipReaches), and a skip is passed on only
+// then: with nobody listening, a next does what it does for any other received track. skip is called on
+// the screen's goroutine, and only starts what it sends.
+func ReceiverSkip(name string, reaches func() bool, skip func(Transport)) {
+	receiverSkips.Store(name, receiverSkip{reaches, skip})
+}
+
+func receiverSkipFor(name string) (receiverSkip, bool) {
+	if sk, ok := receiverSkips.Load(name); ok {
+		return sk.(receiverSkip), true
+	}
+	return receiverSkip{}, false
+}
+
+func receiverSkipReaches(name string) bool {
+	sk, ok := receiverSkipFor(name)
+	return ok && sk.reaches()
 }
 
 // tellSender passes t on to the sender of the received track named from, after whatever was passed on

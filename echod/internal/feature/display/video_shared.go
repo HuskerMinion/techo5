@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 )
@@ -37,7 +39,38 @@ const (
 	videoTapStop
 	videoTapQuieter
 	videoTapLouder
+	// The back and forward a DLNA video has while its controller listens (videoSkip), drawn after
+	// the rest. The Spot's video screen has no skip buttons, so its build never names them.
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapBack
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapNext
 )
+
+// videoBarUp is whether a finger on the video page may be its bar's (seekGesture): while the controls
+// it is drawn with are up (as a tap on the page finds them, videoGesture), or while a finger that came
+// down on it is still on it. With the controls away, the bar the last frame drew is not there to the
+// eye, and a tap that brings the controls back must not move the video as well.
+func (d *Display) videoBarUp(st video.State) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	up := time.Now().Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
+	return up || d.seekF.landed || d.seekF.moving
+}
+
+// videoSkippable is whether the video the player has is a DLNA video whose controller hears a next or
+// a previous from the device (dlna.VideoSkippable): only then are they offered, never as buttons that
+// do nothing.
+func videoSkippable(st video.State) bool {
+	return st.Origin == video.FromDLNA && st.Active() && dlna.Get().VideoSkippable(st.ID)
+}
+
+// videoSkip passes a back or a forward on the video page to the DLNA controller (dlna.Skip).
+func videoSkip(t media.Transport) {
+	if !dlna.Get().Skip(t) {
+		slog.Info("screen: a skip on a video with nobody to hear it", "transport", t)
+	}
+}
 
 // videoAsk is the question about a DLNA video, as drawn.
 type videoAsk struct {
@@ -49,6 +82,10 @@ type videoAsk struct {
 // videoStrip is the controls' shade: dark enough for white over any picture, light enough to see the
 // picture through.
 var videoStrip = color.RGBA{0x00, 0x00, 0x00, 0xb0}
+
+// videoTrack is the bar to seek on where the video has not reached: white at a third, premultiplied as
+// the canvas is, so the strip shows through it as the picture shows through the strip.
+var videoTrack = color.RGBA{0x55, 0x55, 0x55, 0x55}
 
 // videoTime is a place in a video as a player says it: 4:05, or 1:04:05 past an hour.
 func videoTime(d time.Duration) string {

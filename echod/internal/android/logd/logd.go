@@ -56,6 +56,23 @@ var out = stream{lines: make(chan Line, streamDepth)}
 // it to Home Assistant. With nobody reading it costs one buffer and then nothing.
 func Lines() <-chan Line { return out.lines }
 
+// warnings carries word that a warning or an error has been written to the fallback, so whatever
+// keeps the log on flash (feature/maintenance) can push it out at once rather than on its timer. One
+// slot is enough: a word already waiting covers every line written before it is taken.
+var warnings = make(chan struct{}, 1)
+
+// Warned is word that a warning or an error has gone to the fallback writer since it was last taken.
+func Warned() <-chan struct{} { return warnings }
+
+// warned never waits: it is called on whatever goroutine logged, with the handler's lock held, and
+// the flush it asks for happens elsewhere.
+func warned() {
+	select {
+	case warnings <- struct{}{}:
+	default:
+	}
+}
+
 // publish makes room by throwing away the oldest line rather than the newest: a live log is worth
 // more than its history.
 func (s *stream) publish(l Line) {
@@ -150,6 +167,9 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 
 	if h.fallback != nil {
 		fmt.Fprintf(h.fallback, "%s %s\n", Letter(r.Level), line)
+		if r.Level >= slog.LevelWarn {
+			warned()
+		}
 	}
 	if h.conn == nil {
 		return nil

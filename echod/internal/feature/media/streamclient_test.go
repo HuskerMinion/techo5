@@ -65,3 +65,45 @@ func TestRedirectsIntoTheHomeAreRefusedFromOutside(t *testing.T) {
 		t.Errorf("a redirect between public addresses was refused: %v", err)
 	}
 }
+
+// A station on the regiocast/streamabc network gives Go's own User-Agent a short clip and then nothing,
+// and anything else the live stream (#730). The stream client names the device, on the request a
+// redirect makes as well as the first.
+func TestTheStreamClientNamesTheDevice(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("User-Agent"))
+		if r.URL.Path == "/station" {
+			http.Redirect(w, r, "/live", http.StatusFound)
+			return
+		}
+		if strings.HasPrefix(r.Header.Get("User-Agent"), "Go-http-client") {
+			io.WriteString(w, "clip")
+			return
+		}
+		io.WriteString(w, "live")
+	}))
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/station", nil)
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "live" {
+		t.Errorf("the station answered %q, not the live stream", body)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("%d requests, wanted the first and the redirect's: %q", len(seen), seen)
+	}
+	for i, ua := range seen {
+		if !strings.HasPrefix(ua, "TECHO5/") || !strings.Contains(ua, "github.com/HuskerMinion/techo5") {
+			t.Errorf("request %d sent User-Agent %q", i, ua)
+		}
+	}
+	if req.Header.Get("User-Agent") != "" {
+		t.Errorf("the caller's request was changed: %q", req.Header.Get("User-Agent"))
+	}
+}

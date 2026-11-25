@@ -19,8 +19,9 @@ import (
 
 // The settings lock: a PIN the device asks for before its settings change, so guests and children can
 // use the device (the clock, the music, the voice assistant, the call button) without changing it. The
-// settings screen itself opens without it: what is part of using the device (alarms and timers, the
-// volume and tone, brightness) stays open to everyone, and the rest asks for the PIN (display/pin.go).
+// settings screen itself opens without it: how the device looks, sounds and is used (alarms and timers,
+// the volume and tone, brightness, the theme and the clock) stays open to everyone, and what reaches
+// other systems asks for the PIN (display/pin.go, everyday).
 // Off until a PIN is set, from Home Assistant (the settings_lock_pin action) or the setup page; the
 // "Settings lock" switch shows whether one is set, and turning it off clears it, which is the way back in
 // from a forgotten PIN. A right PIN opens the settings for a couple of minutes; wrong ones in a row make

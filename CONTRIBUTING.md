@@ -64,8 +64,8 @@ The tests need Linux (or WSL on Windows). Then:
 
 - Ask in an issue before a big new feature. One that only some people want can often be an add-on
   instead: it runs from userdata at boot ([docs/setup.md](docs/setup.md#running-something-of-your-own-at-boot)),
-  outlasts updates, stays yours, and can be listed under
-  [Add-ons others have made](docs/external-asp.md#add-ons-others-have-made).
+  outlasts updates, stays yours, and can be listed in TECHO5's add-on catalog, which installs it from the
+  setup page ([Getting an add-on listed](docs/setup.md#getting-an-add-on-listed)).
 - Keep a pull request to one change. Say what it fixes and how you tested it, and on which device.
 - Write commit messages like the ones in `git log`: the area, a colon, then what changed, for example
   `display: add Russian as a screen language`.

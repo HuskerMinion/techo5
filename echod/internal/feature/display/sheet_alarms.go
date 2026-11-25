@@ -105,7 +105,9 @@ func (v cardView) withRows(rows ...settingRow) cardView {
 
 // timerRows are the Alarms & Timers card's timers: what is counting down now, then a row that sets
 // one. A timer set here can be stopped here; one from Home Assistant is stopped where it was set, so
-// it is shown and left alone.
+// it is shown and left alone. A silent one (timer_start_silent) is held here but is an automation's
+// wait, which the automation ends itself: stopping it here would only hide the countdown while the
+// automation waited on, so it is shown as Home Assistant's are.
 func timerRows(sv sheetView) []settingRow {
 	var rows []settingRow
 	for _, c := range sv.timers {
@@ -113,14 +115,14 @@ func timerRows(sv sheetView) []settingRow {
 			continue
 		}
 		where := tr("ui_from_home_assistant")
-		if c.Local {
+		if c.Local && !c.Silent {
 			where = tr("ui_set_here")
 		}
 		if c.Name != "" && c.Name != "Timer" {
 			where += " · " + c.Name
 		}
 		row := settingRow{id: "timer:" + c.ID, label: timerLeft(c.Left), sub: where, bold: true, kind: ctlValue, value: tr("ui_running")}
-		if c.Local {
+		if c.Local && !c.Silent {
 			row.kind, row.button, row.value = ctlButton, tr("stop"), ""
 		}
 		rows = append(rows, row)
@@ -346,8 +348,13 @@ func (d *Display) editDraft(f func(*alarmDraft)) {
 // was one of theirs.
 func (d *Display) alarmRowTap(id string, p part, opt int) bool {
 	if key, ok := strings.CutPrefix(id, "timer:"); ok {
-		// Only the device's own stop here; Home Assistant's row has no button to tap.
-		timer.Get().Cancel(key)
+		// Only the device's own stop here; Home Assistant's row has no button to tap, and neither has a
+		// silent timer's, whose automation ends it.
+		for _, c := range timer.Get().List(time.Now()) {
+			if c.ID == key && !c.Silent {
+				timer.Get().Cancel(key)
+			}
+		}
 		return true
 	}
 	if key, ok := strings.CutPrefix(id, "alarm:"); ok {

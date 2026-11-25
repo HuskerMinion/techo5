@@ -4,7 +4,6 @@ package display
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,7 +61,7 @@ func TestTheLockIsOnTheRowsNotTheDoor(t *testing.T) {
 	if ran != 1 || pinIsOpen() || security.Locked() {
 		t.Fatalf("the right PIN: ran %d, pad up %v, locked %v", ran, pinIsOpen(), security.Locked())
 	}
-	gate("wakeword", "Wake word", up, tap)
+	gate("wakesens", "Wake word threshold", up, tap)
 	if ran != 2 || pinIsOpen() {
 		t.Errorf("once open, another locked setting: ran %d, pad up %v", ran, pinIsOpen())
 	}
@@ -80,16 +79,21 @@ func TestTheLockIsOnTheRowsNotTheDoor(t *testing.T) {
 	}
 
 	// A nil tap is the PIN opening the lock and nothing more.
-	gate("theme", "", up, nil)
+	gate("timezone", "", up, nil)
 	typePIN("2468")
 	if security.Locked() || pinIsOpen() {
 		t.Errorf("the PIN alone: locked %v, pad up %v", security.Locked(), pinIsOpen())
 	}
 }
 
-// Everything the lock was set up to keep children away from stays behind it, and every row the
-// Alarms card can show stays open: a row is open only by being named.
+// The line the lock draws: how the device looks, sounds and is used here is open; what it connects to,
+// shares or takes from other systems, and what sends sound away from it unasked, is behind the PIN. A
+// row is open only by being named, so every row the Alarms card can show is open, and the Connections,
+// Privacy & Security and General cards are behind the PIN whole.
 func TestWhichRowsAreEveryday(t *testing.T) {
+	set := wakeWordSet
+	t.Cleanup(func() { wakeWordSet = set })
+	wakeWordSet = func() bool { return true }
 	for _, cat := range []category{catConnections, catSecurity, catGeneral} {
 		rows, _ := categoryRows(sheetView{st: settings{cat: cat}})
 		for _, row := range rows {
@@ -98,28 +102,35 @@ func TestWhichRowsAreEveryday(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{"wakeword", "wakesens", "ttsvoice", "quiet", "dnd", "night", "theme", "slideshow",
-		"airplay", "spotify", "dlna", "sendspin", "settingslock", "ssh", "updates", "restart", "", "unknown"} {
+	// Other systems, and the voice side: behind the PIN wherever they are drawn.
+	behind := []string{"wakesens", "wakesensplaying", "speakergain", "sendspin", "sendspindelay", "airplayvolume",
+		"follow", "camerasound", "callbutton", "roomlights", "cal_", "cal_some_later_row",
+		"presence", "photofolder", "subfolders", "immichfav", "calendars", "calpopcals", "screenlang", "weather",
+		"timezone", "callring", "recordword", "recordslot", "recordcount", "recordgap", "takes", "airplay", "spotify", "dlna",
+		"settingslock", "ssh", "updates", "restart", "tabletapps",
+		"androidsettings", "camtest", "", "unknown"}
+	for _, id := range behind {
 		if everyday(id) {
 			t.Errorf("%q is open while the lock is on", id)
 		}
 	}
-	// The two mixed categories: only what the lock leaves open by name is open there.
-	open := map[category][]string{}
+	for _, id := range []string{"wakeword", "ttsvoice", "quiet", "dnd", "night", "theme", "skin", "font", "textsize",
+		"clockstyle", "slideshow", "photoevery", "calpop", "cal_opens_on", "role:0"} {
+		if !everyday(id) {
+			t.Errorf("%q asks for the PIN; how the device looks and is used is open", id)
+		}
+	}
+	// The two mixed cards: everything on them is open but the rows named above.
+	locked := map[string]bool{}
+	for _, id := range behind {
+		locked[id] = true
+	}
 	for _, cat := range []category{catDisplay, catSound} {
 		rows, _ := categoryRows(sheetView{st: settings{cat: cat, auto: true}})
 		for _, row := range rows {
-			if row.id != "" && everyday(row.id) {
-				open[cat] = append(open[cat], row.id)
+			if row.id != "" && everyday(row.id) == locked[row.id] {
+				t.Errorf("%s: %q open %v", categoryNames[cat], row.id, everyday(row.id))
 			}
-		}
-	}
-	if got := strings.Join(open[catDisplay], " "); got != "brightness auto dimmest" && got != "brightness auto" {
-		t.Errorf("Display: open rows %q, want the brightness ones", got)
-	}
-	for _, id := range open[catSound] {
-		if !strings.Contains(" volume voicevol callvol bass treble output mic waketone sleep ", " "+id+" ") {
-			t.Errorf("Sound: %q is open", id)
 		}
 	}
 	for _, row := range alarmsCard(sheetView{st: settings{cat: catAlarms}}).rows {
@@ -148,5 +159,18 @@ func TestLockedRowsAreMarked(t *testing.T) {
 	}
 	if card.rows[0].locked {
 		t.Error("the card's own rows were changed")
+	}
+}
+
+// The wake word is open only while the first slot listens for one: where the owner chose no word,
+// choosing one would turn listening back on, which is the owner's to do.
+func TestTheWakeWordIsOpenOnlyWhileOneIsSet(t *testing.T) {
+	set := wakeWordSet
+	t.Cleanup(func() { wakeWordSet = set })
+	for _, on := range []bool{true, false} {
+		wakeWordSet = func() bool { return on }
+		if everyday("wakeword") != on {
+			t.Errorf("a word set %v: the wake word row open %v", on, everyday("wakeword"))
+		}
 	}
 }

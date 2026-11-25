@@ -37,6 +37,8 @@ type pressState struct {
 // panel, where nothing is drawn, nor on a card over the page, which is not the control under it.
 func (d *Display) fingerLanded(p touch.Point) {
 	at := image.Pt(p.X, p.Y)
+	// A finger on a bar to seek on is followed as it moves, from now (seekbar.go).
+	d.seekLanded(at)
 	d.mu.Lock()
 	shown := d.pageShown
 	d.mu.Unlock()
@@ -72,6 +74,7 @@ func (d *Display) fingerDown(down bool) {
 	if down {
 		return
 	}
+	d.seekLifted()
 	d.mu.Lock()
 	lifted := d.press.set && d.press.down
 	if lifted {

@@ -28,6 +28,36 @@ func TestPriorityMapsLevels(t *testing.T) {
 	}
 }
 
+// A warning or an error written to the fallback says so on Warned, for the flush that keeps it
+// across a power cut; an ordinary line does not, and a second word while one waits never blocks.
+func TestWarnedOnWarningsOnly(t *testing.T) {
+	drain := func() bool {
+		select {
+		case <-Warned():
+			return true
+		default:
+			return false
+		}
+	}
+	drain()
+
+	var buf bytes.Buffer
+	log := slog.New(&Handler{fallback: &buf, mu: new(sync.Mutex)})
+
+	log.Info("routine")
+	if drain() {
+		t.Fatal("an info line asked for a flush")
+	}
+	log.Warn("first")
+	log.Error("second")
+	if !drain() {
+		t.Fatal("a warning did not ask for a flush")
+	}
+	if drain() {
+		t.Fatal("two words left for one flush")
+	}
+}
+
 func TestHandleFormatsAttrs(t *testing.T) {
 	var buf bytes.Buffer
 	h := &Handler{fallback: &buf, mu: new(sync.Mutex)}

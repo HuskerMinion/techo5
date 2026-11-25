@@ -61,20 +61,24 @@ type session struct {
 	// it. Taken before mu.
 	pauses sync.Mutex
 
-	mu      sync.Mutex
-	cond    *sync.Cond
-	info    Info
-	rate    Rate
-	dec     *decoder
-	ready   []*Frame // decoded, oldest first
-	free    []*Frame
-	made    int  // frames there are buffers for
-	most    int  // frames there may be
-	read    int  // frames read off the pipe
-	videoIn bool // the picture's pipe has ended
-	shown   int
-	dropped int
-	playing bool // started (the first frame has arrived)
+	mu     sync.Mutex
+	cond   *sync.Cond
+	info   Info
+	rate   Rate
+	probed bool // info is known: probed, or handed on by the session a seek replaced
+	// decoding is the decoder's command line fixed, req.Start with it: a seek from here on starts a
+	// session in this one's place (Feature.Seek), where before it only moves where this one starts.
+	decoding bool
+	dec      *decoder
+	ready    []*Frame // decoded, oldest first
+	free     []*Frame
+	made     int  // frames there are buffers for
+	most     int  // frames there may be
+	read     int  // frames read off the pipe
+	videoIn  bool // the picture's pipe has ended
+	shown    int
+	dropped  int
+	playing  bool // started (the first frame has arrived)
 
 	// The clock. With sound, it is how far the room has heard (media.Player.Heard) until the sound runs
 	// out, and the wall clock from there; without, the wall clock alone. wallBase is where the wall
@@ -122,6 +126,12 @@ func scrubURLs(msg string) string {
 // run plays the video until it ends, fails or is stopped.
 func (s *session) run(insecure bool) {
 	err, itself := s.play(insecure)
+	if s.ctx.Err() != nil {
+		// Stopped from outside (a stop, another video, a seek's session in its place): whatever failed
+		// after that failed because of it (the decoder not started, its network refused), and is not
+		// the video failing.
+		err, itself = nil, false
+	}
 	s.cancel()
 	s.mu.Lock()
 	dec := s.dec
@@ -172,25 +182,44 @@ func (s *session) play(insecure bool) (error, bool) {
 	if err != nil {
 		return err, false
 	}
-	info, err := probe(s.ctx, s.u.String(), insecure, proxy)
-	if s.ctx.Err() != nil {
-		return nil, false
-	}
-	if err != nil {
-		return err, false
-	}
 	s.mu.Lock()
-	s.info, s.rate = info, FrameRate(info.FPS)
-	s.sound = info.AudioIndex >= 0
+	probed := s.probed
 	s.mu.Unlock()
-	fit := FitIn(info, s.screen)
-	slog.Info("video: playing", "id", s.id, "url", Redacted(s.u), "video", info.VideoCodec,
-		"size", itoa(info.Width)+"x"+itoa(info.Height), "fps", info.FPS, "shown", itoa(fit.W)+"x"+itoa(fit.H),
-		"sound", info.AudioCodec, "silent", !s.sound, "duration", info.Duration.Round(time.Second),
-		"probed in", time.Since(began).Round(time.Millisecond))
+	// A session a seek started knows what the video is from the one before it: asking the server
+	// again would only hold the picture up.
+	if !probed {
+		info, err := probe(s.ctx, s.u.String(), insecure, proxy)
+		if s.ctx.Err() != nil {
+			return nil, false
+		}
+		if err != nil {
+			return err, false
+		}
+		s.mu.Lock()
+		s.info, s.rate, s.probed = info, FrameRate(info.FPS), true
+		s.sound = info.AudioIndex >= 0
+		s.mu.Unlock()
+		fit := FitIn(info, s.screen)
+		slog.Info("video: playing", "id", s.id, "url", Redacted(s.u), "video", info.VideoCodec,
+			"size", itoa(info.Width)+"x"+itoa(info.Height), "fps", info.FPS, "shown", itoa(fit.W)+"x"+itoa(fit.H),
+			"sound", info.AudioCodec, "silent", !s.sound, "duration", info.Duration.Round(time.Second),
+			"probed in", time.Since(began).Round(time.Millisecond))
+	}
+	// Where it starts is fixed here, with the decoder's command line: a seek from now on is a new
+	// session. A video that says no length cannot be moved through, and one asked to start past its end
+	// starts at its start.
+	s.mu.Lock()
+	info := s.info
+	from := s.req.Start
+	if from > 0 && (info.Duration <= 0 || from >= info.Duration) {
+		slog.Info("video: not started where asked", "id", s.id, "at", from.Round(time.Second), "duration", info.Duration.Round(time.Second))
+		from = 0
+	}
+	s.req.Start, s.decoding = from, true
+	s.mu.Unlock()
 	s.changed()
 
-	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy}), true, s.sound)
+	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy, Start: from}), true, s.sound)
 	if err != nil {
 		return err, false
 	}
@@ -471,6 +500,22 @@ func (s *session) setPaused(on bool) {
 	}
 	s.pauses.Unlock()
 	s.changed()
+}
+
+// position is how far into the video it is: where it started (a seek's place, else zero) and the
+// clock from there, never past its length.
+func (s *session) position(started bool) time.Duration {
+	s.mu.Lock()
+	from, dur := s.req.Start, s.info.Duration
+	s.mu.Unlock()
+	at := from
+	if started {
+		at += s.clock()
+	}
+	if dur > 0 {
+		at = min(at, dur)
+	}
+	return at
 }
 
 // numbers are the session's counts, for State: frames shown and dropped, and whether the picture has

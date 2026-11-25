@@ -351,6 +351,7 @@ func openAthena() (capture, error) {
 	rates := k.micRates
 	soft := ref == nil && k.softRef
 	echoref.Use(soft)
+	echoref.Rejoin()
 
 	var mics *alsa.Capture
 	var err error
@@ -521,6 +522,7 @@ func (c *pairedCapture) restart() error {
 	}
 	c.clock.Reset()
 	c.got = 0
+	echoref.Rejoin()
 	if err := c.start(); err != nil {
 		return err
 	}

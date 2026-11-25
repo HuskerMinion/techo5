@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Screen is what the picture is made for: the canvas the daemon draws on (960×480 on the Show 5,
@@ -113,6 +114,9 @@ type Decoding struct {
 	// Proxy is the daemon's guard proxy, for a kernel that cannot fence the decoder (guard.go); empty
 	// when it can.
 	Proxy string
+
+	// Start is where in the video to begin (a seek), zero for its start.
+	Start time.Duration
 }
 
 // netArgs are the input options every run of the decoder has: the network only, and patience for it.
@@ -207,6 +211,15 @@ func DecodeArgs(d Decoding) []string {
 	// Past 720p every core, and best effort even so: the decoder's own shortcuts (skipping the
 	// deblocking) make ffmpeg 8 refuse to open the picture's output when given on its command line.
 	a = append(a, "-threads", strconv.Itoa(t))
+	if d.Start > 0 {
+		// Before -i, so it is the input that is moved through: ffmpeg asks the server for the part
+		// there (a Range request into an MP4, the right parts of an HLS playlist) rather than decoding
+		// its way to it. It still decodes from the key frame before the time and drops what comes
+		// before it, so the picture starts where it was asked to; its times then count from zero
+		// again, as a video's from its start do, and the clock and the sound's padding go on as
+		// they would.
+		a = append(a, "-ss", strconv.FormatFloat(d.Start.Seconds(), 'f', 3, 64))
+	}
 	a = append(a, "-i", d.URL)
 	a = append(a, "-map", "0:v:"+strconv.Itoa(d.Info.VideoIndex), "-an", "-sn", "-dn",
 		"-vf", Filter(d.Info, d.Screen), "-fps_mode", "passthrough",

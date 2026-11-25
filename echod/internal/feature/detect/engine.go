@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -98,7 +99,7 @@ type Engine struct {
 	OnScored func(slot int, peak, cutoff float64)
 
 	// OnFrames runs every framesEvery, off the audio path, with how the loop kept up since the last
-	// time: what the "wake frames" log line says.
+	// time: what the "wake frames" log line says, which adds these up over framesLogEvery.
 	OnFrames func(Frames)
 
 	// Candidate is the lowest score worth asking Home Assistant about, per slot; zero, or nil, asks
@@ -451,7 +452,22 @@ func (e *Engine) Run(ctx context.Context) error {
 		took, worst time.Duration
 		got         int
 		since       = time.Now()
+		logged      = newFrameTally(since)
+		// first is the first window, whose line is written at once: it says the loop is keeping up
+		// from the start, not ten minutes in.
+		first = true
 	)
+	// What came since the last line is written as the loop stops, so the minutes before a restart or
+	// the microphones going away are in the log too.
+	defer func() {
+		e.mu.Lock()
+		by := maps.Clone(e.spent)
+		e.mu.Unlock()
+		logged.add(got, took, worst, by)
+		if logged.got > 0 {
+			slog.Info("wake frames", logged.attrs(time.Now())...)
+		}
+	}()
 
 	for {
 		select {
@@ -472,32 +488,78 @@ func (e *Engine) Run(ctx context.Context) error {
 
 			if elapsed := time.Since(since); elapsed >= framesEvery {
 				e.mu.Lock()
-				by := make([]any, 0, 8)
+				by := make(map[wake.Kind]time.Duration, len(e.spent))
 				for k, d := range e.spent {
-					by = append(by, string(k)+"_us", d.Microseconds()/int64(max(got, 1)))
+					by[k] = d
 					e.spent[k] = 0
 				}
 				e.mu.Unlock()
 
 				f := Frames{PerSecond: float64(got) / elapsed.Seconds(), Busy: int(100 * took.Seconds() / elapsed.Seconds()),
 					Worst: worst}
-				slog.Info("wake frames", append([]any{
-					"per_second", f.PerSecond,
-					"mean_us", took.Microseconds() / int64(max(got, 1)),
-					"worst_ms", f.Worst.Milliseconds(),
-					"busy_pct", f.Busy,
-				}, by...)...)
 				if e.OnFrames != nil {
 					safe.Go("wake frames", func() { e.OnFrames(f) })
 				}
-				took, worst, got, since = 0, 0, 0, time.Now()
+				now := time.Now()
+				logged.add(got, took, worst, by)
+				if first || logged.due(now) {
+					slog.Info("wake frames", logged.attrs(now)...)
+					logged, first = newFrameTally(now), false
+				}
+				took, worst, got, since = 0, 0, 0, now
 			}
 		}
 	}
 }
 
-// framesEvery is how often the loop says how it kept up.
+// framesEvery is how often the loop says how it kept up to OnFrames, which the wake frames entities
+// show.
 const framesEvery = 30 * time.Second
+
+// framesLogEvery is how often the "wake frames" log line is written, covering everything since the
+// last one. Written every 30 s it was most of a Dot's log, and on eMMC every log line costs flash; a
+// line every ten minutes still shows a loop that falls behind, and the entities keep their 30 s view.
+const framesLogEvery = 10 * time.Minute
+
+// frameTally adds framesEvery's windows up into the one the log line reports.
+type frameTally struct {
+	since       time.Time
+	got         int
+	took, worst time.Duration
+	by          map[wake.Kind]time.Duration
+}
+
+func newFrameTally(since time.Time) frameTally {
+	return frameTally{since: since, by: make(map[wake.Kind]time.Duration)}
+}
+
+func (t *frameTally) add(got int, took, worst time.Duration, by map[wake.Kind]time.Duration) {
+	t.got += got
+	t.took += took
+	t.worst = max(t.worst, worst)
+	for k, d := range by {
+		t.by[k] += d
+	}
+}
+
+// due is whether the tally covers framesLogEvery, and so whether the line is written.
+func (t *frameTally) due(now time.Time) bool { return now.Sub(t.since) >= framesLogEvery }
+
+// attrs is the log line's fields: the same ones the 30 s line had, over the longer window.
+func (t *frameTally) attrs(now time.Time) []any {
+	elapsed := now.Sub(t.since).Seconds()
+	n := int64(max(t.got, 1))
+	out := []any{
+		"per_second", float64(t.got) / elapsed,
+		"mean_us", t.took.Microseconds() / n,
+		"worst_ms", t.worst.Milliseconds(),
+		"busy_pct", int(100 * t.took.Seconds() / elapsed),
+	}
+	for k, d := range t.by {
+		out = append(out, string(k)+"_us", d.Microseconds()/n)
+	}
+	return out
+}
 
 // Frames is how the wake word loop kept up over framesEvery: frames scored a second (fifty when none
 // are lost), the share of the time scoring took, and the slowest frame. Busy is what a wake word costs

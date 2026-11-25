@@ -14,12 +14,13 @@ import (
 // luxBusyFor of each other, the next waits luxBusy: a lamp switched on in a room that has been steady
 // is in Home Assistant within seconds, as it was, and a flickering room settles to a reading every
 // quarter minute.
-const (
+var (
 	luxEvery   = 2 * time.Second
 	luxBusy    = 15 * time.Second
 	luxBusyFor = 30 * time.Second
-	luxStep    = 0.1 // of the last reading sent, and at least 1 lux
 )
+
+const luxStep = 0.1 // of the last reading sent, and at least 1 lux
 
 // luxGap is the least time after the last reading sent before the next may go, given the time
 // between the last two sent (0 with fewer than two).

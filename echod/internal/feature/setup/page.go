@@ -705,6 +705,7 @@ func (f *Feature) drawTab(ctx context.Context, w http.ResponseWriter, token, tab
 		timezoneSection(w, token)
 		calendarLinksSection(w, token)
 		updatesSection(w, token)
+		addonsSection(w, token)
 		if led.HasRing {
 			ringWaitSection(w, token)
 		}

@@ -58,6 +58,24 @@ func TestASilentTimerIsNotSavedAndDefaultsToTheUsualColor(t *testing.T) {
 	}
 }
 
+// A silent timer is listed as one, so the screen and the assistant can leave it to the automation whose
+// wait it shows, and timer_cancel with its id still cancels it (#723).
+func TestASilentTimerIsListedAsSilentAndCanceledByItsID(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+	id := ts.StartSilent("joining", time.Minute, led.Color{})
+	list := ts.List(time.Now())
+	if len(list) != 1 || list[0].ID != id || !list[0].Silent || !list[0].Local {
+		t.Fatalf("listed %+v, want the one silent timer of the device's own", list)
+	}
+	if err := ts.cancelFromHA(id); err != nil {
+		t.Fatalf("timer_cancel with a silent timer's id: %v", err)
+	}
+	if got := ts.List(time.Now()); len(got) != 0 {
+		t.Errorf("still holding %+v after timer_cancel", got)
+	}
+}
+
 func TestParseColor(t *testing.T) {
 	for in, want := range map[string]led.Color{
 		"":              {},

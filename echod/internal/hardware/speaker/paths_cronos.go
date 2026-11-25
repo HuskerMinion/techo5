@@ -45,7 +45,7 @@ const (
 // athena on TECHO5's mainline kernels has no such fault, and its pcmC0D1c is the microphones' capture
 // (an older tools/linux/athena kernel) or the echo reference (DL1_AWB_Record), so nothing is held
 // there. Nor on the Skylight, which has no MediaTek AFE.
-var DRAMHold = onSkylight("", onMainline("", "/dev/snd/pcmC0D1c"))
+var DRAMHold = onThinkSmart("", onSkylight("", onMainline("", "/dev/snd/pcmC0D1c")))
 
 // startFull starts the stream only once the whole ring is written, at open and after every underrun.
 //
@@ -120,6 +120,9 @@ type kctl struct {
 var initSequence = boardInit()
 
 func boardInit() []kctl {
+	if layout.ThinkSmart() {
+		return thinkSmartInit
+	}
 	if layout.Skylight() {
 		return skylightInit
 	}
@@ -188,13 +191,13 @@ var athenaMainlineRoutes = []kctl{
 
 // openSequence is written before the playback device is opened: athena's mainline routes, and nothing
 // on any other Show.
-var openSequence = onMainline(athenaMainlineRoutes, nil)
+var openSequence = onThinkSmart(thinkSmartRoutes, onMainline(athenaMainlineRoutes, nil))
 
 // PlaybackDevice is the playback PCM: the AFE's DL1 into the codec on the Show 5s and crown, and on
 // athena "I2S0DL1_PLayback", the AFE's DL1 into the TAS5805M (hw:0,7). On athena's mainline kernel
 // DL1 is the card's first front end, Playback_1 (hw:0,0). The Skylight's simple-audio-card has one
 // playback device, hw:0,0.
-var PlaybackDevice = onSkylight(0, onMainline(0, onAthena(7, 23)))
+var PlaybackDevice = onThinkSmart(0, onSkylight(0, onMainline(0, onAthena(7, 23))))
 
 // hwRate is the rate the card runs at. Everything up to the card works at Rate; athena's amplifier
 // runs at 96 kHz, as Fire OS runs it (AFE.cfg: "Speakers SamplingRate" 48000, "SpeakerHw
@@ -223,10 +226,11 @@ const athenaTrimDB = 0.0
 // hwBits is the sample width the card is sent: Bits, as everything up to it works.
 const hwBits = Bits
 
-// softRef is whether the speaker may feed the software echo reference (lib/echoref): only athena on
-// the mainline kernel, and there only while the microphones use it (echoref.InUse), which is when the
-// card's own DL1_AWB_Record did not open (mic/athena.go).
-var softRef = layout.AthenaMainline()
+// softRef is whether the speaker may feed the software echo reference (lib/echoref), which it does
+// only while the microphones use it (echoref.InUse): athena on the mainline kernel, when the card's
+// own DL1_AWB_Record did not open (mic/athena.go), and the 1st gen Echo Show 5, whose loopback the
+// canceller cannot use above the bass (mic/softref_cronos.go).
+var softRef = layout.AthenaMainline() || layout.Checkers() || layout.ThinkSmart()
 
 // onMainline picks the value for athena on TECHO5's mainline kernel over any other.
 func onMainline[T any](mainline, other T) T {

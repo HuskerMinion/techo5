@@ -26,6 +26,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -93,7 +94,8 @@ var airplay2Missing = func() string {
 	if config.Get().Streaming.AirPlayClassic {
 		return "AirPlay 2 is turned off"
 	}
-	if _, err := os.Stat(noAirPlay2); err == nil {
+	// Only the firewall's word, as root left it: a file another user made at the name is not.
+	if rootonly.File(noAirPlay2) {
 		return "the firewall could not let AirPlay 2 in (techo5-firewall)"
 	}
 	if lo, err := net.InterfaceByName("lo"); err != nil || lo.Flags&net.FlagUp == 0 {

@@ -11,6 +11,11 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 LOGDIR=/data/techo5-linux
 log() { echo "<14>techo5-boot: $*" > /dev/kmsg; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /run/boot.log; }
+# The boot log is root's alone: it names networks, addresses and the slots' history, and users other
+# than root run on the device (feature/addons). Made so before the first line goes in. Only the logs:
+# a umask for the whole script would reach the device nodes mdev makes and the sockets of what it starts.
+[ -e /run/boot.log ] || (umask 077; : > /run/boot.log)
+chmod 600 /run/boot.log 2>/dev/null
 
 # What differs between devices; the Echo Show 5's values unless the image carries its own.
 DATA_DEV=/dev/mmcblk0p16
@@ -44,26 +49,59 @@ fi
 # not from /proc. Root sees everything, as before. hidepid=2 rather than "invisible", which these 4.9
 # kernels do not know (5.8). Before anything that is not root starts.
 mount -o remount,hidepid=2 /proc 2>/dev/null || log "proc: hidepid=2 refused; other users' processes stay visible"
+# Users other than root run here (the receivers, the decoder, and add-ons, each as a user of its own:
+# feature/addons), and root's scripts write files of fixed names. With these off, a link or a file
+# another user left in a folder anyone can write to (/tmp, /run, /dev/shm) is followed or opened by root
+# as if it were root's own. The kernel's protections, where it has them: links in such a folder are
+# followed only when their owner is the follower or the folder's, and files and FIFOs there that root
+# does not own are not opened to create. And the kernel log, where a driver can print an address or a
+# name, is root's.
+for k in protected_symlinks:1 protected_hardlinks:1 protected_fifos:2 protected_regular:2; do
+	f=/proc/sys/fs/${k%%:*}
+	[ -w "$f" ] && echo "${k##*:}" > "$f" 2>/dev/null
+done
+[ -w /proc/sys/kernel/dmesg_restrict ] && echo 1 > /proc/sys/kernel/dmesg_restrict
 mountpoint -q /sys || mount -t sysfs sysfs /sys
 if ! mountpoint -q /dev; then
 	mount -t tmpfs -o mode=0755 tmpfs /dev
 	mkdir -p /dev/pts
 	mount -t devpts devpts /dev/pts
 fi
-mountpoint -q /run || mount -t tmpfs tmpfs /run
+# /run 0755, root's: a tmpfs made without a mode is 1777, which anyone can write to, and the daemon and
+# these scripts use fixed names in it (a DHCP script, pid files, the receivers' folder) as root. Users
+# other than root run here (feature/addons). An initramfs from before this mounted it 1777: put right
+# here, before anything that is not root starts.
+mountpoint -q /run || mount -t tmpfs -o mode=0755 tmpfs /run
+chown 0:0 /run && chmod 755 /run
 mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
+# /tmp and /var/tmp are memory, and anyone can write to them: bounded, so a program of a user other
+# than root (an add-on) that fills them cannot take the memory the daemon needs. TECHO5's own scripts
+# keep nothing there (techo5-lib.sh, t5_tmp); 32 MB is plenty for what else might, on the smallest
+# board (a Dot 2, about 445 MB free).
+mount -o remount,size=32m,mode=1777 /tmp 2>/dev/null || log "tmp: could not bound /tmp"
 # POSIX shared memory, where nqptp keeps the clock AirPlay 2's receiver reads (feature/streaming): mdev and
 # devtmpfs make no /dev/shm, and without it the daemon keeps the classic receiver.
 mkdir -p /dev/shm
 mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,size=1m tmpfs /dev/shm
-mountpoint -q /data || mount -t ext4 -o noatime $DATA_DEV /data
+# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit), and the old options if it is refused.
+mountpoint -q /data || mount -t ext4 -o noatime,commit=60 $DATA_DEV /data 2>/dev/null ||
+	mount -t ext4 -o noatime $DATA_DEV /data
+t5_data_commit
 # A board with no store (STORE_DEV=none: the Surface RT) skips it: mounting a name that is no block
 # device leaves "Can't lookup blockdev" in the kernel log.
 mountpoint -q /store || { [ -b "$STORE_DEV" ] && mount -t ext4 -o ro,noatime $STORE_DEV /store; }
 # The root is read-only; what needs writing lives on tmpfs or userdata.
-mount -t tmpfs tmpfs /var/log
-mount -t tmpfs tmpfs /var/tmp
+# 0755, and the logs in it root's alone (techo5-lib.sh, t5_private_logs): a tmpfs without a mode is 1777.
+mount -t tmpfs -o mode=0755 tmpfs /var/log
+mount -t tmpfs -o size=16m,mode=1777 tmpfs /var/tmp
 mkdir -p /run/lock /run/techo5 $LOGDIR /data/misc/techo5/models
+# The daemon's state (the Home Assistant key and token, the Wi-Fi's password, the SSH host keys) and the
+# logs are root's alone, as on the Dot: users other than root run here (feature/addons), and a file
+# made 0644 in a folder others can get through is theirs to read. The add-ons live apart, in
+# /data/techo5-addons, so their users need nothing in these. /run/techo5 is root's scratch folder too
+# (techo5-lib.sh, t5_tmp).
+chmod 700 $LOGDIR /data/misc/techo5 /run/techo5 2>/dev/null
+chmod 600 $LOGDIR/*.log $LOGDIR/*.log.1 $LOGDIR/techo5.log* 2>/dev/null
 # With the boot layer (techo5-lib.sh, t5_boot_layer) the kernel comes with the slot
 # (slots/<x>/boot/boot.img) and the boot partition holds the boot layer: the kernel update is off.
 if [ -n "${KERNEL_UPDATE:-}" ] && t5_boot_layer; then
@@ -267,7 +305,7 @@ export UDHCPC_SCRIPT=/etc/techo5/udhcpc.sh
 # Modules the Wi-Fi driver needs loaded first (WIFI_PRE_MODULES, device.conf: athena's prealloc).
 for m in ${WIFI_PRE_MODULES:-}; do
 	n=$(basename "$m" .ko | tr - _)
-	grep -q "^$n " /proc/modules || insmod "$m" 2>/tmp/insmod.err || log "wifi: insmod $m failed: $(cat /tmp/insmod.err)"
+	grep -q "^$n " /proc/modules || insmod "$m" 2>"$(t5_tmp)/insmod.err" || log "wifi: insmod $m failed: $(cat "$(t5_tmp)/insmod.err")"
 done
 t5_wifi_up $WIFI_MODULE $LOGDIR/wpa_supplicant.conf
 # Networks written into the file by hand reach a supplicant that started without any
@@ -307,7 +345,7 @@ t5_bt_up "$BT_MODULE" /var/log
 					/usr/local/sbin/techo5-net renew
 				else
 					killall udhcpc 2>/dev/null
-					udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+					udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > "$(t5_tmp)/udhcpc.log" 2>&1
 				fi
 			fi
 			# The clock is set once there is an address. When Wi-Fi takes longer than the boot

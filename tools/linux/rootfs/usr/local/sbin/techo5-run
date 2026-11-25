@@ -26,5 +26,10 @@ mkdir -p /data/misc/techo5/models
 if [ -f $LOG ] && [ "$(stat -c %s $LOG 2>/dev/null || echo 0)" -gt 5000000 ]; then
 	mv -f $LOG $LOG.1
 fi
+# The log is root's alone, as the folder it is in is: it names networks, addresses and devices, and users
+# other than root run here (feature/addons). Only the file: a umask for the daemon would reach the files
+# it writes for the receivers to read.
+[ -e $LOG ] || (umask 077; : > $LOG)
+chmod 600 $LOG $LOG.1 2>/dev/null
 echo "techo5-run: starting $(/usr/local/bin/techo5 --version 2>/dev/null | head -1) at $(date)" >> $LOG
 exec /usr/local/bin/techo5 run >> $LOG 2>&1
