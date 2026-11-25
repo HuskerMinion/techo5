@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
@@ -297,6 +299,9 @@ func TestNowPlayingGoesBackToTheLibrary(t *testing.T) {
 func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 	noLibrary(t)
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Screen().Welcomed(true); err != nil {
+		t.Fatal(err)
+	}
 	_ = config.Set().Dashboard().Mode(config.DashboardDrawn)
 	t.Cleanup(func() { _ = config.Set().Dashboard().Mode(config.DashboardOff); libLast.Store(nil) })
 	libLast.Store(nil)
@@ -305,8 +310,21 @@ func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 	libQueueOf = func(string) string { return "up0a1b2c3d" }
 	const target = "media_player.ma_kitchen"
 
-	d := &Display{poke: make(chan struct{}, 1)}
-	d.reopenLibrary(true)
+	d := &Display{
+		r:                  newRenderer(image.NewRGBA(image.Rect(0, 0, show8Wide, show8High))),
+		poke:               make(chan struct{}, 1),
+		on:                 true,
+		view:               voice.State{Phase: "idle"},
+		showingPlaying:     true,
+		showingLibraryWord: libWords["fr"][libWordLibrary],
+	}
+	tapQueue := func(modern bool) {
+		d.showingModernMusic = modern
+		_, queue := d.r.musicSideButtons(d.showingLibraryWord, false)
+		hit := d.r.buttonReach(queue)
+		d.gesture(touch.Gesture{Kind: touch.Tap, X: hit.Max.X - 1, Y: queue.Min.Y + queue.Dy()/2})
+	}
+	tapQueue(false)
 	if l := libUp(d); l == nil || l.tab != libQueue || !d.dash {
 		t.Fatalf("with none left, the button opened %+v (dashboard up %v)", libUp(d), d.dash)
 	}
@@ -319,7 +337,7 @@ func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 	setLibUp(d, &sheet)
 	d.libLeave(target, "")
 	before := len(sent())
-	d.reopenLibrary(true)
+	tapQueue(true)
 	l := libUp(d)
 	if l == nil || l.tab != libQueue || len(l.stack) != 0 || l.target != target {
 		t.Fatalf("came back to %+v, want the queue tab with no page opened", l)
@@ -327,27 +345,32 @@ func TestNowPlayingQueueButtonOpensTheQueue(t *testing.T) {
 	waitUntil(t, "the queue read again", func() bool { return asked(sent()[before:], "player_queues/get", "player_queues/items") })
 }
 
-// The Queue button sits clear of the other buttons on the foot of the page, on every panel and in both
-// layouts, and only with the Library button and not for a book.
+// The Queue button and its full tap area fit in the footer in both layouts and every library language.
 func TestTheQueueButtonHasItsOwnPlace(t *testing.T) {
-	if queueOn("", false) || queueOn("Library", true) || !queueOn("Library", false) {
-		t.Error("the Queue button shows without the Library button, or for a book")
-	}
-	for _, panel := range []struct{ wide, high int }{{showWide, showHigh}, {show8Wide, show8High}, {skylightWide, skylightHigh}} {
-		r := newRenderer(image.NewRGBA(image.Rect(0, 0, panel.wide, panel.high)))
-		for lang, words := range libWords { // the Library button's word in every language there is
+	for _, panel := range showPanels() {
+		screen := image.Rect(0, 0, panel.wide, panel.high)
+		r := newRenderer(image.NewRGBA(screen))
+		for lang, words := range libWords {
 			word := words[libWordLibrary]
+			fav, queue := r.musicSideButtons(word, false)
+			q := r.buttonReach(queue)
+			if queue.Empty() || !q.In(screen) || !queue.In(r.favButton()) {
+				t.Errorf("%s %q: Queue button %v (tap area %v) must fit beside Favorites", panel.name, lang, queue, q)
+			}
+			_, withoutLibrary := r.musicSideButtons("", false)
+			_, forSpoken := r.musicSideButtons(word, true)
+			if !withoutLibrary.Empty() || !forSpoken.Empty() {
+				t.Error("the Queue button shows without Library or during spoken playback")
+			}
 			for _, modern := range []bool{false, true} {
-				q := r.queueButton(word, modern)
 				back, play, next := r.musicButtons(modern)
-				others := map[string]image.Rectangle{"done": r.doneButton(), "star": r.favButton(),
-					"library": r.libraryButton(word, modern), "back": back, "play": play, "next": next}
-				if !q.In(image.Rect(0, 0, r.w, r.h)) || q.Empty() {
-					t.Errorf("%dx%d %s (%q) modern %v: the Queue button %v is off the screen", panel.wide, panel.high, word, lang, modern, q)
-				}
+				seekBack, seekForward := r.seekButtons(modern)
+				others := map[string]image.Rectangle{"done": r.doneButton(), "star": fav,
+					"library": r.libraryButton(word, modern), "back": back, "play": play, "next": next,
+					"seek back": seekBack, "seek forward": seekForward}
 				for name, b := range others {
-					if q.Overlaps(b) {
-						t.Errorf("%dx%d %s (%q) modern %v: the Queue button %v meets %s %v", panel.wide, panel.high, word, lang, modern, q, name, b)
+					if hit := r.buttonReach(b); q.Overlaps(hit) {
+						t.Errorf("%s %q modern %v: the Queue tap area %v meets %s %v", panel.name, lang, modern, q, name, hit)
 					}
 				}
 			}

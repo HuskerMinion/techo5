@@ -148,7 +148,7 @@ func (r *renderer) musicFooter(s scene) {
 	r.text(doneFace, word, done.Min.X+(done.Dx()-r.width(doneFace, word))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
 
 	// The star saves what is playing to favorites, and fills in once it has.
-	fav := r.favButton()
+	fav, queue := r.musicSideButtons(s.libraryWord, s.spoken)
 	r.buttonFace(fav, float64(fav.Dy())/2, btnSecondary)
 	// The icon font's star, not one drawn as a polygon: the same outline the rest of the program would
 	// draw, and filled in once the station is saved.
@@ -168,12 +168,9 @@ func (r *renderer) musicFooter(s scene) {
 		r.mdiIcon("bookshelf", x, b.Min.Y+(b.Dy()-icon)/2, 24, col)
 		r.text(doneFace, s.libraryWord, x+icon+gap, b.Min.Y+b.Dy()/2+r.s(8), col)
 	}
-	// Queue: the library's queue tab, what plays next. Not for a book or an episode, which has no list.
-	// The modern page draws its own, one step on from forward.
-	if queueOn(s.libraryWord, s.spoken) && !s.modernMusic {
-		b := r.queueButton(s.libraryWord, s.modernMusic)
-		col := r.buttonFace(b, float64(b.Dy())/2, btnSecondary)
-		r.mdiIconIn("playlist-play", b, 32, col)
+	if !queue.Empty() {
+		col := r.buttonFace(queue, float64(queue.Dy())/2, btnSecondary)
+		r.mdiIconIn("playlist-play", queue, 32, col)
 	}
 	// An audiobook's or an episode's playback speed, which a tap steps on.
 	r.drawSpeed(s)
@@ -193,21 +190,18 @@ func (r *renderer) libraryButton(word string, modern bool) image.Rectangle {
 	return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
 }
 
-// queueOn is whether the now-playing page has the Queue button: with the Library button, and not for a
-// book or an episode, whose speed button takes the place beside Library.
-func queueOn(libraryWord string, spoken bool) bool { return libraryWord != "" && !spoken }
-
-// queueButton is the Queue button, round and with only its icon. On the classic page it is on the left of
-// the Library button at the right end of the foot; on the modern page, where the foot is full once the
-// Library button has a long word, it is one step on from forward, like the music strip's Library button.
-func (r *renderer) queueButton(word string, modern bool) image.Rectangle {
-	if modern {
-		back, play, next := r.musicButtons(true)
-		return next.Add(image.Pt(next.Dx()+play.Min.X-back.Max.X, 0))
+// musicSideButtons gives drawing and touch the same Favorites and Queue positions. When Queue is
+// available, the two icons share the Favorites button's usual space beside Done.
+func (r *renderer) musicSideButtons(libraryWord string, spoken bool) (fav, queue image.Rectangle) {
+	fav = r.favButton()
+	if libraryWord == "" || spoken {
+		return fav, queue
 	}
-	lib := r.libraryButton(word, false)
-	w, gap := lib.Dy(), r.s(12)
-	return image.Rect(lib.Min.X-gap-w, lib.Min.Y, lib.Min.X-gap, lib.Max.Y)
+	gap := r.s(12)
+	size := (fav.Dx() - gap) / 2
+	top := fav.Min.Y + (fav.Dy()-size)/2
+	return image.Rect(fav.Min.X, top, fav.Min.X+size, top+size),
+		image.Rect(fav.Max.X-size, top, fav.Max.X, top+size)
 }
 
 // buttonReach is one of the now-playing page's buttons grown to what a finger on it hits: a little to
