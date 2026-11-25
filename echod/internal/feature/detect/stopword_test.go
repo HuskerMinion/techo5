@@ -175,3 +175,51 @@ func TestStopWordSelectSaves(t *testing.T) {
 		t.Errorf("the built-in word saved as %q, want nothing", got)
 	}
 }
+
+// A word of one's own chosen as the second wake word leaves the stop word and the hang-up word's list
+// once the selection is saved. The load runs before the save, so it still sees the wake words before,
+// and only the look after the save (selected) can move the stop word off it (#741).
+func TestAWakeWordChosenLaterLeavesTheStopWord(t *testing.T) {
+	models := []wake.Model{model("okay_nabu", wake.KindMicroWakeWord), model("stopp", wake.KindMicroWakeWord)}
+	wakeWords := []string{"okay_nabu"}
+	d, e := stopWordFor(t, &models, &wakeWords)
+	d.busy, _ = fixture(t, warm{0: true, 1: true})
+	d.hangup = &hangup{
+		d:         d,
+		word:      &esphome.Select{},
+		models:    func() []wake.Model { return models },
+		wakeWords: func() []string { return wakeWords },
+	}
+	if err := config.Set().Stop().ID("stopp"); err != nil {
+		t.Fatal(err)
+	}
+	d.loadStop()
+	if got := stopLoaded(e); got.ID != "stopp" {
+		t.Fatalf("chosen, loaded %q, want stopp", got.ID)
+	}
+
+	// The load, with the saved wake words still the old ones, as OnWakeWord has them then.
+	resolve := func([]string) []wake.Model { return models }
+	if got := d.loadFrom([]string{"okay_nabu", "stopp"}, resolve); len(got) != 2 {
+		t.Fatalf("loaded %v, want both", got)
+	}
+	if got := stopLoaded(e); got.ID != "stopp" {
+		t.Fatalf("before the save, loaded %q; the test no longer shows the order it is about", got.ID)
+	}
+
+	// Then the save, and selected.
+	wakeWords = []string{"okay_nabu", "stopp"}
+	d.selected()
+	if got := stopLoaded(e); got.Path != "builtin/stop.tflite" {
+		t.Errorf("a wake word now, the stop slot holds %+v, want the built-in word", got)
+	}
+	if got := d.stopWord.word.Get(); got != assets.StopPhrase {
+		t.Errorf("a wake word now, the stop word select shows %q", got)
+	}
+	if slices.Contains(d.stopWord.word.Options, "stopp") {
+		t.Errorf("a wake word now, still offered as the stop word: %v", d.stopWord.word.Options)
+	}
+	if slices.Contains(d.hangup.word.Options, "stopp") {
+		t.Errorf("a wake word now, still offered as the hang-up word: %v", d.hangup.word.Options)
+	}
+}

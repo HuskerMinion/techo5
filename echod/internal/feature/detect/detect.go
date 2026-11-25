@@ -450,6 +450,17 @@ func (d *Detect) selected() {
 	for _, c := range d.commands {
 		c.follow()
 	}
+	// The stop and hang-up words keep away from the wake words saved, as the command words do, and
+	// loadFrom looked at them before this selection was saved: a word of one's own just chosen as a wake
+	// word would otherwise go on listening as the stop word too until a restart (#741).
+	if d.hangup != nil {
+		d.hangup.refreshOptions()
+		d.hangup.follow(hangupListens(phone.Get().State()))
+	}
+	if d.stopWord != nil {
+		d.stopWord.refreshOptions()
+		d.followStop()
+	}
 }
 
 func (d *Detect) Name() string { return "wake" }
