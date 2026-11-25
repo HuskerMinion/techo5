@@ -84,6 +84,18 @@ func isNumber(w string) bool {
 	return ok
 }
 
+// NumberAt reads the number starting at words[i], lowercased words: digits, or number words as a
+// snooze takes them ("ten", "twenty five", "a"). It returns the number and the index of the word after
+// it, and false when words[i] starts no number. The timers read a length in words with it (#734), so
+// what a snooze understands and what a timer does are the same numbers.
+func NumberAt(words []string, i int) (n, next int, ok bool) {
+	if i >= len(words) || !isNumber(words[i]) {
+		return 0, i, false
+	}
+	n, next = readNumber(words, i)
+	return n, next, true
+}
+
 // readNumber reads the number starting at words[i], a tens word and a ones word added together, and
 // returns it with the index of the word after it.
 func readNumber(words []string, i int) (n, next int) {

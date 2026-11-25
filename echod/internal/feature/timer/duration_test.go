@@ -24,6 +24,24 @@ func TestParseDuration(t *testing.T) {
 		"1:30":                  90 * time.Minute,
 		"0:00:30":               30 * time.Second,
 		"24:00:00":              24 * time.Hour,
+
+		// In words, as speech to text writes them and an automation passes them on (#734).
+		"five minutes":              5 * time.Minute,
+		"one minutes":               time.Minute,
+		"Three minutes":             3 * time.Minute,
+		"twenty five minutes":       25 * time.Minute,
+		"twenty-five minutes":       25 * time.Minute,
+		"ten seconds":               10 * time.Second,
+		"two hours and ten minutes": 2*time.Hour + 10*time.Minute,
+		"half an hour":              30 * time.Minute,
+		"half a minute":             30 * time.Second,
+		"a half hour":               30 * time.Minute,
+		"an hour and a half":        90 * time.Minute,
+		"a minute and a half":       90 * time.Second,
+		"two and a half minutes":    150 * time.Second,
+		"1 and a half hours":        90 * time.Minute,
+		"one hour and a half":       90 * time.Minute,
+		"in five minutes":           5 * time.Minute,
 	}
 	for in, want := range good {
 		got, err := ParseDuration(in)
@@ -31,7 +49,9 @@ func TestParseDuration(t *testing.T) {
 			t.Errorf("ParseDuration(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"", "soon", "10 fortnights", "minutes", "0", "-5", "0:00:00", "25:00:00", "1:75", "1:2:3:4", "2 days"} {
+	for _, in := range []string{"", "soon", "10 fortnights", "minutes", "0", "-5", "0:00:00", "25:00:00", "1:75", "1:2:3:4", "2 days",
+		"five", "half", "half an", "half a day", "and five minutes", "five minutes and", "-5 minutes", "five fortnights",
+		"minutes five", "twenty five hours", "a half"} {
 		if got, err := ParseDuration(in); err == nil {
 			t.Errorf("ParseDuration(%q) = %v, want an error", in, got)
 		}
