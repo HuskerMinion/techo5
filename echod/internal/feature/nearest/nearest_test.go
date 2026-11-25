@@ -225,50 +225,78 @@ func TestAnOldClaimDoesNotCount(t *testing.T) {
 }
 
 func TestATieGoesToTheNameThatSortsFirst(t *testing.T) {
-	if !better(claim{From: "Den", Score: 20}, claim{From: "Office", Score: 20}) {
+	if !better(claim{From: "Den", Score: 20}, claim{From: "Office", Score: 20}, false) {
 		t.Error("Den should win a tie with Office")
 	}
-	if better(claim{From: "Office", Score: 20}, claim{From: "Den", Score: 20}) {
+	if better(claim{From: "Office", Score: 20}, claim{From: "Den", Score: 20}, false) {
 		t.Error("Office should lose a tie with Den")
 	}
 }
 
-// Each claim is better than every claim after it, whichever pair is compared.
-func TestNearTiesAndOlderDevices(t *testing.T) {
+// Measured claims compare the score to 1 dB, then the mean standout, then the exact score, then the name.
+func TestTheMeanBreaksANearTie(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
-	m := func(name string, score, conf, energy float64) claim {
-		return claim{From: name, Score: score, Confidence: f(conf), Energy: f(energy)}
-	}
 	order := []claim{
-		m("d", 20, 0.1, 10),   // more than 1 dB closer beats louder and more confident
-		m("c", 10, 0.1, 60),   // within 1 dB, energy decides
-		m("b", 10.4, 0.9, 50), // then confidence
-		m("a", 10, 0.8, 50),
-		m("y", 10, 0.7, 50), // then name
-		m("z", 10, 0.7, 50),
-		{From: "old", Score: 10.4}, // an older device sorts below measured claims with the same rounded score
-		{From: "older", Score: 9.6},
-		m("far", 5, 1, 99),
+		{From: "e", Score: 20, Mean: f(1)},   // more than 1 dB ahead beats a higher mean
+		{From: "d", Score: 9.6, Mean: f(8)},  // within 1 dB, the mean decides
+		{From: "c", Score: 10.4, Mean: f(5)}, // then the exact score
+		{From: "a", Score: 10, Mean: f(5)},   // then the name
+		{From: "b", Score: 10, Mean: f(5)},
 	}
 	for i := range order {
 		for j := range order {
-			if got, want := better(order[i], order[j]), i < j; got != want {
+			if got, want := better(order[i], order[j], true), i < j; got != want {
 				t.Fatalf("better(%s, %s) = %v, want %v", order[i].From, order[j].From, got, want)
 			}
 		}
 	}
 }
 
+// An older device compares score, then name. Whenever one claim in the contest lacks the mean, a
+// newer device must pick the same winner.
+func TestOldAndNewDecidersAgree(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	old := func(a, b claim) bool {
+		if a.Score != b.Score {
+			return a.Score > b.Score
+		}
+		return a.From < b.From
+	}
+	winner := func(claims []claim, cmp func(a, b claim) bool) string {
+		best := claims[0]
+		for _, c := range claims[1:] {
+			if cmp(c, best) {
+				best = c
+			}
+		}
+		return best.From
+	}
+	contests := [][]claim{
+		{{From: "old", Score: 10.4}, {From: "new", Score: 9.6, Mean: f(80)}},
+		{{From: "old", Score: 10}, {From: "new", Score: 10, Mean: f(80)}},
+		{{From: "z-old", Score: 10}, {From: "a-new", Score: 10, Mean: f(1)}, {From: "b-new", Score: 10, Mean: f(90)}},
+	}
+	for _, claims := range contests {
+		measured := true
+		for _, c := range claims {
+			measured = measured && c.Mean != nil
+		}
+		if o, n := winner(claims, old), winner(claims, func(a, b claim) bool { return better(a, b, measured) }); o != n {
+			t.Fatalf("old decider picks %s, new picks %s, for %+v", o, n, claims)
+		}
+	}
+}
+
 func TestAnOlderClaimHasNoMeasurementsOnTheWire(t *testing.T) {
 	b, err := json.Marshal(claim{From: "A", Turn: "t", Score: 3})
-	if err != nil || strings.Contains(string(b), "confidence") || strings.Contains(string(b), "energy") {
+	if err != nil || strings.Contains(string(b), "mean") {
 		t.Fatalf("an unmeasured claim sends measurements: %s, %v", b, err)
 	}
-	n := &Nearest{energy: func() float64 { return 40 }}
-	if c, e := n.measured(0); c != nil || e != nil {
-		t.Fatal("a word with no confidence should not be measured")
+	n := &Nearest{mean: func() float64 { return 40 }}
+	if n.measured(false) != nil {
+		t.Fatal("a word that is not a wake word should not be measured")
 	}
-	if c, e := n.measured(0.8); c == nil || e == nil || *e != 40 {
+	if e := n.measured(true); e == nil || *e != 40 {
 		t.Fatal("a wake word should be measured")
 	}
 }
