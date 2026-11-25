@@ -145,6 +145,7 @@ type Nearest struct {
 	wokeNow   func(slot int)
 	faint     func(slot int, at time.Time) // a faint win (won): asked about first, else woke's (#503)
 	busy      func() bool
+	cancel    func() // ends the turn running here (cutOff)
 	canAnswer func(slot int) bool
 	wakeWord  func(slot int) string
 	score     func() float64
@@ -201,6 +202,7 @@ func build() *Nearest {
 		wokeNow:   func(slot int) { voice.Get().Woke(slot) },
 		faint:     func(slot int, at time.Time) { voice.Get().WokeFaint(slot, at) },
 		busy:      func() bool { return voice.Get().Busy() },
+		cancel:    func() { voice.Get().Cancel() },
 		canAnswer: func(slot int) bool { return voice.Get().CanAnswer(slot) },
 		wakeWord: func(slot int) string {
 			if ids := voice.Get().ActiveWakeWords(); slot >= 0 && slot < len(ids) {
@@ -322,10 +324,27 @@ func hearing(peers []announce.Peer) []announce.Peer {
 // after the window only if no device claimed it better or had already answered it.
 func (n *Nearest) Woke(slot int) {
 	over := n.busy()
+	var lost func()
+	if over && n.claimsOver(true) {
+		lost = n.cutOff
+	}
 	n.contend(n.wakeWord(slot), n.now(), true,
 		func() bool { return n.canAnswer(slot) },
 		func(at time.Time, score float64) { n.wonOver(over, slot, at, score) },
-		func() { n.wokeNow(slot) })
+		func() { n.wokeNow(slot) }, lost)
+}
+
+// cutOff is a wake word said over this device's own reply that another device heard clearly better
+// (#737): the turn there is the one somebody started, so this device's reply ends, as every
+// interrupting wake word ended it before such a word was claimed. Left playing, it talks over the
+// other device's turn. Only while a turn is still running here: one that has finished since has
+// nothing to end.
+func (n *Nearest) cutOff() {
+	if !n.busy() {
+		return
+	}
+	slog.Info("nearest device: another heard the wake word over this reply better, ending the reply")
+	n.cancel()
 }
 
 // WokeGated is Woke for a wake word whose turn may still be called off (detect's contest with a command
@@ -333,10 +352,16 @@ func (n *Nearest) Woke(slot int) {
 // device has won it, sending what was said since at from the history.
 func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
 	over := n.busy()
+	// Lost over a reply, the reply ends as Woke's does, but through the gate too: a command word that
+	// beat the wake word here means it was not a wake word after all, and the reply goes on.
+	var lost func()
+	if over && n.claimsOver(true) {
+		lost = func() { gate(n.cutOff) }
+	}
 	n.contend(n.wakeWord(slot), at, true,
 		func() bool { return n.canAnswer(slot) },
 		func(at time.Time, score float64) { gate(func() { n.wonOver(over, slot, at, score) }) },
-		func() { gate(func() { n.woke(slot, at) }) })
+		func() { gate(func() { n.woke(slot, at) }) }, lost)
 }
 
 // won is a wake word this device won, having heard it with score (pending.clarity). One under Confirm below
@@ -415,19 +440,20 @@ func (n *Nearest) Asking(slot int, clarity float64) (settled func(confirmed bool
 // after the window, and the others hear nothing of it. Word names what was said, so it is not taken for
 // a wake word or for another word.
 func (n *Nearest) Answer(word string, can func() bool, act func()) {
-	n.contend(word, n.now(), false, can, func(time.Time, float64) { act() }, act)
+	n.contend(word, n.now(), false, can, func(time.Time, float64) { act() }, act, nil)
 }
 
 // contend is the claim every word goes through; wake is whether it is a wake word. open runs after the
 // window, with the time the word was heard and this device's score for it, if this device is the
 // nearest; now runs in its place when there is nobody to ask. A turn that is already open is not
-// claimed over, but for a wake word that takes it over (claimsOver).
-func (n *Nearest) contend(word string, at time.Time, wake bool, can func() bool, open func(time.Time, float64), now func()) {
+// claimed over, but for a wake word that takes it over (claimsOver). lost, if not nil, runs when another
+// device has the word instead.
+func (n *Nearest) contend(word string, at time.Time, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
 	if !n.open() || n.busy() && !n.claimsOver(wake) || !can() {
 		now()
 		return
 	}
-	n.contendHeard(word, at, n.score(), wake, can, open, now, nil)
+	n.contendHeard(word, at, n.score(), wake, can, open, now, lost)
 }
 
 // claimsOver is whether a word heard during a turn of this device's own is claimed all the same: a

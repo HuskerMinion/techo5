@@ -40,6 +40,69 @@ func TestAWakeOverAReplyIsClaimedWithALead(t *testing.T) {
 	}
 }
 
+// A wake word over this device's own reply that another device heard clearly better ends the reply
+// here, as an interrupting wake word always did (#737): left playing, it talks over the other device's
+// turn. Won, the reply is ended by the turn it opens, not by a cancel; and a turn that has finished
+// by the end of the window has nothing to end. A wake word that is not over a reply cancels nothing.
+func TestAWakeOverAReplyLostElsewhereEndsTheReply(t *testing.T) {
+	for _, c := range []struct {
+		name                string
+		theirs              float64
+		stillBusy, canceled bool
+	}{
+		{"heard clearly better elsewhere", 4 + onCallLead + 1, true, true},
+		{"heard clearly better elsewhere, the reply over by then", 4 + onCallLead + 1, false, false},
+		{"won here", 1.1, true, false},
+	} {
+		h := newHouse(t)
+		busy := true
+		h.n.busy = func() bool { return busy }
+		h.n.interrupting = func() bool { return true }
+		h.n.score = func() float64 { return 4 }
+		canceled := 0
+		h.n.cancel = func() { canceled++ }
+		h.n.Woke(0)
+		h.claimFrom("Kitchen", c.theirs)
+		busy = c.stillBusy
+		h.wait(300 * time.Millisecond)
+		if got := canceled == 1; got != c.canceled || canceled > 1 {
+			t.Errorf("%s: canceled %d times, want canceled %v", c.name, canceled, c.canceled)
+		}
+	}
+
+	h := newHouse(t)
+	canceled := 0
+	h.n.cancel = func() { canceled++ }
+	h.n.Woke(0)
+	h.claimFrom("Kitchen", 40)
+	h.wait(300 * time.Millisecond)
+	if canceled != 0 {
+		t.Errorf("idle, lost elsewhere: canceled %d times", canceled)
+	}
+}
+
+// Gated, the reply ends only through the gate: a command word that beat the wake word here keeps it.
+func TestAGatedWakeOverAReplyLostElsewhereEndsTheReplyThroughTheGate(t *testing.T) {
+	for _, through := range []bool{true, false} {
+		h := newHouse(t)
+		h.n.busy = func() bool { return true }
+		h.n.interrupting = func() bool { return true }
+		h.n.score = func() float64 { return 4 }
+		canceled := 0
+		h.n.cancel = func() { canceled++ }
+		h.n.WokeGated(0, h.now, func(open func()) {
+			if through {
+				open()
+			}
+		})
+		h.claimFrom("Kitchen", 40)
+		h.wait(300 * time.Millisecond)
+		if want := map[bool]int{true: 1, false: 0}[through]; canceled != want {
+			t.Errorf("gate open %v: canceled %d times, want %d", through, canceled, want)
+		}
+	}
+}
+
 // The device that barely heard the word, idle in another room, stands down to the one being
 // interrupted: its claim, lead and all, is the one every device weighs the same way, an older one too.
 func TestTheDeviceBarelyHearingStandsDownToTheOneTalking(t *testing.T) {
