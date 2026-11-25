@@ -100,7 +100,10 @@ func TestTheDetectorHoldsAndLetsGo(t *testing.T) {
 		}
 		now = now.Add(64 * time.Millisecond)
 	}
-	if d.take(move, now) || d.take(move, now) {
+	// Two blocks, each taken: take counts as it reads, so both calls matter.
+	first := d.take(move, now)
+	second := d.take(move, now)
+	if first || second {
 		t.Fatal("two blocks of movement counted")
 	}
 	if !d.take(move, now) {

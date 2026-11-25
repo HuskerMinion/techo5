@@ -63,6 +63,8 @@ func (d *detector) motion(now time.Time) bool {
 }
 
 // reset forgets what was seen, for a new tone or after the microphones were cut.
+//
+//lint:ignore U1000 used by the Dot 5th gen's listener (ultrasound_cannoli.go), not on other builds
 func (d *detector) reset() {
 	d.recent, d.n, d.last = [ofBlocks]bool{}, 0, time.Time{}
 }

@@ -32,6 +32,8 @@ func TapRaw(f func(RawBlock)) (stop func()) {
 }
 
 // emitRaw gives b to the listener, where there is one.
+//
+//lint:ignore U1000 used by the boards that carry the raw microphones (athena.go), not on every build
 func emitRaw(b RawBlock) {
 	if f := rawTap.Load(); f != nil {
 		(*f)(b)

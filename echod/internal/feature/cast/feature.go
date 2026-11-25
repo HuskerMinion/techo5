@@ -92,10 +92,9 @@ type Feature struct {
 	recv    *Receiver
 
 	// What has been shown since the last line in the log.
-	shown     int
-	painted   int // frames the display drew, which can be fewer: it draws the newest
-	lastLog   time.Time
-	lastAudio [2]int
+	shown   int
+	painted int // frames the display drew, which can be fewer: it draws the newest
+	lastLog time.Time
 }
 
 var (
@@ -260,6 +259,7 @@ func (f *Feature) consent(name string, gone <-chan struct{}) error {
 	ctx := f.runCtx
 	if ctx == nil {
 		f.mu.Unlock()
+		//lint:ignore ST1005 it starts with the feature's name, which the phone shows as it is
 		return errors.New("Cast is off")
 	}
 	f.askSeq++
@@ -286,6 +286,7 @@ func (f *Feature) consent(name string, gone <-chan struct{}) error {
 		return errors.New("nobody accepted it on the device")
 	case <-ctx.Done():
 		f.idle()
+		//lint:ignore ST1005 it starts with the feature's name, which the phone shows as it is
 		return errors.New("Cast was turned off")
 	case <-gone:
 		// The phone gave up (or was stopped by cast_key): nobody is left to answer for.
