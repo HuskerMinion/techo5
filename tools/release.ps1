@@ -767,7 +767,8 @@ if ($missing) {
 
 # The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed from the techo5-addons
 # checkout and published on its own "addons" release, which moves its expiry on even when it has not
-# changed, and attached here as well. After the checks above, which are about the firmware's own files:
-# the catalog carries its own signature and is not in SHA256SUMS.
+# changed, and attached here as well, all four files (catalog-v2.json, catalog.json and their .sig
+# files: format 2, and format 1 for devices that read only that). After the checks above, which are
+# about the firmware's own files: the catalog carries its own signatures and is not in SHA256SUMS.
 & (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version -Catalog $AddonCatalog
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

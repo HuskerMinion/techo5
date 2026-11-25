@@ -3,13 +3,17 @@
   Sign the add-on catalog (catalog.json in a techo5-addons checkout) with the release key and publish it.
 
 .DESCRIPTION
-  Devices fetch the catalog from
-  https://github.com/HuskerMinion/techo5/releases/download/addons/catalog.json and believe it only with
-  catalog.json.sig beside it, the release key's signature over "TECHO5 add-on catalog v1" and those bytes
-  (the same key as manifest.json.sig, never the same signed text; echod/internal/update/trust.go). This
-  script checks the catalog the way a device does (echod/cmd/mkcatalog), refuses one whose serial is
-  below the published one's or that changes a published version, stamps it with an expiry a month out,
-  signs it, and uploads both files to the "addons" release, which it makes the first time. A listing
+  The catalog is published as two files, written from the one source (echod/cmd/mkcatalog):
+    catalog-v2.json, the whole catalog in format 2, which devices that read format 2 fetch first, and
+    believe only with catalog-v2.json.sig beside it, the release key's signature over
+    "TECHO5 add-on catalog v2" and those bytes;
+    catalog.json, format 1, for devices that read only that (up to v1.6.53), with every version they
+    could not read left out, believed only with catalog.json.sig, over "TECHO5 add-on catalog v1".
+  Both are at https://github.com/HuskerMinion/techo5/releases/download/addons/ (the same key as
+  manifest.json.sig, never the same signed text; echod/internal/update/trust.go). This script checks
+  the catalog the way a device does (mkcatalog), refuses one whose serial is below the published
+  files' or that changes a version published in either, stamps it with an expiry a month out, signs
+  both files, and uploads the four to the "addons" release, which it makes the first time. A listing
   goes out this way on its own, without waiting for a release.
 
   The catalog's source is its own repository, https://github.com/HuskerMinion/techo5-addons, where
@@ -144,30 +148,40 @@ function Publish-AddonCatalog {
     New-Item -ItemType Directory -Force -Path $published, $signed -WhatIf:$false | Out-Null
     try {
         # What devices have now, if anything: the serial may not go below it, and no version published in
-        # it may change. The same serial with the same entries is only a fresh expiry, which mkcatalog
-        # allows, so a release with no catalog change still moves the expiry on.
-        $have = $false
-        & gh release view $AddonCatalogTag --repo $Repo --json tagName 2>$null | Out-Null
+        # either file may change. The same serial with the same entries is only a fresh expiry, which
+        # mkcatalog allows, so a release with no catalog change still moves the expiry on.
+        $previous = @()
+        $assetsJson = & gh release view $AddonCatalogTag --repo $Repo --json assets 2>$null
         $tagExists = ($LASTEXITCODE -eq 0)
         if ($tagExists) {
-            # The release is there, so its catalog has to come down: signed without it, the serial and
-            # the published versions would go unchecked (mkcatalog -previous). Its errors are shown.
-            & gh release download $AddonCatalogTag --repo $Repo -p catalog.json -D $published --clobber
-            if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $published 'catalog.json'))) {
-                throw "the $AddonCatalogTag release is there but its catalog.json could not be downloaded; not signing without checking against it"
+            $assets = @((($assetsJson -join "`n") | ConvertFrom-Json).assets | ForEach-Object { $_.name })
+            # The release is there, so its catalog.json has to come down, and catalog-v2.json too once it
+            # has been published: signed without them, the serial and the published versions would go
+            # unchecked (mkcatalog -previous). Before the first format 2 signing there is no
+            # catalog-v2.json, and catalog.json alone is checked against. Their errors are shown.
+            $want = @('catalog.json')
+            if ($assets -contains 'catalog-v2.json') { $want += 'catalog-v2.json' }
+            foreach ($name in $want) {
+                & gh release download $AddonCatalogTag --repo $Repo -p $name -D $published --clobber
+                if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $published $name))) {
+                    throw "the $AddonCatalogTag release is there but its $name could not be downloaded; not signing without checking against it"
+                }
+                $previous += @('-previous', (Join-Path $published $name))
             }
-            $have = $true
         }
 
         Write-Host "== add-on catalog: checking and signing"
-        $mk = @('run', './cmd/mkcatalog', '-in', $catalog, '-out', $signed, '-sign-key', $SignKey)
-        if ($have) { $mk += @('-previous', (Join-Path $published 'catalog.json')) }
+        $mk = @('run', './cmd/mkcatalog', '-in', $catalog, '-out', $signed, '-sign-key', $SignKey) + $previous
         Push-Location (Join-Path $root 'echod')
         try {
             & $Go @mk
             if ($LASTEXITCODE -ne 0) { throw 'mkcatalog refused the catalog' }
         } finally { Pop-Location }
-        $files = @((Join-Path $signed 'catalog.json'), (Join-Path $signed 'catalog.json.sig'))
+        # Both formats and both signatures, always together: one serial, from one source, so a device
+        # that falls back from one to the other never finds it a different catalog.
+        $files = @('catalog-v2.json', 'catalog-v2.json.sig', 'catalog.json', 'catalog.json.sig') | ForEach-Object { Join-Path $signed $_ }
+        $absent = @($files | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
+        if ($absent) { throw "mkcatalog did not write $($absent -join ', '): not publishing half a catalog" }
         if ($DryRun) {
             Write-Host "dry run: the catalog checks out and signs; nothing published"
             return
