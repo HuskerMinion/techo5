@@ -68,7 +68,10 @@ protocol, and a Show can't be a receiver. Use Share.
 
 - The phone and the Show talk TCP on **port 8940**, encrypted with Noise `NNpsk0` keyed by the pairing key
   (`Noise_NNpsk0_25519_ChaChaPoly_SHA256`). A phone with the wrong key fails the handshake, and the key never
-  crosses the network. The port is opened in the firewall only while Cast is on.
+  crosses the network between the phone and the Show. (Choosing one with the `cast_key` action sends it
+  over Home Assistant's link to the device, which is in the clear unless that link has an encryption key.)
+- On Android the port is opened in the firewall only while Cast is on. On the Linux image the firewall rule
+  is always there, and it is the listener that follows Cast: nothing answers on the port while Cast is off.
 - The Show advertises `_techo5cast._tcp` over mDNS so the app can list it. A network that blocks mDNS can
   still add the Show by address.
 - A stranger on the network who does not have the key gets nothing: no handshake, no screen, no sound. Someone
@@ -96,7 +99,8 @@ phone**: they have to scan the pairing code again.
 | Picture stutters, the pill says **Struggling** | Weak Wi-Fi or a busy Show. The app lowers its frame rate by itself. |
 
 Nothing about Cast in Settings → Connections means the build has no receiver: the Echo Dot and Echo Spot
-builds have none, and neither does a Show that has not had a release that includes it.
+builds have none, and neither does a device that has not had a release that includes it. The Panel builds
+(the Skylight and Android tablets) include it, as the Shows do.
 
 ## Trying a build that isn't released yet
 

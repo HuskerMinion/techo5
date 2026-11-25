@@ -249,6 +249,7 @@ func (r *Receiver) session(ctx context.Context, raw net.Conn) error {
 	// the answer is written under.
 	_ = raw.SetDeadline(time.Time{})
 	w, err := r.Sink.Begin(h)
+	stopWatch() // only Begin waits on a person: the read loop notices a closed phone from here on
 	if err != nil {
 		w = Welcome{OK: false, Reason: err.Error()}
 	}

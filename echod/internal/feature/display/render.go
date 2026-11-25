@@ -84,7 +84,7 @@ type scene struct {
 	// when streamed, what arrived.
 	showDash    bool
 	showCast    bool // a phone is casting to the screen (cast.go)
-	showCastAsk bool // and the page is the question about a phone waiting to be accepted: the deck, a custom screen and a video give way to it
+	showCastAsk bool // and the page is the question about a phone waiting to be accepted, for the tap's latch (castLatch)
 	dashHide    bool // the Show dashboard handle setting is off: no bar on the edge (#564)
 	dashAsked   bool // the dashboard a tap on the night screen opened (dashNight): shown over the night clock
 	dashMode    config.DashboardMode

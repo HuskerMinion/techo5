@@ -24,16 +24,16 @@ func TestTheDeckGivesWayToACastQuestion(t *testing.T) {
 	if !d.deckShowing() {
 		t.Fatal("the deck is not up in a plain scene, so the test proves nothing")
 	}
-	s = scene{phase: "idle", showCastAsk: true}
+	s = scene{phase: "idle", showCast: true, showCastAsk: true}
 	d.deckScene(&s, time.Now())
 	if d.deckShowing() {
 		t.Fatal("the deck kept the touches with a phone waiting to be accepted")
 	}
 }
 
-func TestACastQuestionCoversAVideo(t *testing.T) {
-	if !videoCovered(scene{showCastAsk: true}) {
-		t.Fatal("a video was left playing over a phone's question")
+func TestACastCoversAVideo(t *testing.T) {
+	if !videoCovered(scene{showCast: true}) {
+		t.Fatal("a video was left playing over the cast page")
 	}
 }
 
@@ -57,5 +57,26 @@ func TestTheCastQuestionSettlesOnlyWhenDrawn(t *testing.T) {
 	}
 	if id, ok := d.cask.answerable(now.Add(3 * time.Second)); !ok || id != 7 {
 		t.Fatal("not answerable after it had settled")
+	}
+}
+
+// Once accepted, the cast is still over the deck: its taps are the cast's, not a press on a deck button
+// under it, and the swipe that ends it works.
+func TestTheDeckStaysAwayUnderALiveCast(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if err := config.Set().Deck().Button(0, 0, config.DeckButton{Action: config.DeckOBSStream}); err != nil {
+		t.Fatal(err)
+	}
+	d := &Display{deckUp: true, poke: make(chan struct{}, 1)}
+	d.view.Phase = "idle"
+	s := scene{phase: "idle"}
+	d.deckScene(&s, time.Now())
+	if !d.deckShowing() {
+		t.Fatal("the deck is not up in a plain scene, so the test proves nothing")
+	}
+	s = scene{phase: "idle", showCast: true}
+	d.deckScene(&s, time.Now())
+	if d.deckShowing() || s.showDeck {
+		t.Fatal("the deck came back over a live cast")
 	}
 }

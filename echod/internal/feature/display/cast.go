@@ -82,8 +82,9 @@ func (d *Display) castScene(s *scene, sheetOrDrawer bool) {
 	want := (f.Active() || f.Asking() != "" || f.PairingShown()) && s.phase == "idle" && !sheetOrDrawer &&
 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showWifi && !s.bt.Pairing
 	s.showCast = want
-	// The question is over the deck, a custom screen and a video: they give way to it (their scenes
-	// leave themselves out while it is up), so a tap on Accept is not a press on a deck button under it.
+	// The cast page, the question and the cast after it alike, is over the deck, a custom screen and a
+	// video: they leave themselves out of their scenes while it is up, so a tap on Accept, or on the
+	// cast, is not a press on a deck button under it, and a swipe from the left edge ends the cast.
 	s.showCastAsk = want && f.Asking() != ""
 	d.mu.Lock()
 	d.castShowing = want
