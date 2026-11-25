@@ -2,6 +2,7 @@ package timer
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ func ParseDuration(s string) (time.Duration, error) {
 
 func parseDuration(s string) (time.Duration, error) {
 	if n, err := strconv.ParseFloat(s, 64); err == nil {
-		return time.Duration(n * float64(time.Minute)), nil
+		return scaled(n, time.Minute)
 	}
 	if d, err := time.ParseDuration(strings.ReplaceAll(s, " ", "")); err == nil {
 		return d, nil
@@ -90,16 +91,24 @@ func wordsDuration(f []string) (time.Duration, error) {
 			i++
 			continue
 		}
-		// "half an hour", "half a minute"
+		// "half an hour", "half a minute", and "half hour" as it is said too
 		if f[i] == "half" && i+2 < len(f) && (f[i+1] == "a" || f[i+1] == "an") {
 			unit, ok := units[f[i+2]]
 			if !ok {
 				return 0, fmt.Errorf("half of %q", f[i+2])
 			}
-			total += unit / 2
+			total = add(total, unit/2)
 			lengths++
 			i += 3
 			continue
+		}
+		if f[i] == "half" && i+1 < len(f) {
+			if unit, ok := units[f[i+1]]; ok {
+				total = add(total, unit/2)
+				lengths++
+				i += 2
+				continue
+			}
 		}
 		var n float64
 		j := i + 1
@@ -123,11 +132,15 @@ func wordsDuration(f []string) (time.Duration, error) {
 		if !ok {
 			return 0, fmt.Errorf("%q is not a unit", f[j])
 		}
-		total += time.Duration(n * float64(unit))
+		d, err := scaled(n, unit)
+		if err != nil {
+			return 0, err
+		}
+		total = add(total, d)
 		lengths++
 		j++
 		if andAHalf(j) { // "an hour and a half"
-			total += unit / 2
+			total = add(total, unit/2)
 			j += 3
 		}
 		i = j
@@ -137,6 +150,24 @@ func wordsDuration(f []string) (time.Duration, error) {
 	}
 	return total, nil
 }
+
+// tooLong is a length past Longest, which ParseDuration refuses: what a length too long to hold is
+// read as, so it is refused as too long rather than wrapping round to a length that fits.
+const tooLong = Longest + time.Nanosecond
+
+// scaled is n of unit, no longer than tooLong. A number too large for a Duration ("1e19 seconds")
+// would otherwise wrap, and a sum of two such lengths could come back as one that fits (#734). Not a
+// number at all ("nan", "inf") is not a length, and nor is one below nothing, which would otherwise
+// take away from the lengths beside it: "-5 minutes and 10 minutes" is not five minutes.
+func scaled(n float64, unit time.Duration) (time.Duration, error) {
+	if math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
+		return 0, fmt.Errorf("%v is not a length", n)
+	}
+	return time.Duration(min(n*float64(unit), float64(tooLong))), nil
+}
+
+// add is total and d, held at tooLong for the same reason.
+func add(total, d time.Duration) time.Duration { return min(total+d, tooLong) }
 
 // clockDuration reads "h:mm:ss" or "h:mm".
 func clockDuration(s string) (time.Duration, error) {

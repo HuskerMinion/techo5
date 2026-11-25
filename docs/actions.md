@@ -1201,8 +1201,8 @@ with Home Assistant down. Answers with the new timer's `id`, for `timer_cancel`,
 How long: `10 minutes`, `1 hour and 30 minutes`, `90 seconds`, `in 20 minutes`, `1h30m`,
 `00:10:00` (what Home Assistant's duration selector gives), `1:30` (hours and minutes), or a bare
 number, which is minutes. A length in words is read too, as speech to text often writes what was
-said: `five minutes`, `twenty five minutes`, `half an hour`, `an hour and a half`, `two and a half
-minutes`, so an automation can pass on the length it heard. Words are read in English. At most 24
+said: `five minutes`, `seventy five minutes`, `a hundred seconds`, `half an hour`, `half hour`, `an
+hour and a half`, `two and a half minutes`, so an automation can pass on the length it heard. Words are read in English. At most 24
 hours.
 
 ### label (Can be empty)
