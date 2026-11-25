@@ -1968,6 +1968,9 @@ func (d *Display) quietAway(now time.Time, rd home.Radio, music, wants, playing 
 	}
 }
 
+// ownPlaying is this player's own stream playing or paused (media's Playing); a variable for the tests.
+var ownPlaying = func() (playing, paused bool) { return media.Get().Playing() }
+
 // nowPlaying is whether the idle screen should be what is playing rather than the clock: something
 // on the speaker, and a name to put on the page.
 //
@@ -1984,13 +1987,16 @@ func (d *Display) nowPlaying() bool {
 	// Music asked for here (a play in the library, a resume) and not heard yet: the page stays up for it
 	// rather than the clock showing for the second or two the stream takes (musicPending).
 	pending, _ := d.musicPending()
+	// This player's own stream is music whether or not the device has a station list: AirPlay, a phone
+	// over Bluetooth, a track Home Assistant plays. Asked after the list, a device with none (no Home
+	// Assistant token, no place, no favorites) kept the clock up under AirPlay, with only the footer's
+	// word saying anything played (#732). The Spot's face has always asked this first.
+	if playing, paused := ownPlaying(); playing || paused {
+		return true
+	}
 	rd := home.Get().Radio()
 	if !rd.Configured {
 		return pending
-	}
-	playing, paused := media.Get().Playing()
-	if playing || paused {
-		return true
 	}
 	// Home Assistant named a station a moment ago: the stream is on its way, show the page now. And a
 	// station tapped here, while it is still starting: the page says so, and when the start comes to
