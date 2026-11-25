@@ -3,11 +3,13 @@ package media
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin/secure"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/radiobrowser"
@@ -21,8 +23,31 @@ import (
 // libraryWait is how long the library has to get a stream playing here.
 var libraryWait = 20 * time.Second
 
-// libraryPlayer is this device's player id at the library, its factory MAC; a variable for the tests.
-var libraryPlayer = layout.FactoryMAC
+// libraryPlayer is this device's player ids at the library (LibraryPlayerIDs); a variable for the tests.
+var libraryPlayer = LibraryPlayerIDs
+
+// LibraryPlayerIDs are the ids Music Assistant may know this device's player by, for
+// musicassistant.Client.Player: the Sendspin key, which is the client id on the encrypted wire and so
+// the player's id at a server from 2.10.13 on (#679), then the factory MAC, the client id before
+// encryption and still on the unencrypted wire, which a server that carried the old player over keeps
+// (#721). Without the key, a device that plays from Music Assistant was told it had no player there
+// (#738). The key is read, never made: a device with none yet has only the MAC.
+func LibraryPlayerIDs() ([]string, error) {
+	var ids []string
+	if key, err := secure.ClientIDAt(layout.SendspinKeysPath); err == nil {
+		ids = append(ids, key)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		slog.Warn("media: reading the sendspin key id", "err", err)
+	}
+	mac, err := layout.FactoryMAC()
+	if err == nil && mac != "" {
+		ids = append(ids, mac)
+	}
+	if len(ids) == 0 {
+		return nil, errors.New("this device does not know its own player id")
+	}
+	return ids, nil
+}
 
 // errNoLibrary is a device with no music library set up to hand a stream to.
 var errNoLibrary = errors.New("no music library is set up on this device")
@@ -49,7 +74,7 @@ func viaLibrary(url string, wanted func() bool) error {
 		return errOvertaken
 	}
 	player, err := libraryPlayer()
-	if err != nil || player == "" {
+	if err != nil {
 		return errors.New("this device does not know its own player id")
 	}
 	slog.Info("media: handing a stream this device cannot decode to the music library", "url", url)
@@ -87,9 +112,9 @@ func LibraryReady() bool {
 	}
 	libraryState.Unlock()
 	ready := false
-	if player, err := libraryPlayer(); err == nil && player != "" {
+	if player, err := libraryPlayer(); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-		p, err := musicassistant.Client{URL: m.URL, Token: m.Token}.Player(ctx, player)
+		p, err := musicassistant.Client{URL: m.URL, Token: m.Token}.Player(ctx, player...)
 		cancel()
 		ready = err == nil && p.Available
 	}
