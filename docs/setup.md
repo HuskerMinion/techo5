@@ -2966,7 +2966,8 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   `0644`) in the add-on's `bin` folder beside the program, under those names; an update, going back,
   and removal treat them as part of the program. The program finds that folder in
   `TECHO5_ADDON_BIN`, and its `state` folder in `TECHO5_ADDON_STATE`. Names are plain file names
-  (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not the program's own name), at most
+  (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not ending in `.part`, not the
+  program's own name, and neither another's name nor the program's followed by a dot), at most
   8 of them and 128 MB together, and every build lists the same names, since one `addon.json` serves
   them all. An add-on downloads nothing else at run time: what it runs is what was looked over. A
   version with extra files says so in `"requires": ["files"]` (below).

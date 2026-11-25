@@ -309,3 +309,44 @@ func TestUnchangedCoversExtraFiles(t *testing.T) {
 		t.Errorf("the same: %v", err)
 	}
 }
+
+// A download into bin/ clears what an earlier try left matching its name followed by .*.part, so no
+// name may end in .part, nor be another's (or the program's) followed by a dot: each would let one
+// download delete another's file.
+func TestExtraFileNamesCannotTreadOnEachOthersDownloads(t *testing.T) {
+	for _, name := range []string{"x.part", "netbird.tar.gz.part", "a.b.part"} {
+		if ValidFileName(name) {
+			t.Errorf("%s: a valid name", name)
+		}
+	}
+	for name, files := range map[string][]File{
+		"one and one with a dot": {extra("x"), extra("x.abc")},
+		"the other way round":    {extra("x.abc.def"), extra("x.abc")},
+	} {
+		v := netbirdVersion()
+		v.Files = map[string][]File{"arm": files, "arm64": files}
+		if err := v.valid("x", Format); err == nil {
+			t.Errorf("%s: taken", name)
+		}
+	}
+	ok := netbirdVersion()
+	ok.Files = map[string][]File{"arm": {extra("x.a"), extra("xa")}, "arm64": {extra("x.a"), extra("xa")}}
+	if err := ok.valid("x", Format); err != nil {
+		t.Errorf("names that only share a start: %v", err)
+	}
+	for name, files := range map[string]string{
+		"a file and one with a dot": `["netbird.tar","netbird.tar.gz"]`,
+		"the program with a dot":    `["techo5-netbird.tar.gz"]`,
+		"ending in .part":           `["netbird.part"]`,
+	} {
+		m := strings.Replace(netbirdManifest, `"files":["netbird.tar.gz"]`, `"files":`+files, 1)
+		if _, err := ParseManifest([]byte(m)); err == nil {
+			t.Errorf("a manifest with %s: taken", name)
+		}
+	}
+	// A program whose name a file extends with a dot.
+	m := strings.Replace(netbirdManifest, `"command":["techo5-netbird"]`, `"command":["netbird.tar"]`, 1)
+	if _, err := ParseManifest([]byte(m)); err == nil {
+		t.Error("a manifest whose file extends the program's name: taken")
+	}
+}

@@ -164,8 +164,19 @@ const (
 // on the card and in the logs, so nothing that walks a path, hides, or reads as something else.
 var fileNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 
-// ValidFileName reports whether name can be an extra file's name.
-func ValidFileName(name string) bool { return fileNamePattern.MatchString(name) && safename.OK(name) }
+// ValidFileName reports whether name can be an extra file's name. None ends in ".part": a download
+// into bin/ is written as <name>.<hash>.part and, before it starts, clears what an earlier try left
+// matching <name>.*.part (update.download), which would take a finished file of such a name with it.
+func ValidFileName(name string) bool {
+	return fileNamePattern.MatchString(name) && safename.OK(name) && !strings.HasSuffix(name, ".part")
+}
+
+// NamesClash is whether two names in one bin/ folder would tread on each other's downloads: the same
+// name, or one that is the other followed by a dot. Downloading a, update.download clears a.*.part,
+// which is where a.b's download is written.
+func NamesClash(a, b string) bool {
+	return a == b || strings.HasPrefix(b, a+".") || strings.HasPrefix(a, b+".")
+}
 
 // FilesFor is the extra files the build for arch brings.
 func (v Version) FilesFor(arch string) []File { return v.Files[arch] }
@@ -213,6 +224,11 @@ func (v Version) validFiles(what string) error {
 			}
 			if seen[f.Name] {
 				return fmt.Errorf("catalog: %s lists the extra file %s twice for %s", what, f.Name, arch)
+			}
+			for other := range seen {
+				if NamesClash(other, f.Name) {
+					return fmt.Errorf("catalog: %s's extra files %s and %s for %s are one name and the other with a dot after it, whose downloads would tread on each other", what, other, f.Name, arch)
+				}
 			}
 			seen[f.Name] = true
 			if err := pinned(f.Binary); err != nil {

@@ -86,8 +86,17 @@ func (m Manifest) Valid() error {
 		case f == m.Command[0]:
 			// Both go into bin/: the file would take the program's place.
 			return fmt.Errorf("addon.json: the extra file %q has the program's name", f)
+		case NamesClash(f, m.Command[0]):
+			// The program's download clears what matches its name and a dot, and the file's the
+			// program's likewise (NamesClash).
+			return fmt.Errorf("addon.json: the extra file %q and the program %q are one name and the other with a dot after it", f, m.Command[0])
 		case slices.Contains(m.Files[:i], f):
 			return fmt.Errorf("addon.json: the extra file %q is named twice", f)
+		}
+		for _, g := range m.Files[:i] {
+			if NamesClash(f, g) {
+				return fmt.Errorf("addon.json: the extra files %q and %q are one name and the other with a dot after it", g, f)
+			}
 		}
 	}
 	if m.Page != "" {
