@@ -25,6 +25,8 @@ func TestTheSpotVideoFace(t *testing.T) {
 	playing := video.State{Phase: video.Playing, ID: 3, Title: "Big Buck Bunny", Frames: true, Pos: 83 * time.Second, Dur: 9*time.Minute + 56*time.Second}
 	paused := playing
 	paused.Phase = video.Paused
+	filled, stretched := playing, playing
+	filled.Aspect, stretched.Aspect = video.AspectFill, video.AspectStretch
 	scenes := map[string]roundScene{
 		"video-spot-picture":  {video: playing, showVideo: true, videoLive: true},
 		"video-spot-controls": {video: playing, showVideo: true, videoLive: true, videoControls: true},
@@ -38,6 +40,14 @@ func TestTheSpotVideoFace(t *testing.T) {
 			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
 		"video-spot-seek-drag": {video: playing, showVideo: true, videoLive: true, videoControls: true,
 			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur, shown: true, to: 6 * time.Minute}},
+		// The button for the way the picture takes the screen (#733), five buttons on the chord, its icon
+		// the way it is now.
+		"video-spot-fit": {video: playing, showVideo: true, videoLive: true, videoControls: true, videoFit: true,
+			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
+		"video-spot-fit-fill": {video: filled, showVideo: true, videoLive: true, videoControls: true, videoFit: true,
+			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
+		"video-spot-fit-stretch": {video: stretched, showVideo: true, videoLive: true, videoControls: true, videoFit: true,
+			videoSeek: seekView{route: seekVideo, id: 3, dur: playing.Dur}},
 	}
 	for name, s := range scenes {
 		s.now, s.phase = at, "idle"
@@ -54,7 +64,16 @@ func TestTheSpotVideoFace(t *testing.T) {
 			}
 		}
 		if s.videoControls && s.video.Active() {
-			for i, b := range r.videoButtonsSpot() {
+			buttons := r.videoButtonsSpot(s.videoFit)
+			want := []videoTap{videoTapPlay, videoTapStop, videoTapQuieter, videoTapLouder}
+			if s.videoFit {
+				want = []videoTap{videoTapPlay, videoTapStop, videoTapFit, videoTapQuieter, videoTapLouder}
+			}
+			if len(buttons) != len(want) {
+				t.Fatalf("%s: %d buttons, want %d", name, len(buttons), len(want))
+			}
+			for i, z := range buttons {
+				b := z.r
 				// Every corner of every button inside the circle, with room to spare.
 				for _, c := range []image.Point{b.Min, {b.Max.X, b.Min.Y}, {b.Min.X, b.Max.Y}, b.Max} {
 					dx, dy := c.X-center, c.Y-center
@@ -63,8 +82,23 @@ func TestTheSpotVideoFace(t *testing.T) {
 					}
 				}
 				mid := b.Min.Add(image.Pt(b.Dx()/2, b.Dy()/2))
-				if got := r.videoTappedSpot(mid); got != videoTap(i+1) {
-					t.Errorf("%s: a tap on button %d gave %v", name, i, got)
+				if got := r.videoTappedSpot(mid); got != want[i] {
+					t.Errorf("%s: a tap on button %d gave %v, want %v", name, i, got, want[i])
+				}
+				// No button's reach takes another's middle, nor its icon's square.
+				for j, o := range buttons {
+					icon := image.Rect(0, 0, videoIconSpot, videoIconSpot).Add(o.r.Min.Add(image.Pt((o.r.Dx()-videoIconSpot)/2, (o.r.Dy()-videoIconSpot)/2)))
+					if j != i && b.Inset(-6).Overlaps(icon) {
+						t.Errorf("%s: button %d's reach takes button %d's icon", name, i, j)
+					}
+				}
+			}
+			if !s.videoFit {
+				// Where the fit button would be, with five, is another button or nothing: never the fit.
+				for _, z := range r.videoButtonsSpot(true) {
+					if got := r.videoTappedSpot(z.r.Min.Add(image.Pt(z.r.Dx()/2, z.r.Dy()/2))); got == videoTapFit {
+						t.Errorf("%s: a fit button with none drawn", name)
+					}
 				}
 			}
 			if got := r.videoTappedSpot(image.Pt(center, 150)); got != videoTapNone {
@@ -86,9 +120,9 @@ func TestTheSpotVideoFace(t *testing.T) {
 				if !z.bar.In(r.videoOver) {
 					t.Errorf("%s: the bar %v is outside the strip %v", name, z.bar, r.videoOver)
 				}
-				for _, b := range r.videoButtonsSpot() {
-					if z.reach.Overlaps(b.Inset(-6)) {
-						t.Errorf("%s: the bar's reach %v takes a button's %v", name, z.reach, b)
+				for _, b := range buttons {
+					if z.reach.Overlaps(b.r.Inset(-6)) {
+						t.Errorf("%s: the bar's reach %v takes a button's %v", name, z.reach, b.r)
 					}
 				}
 			}
@@ -99,7 +133,16 @@ func TestTheSpotVideoFace(t *testing.T) {
 		shown := img
 		if s.videoLive {
 			fit := video.FitIn(video.Info{Width: 1280, Height: 720}, video.Screen{W: side, H: side})
-			shown = roundPanel(overSpotPicture(img, image.Rect(fit.X, fit.Y, fit.X+fit.W, fit.Y+fit.H)))
+			at := image.Rect(fit.X, fit.Y, fit.X+fit.W, fit.Y+fit.H)
+			switch s.video.Aspect {
+			case video.AspectFill:
+				// The 16:9 picture as tall as the square, its sides cut off by the panel's edge.
+				w := side * 16 / 9
+				at = image.Rect((side-w)/2, 0, (side-w)/2+w, side)
+			case video.AspectStretch:
+				at = image.Rect(0, 0, side, side)
+			}
+			shown = roundPanel(overSpotPicture(img, at))
 		} else {
 			shown = roundPanel(img)
 		}

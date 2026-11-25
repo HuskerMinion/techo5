@@ -49,6 +49,7 @@ func (d *Display) videoSceneSpot(s *roundScene, now time.Time) {
 	// How a place chosen on the bar would be sent, worked out before d.mu: it asks the player and the
 	// DLNA renderer, which have locks of their own.
 	route := videoSeekRoute(st)
+	fit := videoFittableNow(st)
 	d.mu.Lock()
 	failedRecently := st.Failed != 0 && st.Failed == d.videoTried && now.Sub(st.ErrAt) < videoFailShown
 	up := st.Active() && st.Phase != video.Asking
@@ -60,6 +61,7 @@ func (d *Display) videoSceneSpot(s *roundScene, now time.Time) {
 	s.videoControls = now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames || s.showVolume
 	// The bar to seek on, for a video somebody can move through, showing the place a finger is choosing.
 	s.videoSeek = d.seekShowLocked(route, st.Pos, now)
+	s.videoFit = up && fit
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
 	d.mu.Unlock()
@@ -141,6 +143,9 @@ func (d *Display) videoGestureSpot(g touch.Gesture) {
 			show()
 		case videoTapLouder:
 			go media.Get().Adjust(+1)
+			show()
+		case videoTapFit:
+			go videoRefit(st.ID)
 			show()
 		default:
 			d.mu.Lock()

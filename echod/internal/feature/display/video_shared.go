@@ -45,7 +45,66 @@ const (
 	videoTapBack
 	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
 	videoTapNext
+	// The button that takes the picture round its ways of taking the screen (videoRefit), for a video
+	// the player can start again where it is (video.Refittable).
+	videoTapFit
 )
+
+// videoZone is a control on the video page as last drawn, and what a tap on it is.
+type videoZone struct {
+	r   image.Rectangle
+	tap videoTap
+}
+
+// videoZoneAt is the control a tap at at landed on, a finger reach (pixels) wider than its edges.
+func videoZoneAt(zones []videoZone, at image.Point, reach int) videoTap {
+	for _, z := range zones {
+		if at.In(z.r.Inset(-reach)) {
+			return z.tap
+		}
+	}
+	return videoTapNone
+}
+
+// The player's say on the way the picture takes the screen; tests put their own in.
+var (
+	videoFittable = video.Refittable
+	videoRefitTo  = video.Refit
+)
+
+// videoFittableNow is whether the video in st gets the button for its way of taking the screen: a
+// video the player can start again where it is, once that is known.
+func videoFittableNow(st video.State) bool {
+	if !st.Active() || st.Phase == video.Asking {
+		return false
+	}
+	ok, known := videoFittable(st.ID)
+	return ok && known
+}
+
+// videoRefit takes the video on to its next way of taking the screen. It is not waited for: the
+// player stops and starts the decoder.
+func videoRefit(id uint64) {
+	a, err := videoRefitTo(id)
+	if err != nil {
+		slog.Info("screen: the video's picture was not changed", "err", err)
+		return
+	}
+	slog.Info("screen: the video's picture", "aspect", a)
+}
+
+// videoFitIcon is the button's icon: the way the picture takes the screen now, so a glance at it says
+// which it is with no words to translate. Whole with bars is a screen with the picture fitted in it,
+// filling is a crop, stretching is a picture pulled out to the page's edges.
+func videoFitIcon(a video.Aspect) string {
+	switch a {
+	case video.AspectFill:
+		return "crop"
+	case video.AspectStretch:
+		return "stretch-to-page-outline"
+	}
+	return "fit-to-screen-outline"
+}
 
 // videoBarUp is whether a finger on the video page may be its bar's (seekGesture): while the controls
 // it is drawn with are up (as a tap on the page finds them, videoGesture), or while a finger that came

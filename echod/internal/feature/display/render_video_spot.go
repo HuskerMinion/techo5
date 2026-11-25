@@ -14,7 +14,8 @@ import (
 
 // The Spot's video face (video_spot.go). The decoder fills the square with the picture and the bezel
 // takes its corners (video.FitIn). The controls lie across the foot of the circle, where its width is:
-// the title, four buttons on a chord the circle is wide enough for, the time under them.
+// the title, four buttons on a chord the circle is wide enough for (five, a little narrower, with the
+// one for the way the picture takes the screen), the time under them.
 const (
 	videoStripTopSpot = 300 // the controls' shade, down to the foot
 	videoTitleYSpot   = 334 // the title's baseline
@@ -33,14 +34,30 @@ const (
 	videoSeekReach    = 16 // how far above and below it a finger still lands on it
 )
 
-// videoButtonsSpot are the controls, left to right: play or pause, stop, quieter, louder.
-func (r *roundRenderer) videoButtonsSpot() [4]image.Rectangle {
-	total := 4*videoButtonWSpot + 3*videoGapSpot
+// The five buttons with the one for the way the picture takes the screen (videoFit): narrower, so the
+// row stays on the chord the circle is wide enough for at the buttons' foot (about 328 inside the
+// bezel's margin there), 320 across.
+const (
+	videoButtonWFitSpot = 56
+	videoGapFitSpot     = 10
+)
+
+// videoButtonsSpot are the controls, left to right: play or pause, stop, then with fit the button for
+// the way the picture takes the screen, between them and the volume as the Show has it beside the
+// volume, then quieter and louder.
+func (r *roundRenderer) videoButtonsSpot(fit bool) []videoZone {
+	taps := []videoTap{videoTapPlay, videoTapStop, videoTapQuieter, videoTapLouder}
+	w, gap := videoButtonWSpot, videoGapSpot
+	if fit {
+		taps = []videoTap{videoTapPlay, videoTapStop, videoTapFit, videoTapQuieter, videoTapLouder}
+		w, gap = videoButtonWFitSpot, videoGapFitSpot
+	}
+	total := len(taps)*w + (len(taps)-1)*gap
 	x := center - total/2
-	var b [4]image.Rectangle
-	for i := range b {
-		b[i] = image.Rect(x, videoButtonsYSpot, x+videoButtonWSpot, videoButtonsYSpot+videoButtonHSpot)
-		x += videoButtonWSpot + videoGapSpot
+	b := make([]videoZone, len(taps))
+	for i, t := range taps {
+		b[i] = videoZone{image.Rect(x, videoButtonsYSpot, x+w, videoButtonsYSpot+videoButtonHSpot), t}
+		x += w + gap
 	}
 	return b
 }
@@ -110,14 +127,16 @@ func (r *roundRenderer) videoControlsSpot(s roundScene) image.Rectangle {
 	if s.video.Phase == video.Paused {
 		mark = "play"
 	}
-	b := r.videoButtonsSpot()
-	for i, icon := range []string{mark, "stop", "volume-minus", "volume-plus"} {
+	b := r.videoButtonsSpot(s.videoFit)
+	icons := map[videoTap]string{videoTapPlay: mark, videoTapStop: "stop", videoTapFit: videoFitIcon(s.video.Aspect),
+		videoTapQuieter: "volume-minus", videoTapLouder: "volume-plus"}
+	for _, z := range b {
 		style := btnSecondary
-		if i == 0 {
+		if z.tap == videoTapPlay {
 			style = btnPrimary
 		}
-		fg := r.buttonFace(b[i], 16, style)
-		r.mdiIcon(icon, b[i].Min.X+(b[i].Dx()-videoIconSpot)/2, b[i].Min.Y+(b[i].Dy()-videoIconSpot)/2, videoIconSpot, fg)
+		fg := r.buttonFace(z.r, 16, style)
+		r.mdiIcon(icons[z.tap], z.r.Min.X+(z.r.Dx()-videoIconSpot)/2, z.r.Min.Y+(z.r.Dy()-videoIconSpot)/2, videoIconSpot, fg)
 	}
 	at := videoTime(s.videoSeek.at(s.video.Pos))
 	dur := s.video.Dur
@@ -139,7 +158,7 @@ func (r *roundRenderer) videoControlsSpot(s roundScene) image.Rectangle {
 	}
 	r.centered(r.small, at, videoTimeYSpot, colDim)
 	r.zmu.Lock()
-	r.videoZones = b[:]
+	r.videoZones = b
 	r.zmu.Unlock()
 	return strip
 }
@@ -169,12 +188,7 @@ func (r *roundRenderer) videoSeekBarSpot(s roundScene) {
 func (r *roundRenderer) videoTappedSpot(at image.Point) videoTap {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
-	for i, z := range r.videoZones {
-		if at.In(z.Inset(-6)) {
-			return videoTap(i + 1)
-		}
-	}
-	return videoTapNone
+	return videoZoneAt(r.videoZones, at, 6)
 }
 
 // videoAskFace is the question about a DLNA video, the setup page's question's way: Not now above,
