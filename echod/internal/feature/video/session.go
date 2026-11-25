@@ -69,16 +69,20 @@ type session struct {
 	// decoding is the decoder's command line fixed, req.Start with it: a seek from here on starts a
 	// session in this one's place (Feature.Seek), where before it only moves where this one starts.
 	decoding bool
-	dec      *decoder
-	ready    []*Frame // decoded, oldest first
-	free     []*Frame
-	made     int  // frames there are buffers for
-	most     int  // frames there may be
-	read     int  // frames read off the pipe
-	videoIn  bool // the picture's pipe has ended
-	shown    int
-	dropped  int
-	playing  bool // started (the first frame has arrived)
+	// aspect is how the picture takes the screen (PlaceIn): AspectFit for a new video, and what the
+	// session before had for one a seek or a change of the way started in its place (Feature.Refit).
+	// Fixed with the decoder's command line, as req.Start is.
+	aspect  Aspect
+	dec     *decoder
+	ready   []*Frame // decoded, oldest first
+	free    []*Frame
+	made    int  // frames there are buffers for
+	most    int  // frames there may be
+	read    int  // frames read off the pipe
+	videoIn bool // the picture's pipe has ended
+	shown   int
+	dropped int
+	playing bool // started (the first frame has arrived)
 
 	// The clock. With sound, it is how far the room has heard (media.Player.Heard) until the sound runs
 	// out, and the wall clock from there; without, the wall clock alone. wallBase is where the wall
@@ -152,6 +156,13 @@ func (s *session) run(insecure bool) {
 	s.ended(s, s.scrub(err), itself)
 }
 
+// aspect0 is how the session's picture takes the screen.
+func (s *session) aspect0() Aspect {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.aspect
+}
+
 // sound0 is the sound's source, once there is one.
 func (s *session) sound0() *soundSource {
 	s.mu.Lock()
@@ -216,10 +227,11 @@ func (s *session) play(insecure bool) (error, bool) {
 		from = 0
 	}
 	s.req.Start, s.decoding = from, true
+	aspect := s.aspect
 	s.mu.Unlock()
 	s.changed()
 
-	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy, Start: from}), true, s.sound)
+	dec, err := start(s.ctx, DecodeArgs(Decoding{URL: s.u.String(), Info: info, Screen: s.screen, CAFile: caFileIf(), Insecure: insecure, Proxy: proxy, Start: from, Aspect: aspect}), true, s.sound)
 	if err != nil {
 		return err, false
 	}
