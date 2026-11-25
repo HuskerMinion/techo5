@@ -559,6 +559,14 @@ another 5 minutes") snoozes it, for that long or for the device's snooze length,
 minutes; a ringing timer cannot be put off, so it stops. The automations are what make Home Assistant
 answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding.
 
+"Stop the timer" is also Home Assistant's own sentence for canceling a timer, and an automation that
+catches a sentence takes it from Home Assistant. So with nothing ringing, the first automation cancels
+the soonest timer itself: one of the device's own with `timer_cancel`, leaving out silent ones, or one
+of Home Assistant's by handing "cancel the timer" to Home Assistant. A ring that ended in the last 15
+seconds, to the wake word or to the device hearing "stop", still answers "Stopped." An automation made
+from an earlier copy of this one, or of the blueprint, answered "Stopped." with nothing ringing and
+left the timer running: replace it with this, or re-import the blueprint.
+
 ```yaml
 alias: TECHO5 - stop alarm or timer by voice
 triggers:
@@ -570,10 +578,65 @@ triggers:
 conditions:
   - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
 actions:
-  - action: button.press
-    target:
-      entity_id: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
-  - set_conversation_response: "Stopped."
+  - variables:
+      node: "{{ device_attr(trigger.device_id, 'name') | slugify }}"
+      stop: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
+      # The device's Sounding sensor, on for any ring, rather than its Alarm sounding or Timer sounding.
+      sounding: >-
+        {{ device_entities(trigger.device_id) | select('match', 'binary_sensor\.') | select('search', '_sounding$')
+           | reject('search', '_(alarm|timer)_sounding$') | first | default('') }}
+      ringing: "{{ sounding != '' and is_state(sounding, 'on') }}"
+      # The wake word, or the device itself on hearing "stop the timer", often ends the ring before this
+      # runs (#735): a ring that ended in the last 15 seconds is the one being stopped.
+      just_rang: >-
+        {{ sounding != '' and is_state(sounding, 'off')
+           and states[sounding].last_changed > now() - timedelta(seconds=15) }}
+      timer: "{{ 'timer' in trigger.sentence | lower }}"
+  - choose:
+      - conditions: "{{ ringing or just_rang }}"
+        sequence:
+          - if: "{{ ringing }}"
+            then:
+              - action: button.press
+                target:
+                  entity_id: "{{ stop }}"
+          - set_conversation_response: "Stopped."
+      # Nothing ringing: "stop the timer" is also Home Assistant's own sentence for canceling one, which
+      # this automation's trigger takes from it, so the cancel is done here rather than lost (#735).
+      - conditions: "{{ timer }}"
+        sequence:
+          - action: "esphome.{{ node }}_alarms_list"
+            response_variable: listed
+          - variables:
+              # A silent timer is an automation's countdown, which that automation cancels itself (#723).
+              soonest: >-
+                {{ listed.timers | default([]) | rejectattr('silent') | sort(attribute='left_seconds')
+                   | first | default(none) }}
+          - choose:
+              - conditions: "{{ soonest is none }}"
+                sequence:
+                  - set_conversation_response: "There's no timer to stop."
+              - conditions: "{{ soonest.local }}"
+                sequence:
+                  - action: "esphome.{{ node }}_timer_cancel"
+                    data:
+                      id: "{{ soonest.id }}"
+                  - set_conversation_response: "Timer canceled."
+            # One of Home Assistant's, set through Assist: its own intent cancels it, reached with a
+            # sentence this automation doesn't catch. It isn't told which device asked, so with several
+            # running it may ask which one: its answer is passed on rather than "Stopped."
+            default:
+              - action: conversation.process
+                data:
+                  text: "cancel the timer"
+                  agent_id: conversation.home_assistant
+                  language: en
+                response_variable: canceled
+              - set_conversation_response: >-
+                  {{ canceled.response.speech.plain.speech | default('Timer canceled.') }}
+    # "Stop the alarm" with nothing ringing has nothing to stop: saying "Stopped." would claim otherwise.
+    default:
+      - set_conversation_response: "Nothing is ringing."
 mode: queued
 ```
 
