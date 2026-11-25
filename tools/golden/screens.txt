@@ -224,3 +224,10 @@ show/nowplaying-seekbar-show8.png
 show/nowplaying-modern-seekbar-show8.png
 spot/video-spot-seek.png
 spot/video-spot-seek-drag.png
+show/video-fit-show8.png
+show/video-fit-fill-show8.png
+show/video-fit-stretch-show8.png
+show/video-fit-skip.png
+spot/video-spot-fit.png
+spot/video-spot-fit-fill.png
+spot/video-spot-fit-stretch.png
