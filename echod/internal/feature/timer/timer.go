@@ -96,6 +96,13 @@ type Timers struct {
 	rangAt  time.Time // when it began, for alarms_list's ringing
 	shown   []led.Color
 
+	// inList is "Timers set here in Home Assistant", listGone the stand-ins of timers canceled here that
+	// Home Assistant could not be told about yet, and listQuiet until when what Home Assistant says of a
+	// stand-in is what it had before it went away (mirror.go).
+	inList    *esphome.Switch
+	listGone  []string
+	listQuiet time.Time
+
 	// Changed fires when a timer starts, changes, ends or rings, and when the ringing stops.
 	Changed hook.Hook[struct{}]
 }
@@ -173,6 +180,11 @@ type timer struct {
 	// the ring's, countdownColor when it is unset.
 	silent bool
 	color  led.Color
+
+	// ha is the id of this timer's stand-in in Home Assistant's timer list, for one of the device's own
+	// while it has one, and listing is a stand-in being added (mirror.go).
+	ha      string
+	listing bool
 }
 
 // due is when this timer runs out, as well as the device can tell: from when it was started and how long
@@ -214,13 +226,14 @@ func build() *Timers {
 	// No timers yet, the state the sensor returns to when the last one ends; until something was set,
 	// Home Assistant showed it as unknown.
 	t.names.Set("")
+	t.buildInListSwitch()
 	return t
 }
 
 func (t *Timers) Name() string { return "timers" }
 
 func (t *Timers) Entities() []esphome.Entity {
-	return []esphome.Entity{t.names, t.next.ends, t.next.label}
+	return []esphome.Entity{t.names, t.next.ends, t.next.label, t.inList}
 }
 
 // Actions let Home Assistant set and cancel the device's own timers, which run and ring here with Home
@@ -359,7 +372,7 @@ func localList(held map[string]*timer, now time.Time) []config.LocalTimer {
 		if !c.local || c.silent {
 			continue
 		}
-		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total}
+		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total, HA: c.ha}
 		if c.active {
 			saved.Finish = now.Add(c.remaining(now))
 		} else {
@@ -401,6 +414,7 @@ func saveLocal(list []config.LocalTimer) {
 // With the clock not yet set it waits for it: a finish time read against 1970 is a timer that runs
 // for fifty years, or one that finished while the device was off taken for one still to come.
 func (t *Timers) Restore(c config.Config) {
+	t.inList.Set(c.Timers.InHAList)
 	if len(c.Timers.Local) == 0 {
 		return
 	}
@@ -442,9 +456,9 @@ func (t *Timers) restore(list []config.LocalTimer, now time.Time) {
 			}
 			continue
 		case !s.Finish.IsZero():
-			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true}
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true, ha: s.HA}
 		default:
-			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Left, at: now, local: true}
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Left, at: now, local: true, ha: s.HA}
 		}
 		live = append(live, s)
 	}
@@ -496,6 +510,7 @@ func (t *Timers) start(c *timer, d time.Duration) string {
 		saveLocal(saved)
 	}
 	slog.Info("timer set here", "name", c.name, "for", d, "silent", c.silent)
+	t.listAdd(id)
 
 	select {
 	case t.woke <- struct{}{}:
@@ -514,14 +529,20 @@ func (t *Timers) Cancel(id string) bool {
 		return false
 	}
 	t.mu.Lock()
-	_, had := t.held[id]
+	c, had := t.held[id]
 	delete(t.held, id)
+	haID := ""
+	if had {
+		haID = c.ha
+		t.endedHere(haID, time.Now())
+	}
 	saved := t.saved(time.Now())
 	t.mu.Unlock()
 	if !had {
 		return false
 	}
 	saveLocal(saved)
+	t.listDrop(haID)
 	t.show()
 	t.publish()
 	t.Changed.Emit(struct{}{})
@@ -576,11 +597,10 @@ func (t *Timers) end(ids []string, now time.Time) {
 		delete(t.held, id)
 		t.pruneEnded(now)
 		if !local && !dropped {
-			if t.ended == nil {
-				t.ended = map[string]time.Time{}
-			}
-			t.ended[id] = now
+			t.endedHere(id, now)
 		}
+		// Its stand-in in Home Assistant's list finishes too, and its event must not ring it again.
+		t.endedHere(c.ha, now)
 		saved := t.saved(now)
 		t.mu.Unlock()
 
@@ -609,6 +629,13 @@ func (t *Timers) end(ids []string, now time.Time) {
 func (t *Timers) Event(e esphome.TimerEvent) {
 	slog.Info("timer",
 		"event", e.Type, "id", e.TimerID, "name", e.Name, "left", e.SecondsLeft, "total", e.TotalSeconds, "active", e.IsActive)
+
+	if t.listEvent(e) {
+		t.show()
+		t.publish()
+		t.Changed.Emit(struct{}{})
+		return
+	}
 
 	switch e.Type {
 	case api.VoiceAssistantTimerEvent_VOICE_ASSISTANT_TIMER_STARTED,
@@ -736,6 +763,14 @@ func (t *Timers) Keep() {
 		t.forgetWait = nil
 	}
 	t.mu.Unlock()
+
+	// Home Assistant's timer list is brought in line with the device's own timers once it is listening:
+	// a moment later, since it subscribes to the voice satellite before it is done setting up the rest.
+	// Until then what it says of their stand-ins is what it had before it went (listEvent).
+	t.mu.Lock()
+	t.listQuiet = time.Now().Add(listSyncDelay)
+	t.mu.Unlock()
+	time.AfterFunc(listSyncDelay, t.listSync)
 }
 
 // Ringing reports whether a finished timer is sounding, which is one of the things that makes the
@@ -896,4 +931,16 @@ func frame(left, total time.Duration, c led.Color) []led.Color {
 func dim(c led.Color, by float64) led.Color {
 	scale := func(v byte) byte { return byte(math.Round(float64(v) * by)) }
 	return led.Color{R: scale(c.R), G: scale(c.G), B: scale(c.B)}
+}
+
+// endedHere remembers that a timer, or a stand-in, was ended here, so that a late event for it does not
+// ring it again. Nothing for an empty id. Call it with the lock held.
+func (t *Timers) endedHere(id string, now time.Time) {
+	if id == "" {
+		return
+	}
+	if t.ended == nil {
+		t.ended = map[string]time.Time{}
+	}
+	t.ended[id] = now
 }

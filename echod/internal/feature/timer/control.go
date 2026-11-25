@@ -168,16 +168,19 @@ func (t *Timers) change(id, what string, f func(c *timer, now time.Time) error) 
 		t.mu.Unlock()
 		return errRunOut
 	}
+	before := c.remaining(now)
 	if err := f(c, now); err != nil {
 		t.mu.Unlock()
 		return err
 	}
 	name, left, active := c.name, c.remaining(now), c.active
+	by := left - before
 	saved := t.saved(now)
 	t.mu.Unlock()
 
 	saveLocal(saved)
 	slog.Info("timer "+what+" from home assistant", "id", id, "name", name, "left", left, "running", active)
+	t.listFollow(id, what, by)
 
 	select {
 	case t.woke <- struct{}{}:
