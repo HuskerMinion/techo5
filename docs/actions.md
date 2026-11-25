@@ -1143,7 +1143,7 @@ The answer looks like this. Times are in the device's time zone; `next` is empty
 is off or will not ring again.
 
 ```yaml
-ringing: null            # or {label: "Wake up", since: "2026-09-24T06:45:00-05:00"}
+ringing: null            # or {label: "Wake up", since: "2026-09-24T06:45:00-05:00", kind: alarm}
 alarms:
   - id: "m1x2y3"
     time: "06:45"
@@ -1167,6 +1167,11 @@ timers:
     local: true          # false for a timer set by voice through Home Assistant
     silent: false        # true for one started with timer_start_silent
 ```
+
+`ringing` is the alarm or timer ringing now, and `kind` says which: `alarm` or `timer`. A timer that
+rings has left `timers`, so `ringing` is where to find it, by its label (`Timer` for one with no
+label). Timers that run out into the same ring are one ring, named for the first. When an alarm
+and a timer ring at once, `ringing` is the alarm.
 
 ## Start a timer
 

@@ -103,7 +103,7 @@ func TestSkippingOneOccurrenceKeepsTheAlarmAndItsDays(t *testing.T) {
 	if v := a.View(now); len(v.Skipped) != 1 {
 		t.Errorf("the view does not say what was left out: %+v", v.Skipped)
 	}
-	if l := listing(now, a.View(now), nil); l.Alarms[0].Next != tuesday.Format(time.RFC3339) {
+	if l := listing(now, a.View(now), nil, nil); l.Alarms[0].Next != tuesday.Format(time.RFC3339) {
 		t.Errorf("listed next = %q, want %q", l.Alarms[0].Next, tuesday)
 	}
 	// The morning after is ordinary: it is offered again from inside its own light.
