@@ -446,22 +446,34 @@ func (f *Feature) Seek(id uint64, to time.Duration) error {
 		s.mu.Unlock()
 		return nil
 	}
-	info, req := s.info, s.req
+	info, aspect := s.info, s.aspect
 	s.mu.Unlock()
 	if info.Duration <= 0 {
 		return ErrNotSeekable
 	}
-	req.Start = shortOfEnd(to, info.Duration)
+	return f.restart(s, shortOfEnd(to, info.Duration), aspect, "moving")
+}
+
+// restart starts the decoder of session s again from to, taking the screen the way aspect says, in a
+// new session under the same id in its place, which knows the video already and so goes straight to
+// decoding: the page stays up, saying it is loading until the first frame from there, and a video
+// paused stays paused. Only for a video whose decoder has started and that says how long it runs.
+func (f *Feature) restart(s *session, to time.Duration, aspect Aspect, why string) error {
+	s.mu.Lock()
+	info, req := s.info, s.req
+	s.mu.Unlock()
+	req.Start = to
 	paused := s.paused()
 
 	f.mu.Lock()
 	if f.cur != s {
-		// Stopped or replaced meanwhile: the seek was for a video that is gone.
+		// Stopped or replaced meanwhile: the seek or the change was for a video that is gone.
 		f.mu.Unlock()
 		return ErrNotSeekable
 	}
-	ns := newSession(id, req, s.u, f.scr, f.panelW, f.panelH)
+	ns := newSession(s.id, req, s.u, f.scr, f.panelW, f.panelH)
 	ns.info, ns.rate, ns.sound, ns.probed = info, FrameRate(info.FPS), info.AudioIndex >= 0, true
+	ns.aspect = aspect
 	// Paused, it starts paused: a pause held before the sound comes is handed to its track when it
 	// does (soundSource.begin), as one from before a first start is. What covered the video still
 	// covers it, so covered and heldByUs stay as they are.
@@ -470,7 +482,7 @@ func (f *Feature) Seek(id uint64, to time.Duration) error {
 	f.cur = ns
 	insecure := config.Get().Diag.InsecureTLS
 	f.mu.Unlock()
-	slog.Info("video: moving", "id", id, "to", req.Start.Round(time.Second), "paused", paused)
+	slog.Info("video: "+why, "id", s.id, "to", req.Start.Round(time.Second), "aspect", aspect, "paused", paused)
 	// The old one goes first, its sound with it, before the new one can start a track of its own.
 	s.stop(true)
 	f.Changed.Emit(struct{}{})
@@ -481,6 +493,45 @@ func (f *Feature) Seek(id uint64, to time.Duration) error {
 	})
 	return nil
 }
+
+// Refit takes video id on to the next way of taking the screen (Aspect.Next), if it is still the one
+// up, and says which way that is. The way is the decoder's to make, so a video already decoding is
+// started again where it is, as a seek there would be (restart): which is why only a video that can be
+// moved through (Seekable) can be refitted once it has started. A live stream, or a continuous
+// transcode, says no length, and starting one again would start it from wherever its server starts
+// it, not from the place on the screen (ErrNotSeekable). Before its decoder has started the way is only
+// what it starts with. A new video starts at AspectFit again: the way is the video's, not a setting.
+func (f *Feature) Refit(id uint64) (Aspect, error) {
+	f.mu.Lock()
+	s := f.cur
+	f.mu.Unlock()
+	if s == nil || s.id != id {
+		return AspectFit, ErrNotSeekable
+	}
+	s.mu.Lock()
+	next := s.aspect.Next()
+	if !s.decoding {
+		s.aspect = next
+		s.mu.Unlock()
+		slog.Info("video: refitted before it starts", "id", id, "aspect", next)
+		f.Changed.Emit(struct{}{})
+		return next, nil
+	}
+	dur := s.info.Duration
+	s.mu.Unlock()
+	if dur <= 0 {
+		return s.aspect0(), ErrNotSeekable
+	}
+	_, _, started := s.numbers()
+	if err := f.restart(s, shortOfEnd(s.position(started), dur), next, "refitted"); err != nil {
+		return s.aspect0(), err
+	}
+	return next, nil
+}
+
+// Refittable is whether video id's way of taking the screen can be changed (Refit) now, and whether
+// that is known yet: as Seekable, which is what a change once it has started needs.
+func (f *Feature) Refittable(id uint64) (ok, known bool) { return f.Seekable(id) }
 
 // endRoom is how far short of a video's end a seek to (or past) the end lands: the decoder started at
 // the very end has no frame to show, which is a video that failed, and one started past it starts the
@@ -582,7 +633,7 @@ func (f *Feature) State() State {
 		shown, dropped, started := s.numbers()
 		st.Shown, st.Dropped, st.Frames = shown, dropped, started
 		s.mu.Lock()
-		st.Dur = s.info.Duration
+		st.Dur, st.Aspect = s.info.Duration, s.aspect
 		s.mu.Unlock()
 		st.Phase = Loading
 		// Where it is, and while it is still loading (after a seek) where it is going to start.
@@ -676,6 +727,8 @@ func Pause()                                 { Get().Pause() }
 func Resume()                                { Get().Resume() }
 func Seek(id uint64, to time.Duration) error { return Get().Seek(id, to) }
 func Seekable(id uint64) (ok, known bool)    { return Get().Seekable(id) }
+func Refit(id uint64) (Aspect, error)        { return Get().Refit(id) }
+func Refittable(id uint64) (ok, known bool)  { return Get().Refittable(id) }
 func Current() State                         { return Get().State() }
 func SetOn(on bool)                          { Get().SetOn(on) }
 func SetDLNA(on bool)                        { Get().SetDLNA(on) }

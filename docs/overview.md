@@ -33,6 +33,11 @@ project started on:
 
   ![Touch map of the clock](images/touch-map.svg)
 
+- **Cast from a phone**: an Android phone sends a video, or its screen and sound, straight to the Show
+  (the TECHO5 Cast app: share from YouTube or any video app). Off until turned on (Settings, Connections);
+  paired by scanning a QR code the Show draws; the Show asks to Accept a phone before it casts; encrypted
+  (Noise) on port 8940 with no server in between. See [cast.md](cast.md).
+
 - **Timers and alarms**: voice timers from Home Assistant count down under the clock; alarms are set
   on the settings screen (Alarms) or with the `alarm_set` action, or followed from Home Assistant `input_datetime`
   helpers (`alarms_follow`), and ring from the device's own clock even when Home Assistant is down.

@@ -1328,7 +1328,11 @@ func (a *Alarms) Actions() []*esphome.Action {
 			Answers: true,
 			Run: func(esphome.Call) (any, error) {
 				now := time.Now()
-				return listing(now, a.View(now), timer.Get().List(now)), nil
+				var rung *timer.Rung
+				if r, ok := timer.Get().RingingNow(); ok {
+					rung = &r
+				}
+				return listing(now, a.View(now), timer.Get().List(now), rung), nil
 			},
 		},
 		{

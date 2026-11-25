@@ -17,7 +17,6 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
-	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
@@ -275,7 +274,7 @@ func resumeMusic(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p, err := c.Player(ctx, own)
+	p, err := c.Player(ctx, own...)
 	if err != nil {
 		return err
 	}
@@ -297,14 +296,14 @@ func stopMusic() {
 }
 
 // maPlayer is the Music Assistant set up on this device and this device's player there.
-func maPlayer() (musicassistant.Client, string, error) {
+func maPlayer() (musicassistant.Client, []string, error) {
 	m := config.Get().MusicAssistant
 	if !m.Set() {
-		return musicassistant.Client{}, "", errors.New("no music library is set up on this device")
+		return musicassistant.Client{}, nil, errors.New("no music library is set up on this device")
 	}
-	player, err := layout.FactoryMAC()
-	if err != nil || player == "" {
-		return musicassistant.Client{}, "", errors.New("this device does not know its own player id")
+	player, err := media.LibraryPlayerIDs()
+	if err != nil {
+		return musicassistant.Client{}, nil, err
 	}
 	return musicassistant.Client{URL: m.URL, Token: m.Token}, player, nil
 }

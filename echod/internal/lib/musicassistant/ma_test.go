@@ -71,6 +71,32 @@ func TestPlayer(t *testing.T) {
 	}
 }
 
+// A device on encrypted Sendspin is Music Assistant's player under its key, and the player it had
+// under its MAC from before stays on, unavailable (#721): the device is found by either id, and the
+// connected one wins wherever it comes in the list (#738).
+func TestPlayerByKeyOrMAC(t *testing.T) {
+	const key = "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`[{"player_id":"aa:bb:cc:dd:ee:ff","available":false,"playback_state":"idle"},` +
+			`{"player_id":"` + key + `","available":true,"playback_state":"idle"}]`))
+	}))
+	defer srv.Close()
+	c := Client{URL: srv.URL, Token: "tok"}
+	for _, own := range [][]string{{key, "aa:bb:cc:dd:ee:ff"}, {"aa:bb:cc:dd:ee:ff", key}, {key}} {
+		if p, err := c.Player(context.Background(), own...); err != nil || p.ID != key || !p.Available {
+			t.Errorf("%v: %+v %v", own, p, err)
+		}
+	}
+	// A server that carried the MAC player over, or a device on the unencrypted wire, has the MAC
+	// alone: that is still the device, connected or not.
+	if p, err := c.Player(context.Background(), "nokey", "AA:BB:CC:DD:EE:FF"); err != nil || p.ID != "aa:bb:cc:dd:ee:ff" || p.Available {
+		t.Errorf("by the MAC: %+v %v", p, err)
+	}
+	if _, err := c.Player(context.Background(), "", "11:22:33:44:55:66"); err == nil || !strings.Contains(err.Error(), "allowed players") {
+		t.Errorf("neither id: %v", err)
+	}
+}
+
 // A search can be held to services, which go to Music Assistant as its providers argument; without
 // any, the argument is left out and the whole library is searched.
 func TestSearchProviders(t *testing.T) {

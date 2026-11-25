@@ -906,8 +906,8 @@ func set(s *esphome.Sensor, r metrics.Reading) {
 	}
 }
 
-// inUse is what the slots are set to, the hang-up word and the command words, which is what a purge has
-// to leave alone.
+// inUse is what the slots are set to, the stop word, the hang-up word and the command words, which is
+// what a purge has to leave alone.
 func inUse() []string {
 	saved := config.Get().Wake
 
@@ -916,6 +916,9 @@ func inUse() []string {
 		if id := saved.Slot(slot).ID; id != "" {
 			ids = append(ids, id)
 		}
+	}
+	if id := saved.Stop.ModelID(); id != "" {
+		ids = append(ids, id)
 	}
 	if id := saved.Hangup.ModelID(); id != "" {
 		ids = append(ids, id)

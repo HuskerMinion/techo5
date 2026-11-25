@@ -94,8 +94,8 @@ func tooLarge(err error) bool {
 }
 
 // listening is whether a slot is listening for the model, as the selection was last saved, or it is the
-// hang-up word or a command word: a model any of them has loaded would go on running whatever replaced
-// it on disk.
+// stop word, the hang-up word or a command word: a model any of them has loaded would go on running
+// whatever replaced it on disk.
 func listening(id string) bool {
 	wake := config.Get().Wake
 	for _, s := range wake.Slots(wakeword.Slots) {
@@ -106,7 +106,7 @@ func listening(id string) bool {
 	if id == "" {
 		return false
 	}
-	return wake.Hangup.ModelID() == id || slices.ContainsFunc(wake.CommandWords(), func(w config.CommandWord) bool {
+	return wake.Stop.ModelID() == id || wake.Hangup.ModelID() == id || slices.ContainsFunc(wake.CommandWords(), func(w config.CommandWord) bool {
 		return w.ID == id
 	})
 }

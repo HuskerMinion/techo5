@@ -80,6 +80,9 @@ type State struct {
 	// Frames is whether the picture has begun to arrive.
 	Frames bool
 
+	// Aspect is how the picture takes the screen (Refit): AspectFit for every video as it starts.
+	Aspect Aspect
+
 	// AskID is the DLNA video whose question is on the screen, when there is one: while another video
 	// plays, the state is that video's, and this is how the one asking knows it is still asked about.
 	AskID uint64

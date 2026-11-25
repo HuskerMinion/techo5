@@ -251,6 +251,41 @@ screensaver up now, as if the screen had been idle for the whole wait, for an au
 "everybody left" or "movie time". A tap takes it down as usual. A press does nothing when there is
 no screensaver to show (Slideshow is not on Screensaver, or no photo has arrived yet), when the
 screen is out, or while something else has the screen (a request, a call, a ring, the settings).
+**Hide screensaver** (a button beside it) takes the screensaver down to the clock, as a tap does,
+and the idle wait starts again from the press. It does nothing when no screensaver is up.
+
+To have the screensaver only at the times an automation chooses, and never by itself after the wait
+otherwise, leave **Slideshow** on **Background** or **Off** and let the automation switch it: set
+`select.<node>_slideshow` to **Screensaver**, then press **Show screensaver**; to end it, set
+Slideshow back, which takes the screensaver down and keeps it from coming back by itself. While
+Slideshow is on Screensaver it is the ordinary screensaver: after a tap it comes back once the screen
+has been idle for the wait. From
+**Off** the first photo is fetched after the switch, so give it a few seconds before the press (a
+press before a photo has arrived does nothing); from **Background** a photo is already there.
+
+```yaml
+# Up at 20:00 and down at 23:00. In between, a tap takes it down and it comes back after the
+# idle wait; after 23:00 it does not come back by itself.
+- alias: Photos in the evening
+  triggers:
+    - trigger: time
+      at: "20:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: Screensaver }
+    - delay: 10
+    - action: button.press
+      target: { entity_id: button.office_show_screensaver }
+- alias: Photos off at night
+  triggers:
+    - trigger: time
+      at: "23:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: "Off" }
+```
 
 The same settings are entities in Home Assistant, and the folder can be set with the
 [`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is
@@ -1575,6 +1610,24 @@ close it came there is what says whether to lower the threshold. How close a "st
 answer came is also in the log, one line an answer (see
 [Watching the wake word scores](#watching-the-wake-word-scores)).
 
+**Stop word**, beside the threshold, picks the word: **Stop**, the English one that comes with the
+device and the default, or one of the wake word models the device has, such as a "Stopp" of your own
+trained on German voices, sent the way [a wake word of your own](#a-wake-word-of-your-own) is. The
+word chosen does everything the built-in one does, at the same threshold and with the same allowance
+over a ring or an answer, and the built-in one isn't listened for while it does. The list leaves out
+the wake words chosen now (a word can't open a turn and stop one at once) and a model of your own
+called "Stop", which couldn't be told from the built-in one: give it another name. If the model
+chosen goes from the device, or is chosen as a wake word, the built-in **Stop** listens in its place,
+the list shows **Stop** and the device's log says why. The choice is kept, so the word comes back with
+the model. Like the [hang-up word](phone.md#a-hang-up-word), it is the device's own: a settings file
+doesn't change it, and the remote API can read it but not change it.
+
+With the wake word first, a ringing alarm or timer stops when what's heard is a stop and nothing
+else: "stop", "turn off the timer", "stop the alarm, please", or the same in the screen's languages
+and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
+"выключи будильник"). A sentence with anything more in it ("stop the music") goes to Home Assistant
+as any other.
+
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
 for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history, as plain text
@@ -1761,10 +1814,10 @@ Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
 is listening for can't be removed or sent again either: pick another one first. Neither can one
-chosen as the [volume down word](#the-volume-down-word), the [volume up or next song
-word](#the-volume-up-and-next-song-words) or the [hang-up word](phone.md#a-hang-up-word), even while
-it's off (for being a wake word too, or with no music or call): set that word's list to **None** or
-another word first. The page says "listening for that wake word" in each case.
+chosen as the [stop word](#two-wake-words-two-assistants), the [volume down
+word](#the-volume-down-word), the [volume up or next song word](#the-volume-up-and-next-song-words)
+or the [hang-up word](phone.md#a-hang-up-word), even while it's off (for being a wake word too, or
+with no music or call): set that word's list to **None**, **Stop** or another word first. The page says "listening for that wake word" in each case.
 
 Or, through Home Assistant:
 
@@ -2818,7 +2871,8 @@ on the setup page's **Add-ons** card (**System** tab). The card has three parts:
 
 - **Available:** the add-ons in TECHO5's catalog, each with its author, what it does, its version and
   the TECHO5 version it needs, a link to its own page, and what it asks for: the network ports it needs
-  opened, whether it runs as root, and roughly how much memory and storage it uses. One made for
+  opened, whether it runs as root, any extra files it downloads beside its program (by name and
+  size), and roughly how much memory and storage it uses. One made for
   another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
   installed from the card yet, and one that needs more memory than the device can spare are listed
   too, grayed out with the reason.
@@ -2837,19 +2891,21 @@ Every install shows this warning first, and you have to tick the box under it to
 
 Installing is only possible on the setup page, behind its Allow on the device (or the action button on
 a Dot), never from Home Assistant, a voice command or the screen, so the warning is always seen. An
-update that asks for more than the version before (a new port, or root) shows the warning and the box
-again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
+update that asks for more than the version before (a new port, root, or an extra file that is new or
+changed) shows the warning and the box again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
 install an update from there only when the update asks for nothing new, and otherwise says to use the
 setup page.
 
 How the device runs them:
 
 - **Only from the catalog.** The catalog (`catalog.json` in
-  [techo5-addons](https://github.com/HuskerMinion/techo5-addons)) is signed with the
+  [techo5-addons](https://github.com/HuskerMinion/techo5-addons), published as `catalog-v2.json` and
+  `catalog.json`, below) is signed with the
   same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
   and the device believes it only with that signature. It names each version's download and its SHA-256,
-  and the manifest it ships (`addon.json`) by its hash too: the device refuses a download that doesn't
-  match, and an add-on whose manifest asks for more than the catalog shows. A signed catalog expires a
+  and the manifest it ships (`addon.json`) by its hash too, as well as any extra files it brings: the
+  device refuses a download that doesn't match, and an add-on whose manifest asks for more than the
+  catalog shows or names other extra files than the catalog pins. A signed catalog expires a
   month after it was signed (every TECHO5 (Show) release signs it again): past that, installed add-ons keep running
   but nothing is offered, and the card says why. A device never goes back to an older catalog than one
   it has seen.
@@ -2874,7 +2930,9 @@ How the device runs them:
   installed or started, and the card says why; one that can't start for memory is tried again, like a
   crash. An Echo Dot 2nd gen has about 445 MB free.
 - **Updates are tried first.** The new version is downloaded beside the old one and checked, then
-  started; if it doesn't stay up for a minute, the old one goes back, and the card says so.
+  started; if it doesn't stay up for a minute, the old one goes back, its extra files with it, and the
+  card says so. A device that loses power in the middle of an update puts the old version back when it
+  starts again.
 - **Remove** stops it, closes its ports and deletes its folder, `/data/techo5-addons/<id>`. What
   it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
   the box to delete it too.
@@ -2896,7 +2954,8 @@ form with your add-on's repository and the release to list. Its
 [README](https://github.com/HuskerMinion/techo5-addons#for-authors-getting-an-add-on-listed) says in
 full what an add-on needs and how it is reviewed. In short, it needs:
 
-- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux;
+- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux,
+  and any extra files the program needs beside it (below);
 - an `addon.json` in the same release, such as techo5-plex's:
 
   ```json
@@ -2921,6 +2980,49 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   browser reached it. A port below 1024 is refused unless it runs as root, and one of TECHO5's own is
   refused always.
 
+- **Extra files**, when the program needs more than itself: another project's release it unpacks, a
+  model. `addon.json` names them, `"files": ["netbird.tar.gz"]`, and the catalog entry pins each one
+  as it pins the binary (an https URL, its SHA-256 and its size), under the TECHO5 build that gets it,
+  `arm` or `arm64`, whatever is inside: an `arm` program that unpacks another project's `linux_arm64`
+  archive lists that archive under `arm`:
+
+  ```json
+  "requires": ["files"],
+  "binaries": {
+    "arm": {"url": "https://github.com/example/techo5-netbird/releases/download/v0.2.0/techo5-netbird-arm", "sha256": "…", "size": 9000000}
+  },
+  "files": {
+    "arm": [
+      {"name": "netbird.tar.gz", "url": "https://github.com/netbirdio/netbird/releases/download/vX.Y.Z/netbird_X.Y.Z_linux_arm64.tar.gz", "sha256": "…", "size": 15000000}
+    ]
+  }
+  ```
+
+  The device downloads and checks each one as it does the program, and installs them read-only (root's,
+  `0644`) in the add-on's `bin` folder beside the program, under those names; an update, going back,
+  and removal treat them as part of the program. The program finds that folder in
+  `TECHO5_ADDON_BIN`, and its `state` folder in `TECHO5_ADDON_STATE`. Names are plain file names
+  (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not ending in `.part`, not the
+  program's own name, and neither another's name nor the program's followed by a dot), at most
+  8 of them and 128 MB together, and every build lists the same names, since one `addon.json` serves
+  them all. An add-on downloads nothing else at run time: what it runs is what was looked over. A
+  version with extra files says so in `"requires": ["files"]` (below).
+
+- **`requires`**, the features a version needs beyond the catalog's first format (today only
+  `files`). The catalog is format 2: a device skips a version that requires a feature it doesn't know,
+  rather than refusing the whole catalog, and an add-on with no version it can read is shown grayed out
+  as needing a newer TECHO5. Everything else stays strict: a key the format doesn't know is refused
+  anywhere but in a version skipped this way, so a version that uses a new field has to require the
+  feature that brings it, and one that requires a feature has to use it.
+
+  Devices up to v1.6.53 read only format 1, and refuse the whole catalog for one field they don't
+  know. So the catalog is published as two files from the one source: `catalog-v2.json`, everything in
+  format 2, which newer devices fetch first, and `catalog.json`, format 1 as before, with every version
+  that requires anything left out (and an add-on with nothing left, left out too), which older devices
+  go on reading. A newer device takes `catalog.json` only while `catalog-v2.json` isn't published.
+  Both carry one serial, so a device that has believed one never takes an older one of either, and
+  each is signed under its own text, so neither's signature passes for the other's.
+
 We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
 catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
 way a device does. Each new version gets a new entry: a version is never trusted because an earlier
@@ -2933,12 +3035,16 @@ worktree beside it), else `E:\projects\techo5-addons`. It signs only a `catalog.
 in a checkout at its `origin/main`, with `mkcatalog` built from a clean checkout of this repository at
 its `origin/main`. It checks the catalog (`mkcatalog`), refuses one whose `serial` is below the
 published one's, or the same serial with different entries (the same entries again only renew the
-expiry; a device never takes an older catalog than it has), signs it with the release key, and
-publishes `catalog.json` and `catalog.json.sig` on this repository's `addons` release, which is what
-devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
+expiry; a device never takes an older catalog than it has) or that changes a version published in
+either file, writes `catalog-v2.json` and `catalog.json` from it, signs both with the release key, and
+publishes the four files (with `catalog-v2.json.sig` and `catalog.json.sig`) on this repository's
+`addons` release, which is what devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
 anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
-is passed on as `-Catalog`). `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
-downloaded file by.
+is passed on as `-Catalog`). Once the `addons` release has `catalog.json`, it checks against
+`catalog-v2.json` as well and refuses to sign without it, as `catalog.json` alone doesn't hold every
+version; the one signing that first publishes `catalog-v2.json` says so with `-FirstFormat2`
+(`release.ps1 -FirstFormat2Catalog`), which is refused once it is published. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
+downloaded file by; with `-file NAME` as well, it prints an extra file's pin under that name.
 
 ### Running something of your own at boot
 

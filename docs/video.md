@@ -110,6 +110,16 @@ A live stream can't be moved through: the app is told so, and it plays on.
   seeks (the app is then asked to, [the same way](setup.md#dlna-next-and-previous)). Tap it to go to that place,
   or slide a finger along it: the time shows where you are, and the video moves there when you let
   go. A live stream has no bar.
+- **The picture button**, next to quieter (between stop and quieter on the Spot), changes how the
+  picture fills the screen, for a badly framed or oddly shaped video. Each tap moves on to the next of
+  three: **fit** shows the whole picture with black bars (the usual), **fill** fills the screen and
+  cuts off what doesn't fit, top and bottom or the sides, and **stretch** pulls the whole picture to
+  the screen's shape. Its icon shows which one is on: a screen with the picture fitted in it, a crop
+  mark, or a picture pulled out to the edges. The picture starts again where it was, after a moment
+  of loading. It's for the video that's playing only, and isn't a setting: the next video starts
+  with fit again. It's there for a video the Show can move through itself, one that says how long it
+  is. A live stream, or a Plex transcode that only its app can move through, doesn't have it, since
+  starting one again would start it wherever its server does.
 - **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was.
 - A call, an alarm or a timer ringing, the settings, a camera or a voice turn goes on top. The video
   pauses under it and goes on once it's gone.

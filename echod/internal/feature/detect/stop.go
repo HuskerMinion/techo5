@@ -88,25 +88,54 @@ func stopModel() (wake.Model, error) {
 // one costs a front end per frame however loud the room is — unlike a second openWakeWord word, which
 // is only another classifier over a front end already running. Leaving it loaded and never acting on it
 // would be paying for the feature while it is turned off.
-func (d *Detect) loadStop() {
+//
+// The model is the one chosen in Stop word, the built-in one unless another was (stopword.go).
+func (d *Detect) loadStop() { d.putStop(false) }
+
+// followStop is loadStop after the library or the wake words changed, which happens far more often
+// than the stop word does: a slot that already holds the word it should is left without a line.
+func (d *Detect) followStop() { d.putStop(true) }
+
+func (d *Detect) putStop(quiet bool) {
+	// Called from the threshold, the select, the library changing and the engine's load, any of which can
+	// come together: one at a time, so the last one's model is the one left in the slot.
+	d.stopMu.Lock()
+	defer d.stopMu.Unlock()
+
 	if !config.Get().Wake.Stop.Listening() {
+		if _, loaded := d.engine.Loaded(StopSlot); quiet && !loaded {
+			return
+		}
 		d.engine.Clear(StopSlot)
 		slog.Info("stop word off", "threshold", config.Get().Wake.Stop.Threshold)
 		return
 	}
 
-	m, err := stopModel()
+	var m wake.Model
+	var err error
+	if d.stopWord != nil {
+		m, err = d.stopWord.wanted()
+	} else {
+		m, err = builtInStop()
+	}
 	if err != nil {
 		slog.Error("the stop word is unavailable", "err", err)
 		d.engine.Clear(StopSlot)
 		return
 	}
+	// Use keeps a slot that already holds a model of the same id as it is. A model of one's own could
+	// have the built-in one's id, so a slot holding another file is emptied first.
+	if have, loaded := d.engine.Loaded(StopSlot); loaded && have.Path != m.Path {
+		d.engine.Clear(StopSlot)
+	} else if loaded && quiet && have.ID == m.ID {
+		return
+	}
 	if err := d.engine.Use(StopSlot, m); err != nil {
-		slog.Error("loading the stop word failed", "err", err)
+		slog.Error("loading the stop word failed", "id", m.ID, "err", err)
 		d.engine.Clear(StopSlot)
 		return
 	}
-	slog.Info("stop word listening", "threshold", config.Get().Wake.Stop.Threshold)
+	slog.Info("stop word listening", "id", m.ID, "phrase", m.Phrase, "threshold", config.Get().Wake.Stop.Threshold)
 }
 
 // newStopEntity is the one control the stop word has. There is no switch beside it: the top of the range
@@ -139,7 +168,11 @@ func newStopEntity(d *Detect) *esphome.Number {
 }
 
 func (d *Detect) Entities() []esphome.Entity {
-	out := []esphome.Entity{d.stop, d.hangup.word, d.hangup.threshold}
+	out := []esphome.Entity{d.stop}
+	if d.stopWord != nil {
+		out = append(out, d.stopWord.word)
+	}
+	out = append(out, d.hangup.word, d.hangup.threshold)
 	for _, c := range d.commands {
 		out = append(out, c.word, c.threshold)
 	}
@@ -211,6 +244,9 @@ func (d *Detect) setWakeProblem(problems []string) {
 func (d *Detect) Restore(c config.Config) {
 	d.stop.Set(float32(c.Wake.Stop.Threshold))
 	slog.Info("restored", "what", d.stop.ObjectID, "using", c.Wake.Stop.Threshold)
+	if d.stopWord != nil {
+		d.stopWord.restore(c.Wake.Stop)
+	}
 	d.hangup.restore(c.Wake.Hangup)
 	d.restoreCommands(c.Wake)
 	d.onHA.restore(c.Wake.OnHA)

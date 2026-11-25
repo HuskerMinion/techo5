@@ -29,7 +29,7 @@ func videoCovered(s scene) bool {
 	turn := s.phase == "listening" || s.phase == "thinking" || s.phase == "replying" || cueLit(s.cue) ||
 		(s.cue != "" && (cueWords(s.cue, s.heard, s.reply) != "" || s.failed != ""))
 	return s.call.Phase != phone.Idle || s.ring.any() || s.pin.open || s.setupAsking || s.showVideoAsk || s.bt.Pairing ||
-		s.showWifi || s.showCamera || s.showSheet || turn
+		s.showWifi || s.showCamera || s.showSheet || s.showCast || turn
 }
 
 // videoScene fills in the video's part of the scene, and tells the player whether it is covered.
@@ -55,6 +55,7 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	// How a place chosen on the bar would be sent, worked out before d.mu: it asks the player and the
 	// DLNA renderer, which have locks of their own.
 	route := videoSeekRoute(st)
+	fit := up && videoFittableNow(st)
 	d.mu.Lock()
 	if up {
 		d.videoTried = st.ID
@@ -62,6 +63,7 @@ func (d *Display) videoScene(s *scene, now time.Time) {
 	controls := now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
 	s.videoControls = controls
 	s.videoSkip = up && videoSkippable(st)
+	s.videoFit = fit
 	// The bar to seek on, for a video somebody can move through, showing the place a finger is choosing.
 	s.videoSeek = d.seekShowLocked(route, st.Pos, now)
 	s.videoLive = s.showVideo && up && st.Frames
@@ -139,6 +141,9 @@ func (d *Display) videoGesture(g touch.Gesture) {
 			d.showVideoControls()
 		case videoTapNext:
 			go videoSkip(media.TransportNext)
+			d.showVideoControls()
+		case videoTapFit:
+			go videoRefit(st.ID)
 			d.showVideoControls()
 		default:
 			// Off the controls: they go, and the picture is the whole screen again.

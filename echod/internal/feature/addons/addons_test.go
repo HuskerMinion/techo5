@@ -460,8 +460,19 @@ func sameAsks(r *rig) catalog.Version { return r.version("techo5-plex", "0.2.0",
 
 // An update that stays up a minute is kept; the old version is deleted then, and the state is the same
 // folder throughout.
-func TestAnUpdateThatStaysUpIsKept(t *testing.T) {
+func TestAnUpdateThatStaysUpIsKept(t *testing.T) { updateStaysUp(t, false) }
+
+// The same, with the new version's ports slow to open, as on a loaded machine: its process is there
+// before the supervisor marks it running, and the update's trial can end in between.
+func TestAnUpdateThatStaysUpIsKeptWhileItsPortsOpen(t *testing.T) { updateStaysUp(t, true) }
+
+func updateStaysUp(t *testing.T, slowFirewall bool) {
 	r, _ := updateRig(t, sameAsks)
+	if slowFirewall {
+		r.tables.mu.Lock()
+		r.tables.slow = 20 * time.Millisecond
+		r.tables.mu.Unlock()
+	}
 	if s := r.state("techo5-plex"); s.Update == nil || s.Update.Version != "0.2.0" || len(s.Update.More) != 0 {
 		t.Fatalf("offered: %+v", s.Update)
 	}
@@ -477,6 +488,11 @@ func TestAnUpdateThatStaysUpIsKept(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+	// The trial is timed from the start, not from running: the new process is there (and the test's
+	// wait above saw it) a moment before its ports are open and it is marked running, which on a
+	// loaded machine can come after the trial's end. That moment is milliseconds against a trial of a
+	// minute on a device, so the test waits for it rather than the code holding the trial for it.
+	r.waitState("techo5-plex", StateRunning)
 	s := r.state("techo5-plex")
 	if s.Version != "0.2.0" || s.Update != nil || s.State != StateRunning {
 		t.Errorf("after the update: %+v", s)
@@ -548,6 +564,8 @@ func TestAnUpdateAskingForMoreAsksAgain(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+	// Its ports are opened as it is marked running, which can come after the trial ends (updateStaysUp).
+	r.waitState("techo5-plex", StateRunning)
 	if got := r.tables.rules(tools[0], chain); !slices.Contains(got, "-p tcp --dport 32600 -j ACCEPT") {
 		t.Errorf("the new port is not open: %q", got)
 	}

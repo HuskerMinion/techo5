@@ -8,7 +8,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
-	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
@@ -89,16 +89,16 @@ func maPlayerTemplate(own, name string) string {
 		"{%- endif -%}{%- endfor -%}{{ ns.q or ns.p or ns.n or ns.o or 'none' }}"
 }
 
-// resumeDirect resumes this device's own player at the server, found by its id there (the factory MAC,
-// as the voice assistant finds it). A variable for the tests.
+// resumeDirect resumes this device's own player at the server, found by its ids there (its Sendspin
+// key and factory MAC, as the voice assistant finds it). A variable for the tests.
 var resumeDirect = func(c musicassistant.Client) error {
-	own, err := layout.FactoryMAC()
+	own, err := media.LibraryPlayerIDs()
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	p, err := c.Player(ctx, own)
+	p, err := c.Player(ctx, own...)
 	if err != nil {
 		return err
 	}

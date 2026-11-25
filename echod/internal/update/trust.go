@@ -76,9 +76,19 @@ func verify(manifest, sig []byte, key string) error {
 // catalog never verifies a manifest, and a manifest's never verifies a catalog.
 const CatalogDomain = "TECHO5 add-on catalog v1\n"
 
+// CatalogDomainV2 is CatalogDomain for the format 2 catalog (catalog-v2.json), published beside the
+// format 1 one that older devices read. Each format is signed under its own domain, so neither file's
+// signature verifies the other: a device asking for one is never handed the other's bytes as it.
+const CatalogDomainV2 = "TECHO5 add-on catalog v2\n"
+
 // SignCatalog is Sign for the add-on catalog, over CatalogDomain and the catalog (cmd/mkcatalog).
 func SignCatalog(catalog []byte, seed string) (string, error) {
 	return Sign(append([]byte(CatalogDomain), catalog...), seed)
+}
+
+// SignCatalogV2 is SignCatalog for the format 2 catalog, over CatalogDomainV2.
+func SignCatalogV2(catalog []byte, seed string) (string, error) {
+	return Sign(append([]byte(CatalogDomainV2), catalog...), seed)
 }
 
 // VerifyCatalog checks an add-on catalog against its detached signature, for feature/addons, which
@@ -88,11 +98,26 @@ func VerifyCatalog(body, sig []byte) error {
 	return verify(append([]byte(CatalogDomain), body...), sig, releaseKey)
 }
 
+// VerifyCatalogV2 is VerifyCatalog for the format 2 catalog.
+func VerifyCatalogV2(body, sig []byte) error {
+	return verify(append([]byte(CatalogDomainV2), body...), sig, releaseKey)
+}
+
 // FetchSignedCatalog is Fetch for the add-on catalog (feature/addons). The file is fetched through the
 // updater's own client, its signature from beside it (url + ".sig"), and it is returned only once the
 // signature is the release key's over CatalogDomain and exactly the bytes served. Nothing is fetched
-// before the clock is set, for the reason Fetch gives.
+// before the clock is set, for the reason Fetch gives. A catalog that is not there is ErrNotFound; one
+// whose signature is not there is not.
 func FetchSignedCatalog(ctx context.Context, url string, max int64) (body, sig []byte, err error) {
+	return fetchSignedCatalog(ctx, url, max, VerifyCatalog)
+}
+
+// FetchSignedCatalogV2 is FetchSignedCatalog for the format 2 catalog, checked over CatalogDomainV2.
+func FetchSignedCatalogV2(ctx context.Context, url string, max int64) (body, sig []byte, err error) {
+	return fetchSignedCatalog(ctx, url, max, VerifyCatalogV2)
+}
+
+func fetchSignedCatalog(ctx context.Context, url string, max int64, check func(body, sig []byte) error) (body, sig []byte, err error) {
 	if !clockSet() {
 		return nil, nil, ErrClock
 	}
@@ -104,9 +129,11 @@ func FetchSignedCatalog(ctx context.Context, url string, max int64) (body, sig [
 	}
 	sig, err = get(ctx, url+".sig", 1<<10)
 	if err != nil {
-		return nil, nil, fmt.Errorf("update: %s has no signature: %w", url, err)
+		// Not wrapped: a catalog published without its signature is a failure, never ErrNotFound, which
+		// a caller may take for the file not being published at all, and fall back from.
+		return nil, nil, fmt.Errorf("update: %s has no signature: %v", url, err)
 	}
-	if err := VerifyCatalog(body, sig); err != nil {
+	if err := check(body, sig); err != nil {
 		return nil, nil, err
 	}
 	return body, sig, nil

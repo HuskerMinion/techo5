@@ -262,6 +262,7 @@ type roundScene struct {
 	videoLive     bool
 	videoControls bool
 	videoSeek     seekView
+	videoFit      bool
 	showVideoAsk  bool
 	videoAsk      videoAsk
 
@@ -321,7 +322,7 @@ type roundRenderer struct {
 	driftCanvas *image.RGBA
 	// videoZones are the video face's controls as last drawn, under zmu, and videoOver what of the
 	// canvas goes over the picture (render_video_spot.go).
-	videoZones []image.Rectangle
+	videoZones []videoZone
 	videoOver  image.Rectangle
 	// seekBars is the video's bar to seek on, as the Show's renderer has it (seekbar.go).
 	seekBars seekBars

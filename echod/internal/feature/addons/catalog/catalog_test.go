@@ -36,7 +36,7 @@ func plex() Addon {
 		Repo: "https://github.com/example/techo5-plex", Versions: []Version{plexVersion("0.1.0")}}
 }
 
-func valid() Catalog { return Catalog{Format: 1, Serial: 3, Addons: []Addon{plex()}} }
+func valid() Catalog { return Catalog{Format: 2, Serial: 3, Addons: []Addon{plex()}} }
 
 // The catalog in a techo5-addons checkout ($TECHO5_ADDONS, or beside this one) is one a device would
 // take: it is what gets signed. It is skipped without one; techo5-addons checks its own catalog with
@@ -204,7 +204,7 @@ func TestNewestSkipsWithdrawnAndUnrunnable(t *testing.T) {
 }
 
 func TestMoreIsWhatWasNotAgreedTo(t *testing.T) {
-	before := plexVersion("0.1.0").Asks()
+	before := plexVersion("0.1.0").Asks("arm")
 	if more := before.More(before); len(more) != 0 {
 		t.Errorf("the same asks: %v", more)
 	}
@@ -231,7 +231,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := m.Matches("techo5-plex", plexVersion("0.1.0")); err != nil {
+	if err := m.Matches("techo5-plex", plexVersion("0.1.0"), "arm"); err != nil {
 		t.Errorf("matches its entry: %v", err)
 	}
 	if got := m.Expand("/data/x/state"); strings.Join(got, " ") != "-data /data/x/state" {
@@ -240,17 +240,17 @@ func TestManifest(t *testing.T) {
 	if got := m.PageFor("192.0.2.4"); got != "http://192.0.2.4:32501/" {
 		t.Errorf("page: %q", got)
 	}
-	if err := m.Matches("techo5-plex", plexVersion("0.2.0")); err == nil {
+	if err := m.Matches("techo5-plex", plexVersion("0.2.0"), "arm"); err == nil {
 		t.Error("matched another version's entry")
 	}
 	wider := plexVersion("0.1.0")
 	wider.Ports = wider.Ports[:2]
-	if err := m.Matches("techo5-plex", wider); err == nil {
+	if err := m.Matches("techo5-plex", wider, "arm"); err == nil {
 		t.Error("a manifest asking for more ports than its entry matched")
 	}
 	rooted := plexVersion("0.1.0")
 	rooted.Root = true
-	if err := m.Matches("techo5-plex", rooted); err == nil {
+	if err := m.Matches("techo5-plex", rooted, "arm"); err == nil {
 		t.Error("matched an entry that differs on root")
 	}
 	for name, bad := range map[string]string{
@@ -258,6 +258,7 @@ func TestManifest(t *testing.T) {
 		"hidden":     strings.Replace(good, `"command":["techo5-plex"]`, `"command":[".x"]`, 1),
 		"no command": strings.Replace(good, `"command":["techo5-plex"]`, `"command":[]`, 1),
 		"own port":   strings.Replace(good, `"port":32500`, `"port":6053`, 1),
+		"cast port":  strings.Replace(good, `"port":32500`, `"port":8940`, 1),
 		"bad page":   strings.Replace(good, `http://{device}:32501/`, `javascript:alert(1)`, 1),
 		"no memory":  strings.Replace(good, `"memory_mb":40`, `"memory_mb":0`, 1),
 	} {

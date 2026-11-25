@@ -110,7 +110,7 @@ func TestTheLibraryPlaysWhatTheDeviceCannot(t *testing.T) {
 		t.Fatal(err)
 	}
 	was := libraryPlayer
-	libraryPlayer = func() (string, error) { return "aa:bb:cc:dd:ee:ff", nil }
+	libraryPlayer = func() ([]string, error) { return []string{"aa:bb:cc:dd:ee:ff"}, nil }
 	defer func() { libraryPlayer = was }()
 	// An address into a home, or one handed on after something else was asked for, is not given.
 	if err := viaLibrary("http://192.168.1.20:8000/a.aac", nil); err == nil {

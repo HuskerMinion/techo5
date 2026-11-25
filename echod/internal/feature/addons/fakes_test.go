@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -160,6 +161,7 @@ type fakeTables struct {
 	mu     sync.Mutex
 	chains map[string]map[string][]string // tool, chain, rules
 	broken map[string]bool                // tools that fail every command
+	slow   time.Duration                  // how long each command takes, as on a loaded device
 }
 
 func newFakeTables() *fakeTables {
@@ -173,6 +175,9 @@ func newFakeTables() *fakeTables {
 func (f *fakeTables) run(tool string, args ...string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.slow > 0 {
+		time.Sleep(f.slow)
+	}
 	if f.broken[tool] {
 		return errors.New(tool + ": not found")
 	}
@@ -287,12 +292,17 @@ type rig struct {
 	assets *assets
 	seed   string
 	pub    ed25519.PublicKey
-	served []byte // the catalog fetchSigned serves
+	served []byte // the format 1 catalog fetchSigned serves
 	sig    string
-	cancel context.CancelFunc
-	ran    chan struct{}
-	owned  map[string]uint32 // what chown handed to whom
-	mu     sync.Mutex
+	// servedV2 is the format 2 catalog fetchSigned serves; without one, it is not published
+	// (update.ErrNotFound), and the format 1 one is taken.
+	servedV2 []byte
+	sigV2    string
+	asked    []string // the catalogs fetchSigned was asked for, by url
+	cancel   context.CancelFunc
+	ran      chan struct{}
+	owned    map[string]uint32 // what chown handed to whom
+	mu       sync.Mutex
 }
 
 func newRig(t *testing.T) *rig {
@@ -325,23 +335,40 @@ func newRig(t *testing.T) *rig {
 			f()
 		}
 	})
-	verifySigned = func(body, sig []byte) error {
+	verifySigned = func(format int, body, sig []byte) error {
+		domain := update.CatalogDomainV2
+		if format == catalog.FormatV1 {
+			domain = update.CatalogDomain
+		}
 		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
-		if err != nil || !ed25519.Verify(r.pub, append([]byte(update.CatalogDomain), body...), raw) {
+		if err != nil || !ed25519.Verify(r.pub, append([]byte(domain), body...), raw) {
 			return errors.New("not signed by the test key")
 		}
 		return nil
 	}
-	fetchSigned = func(ctx context.Context, url string, max int64) ([]byte, []byte, error) {
+	fetchSigned = func(ctx context.Context, format int, url string, max int64) ([]byte, []byte, error) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if r.served == nil {
+		r.asked = append(r.asked, url)
+		body, sig := r.served, r.sig
+		if format != catalog.FormatV1 {
+			if url != catalogV2URL {
+				return nil, nil, errors.New("format 2 asked for at " + url)
+			}
+			if r.servedV2 == nil {
+				return nil, nil, fmt.Errorf("fetching %s: %w", url, update.ErrNotFound)
+			}
+			body, sig = r.servedV2, r.sigV2
+		} else if url != catalogURL {
+			return nil, nil, errors.New("format 1 asked for at " + url)
+		}
+		if body == nil {
 			return nil, nil, errors.New("nothing served")
 		}
-		if err := verifySigned(r.served, []byte(r.sig)); err != nil {
+		if err := verifySigned(format, body, []byte(sig)); err != nil {
 			return nil, nil, err
 		}
-		return r.served, []byte(r.sig), nil
+		return body, []byte(sig), nil
 	}
 	spawn = r.procs.spawn
 	canDrop = func() bool { return true }
@@ -358,7 +385,7 @@ func newRig(t *testing.T) *rig {
 }
 
 // serve signs and serves a catalog, stamped to expire a month after the fake clock's now unless it
-// says otherwise.
+// says otherwise, as the file of its format: catalog.json for format 1, catalog-v2.json for 2.
 func (r *rig) serve(c catalog.Catalog) {
 	if c.Expires.IsZero() {
 		c.Expires = r.clock.Now().Add(30 * 24 * time.Hour)
@@ -367,12 +394,27 @@ func (r *rig) serve(c catalog.Catalog) {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	sig, err := update.SignCatalog(b, r.seed)
+	sign := update.SignCatalogV2
+	if c.Format == catalog.FormatV1 {
+		sign = update.SignCatalog
+	}
+	sig, err := sign(b, r.seed)
 	if err != nil {
 		r.t.Fatal(err)
 	}
 	r.mu.Lock()
-	r.served, r.sig = b, sig
+	if c.Format == catalog.FormatV1 {
+		r.served, r.sig = b, sig
+	} else {
+		r.servedV2, r.sigV2 = b, sig
+	}
+	r.mu.Unlock()
+}
+
+// unpublishV2 takes the format 2 catalog away, as before it was first published.
+func (r *rig) unpublishV2() {
+	r.mu.Lock()
+	r.servedV2, r.sigV2 = nil, ""
 	r.mu.Unlock()
 }
 

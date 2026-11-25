@@ -44,6 +44,11 @@ var (
 	// read-only.
 	UpdatingPath = StateDir + "/updating"
 
+	// SendspinKeysPath is the device's Sendspin identity and its pairings (feature/sendspin/secure).
+	// Here, not in feature/sendspin, because what looks the device up in Music Assistant by its key id
+	// sits below that package.
+	SendspinKeysPath = StateDir + "/sendspin-keys.json"
+
 	// LinuxDir is where the Linux image installs the daemon, and the fallback when the executable's
 	// own path cannot be read.
 	LinuxDir = "/usr/local/bin"

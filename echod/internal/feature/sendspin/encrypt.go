@@ -31,7 +31,7 @@ import (
 // from it is only a failed connection, tried again as any is.
 
 // keysPath is the device's Sendspin identity and its pairings. A variable for the tests.
-var keysPath = layout.StateDir + "/sendspin-keys.json"
+var keysPath = layout.SendspinKeysPath
 
 // keys is the store, opened on first use. A store that cannot be opened leaves the device on the
 // unencrypted wire, which is how it played before, rather than without music, and is tried again on

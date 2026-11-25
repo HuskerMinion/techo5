@@ -151,3 +151,26 @@ func TestAcceptedAsPeripheral(t *testing.T) {
 		t.Error("a short packet was changed")
 	}
 }
+
+// LE Read Local Supported Features: extended and periodic advertising are hidden, the rest is kept, and
+// other events pass untouched.
+func TestHideExtAdv(t *testing.T) {
+	feat := []byte{0x04, 0x0e, 0x0c, 0x01, 0x03, 0x20, 0x00, 0xff, 0x79, 0x01, 0, 0, 0, 0, 0}
+	if !hideExtAdv(feat) {
+		t.Fatal("the features were not changed")
+	}
+	if feat[8] != 0x49 || feat[7] != 0xff || feat[9] != 0x01 {
+		t.Errorf("features % x", feat[7:])
+	}
+	if hideExtAdv(feat) {
+		t.Error("changed again with nothing left to hide")
+	}
+	failed := []byte{0x04, 0x0e, 0x0c, 0x01, 0x03, 0x20, 0x01, 0xff, 0x79, 0x01, 0, 0, 0, 0, 0}
+	other := []byte{0x04, 0x0e, 0x0c, 0x01, 0x04, 0x10, 0x00, 0xff, 0x79, 0x01, 0, 0, 0, 0, 0}
+	for _, p := range [][]byte{failed, other, evt} {
+		before := append([]byte(nil), p...)
+		if hideExtAdv(p) || !bytes.Equal(p, before) {
+			t.Errorf("% x was changed", before)
+		}
+	}
+}

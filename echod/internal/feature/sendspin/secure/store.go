@@ -118,6 +118,28 @@ func Open(path string) (*Store, error) {
 // ClientID is the device's id on the wire: its public key.
 func (s *Store) ClientID() string { return b64.EncodeToString(s.pub) }
 
+// ClientIDAt is the client id of the store at path, read without opening it: nothing is made or
+// written, so a look at what the device is called in Music Assistant never makes it a new identity,
+// and the store the Sendspin client holds open is not raced. A missing file is fs.ErrNotExist.
+func ClientIDAt(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var f storeFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return "", err
+	}
+	if len(f.PrivateKey) != keySize {
+		return "", errors.New("sendspin keys: a key of the wrong size")
+	}
+	pub, err := publicKey(f.PrivateKey)
+	if err != nil {
+		return "", err
+	}
+	return b64.EncodeToString(pub), nil
+}
+
 // Token is the pairing token for this device, which the operator enters into a server to pair with it
 // using the pairing PSK. It is a credential: whoever holds it can pair a server with the device.
 func (s *Store) Token() string {

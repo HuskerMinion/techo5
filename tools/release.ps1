@@ -127,7 +127,10 @@ param(
     [string]$ThirdPartySources = '',
     # The techo5-addons checkout the add-on catalog is signed from (tools/sign-catalog.ps1 -Catalog).
     # Empty is $env:TECHO5_ADDONS, then techo5-addons beside this checkout, then E:\projects\techo5-addons.
-    [string]$AddonCatalog = ''
+    [string]$AddonCatalog = '',
+    # Passed on to sign-catalog.ps1 as -FirstFormat2: the one release whose catalog signing first
+    # publishes catalog-v2.json beside catalog.json. Refused there once catalog-v2.json is published.
+    [switch]$FirstFormat2Catalog
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ThirdPartySources -or -not (Test-Path $ThirdPartySources)) {
@@ -452,7 +455,7 @@ $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 # The add-on catalog is signed and published at the end, once the release is up (below). Its checks run
 # here first as a dry run, so a techo5-addons checkout that is missing or not at its origin/main, or a
 # catalog mkcatalog refuses, stops the release before anything is published rather than after.
-& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Catalog $AddonCatalog -WhatIf
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Catalog $AddonCatalog -FirstFormat2:$FirstFormat2Catalog -WhatIf
 $bin = Join-Path $root 'bin'
 New-Item -ItemType Directory -Force $bin | Out-Null
 
@@ -767,7 +770,8 @@ if ($missing) {
 
 # The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed from the techo5-addons
 # checkout and published on its own "addons" release, which moves its expiry on even when it has not
-# changed, and attached here as well. After the checks above, which are about the firmware's own files:
-# the catalog carries its own signature and is not in SHA256SUMS.
-& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version -Catalog $AddonCatalog
+# changed, and attached here as well, all four files (catalog-v2.json, catalog.json and their .sig
+# files: format 2, and format 1 for devices that read only that). After the checks above, which are
+# about the firmware's own files: the catalog carries its own signatures and is not in SHA256SUMS.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version -Catalog $AddonCatalog -FirstFormat2:$FirstFormat2Catalog
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

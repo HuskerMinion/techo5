@@ -47,6 +47,14 @@ func (r *renderer) videoSkipButtons() (back, next image.Rectangle) {
 	return back, back.Add(step)
 }
 
+// videoFitButton is the button for the way the picture takes the screen (videoFit): before quieter, in
+// the right group, so the left group keeps play and stop where a hand knows them, and back and forward
+// after them.
+func (r *renderer) videoFitButton() image.Rectangle {
+	_, _, quieter, _ := r.videoButtons()
+	return quieter.Sub(image.Pt(r.s(videoButtonW)+r.s(videoGap), 0))
+}
+
 // videoPage draws the video page and says what of it goes over the picture.
 func (r *renderer) videoPage(s scene) (over image.Rectangle) {
 	r.zmu.Lock()
@@ -128,13 +136,19 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 		icon string
 	}
 	buttons := []button{{play, mark}, {stop, "stop"}, {quieter, "volume-minus"}, {louder, "volume-plus"}}
-	zones := []image.Rectangle{play, stop, quieter, louder}
-	lastLeft := stop
+	zones := []videoZone{{play, videoTapPlay}, {stop, videoTapStop}, {quieter, videoTapQuieter}, {louder, videoTapLouder}}
+	lastLeft, firstRight := stop, quieter
 	if s.videoSkip {
 		back, next := r.videoSkipButtons()
 		buttons = append(buttons, button{back, "skip-previous"}, button{next, "skip-next"})
-		zones = append(zones, back, next) // videoTapBack, videoTapNext, in videoTap's order
+		zones = append(zones, videoZone{back, videoTapBack}, videoZone{next, videoTapNext})
 		lastLeft = next
+	}
+	if s.videoFit {
+		fit := r.videoFitButton()
+		buttons = append(buttons, button{fit, videoFitIcon(s.video.Aspect)})
+		zones = append(zones, videoZone{fit, videoTapFit})
+		firstRight = fit
 	}
 	for _, b := range buttons {
 		style := btnSecondary
@@ -145,7 +159,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 		r.mdiIcon(b.icon, b.rect.Min.X+(b.rect.Dx()-r.s(videoIcon))/2, b.rect.Min.Y+(b.rect.Dy()-r.s(videoIcon))/2, videoIcon, fg)
 	}
 	// The name and where it is, between the two groups.
-	left, right := lastLeft.Max.X+r.s(28), quieter.Min.X-r.s(28)
+	left, right := lastLeft.Max.X+r.s(28), firstRight.Min.X-r.s(28)
 	name := s.video.Title
 	if name == "" {
 		name = s.video.Host
@@ -193,12 +207,7 @@ func videoLength(s scene) time.Duration {
 func (r *renderer) videoTapped(at image.Point) videoTap {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
-	for i, z := range r.videoZones {
-		if at.In(z.Inset(-r.s(8))) {
-			return videoTap(i + 1)
-		}
-	}
-	return videoTapNone
+	return videoZoneAt(r.videoZones, at, r.s(8))
 }
 
 // videoAskPage is the question about a DLNA video from an address that has not been allowed: who is

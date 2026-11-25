@@ -52,8 +52,9 @@ func addonsBox(name, author string) string {
 		html.EscapeString(name), html.EscapeString(author))
 }
 
-// addonsAsk is what a version asks of the device, as the card lists it before an install.
-func addonsAsk(w http.ResponseWriter, v catalog.Version, asRoot bool) {
+// addonsAsk is what a version asks of the device, as the card lists it before an install: with the
+// extra files this device's build brings, so the owner sees everything that is downloaded.
+func addonsAsk(w http.ResponseWriter, v catalog.Version, files []catalog.File, asRoot bool) {
 	fmt.Fprint(w, `<ul class="note" style="margin:.3rem 0">`)
 	if len(v.Ports) == 0 {
 		fmt.Fprint(w, `<li>Network ports: none.</li>`)
@@ -73,7 +74,22 @@ func addonsAsk(w http.ResponseWriter, v catalog.Version, asRoot bool) {
 	} else {
 		fmt.Fprint(w, `<li>Runs as a user of its own, not as root.</li>`)
 	}
+	if len(files) > 0 {
+		var fs []string
+		for _, f := range files {
+			fs = append(fs, "<code>"+html.EscapeString(f.Name)+"</code> ("+fileSize(f.Size)+")")
+		}
+		fmt.Fprintf(w, `<li>Downloads beside its program, checked as the program is: %s.</li>`, strings.Join(fs, ", "))
+	}
 	fmt.Fprintf(w, `<li>Uses about %d MB of memory and %d MB of storage.</li></ul>`, v.MemoryMB, v.DiskMB)
+}
+
+// fileSize is a download's size as the card says it: in MB from one up, in kB below.
+func fileSize(n int64) string {
+	if n >= 1<<20 {
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	}
+	return fmt.Sprintf("%d kB", max((n+1023)>>10, 1))
 }
 
 func addonsSection(w http.ResponseWriter, token string) {
@@ -240,19 +256,26 @@ func addonsAvailable(w http.ResponseWriter, token string, available []addons.Lis
 		}
 		fmt.Fprintf(w, `<div%s><h4>%s <span class="note">%s, by %s</span></h4><p style="margin:.2rem 0">%s</p>`, style,
 			html.EscapeString(a.Name), html.EscapeString(v.Version), html.EscapeString(a.Author), html.EscapeString(a.Summary))
+		page := a.Page
+		if page == "" {
+			page = a.Repo
+		}
+		if l.NeedsNewer {
+			// Nothing of the version was read but its number, so there is nothing of what it asks to show:
+			// only that a newer TECHO5 lists it in full.
+			fmt.Fprintf(w, `<p class="note">Not on this device: %s. <a href="%s">Its page</a>.</p></div>`,
+				html.EscapeString(l.Why), html.EscapeString(page))
+			continue
+		}
 		needs := []string{}
 		for _, fam := range catalog.Families {
 			if min, ok := v.MinTECHO5[fam]; ok {
 				needs = append(needs, map[string]string{"show": "Echo Show", "spot": "Echo Spot", "dot": "Echo Dot"}[fam]+" "+min)
 			}
 		}
-		page := a.Page
-		if page == "" {
-			page = a.Repo
-		}
 		fmt.Fprintf(w, `<p class="note" style="margin:.2rem 0">Needs TECHO5 %s or later. <a href="%s">Its page</a>.</p>`,
 			html.EscapeString(strings.Join(needs, ", ")), html.EscapeString(page))
-		addonsAsk(w, v, l.AsRoot)
+		addonsAsk(w, v, l.Files, l.AsRoot)
 		if !l.Runs {
 			fmt.Fprintf(w, `<p class="note">Not on this device: %s.</p></div>`, html.EscapeString(l.Why))
 			continue

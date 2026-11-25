@@ -671,17 +671,16 @@ func (a *Adapter) device(address string) (dbus.BusObject, error) {
 	return a.conn.Object(service, d.Path), nil
 }
 
-// Pair bonds with a device; bluetoothd asks the agent to confirm, which it does.
+// Pair bonds with a device; bluetoothd asks the agent to confirm, which it does. A speaker that
+// pairs with a fixed PIN and refuses 0000 is tried with the other common ones (pairWithPINs).
 func (a *Adapter) Pair(ctx context.Context, address string) error {
 	o, err := a.device(address)
 	if err != nil {
 		return err
 	}
-	err = o.CallWithContext(ctx, deviceIfc+".Pair", 0).Err
-	if err != nil && strings.Contains(err.Error(), "AlreadyExists") {
-		return nil
-	}
-	return err
+	return pairWithPINs(ctx, o.Path(), func() error {
+		return o.CallWithContext(ctx, deviceIfc+".Pair", 0).Err
+	})
 }
 
 // Trust lets the device connect on its own later, which earbuds do when they come out of the case.
@@ -853,7 +852,7 @@ func (g agent) RequestPinCode(path dbus.ObjectPath) (string, *dbus.Error) {
 	if err := g.open(path, "pin"); err != nil {
 		return "", err
 	}
-	return "0000", nil
+	return pinFor(path), nil
 }
 
 func (agent) DisplayPinCode(dbus.ObjectPath, string) *dbus.Error { return nil }

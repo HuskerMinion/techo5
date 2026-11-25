@@ -20,6 +20,8 @@ type Listing struct {
 type ListedRing struct {
 	Label string `json:"label"`
 	Since string `json:"since"`
+	// Kind is "alarm" or "timer", so an automation can tell a ringing alarm from a ringing timer (#736).
+	Kind string `json:"kind"`
 }
 
 type ListedAlarm struct {
@@ -71,11 +73,16 @@ type ListedTimer struct {
 }
 
 // listing builds the answer from what the device holds; kept apart from the Alarms so it can be tested
-// without one.
-func listing(now time.Time, v View, timers []timer.Countdown) Listing {
+// without one. rung is the timer ringing, nil when none is.
+func listing(now time.Time, v View, timers []timer.Countdown, rung *timer.Rung) Listing {
 	l := Listing{Alarms: []ListedAlarm{}, Snoozed: []ListedSnooze{}, Followed: []ListedHelper{}, Timers: []ListedTimer{}}
-	if v.Ringing != nil {
-		l.Ringing = &ListedRing{Label: v.Ringing.Label, Since: stamp(v.Ringing.At)}
+	switch {
+	case v.Ringing != nil:
+		l.Ringing = &ListedRing{Label: v.Ringing.Label, Since: stamp(v.Ringing.At), Kind: "alarm"}
+	case rung != nil:
+		// A ringing timer has left the timers, and rings from the timers' own ring rather than the
+		// alarms', so without this nothing in the answer would say it rings (#736).
+		l.Ringing = &ListedRing{Label: rung.Name, Since: stamp(rung.Since), Kind: "timer"}
 	}
 	for _, al := range v.Local {
 		next := ""

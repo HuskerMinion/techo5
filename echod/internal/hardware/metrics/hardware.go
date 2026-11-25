@@ -68,6 +68,13 @@ func (r Reader) Temperatures() map[string]float64 {
 			out["mtktscpu"] = temp
 		}
 	}
+	// The Echo Dot 5th gen's MT7663 driver (Amazon's mt76x3, amazon_wifi_temp_sensor.c) has a zone of its
+	// own, wifi_temp, which reads 0 while the radio does not answer: no reading then, not 0 degrees.
+	if _, exists := out["mtktswmt"]; !exists {
+		if temp, ok := out["wifi_temp"]; ok && temp > 0 && temp <= 150 {
+			out["mtktswmt"] = temp
+		}
+	}
 	if _, exists := out["mtktswmt"]; !exists {
 		if raw, err := text(r.path("proc/net/wlan/get_temperature")); err == nil {
 			if key, value, ok := strings.Cut(raw, "="); ok && strings.TrimSpace(key) == "Temperature" {
@@ -116,7 +123,10 @@ func zoneNumber(path string) int {
 // cpuZones are the names the CPU's zone goes by, best first. Amazon's MediaTek kernels call it
 // mtktscpu, as the Dot's 3.18 and the Show 5's 4.9 do; a mainline kernel names it after its device
 // tree node, cpu-thermal on the MT8183, and some older trees spell that with an underscore.
-var cpuZones = []string{"mtktscpu", "cpu-thermal", "cpu_thermal", "soc-thermal", "soc_thermal"}
+//
+// Amazon's 5.4 kernel on the Echo Dot 5th gen (MT8519) has no mtktscpu: its SoC zones are soc_max, the
+// hottest of the die's sensors, and one per cluster (cpu_little0 and on), so soc_max stands for the CPU.
+var cpuZones = []string{"mtktscpu", "cpu-thermal", "cpu_thermal", "soc-thermal", "soc_thermal", "soc_max"}
 
 // CPUTemperature picks the CPU out of what Temperatures found. Unknown on a kernel with no thermal
 // driver at all. The mainline Show 8's kernel has its driver built in, and the zone is cpu-thermal.

@@ -354,6 +354,13 @@ func (v *Voice) open(slot int, woke bool, at time.Time) {
 // is.
 func (v *Voice) Busy() bool { return v.turn.Busy() }
 
+// Interruptible reports whether a wake word heard now takes the turn over: thinking or replying. While
+// listening, one is part of what is being said and is ignored (conversation.start).
+func (v *Voice) Interruptible() bool {
+	p := v.turn.Phase()
+	return p == phaseThinking || p == phaseReplying
+}
+
 // Cancel stops a turn that is running, for a gesture that turned out to mean something else: the
 // second tap of a double, the way a long hold already undoes the turn its hold began.
 func (v *Voice) Cancel() {

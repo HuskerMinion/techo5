@@ -649,3 +649,36 @@ func TestWhatWasEndedHereIsLetGoOfWhenAnEventComes(t *testing.T) {
 		t.Errorf("still remembering %d timers ended here long ago", len(ts.ended))
 	}
 }
+
+// A timer that rings says which one and since when, for alarms_list's ringing (#736), and stops saying
+// so once its ring is over.
+func TestARingingTimerSaysWhichAndSinceWhen(t *testing.T) {
+	ts := build()
+	t.Cleanup(func() { ts.Stop() })
+
+	if _, ok := ts.RingingNow(); ok {
+		t.Fatal("ringing with no timer")
+	}
+	before := time.Now()
+	id := ts.Start("Repro", 3*time.Second)
+	ts.mu.Lock()
+	at := ts.held[id].at
+	ts.mu.Unlock()
+	ts.ripe(at.Add(3 * time.Second))
+
+	r, ok := ts.RingingNow()
+	if !ok || r.Name != "Repro" || r.Since.Before(before) {
+		t.Fatalf("RingingNow = %+v, %v; want Repro, ringing since it ran out", r, ok)
+	}
+
+	ts.Stop()
+	for range 100 {
+		if _, ok := ts.RingingNow(); !ok {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if r, ok := ts.RingingNow(); ok || r != (Rung{}) {
+		t.Errorf("after the ring ended, RingingNow = %+v, %v", r, ok)
+	}
+}

@@ -242,18 +242,14 @@ func (f *Feature) listBoards(d config.Dashboard) {
 // showing.
 func boardOptions(d config.Dashboard) (opts []string, chosen string) {
 	opts, chosen = []string{automatic}, automatic
-	size := len(automatic)
 	path := listedPath(d.Path, d.Known)
-	for _, b := range d.Known {
-		mine := b.Path == path
-		// Capped as home's selects are (home.roomFor, #136): all the options go in one message, and one
-		// over 64 KiB breaks the device's connection to Home Assistant. The chosen one always stays.
-		if !mine && (len(opts) >= boardsMax || size+len(b.Label) > boardBytes) {
+	keep := fitBoards(d.Known, path)
+	for i, b := range d.Known {
+		if !keep[i] {
 			continue
 		}
 		opts = append(opts, b.Label)
-		size += len(b.Label)
-		if mine {
+		if b.Path == path {
 			chosen = b.Label
 		}
 	}
@@ -262,6 +258,43 @@ func boardOptions(d config.Dashboard) (opts []string, chosen string) {
 		chosen = d.Path
 	}
 	return opts, chosen
+}
+
+// fitBoards is which of known the list has room for, the one at path always among them. The list is
+// capped as home's selects are (home.roomFor, #136): all the options go in one message, and one over
+// 64 KiB breaks the device's connection to Home Assistant. Every view of a dashboard is a choice of
+// its own, and Home Assistant lists a new dashboard last, so cutting the list where it fills cut every
+// dashboard made after that, however long one waited for it (#743). So each dashboard gets one place
+// first, its first view, and views beyond that fill the room that is left.
+func fitBoards(known []config.DashboardChoice, path string) []bool {
+	keep := make([]bool, len(known))
+	n, size := 1, len(automatic) // Automatic is always first
+	take := func(i int) {
+		b := known[i]
+		if keep[i] || (b.Path != path && (n >= boardsMax || size+len(b.Label) > boardBytes)) {
+			return
+		}
+		keep[i] = true
+		n++
+		size += len(b.Label)
+	}
+	for i, b := range known {
+		if b.Path == path {
+			take(i)
+		}
+	}
+	firsts := make(map[string]bool)
+	for i, b := range known {
+		dash, _, _ := strings.Cut(b.Path, "/")
+		if !firsts[dash] {
+			firsts[dash] = true
+			take(i)
+		}
+	}
+	for i := range known {
+		take(i)
+	}
+	return keep
 }
 
 // listedPath is the path the list has for a view reached by another name, so that going to it adds
@@ -420,8 +453,17 @@ func (f *Feature) listOnce(ctx context.Context) {
 		slog.Error("saving the dashboards failed", "err", err)
 		return
 	}
-	slog.Info("dashboard: Home Assistant's dashboards", "count", len(known))
-	f.listBoards(config.Get().Dashboard)
+	d := config.Get().Dashboard
+	// The views the list had no room for, said so a dashboard missing from the select has a reason in
+	// the log (#743).
+	left := 0
+	for _, kept := range fitBoards(known, listedPath(d.Path, known)) {
+		if !kept {
+			left++
+		}
+	}
+	slog.Info("dashboard: Home Assistant's dashboards", "count", len(known), "left out", left)
+	f.listBoards(d)
 	f.mu.Lock()
 	f.relist = true
 	f.mu.Unlock()

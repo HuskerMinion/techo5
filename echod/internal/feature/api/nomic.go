@@ -33,7 +33,7 @@ var listeningObjects = map[string]bool{
 	"microphone_preroll_with_sound": true,
 	// feature/detect
 	"confirm_threshold": true, "confirm_below_nearest_score": true, "confirm_wake_with_home_assistant": true, "wake_word_on_home_assistant": true,
-	"keep_wake_clips": true, "send_wake_clips_to": true, "wake_clips_unsent": true, "wake_clips_send_status": true, "last_wake_score": true, "wake_word_problem": true, "stop_word_sensitivity": true,
+	"keep_wake_clips": true, "send_wake_clips_to": true, "wake_clips_unsent": true, "wake_clips_send_status": true, "last_wake_score": true, "wake_word_problem": true, "stop_word_sensitivity": true, "stop_word": true,
 	"wake_clips": true, "wake_clips_by_kind": true, "wake_word_load": true, "wake_frames": true, "worst_wake_frame": true,
 	// feature/security: recording takes of a word from the setup page (feature/takes)
 	"record_takes": true,

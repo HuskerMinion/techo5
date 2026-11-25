@@ -92,7 +92,8 @@ type Timers struct {
 	// up. Kept so a save meanwhile writes them back rather than dropping them.
 	waiting []config.LocalTimer
 	stop    func()
-	rang    string // the name of what is ringing, for the screen
+	rang    string    // the name of what is ringing, for the screen
+	rangAt  time.Time // when it began, for alarms_list's ringing
 	shown   []led.Color
 
 	// Changed fires when a timer starts, changes, ends or rings, and when the ringing stops.
@@ -138,6 +139,20 @@ func (t *Timers) RingingName() (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.rang, t.stop != nil
+}
+
+// Rung is a timer ringing now: its name, and when it began to ring.
+type Rung struct {
+	Name  string
+	Since time.Time
+}
+
+// RingingNow is the timer ringing now, if one is. It is what alarms_list answers as its ringing when no
+// alarm is (#736): a ringing timer has left the list of timers, so nothing else there would say so.
+func (t *Timers) RingingNow() (Rung, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return Rung{Name: t.rang, Since: t.rangAt}, t.stop != nil
 }
 
 // timer is one of them. left is what was last known and at is when that was true, so a running timer
@@ -809,14 +824,14 @@ func (t *Timers) startRinging(name string) {
 		ring.Again()
 		return
 	}
-	t.rang = name
+	t.rang, t.rangAt = name, time.Now()
 	t.stop = ring.Start("timer", name, speaker.TimerSound(), t.rungOut)
 }
 
 // rungOut is the bell telling the timers their ring is over, however that came about.
 func (t *Timers) rungOut() {
 	t.mu.Lock()
-	t.stop, t.rang = nil, ""
+	t.stop, t.rang, t.rangAt = nil, "", time.Time{}
 	t.mu.Unlock()
 	t.show()
 	t.Changed.Emit(struct{}{})

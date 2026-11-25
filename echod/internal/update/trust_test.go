@@ -135,6 +135,8 @@ func TestFetchSignedCatalogNeedsItsOwnSignatureAndTheClock(t *testing.T) {
 	sig = ""
 	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); err == nil {
 		t.Error("an unsigned file was taken")
+	} else if errors.Is(err, ErrNotFound) {
+		t.Errorf("a missing signature reads as a missing catalog: %v", err)
 	}
 	sig = good
 	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 4); err == nil {
@@ -146,5 +148,59 @@ func TestFetchSignedCatalogNeedsItsOwnSignatureAndTheClock(t *testing.T) {
 	clockSet = func() bool { return false }
 	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog.json", 1<<10); !errors.Is(err, ErrClock) {
 		t.Errorf("fetched on an unset clock: %v", err)
+	}
+}
+
+// The two catalog formats are signed under domains of their own: a format 1 catalog's signature never
+// verifies as format 2's, nor the other way, and neither as a firmware manifest's. A device asking for
+// one file can then never be handed the other's bytes, signed as they are, as it.
+func TestTheCatalogFormatsAreSignedApart(t *testing.T) {
+	seed, pub := testKey(t)
+	restoreKey, restoreClock := releaseKey, clockSet
+	t.Cleanup(func() { releaseKey, clockSet = restoreKey, restoreClock })
+	releaseKey = pub
+	clockSet = func() bool { return true }
+
+	body := []byte(`{"format":2,"serial":1}`)
+	v1, _ := SignCatalog(body, seed)
+	v2, _ := SignCatalogV2(body, seed)
+	if err := VerifyCatalogV2(body, []byte(v2)); err != nil {
+		t.Fatalf("a format 2 signature: %v", err)
+	}
+	if err := VerifyCatalog(body, []byte(v1)); err != nil {
+		t.Fatalf("a format 1 signature: %v", err)
+	}
+	if err := VerifyCatalog(body, []byte(v2)); err == nil {
+		t.Error("a format 2 signature verified as format 1's")
+	}
+	if err := VerifyCatalogV2(body, []byte(v1)); err == nil {
+		t.Error("a format 1 signature verified as format 2's")
+	}
+	if err := verify(body, []byte(v2), pub); err == nil {
+		t.Error("a format 2 signature verified as a manifest's")
+	}
+	manifest, _ := Sign(body, seed)
+	if err := VerifyCatalogV2(body, []byte(manifest)); err == nil {
+		t.Error("a manifest's signature verified as a format 2 catalog's")
+	}
+
+	sig := v2
+	mux := http.NewServeMux()
+	mux.HandleFunc("/catalog-v2.json", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) })
+	mux.HandleFunc("/catalog-v2.json.sig", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(sig)) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	if _, _, err := FetchSignedCatalogV2(context.Background(), srv.URL+"/catalog-v2.json", 1<<10); err != nil {
+		t.Errorf("a signed format 2 catalog: %v", err)
+	}
+	if _, _, err := FetchSignedCatalog(context.Background(), srv.URL+"/catalog-v2.json", 1<<10); err == nil {
+		t.Error("a format 2 catalog was fetched as format 1")
+	}
+	sig = v1
+	if _, _, err := FetchSignedCatalogV2(context.Background(), srv.URL+"/catalog-v2.json", 1<<10); err == nil {
+		t.Error("a format 1 signature was taken for a format 2 catalog")
+	}
+	if _, _, err := FetchSignedCatalogV2(context.Background(), srv.URL+"/nothing.json", 1<<10); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a missing format 2 catalog: %v, want ErrNotFound", err)
 	}
 }

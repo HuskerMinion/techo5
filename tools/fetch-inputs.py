@@ -241,7 +241,7 @@ def main():
     alpine(out)
     step('busybox.static, apk.static')
     from_apk(get_apk('busybox-static-1.37.0-r31.apk', tmp), 'bin/busybox.static', os.path.join(out, 'busybox.static'))
-    from_apk(get_apk('apk-tools-static-2.14.12-r0.apk', tmp, 'v3.22', 'x86_64'), 'sbin/apk.static', os.path.join(out, 'apk.static'))
+    from_apk(get_apk('apk-tools-static-2.14.13-r0.apk', tmp, 'v3.22', 'x86_64'), 'sbin/apk.static', os.path.join(out, 'apk.static'))
     step('wake word models')
     os.makedirs(os.path.join(out, 'models'), exist_ok=True)
     for m in MODELS:

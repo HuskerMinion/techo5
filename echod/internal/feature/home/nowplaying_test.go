@@ -109,14 +109,16 @@ func runNowPlaying(t *testing.T, f *Feature) {
 
 // aPlayer says what a test tells it to, each field its own, so a field read into the wrong place shows.
 type aPlayer struct {
-	recv    [4]string
-	carried bool
-	track   [3]string
-	held    [3]string
-	holding bool
-	own     [2]bool
-	screen  [2]bool
-	title   *media.Title
+	recv      [4]string
+	carried   bool
+	track     [3]string
+	trackLive bool
+	held      [3]string
+	heldLive  bool
+	holding   bool
+	own       [2]bool
+	screen    [2]bool
+	title     *media.Title
 }
 
 func (p aPlayer) ReceivedTrack() (from, title, artist, album string) {
@@ -124,9 +126,11 @@ func (p aPlayer) ReceivedTrack() (from, title, artist, album string) {
 }
 func (p aPlayer) Carried() bool                        { return p.carried }
 func (p aPlayer) Track() (title, artist, album string) { return p.track[0], p.track[1], p.track[2] }
+func (p aPlayer) TrackLive() bool                      { return p.trackLive }
 func (p aPlayer) Held() (title, artist, album string, ok bool) {
 	return p.held[0], p.held[1], p.held[2], p.holding
 }
+func (p aPlayer) HeldLive() bool                      { return p.heldLive }
 func (p aPlayer) Playing() (playing, paused bool)     { return p.own[0], p.own[1] }
 func (p aPlayer) ScreenState() (playing, paused bool) { return p.screen[0], p.screen[1] }
 func (p aPlayer) OwnTitle() *media.Title              { return p.title }
@@ -134,21 +138,23 @@ func (p aPlayer) OwnTitle() *media.Title              { return p.title }
 // What the sensors read is what the player says, each field where it belongs.
 func TestTheSnapshotIsWhatThePlayerSays(t *testing.T) {
 	got := snapshotOf(aPlayer{
-		recv:    [4]string{DLNAName, "Africa", "Toto", "Toto IV"},
-		carried: true,
-		track:   [3]string{"Hold the Line", "Toto (band)", "Toto (album)"},
-		held:    [3]string{"Rosanna", "David Paich", "Toto IV (2018)"},
-		holding: true,
-		own:     [2]bool{false, true},
-		screen:  [2]bool{true, false},
-		title:   &media.Title{Title: "Message from Alex", Subtitle: "today 14:12", Source: "Answering machine"},
+		recv:      [4]string{DLNAName, "Africa", "Toto", "Toto IV"},
+		carried:   true,
+		track:     [3]string{"Hold the Line", "Toto (band)", "Toto (album)"},
+		trackLive: true,
+		held:      [3]string{"Rosanna", "David Paich", "Toto IV (2018)"},
+		heldLive:  true,
+		holding:   true,
+		own:       [2]bool{false, true},
+		screen:    [2]bool{true, false},
+		title:     &media.Title{Title: "Message from Alex", Subtitle: "today 14:12", Source: "Answering machine"},
 	})
 	want := playingSnapshot{
 		recvFrom: DLNAName, recvTitle: "Africa", recvArtist: "Toto", recvAlbum: "Toto IV",
 		carried:  true,
-		extTitle: "Hold the Line", extArtist: "Toto (band)", extAlbum: "Toto (album)",
+		extTitle: "Hold the Line", extArtist: "Toto (band)", extAlbum: "Toto (album)", extLive: true,
 		held:      true,
-		heldTitle: "Rosanna", heldArtist: "David Paich", heldAlbum: "Toto IV (2018)",
+		heldTitle: "Rosanna", heldArtist: "David Paich", heldAlbum: "Toto IV (2018)", heldLive: true,
 		ownPaused:     true,
 		screenPlaying: true,
 		titled:        true,
@@ -207,6 +213,94 @@ func TestTheStationIsUnderARadioTitle(t *testing.T) {
 		if got := byline(c.artist, c.album); got != c.want {
 			t.Errorf("artist %q, album %q: %q, want %q", c.artist, c.album, got, c.want)
 		}
+	}
+}
+
+// A live Music Assistant radio stream whose track carries both title and artist appends the station
+// name to the top source line without altering stations without an artist (#666), stations without
+// song metadata, fixed-duration album tracks, or the Home Assistant now_playing sensors (#674).
+func TestTheStationJoinsTheSourceLineOnlyForLiveTracksWithArtist(t *testing.T) {
+	for _, c := range []struct {
+		name                        string
+		s                           playingSnapshot
+		wantNow, wantTitle, wantArt string
+		wantStand, wantPlay         bool
+		wantSensorSource            string
+	}{
+		{
+			name: "live radio with song and artist",
+			s: playing(playingSnapshot{
+				carried: true, extTitle: "Harbor Lights", extArtist: "The Quartet", extAlbum: "Station 99", extLive: true,
+			}),
+			wantNow: "Music Assistant  ·  Station 99", wantTitle: "Harbor Lights", wantArt: "The Quartet",
+			wantPlay: true, wantSensorSource: "Music Assistant",
+		},
+		{
+			name: "live radio identified as Radio service with song and artist",
+			s: playing(playingSnapshot{
+				carried: true, extTitle: "Harbor Lights", extArtist: "The Quartet", extAlbum: "Station 99", extLive: true, maService: maServiceRadio,
+			}),
+			wantNow: "Radio  ·  Station 99", wantTitle: "Harbor Lights", wantArt: "The Quartet",
+			wantPlay: true, wantSensorSource: "Radio",
+		},
+		{
+			name: "live radio with no song metadata (station name as title)",
+			s: playing(playingSnapshot{
+				carried: true, extTitle: "Station 99", extAlbum: "Station 99", extLive: true,
+			}),
+			wantNow: "Music Assistant", wantTitle: "Station 99", wantArt: "Station 99",
+			wantStand: true, wantPlay: true, wantSensorSource: "Music Assistant",
+		},
+		{
+			name: "live radio with title but no artist keeps #666 placement under title",
+			s: playing(playingSnapshot{
+				carried: true, extTitle: "Song / Artist", extAlbum: "Station 99", extLive: true,
+			}),
+			wantNow: "Music Assistant", wantTitle: "Song / Artist", wantArt: "Station 99",
+			wantStand: true, wantPlay: true, wantSensorSource: "Music Assistant",
+		},
+		{
+			name: "album track with duration keeps source line clean",
+			s: playing(playingSnapshot{
+				carried: true, extTitle: "Africa", extArtist: "Toto", extAlbum: "Toto IV", extLive: false, maService: "Spotify",
+			}),
+			wantNow: "Spotify", wantTitle: "Africa", wantArt: "Toto",
+			wantPlay: true, wantSensorSource: "Spotify",
+		},
+		{
+			name: "paused album track keeps source line clean",
+			s: playingSnapshot{
+				held: true, heldTitle: "Africa", heldArtist: "Toto", heldAlbum: "Toto IV", heldLive: false, screenPaused: true,
+			},
+			wantNow: "Music Assistant", wantTitle: "Africa", wantArt: "Toto",
+			wantPlay: false, wantSensorSource: "Music Assistant",
+		},
+		{
+			name: "paused live radio keeps station on source line",
+			s: playingSnapshot{
+				held: true, heldTitle: "Harbor Lights", heldArtist: "The Quartet", heldAlbum: "Station 99", heldLive: true, screenPaused: true,
+			},
+			wantNow: "Music Assistant  ·  Station 99", wantTitle: "Harbor Lights", wantArt: "The Quartet",
+			wantPlay: false, wantSensorSource: "Music Assistant",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := carriedFrom(Radio{}, c.s)
+			if r.Now != c.wantNow || r.Title != c.wantTitle || r.Artist != c.wantArt || r.Stand != c.wantStand || r.Playing != c.wantPlay {
+				t.Errorf("carriedFrom = {Now:%q Title:%q Artist:%q Stand:%v Playing:%v}, want {Now:%q Title:%q Artist:%q Stand:%v Playing:%v}",
+					r.Now, r.Title, r.Artist, r.Stand, r.Playing,
+					c.wantNow, c.wantTitle, c.wantArt, c.wantStand, c.wantPlay)
+			}
+			if got := nowPlayingOf(c.s).source; got != c.wantSensorSource {
+				t.Errorf("sensor source = %q, want %q", got, c.wantSensorSource)
+			}
+			if r.NowBase != c.wantSensorSource {
+				t.Errorf("NowBase = %q, want %q, the source without the station", r.NowBase, c.wantSensorSource)
+			}
+		})
+	}
+	if got := maSourceLine("Radio", "Morning News", "Host", "Radio", true); got != "Radio" {
+		t.Errorf("station equal to source = %q, want %q", got, "Radio")
 	}
 }
 
@@ -670,5 +764,21 @@ func TestATitledTrackIsNamedAsItWasTold(t *testing.T) {
 func TestAStationUnderTheTitleIsNotLookedUpForLyrics(t *testing.T) {
 	if _, ok := Get().LyricNow(Radio{Title: "Song", Artist: "SWR3", Stand: true}, time.Now()); ok {
 		t.Error("lyrics were offered for a station standing in for the artist")
+	}
+}
+
+// Whether a Music Assistant track is live comes with its position, which can come after its title, so
+// Now gains the station a moment into the track. NowBase, what the page keys a dismissal and a star on,
+// stays as it was (#676).
+func TestNowBaseStaysWhenTheTrackTurnsOutLive(t *testing.T) {
+	first := playing(playingSnapshot{carried: true, extTitle: "Harbor Lights", extArtist: "The Quartet", extAlbum: "Station 99"})
+	later := first
+	later.extLive = true
+	a, b := carriedFrom(Radio{}, first), carriedFrom(Radio{}, later)
+	if a.Now == b.Now {
+		t.Fatalf("Now did not gain the station: %q", b.Now)
+	}
+	if a.NowBase == "" || a.NowBase != b.NowBase {
+		t.Errorf("NowBase went from %q to %q", a.NowBase, b.NowBase)
 	}
 }

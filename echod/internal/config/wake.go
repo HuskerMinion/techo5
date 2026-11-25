@@ -95,6 +95,12 @@ type Stop struct {
 	// at all: the model is left unloaded, so switching it off costs nothing rather than costing a
 	// comparison. There is no separate switch because this is one.
 	Threshold float64 `json:"threshold"`
+
+	// ID is the model listened for as the stop word: empty for the built-in "Stop" that comes with the
+	// daemon, which is the default, or a model from the same library as the wake words (#741), such as a
+	// "Stopp" of one's own trained on German voices. The threshold and everything the stop word does
+	// stay the same whichever it is; only the word listened for changes.
+	ID string `json:"id,omitempty"`
 }
 
 const (
@@ -111,6 +117,10 @@ func defaultStop() Stop {
 
 // Listening reports whether the stop word is being listened for.
 func (s Stop) Listening() bool { return s.Threshold < StopOff }
+
+// ModelID is the model the stop word takes from the wake word library, empty for the built-in one:
+// what has to be kept on the device for it.
+func (s Stop) ModelID() string { return s.ID }
 
 // Hangup is the hang-up word: which word, and the score it has to reach. An empty ID is none, which is
 // the default, so hanging up by voice is something chosen; HangupStop is the stop word, and anything
@@ -348,6 +358,11 @@ type StopWriter struct{ st *Store }
 
 func (w StopWriter) Threshold(v float64) error {
 	return w.st.Update(func(c *Config) { c.Wake.Stop.Threshold = v })
+}
+
+// ID is the model listened for as the stop word, empty for the built-in one.
+func (w StopWriter) ID(v string) error {
+	return w.st.Update(func(c *Config) { c.Wake.Stop.ID = v })
 }
 
 // HangupWriter is the hang-up word, which belongs to no slot.
