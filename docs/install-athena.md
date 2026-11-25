@@ -169,6 +169,16 @@ On TECHO5's kernel the microphones can be muted two ways, as on a Home Assistant
 | ... and press the button again | **live** (both mutes lifted, card on the screen) | off | off |
 | Unmute in Home Assistant while the button holds the latch | stays off (only the button) | on | on |
 
+The **MICROPHONE OFF** pill at the top of the screen, with the **Show Microphone off** switch in
+Home Assistant:
+
+| Muted by | Red light | Show Microphone off **on** (the default) | Show Microphone off **off** |
+|---|---|---|---|
+| nothing | off | no pill | no pill |
+| the button only (the latch) | on | pill | no pill, the red light says it |
+| Home Assistant or the screen only | off | pill | pill (nothing else says it) |
+| the button and Home Assistant or the screen | on | pill | pill |
+
 | | |
 |---|---|
 | ![Muted from Home Assistant: "Microphone off" at the top, the red light off](screenshots/show8/mute-software.png) | ![The card after the button lifted a mute from Home Assistant](screenshots/show8/mute-lifted.png) |
