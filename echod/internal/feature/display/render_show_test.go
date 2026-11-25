@@ -78,6 +78,9 @@ func TestShowScenesDraw(t *testing.T) {
 		// Music Assistant's track, carried over Sendspin: named, with the three buttons.
 		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		// Live Music Assistant radio with a song and artist: the station joins the source line.
+		"nowplaying-music-assistant-radio": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
+			radio: home.Radio{Playing: true, Now: "Music Assistant  ·  YES 933", Title: "Take It Easy", Artist: "Eagles", Music: true}},
 		// With Music Assistant set up: the Library button at the right end of the foot, back to the library.
 		"nowplaying-library": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library",
 			bt:    btaudio.State{Connected: "Phone"},

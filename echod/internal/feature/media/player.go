@@ -1500,15 +1500,34 @@ func (p *Player) Track() (title, artist, album string) {
 }
 
 // TrackLive reports whether the carried track is a live stream (a track with no duration).
+// Once a zero-duration position is seen for the current track, Live is recorded on the stored
+// track so a later ClearPosition does not drop it when metadata arrived before progress.
 func (p *Player) TrackLive() bool {
 	t, _ := p.extTrack.Load().(remoteTrack)
 	if t.Title == "" {
 		return false
 	}
 	if pos, ok := TrackPosition(t.Title); ok {
-		return pos.Dur == 0
+		if pos.Dur == 0 {
+			if !t.Live {
+				p.markExternalLive(t)
+			}
+			return true
+		}
+		return false
 	}
 	return t.Live
+}
+
+func (p *Player) markExternalLive(t remoteTrack) {
+	live := t
+	live.Live = true
+	p.extTrack.CompareAndSwap(t, live)
+	if l, _ := p.lastExt.Load().(lastTrack); l.remoteTrack == t {
+		prev := l
+		l.Live = true
+		p.lastExt.CompareAndSwap(prev, l)
+	}
 }
 
 // Playing reports what the track is doing, which is what decides whether a turn has anything to take

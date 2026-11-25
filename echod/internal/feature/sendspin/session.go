@@ -598,6 +598,10 @@ func (s *session) progress(m *protocol.MetadataState) {
 		Dur:   time.Duration(m.Progress.TrackDuration) * time.Millisecond,
 		Rate:  float64(m.Progress.PlaybackSpeed) / 1000,
 	})
+	if m.Progress.TrackDuration == 0 {
+		// Record the live flag on the stored track when progress arrives after metadata.
+		media.Get().TrackLive()
+	}
 }
 
 // took records what the controller role may ask the server for. The server decides whether to act on a

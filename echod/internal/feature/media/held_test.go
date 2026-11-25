@@ -212,3 +212,31 @@ func TestLiveFlagFollowsPositionThroughHold(t *testing.T) {
 		t.Error("HeldLive = true after ClearPosition for fixed-duration track, want false")
 	}
 }
+
+// When track metadata arrives without progress and a zero-duration progress message arrives later,
+// TrackLive records the live flag on the stored track so ClearPosition does not drop it.
+func TestLiveFlagKeptWhenProgressArrivesAfterMetadata(t *testing.T) {
+	t.Cleanup(ClearPosition)
+	p := &Player{stream: &Stream{}, mp: &esphome.MediaPlayer{}}
+
+	p.ExternalTrack("Take It Easy", "Eagles", "YES 933")
+	if p.TrackLive() {
+		t.Fatal("TrackLive = true before progress arrived, want false")
+	}
+
+	SetPosition(Position{Title: "Take It Easy", Dur: 0, Rate: 1})
+	if !p.TrackLive() {
+		t.Fatal("TrackLive = false after zero-duration progress arrived, want true")
+	}
+
+	ClearPosition()
+	if !p.TrackLive() {
+		t.Error("TrackLive = false after ClearPosition, want stored live flag preserved")
+	}
+
+	p.HoldRemote()
+	p.ExternalTrack("", "", "")
+	if !p.HeldLive() {
+		t.Error("HeldLive = false after ClearPosition and HoldRemote, want true")
+	}
+}

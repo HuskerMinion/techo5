@@ -218,7 +218,7 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 	if s.paused {
 		label = tr("ui_paused")
 	}
-	label = clip(r.label, r, label+" · "+upper(station), 330)
+	label = r.musicLabel(label, station)
 	r.centered(r.label, label, 304, colMusic)
 	if rd.Title != "" {
 		r.centered(r.title, clip(r.title, r, rd.Title, 350), 340, colText)
@@ -254,6 +254,23 @@ func (r *roundRenderer) nowPlayingFace(s roundScene) {
 		r.line(center-7, by-11, center-7, by+11, 6, colText)
 		r.line(center+7, by-11, center+7, by+11, 6, colText)
 	}
+}
+
+// musicLabel formats the Spot's narrow (330 px) source line. When a compound source such as
+// "Music Assistant  ·  YES 933" does not fit alongside the state word, drop everything through
+// the last separator so the station itself is shown ("PLAYING · YES 933") instead of clipping
+// the station off the end.
+func (r *roundRenderer) musicLabel(state, station string) string {
+	full := state + " · " + upper(station)
+	if r.width(r.label, full) <= 330 {
+		return full
+	}
+	if i := strings.LastIndex(station, "·"); i >= 0 {
+		if tail := strings.TrimSpace(station[i+len("·"):]); tail != "" {
+			return clip(r.label, r, state+" · "+upper(tail), 330)
+		}
+	}
+	return clip(r.label, r, full, 330)
 }
 
 // notesMark is two beamed notes, centered at x, y, u half their size.
