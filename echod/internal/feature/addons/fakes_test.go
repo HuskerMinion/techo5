@@ -161,6 +161,7 @@ type fakeTables struct {
 	mu     sync.Mutex
 	chains map[string]map[string][]string // tool, chain, rules
 	broken map[string]bool                // tools that fail every command
+	slow   time.Duration                  // how long each command takes, as on a loaded device
 }
 
 func newFakeTables() *fakeTables {
@@ -174,6 +175,9 @@ func newFakeTables() *fakeTables {
 func (f *fakeTables) run(tool string, args ...string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.slow > 0 {
+		time.Sleep(f.slow)
+	}
 	if f.broken[tool] {
 		return errors.New(tool + ": not found")
 	}
