@@ -375,6 +375,9 @@ func dropUnknown(b []byte, skip bool) ([]byte, map[int][]string, error) {
 			return nil, nil, fmt.Errorf("catalog: add-on %d's versions: %w", i+1, err)
 		}
 		kept := []json.RawMessage{}
+		var id string
+		_ = json.Unmarshal(a["id"], &id)
+		seen := map[string]bool{}
 		for _, v := range versions {
 			var peek struct {
 				Version  string   `json:"version"`
@@ -383,14 +386,23 @@ func dropUnknown(b []byte, skip bool) ([]byte, map[int][]string, error) {
 			if err := json.Unmarshal(v, &peek); err != nil {
 				return nil, nil, fmt.Errorf("catalog: add-on %d's versions: %w", i+1, err)
 			}
+			// A version number is given once in an add-on, skipped or not: the card shows a skipped one's
+			// number, and one that was also a version read would be two entries under one name.
+			if seen[peek.Version] {
+				return nil, nil, fmt.Errorf("catalog: %s %s is listed twice", id, peek.Version)
+			}
+			seen[peek.Version] = true
 			unknown := slices.DeleteFunc(slices.Clone(peek.Requires), func(f string) bool { return slices.Contains(Features, f) })
 			if len(unknown) == 0 {
 				kept = append(kept, v)
 				continue
 			}
+			// Nothing else of a skipped version is read, but its number is shown, so it is held to the
+			// shape every version has.
+			if err := update.ValidVersion(peek.Version); err != nil {
+				return nil, nil, fmt.Errorf("catalog: %s %q: %w", id, peek.Version, err)
+			}
 			if !skip {
-				var id string
-				_ = json.Unmarshal(a["id"], &id)
 				return nil, nil, fmt.Errorf("catalog: %s %s requires %s, which this build does not know (%s)", id, peek.Version, strings.Join(unknown, ", "), strings.Join(Features, ", "))
 			}
 			skipped[i] = append(skipped[i], peek.Version)

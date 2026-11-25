@@ -11,19 +11,21 @@ import (
 const futureVersion = `{"version":"0.3.0","requires":["files","sandbox"],"sandbox":{"profile":"strict"},
  "min_techo5":{"show":"v1.7.0"},"binaries":{},"memory_mb":0}`
 
-// withVersion is c written out with raw added as the last version of its add-on at index i.
-func withVersion(t *testing.T, c Catalog, i int, raw string) []byte {
+// withVersion is c written out with raws added as the last versions of its add-on at index i.
+func withVersion(t *testing.T, c Catalog, i int, raws ...string) []byte {
 	t.Helper()
 	b, _ := json.Marshal(c)
 	var top map[string]any
 	_ = json.Unmarshal(b, &top)
 	addons := top["addons"].([]any)
 	a := addons[i].(map[string]any)
-	var v any
-	if err := json.Unmarshal([]byte(raw), &v); err != nil {
-		t.Fatal(err)
+	for _, raw := range raws {
+		var v any
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			t.Fatal(err)
+		}
+		a["versions"] = append(a["versions"].([]any), v)
 	}
-	a["versions"] = append(a["versions"].([]any), v)
 	out, _ := json.Marshal(top)
 	return out
 }
@@ -100,6 +102,9 @@ func TestTheStrictReadingStays(t *testing.T) {
 		"a format 1 version that requires":                    strings.Replace(strings.Replace(good, `"format":2`, `"format":1`, 1), `"version":"0.1.0",`, `"version":"0.1.0","requires":["files"],`, 1),
 		"a format 1 version that skips":                       strings.Replace(future, `"format":2`, `"format":1`, 1),
 		"format 3":                                            strings.Replace(good, `"format":2`, `"format":3`, 1),
+		"a skipped version not a version":                     strings.Replace(future, `"version":"0.3.0"`, `"version":"next"`, 1),
+		"a skipped version a read one's number":               strings.Replace(future, `"version":"0.3.0"`, `"version":"0.2.0"`, 1),
+		"a skipped version twice":                             string(withVersion(t, c, 1, futureVersion, futureVersion)),
 	} {
 		if bad == good || bad == future {
 			t.Fatalf("%s: the replacement did not apply", name)
