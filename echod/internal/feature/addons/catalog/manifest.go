@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
@@ -23,6 +24,10 @@ type Manifest struct {
 	// Args follow the command. {state} in one is the add-on's own folder for what it keeps, which
 	// outlives updates.
 	Args []string `json:"args,omitempty"`
+
+	// Files are the names of the extra files its catalog entry pins beside the program (Version.Files),
+	// installed read-only in the same bin folder under these names, where TECHO5_ADDON_BIN finds them.
+	Files []string `json:"files,omitempty"`
 
 	Ports []Port `json:"ports"`
 	Root  bool   `json:"root"`
@@ -71,6 +76,20 @@ func (m Manifest) Valid() error {
 			return errors.New("addon.json: an argument holds a NUL")
 		}
 	}
+	if len(m.Files) > MaxFiles {
+		return fmt.Errorf("addon.json: it names %d extra files, more than %d", len(m.Files), MaxFiles)
+	}
+	for i, f := range m.Files {
+		switch {
+		case !ValidFileName(f):
+			return fmt.Errorf("addon.json: the extra file %q is not a plain file name", f)
+		case f == m.Command[0]:
+			// Both go into bin/: the file would take the program's place.
+			return fmt.Errorf("addon.json: the extra file %q has the program's name", f)
+		case slices.Contains(m.Files[:i], f):
+			return fmt.Errorf("addon.json: the extra file %q is named twice", f)
+		}
+	}
 	if m.Page != "" {
 		u, err := url.Parse(strings.ReplaceAll(m.Page, "{device}", "device.invalid"))
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -80,11 +99,12 @@ func (m Manifest) Valid() error {
 	return ValidPorts(m.Ports, m.Root)
 }
 
-// Matches checks a manifest against the catalog entry that pinned it: the same add-on and version, and
-// asking for exactly what the entry says it asks for. The hash already says it is the file that was
+// Matches checks a manifest against the catalog entry that pinned it, for a device of the architecture
+// arch: the same add-on and version, asking for exactly what the entry says it asks for, and naming
+// exactly the extra files the entry pins for that build. The hash already says it is the file that was
 // looked over; this says the entry describes that file, so the card did not show one thing while the
-// firewall opens another.
-func (m Manifest) Matches(id string, v Version) error {
+// firewall opens another, or the add-on looks for a file the device was never given.
+func (m Manifest) Matches(id string, v Version, arch string) error {
 	switch {
 	case m.ID != id:
 		return fmt.Errorf("addon.json is %s's, not %s's", m.ID, id)
@@ -95,7 +115,19 @@ func (m Manifest) Matches(id string, v Version) error {
 	case !Same(m.Ports, v.Ports):
 		return errors.New("addon.json asks for other ports than the catalog lists")
 	}
+	names := slices.Sorted(slices.Values(m.Files))
+	if pinned := FileNames(v.FilesFor(arch)); !slices.Equal(names, pinned) {
+		return fmt.Errorf("addon.json names other extra files (%s) than the catalog pins for %s (%s)",
+			listOrNone(names), arch, listOrNone(pinned))
+	}
 	return nil
+}
+
+func listOrNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }
 
 // Expand is the manifest's arguments with {state} replaced by the add-on's folder for what it keeps.

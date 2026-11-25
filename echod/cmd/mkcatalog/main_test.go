@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -119,13 +120,59 @@ func TestPin(t *testing.T) {
 	dir := t.TempDir()
 	f := write(t, dir, "x", "hello")
 	var b bytes.Buffer
-	if err := printPin(&b, "https://example.com/x="+f); err != nil {
+	if err := printPin(&b, "https://example.com/x="+f, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(b.String(), "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824") || !strings.Contains(b.String(), `"size": 5`) {
 		t.Errorf("pin: %s", b.String())
 	}
-	if err := printPin(&b, "http://example.com/x="+f); err == nil {
+	if err := printPin(&b, "http://example.com/x="+f, ""); err == nil {
 		t.Error("pinned an http url")
+	}
+
+	// An extra file's pin, under its name, reads back as one.
+	b.Reset()
+	if err := printPin(&b, "https://example.com/x="+f, "netbird.tar.gz"); err != nil {
+		t.Fatal(err)
+	}
+	var got catalog.File
+	if err := json.Unmarshal(b.Bytes(), &got); err != nil || got.Name != "netbird.tar.gz" || got.Size != 5 ||
+		got.SHA256 != "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" {
+		t.Errorf("an extra file's pin: %v %s", err, b.String())
+	}
+	if !strings.HasPrefix(strings.TrimSpace(b.String()), "{\n  \"name\": \"netbird.tar.gz\",\n  \"url\"") {
+		t.Errorf("an extra file's pin is not written as an entry lists it:\n%s", b.String())
+	}
+	if err := printPin(&b, "https://example.com/x="+f, "../x"); err == nil {
+		t.Error("pinned an extra file under a path")
+	}
+}
+
+// One addon.json serves every build, so it is checked against the extra files each build pins.
+func TestCheckManifestWithExtraFiles(t *testing.T) {
+	dir := t.TempDir()
+	pin := func(name string) string {
+		return `{"name":"` + name + `","url":"https://example.com/` + name + `","sha256":"` + strings.Repeat("a", 64) + `","size":1}`
+	}
+	bin := `{"url":"https://example.com/x","sha256":"` + strings.Repeat("a", 64) + `","size":1}`
+	entry := func(files string) string {
+		return write(t, dir, "catalog.json", `{"format":1,"serial":1,"addons":[{"id":"x-addon","name":"X","author":"A",
+		 "summary":"Does X.","repo":"https://example.com/x","versions":[{"version":"1.0.0","min_techo5":{"show":"v1.0.0"},
+		 "binaries":{"arm":`+bin+`,"arm64":`+bin+`},"files":`+files+`,
+		 "ports":[],"root":true,"memory_mb":10,"disk_mb":1}]}]}`)
+	}
+	man := func(files string) string {
+		return write(t, dir, "addon.json", `{"id":"x-addon","version":"1.0.0","command":["x-addon"],"files":`+files+`,
+		 "ports":[],"root":true,"memory_mb":10}`)
+	}
+	both := entry(`{"arm":[` + pin("a.tar.gz") + `],"arm64":[` + pin("a.tar.gz") + `]}`)
+	var b bytes.Buffer
+	if err := checkManifest(&b, man(`["a.tar.gz"]`), both); err != nil || !strings.Contains(b.String(), "matches its entry") {
+		t.Errorf("a matching manifest: %v, %s", err, b.String())
+	}
+	for name, files := range map[string]string{"none": `[]`, "another": `["b.tar.gz"]`, "one more": `["a.tar.gz","b.tar.gz"]`} {
+		if err := checkManifest(&b, man(files), both); err == nil {
+			t.Errorf("a manifest naming %s passed", name)
+		}
 	}
 }

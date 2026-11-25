@@ -8,9 +8,9 @@
 // signs the file and the device that reads it parse it with the same definition: a catalog written by
 // hand that the device would refuse is refused before it is signed, rather than found out on devices.
 //
-// What an entry pins is what was looked over: each version's binaries by their SHA-256, the manifest
-// the version ships (addon.json) by its own, and what it asks of the device, its ports and whether it
-// runs as root. A device opens in its firewall only what the catalog says, so a manifest that asks for
+// What an entry pins is what was looked over: each version's binaries by their SHA-256, any extra files
+// it brings beside them by theirs, the manifest the version ships (addon.json) by its own, and what it
+// asks of the device, its ports and whether it runs as root. A device opens in its firewall only what the catalog says, so a manifest that asks for
 // more than its entry is refused even when its hash would match.
 package catalog
 
@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 )
 
@@ -86,6 +87,13 @@ type Version struct {
 	// and its size.
 	Binaries map[string]update.Binary `json:"binaries"`
 
+	// Files are the extra files each build brings beside its program, by the same architecture as
+	// Binaries: the one of the TECHO5 build that gets them, whatever is inside them. A program built
+	// for arm that unpacks another project's arm64 release lists that release under "arm". Each is
+	// pinned as a binary is and installed read-only in the add-on's bin folder under its name, which
+	// its addon.json names too. Every build lists the same names, as one addon.json serves them all.
+	Files map[string][]File `json:"files,omitempty"`
+
 	// Manifest is the addon.json this version ships, pinned by its hash. A version without one is
 	// listed but cannot be installed: what it would run and open is not pinned.
 	Manifest *update.Binary `json:"manifest,omitempty"`
@@ -101,6 +109,105 @@ type Version struct {
 
 	// Todo is a note for whoever signs the catalog next, never shown on a device.
 	Todo string `json:"todo,omitempty"`
+}
+
+// File is one extra file a version pins: the name it is installed under, beside the program, and the
+// download it is, checked as the binary is.
+type File struct {
+	Name string `json:"name"`
+	update.Binary
+}
+
+// Extra files are held to a few, and to a size the device's storage can take beside everything else:
+// they are for what a program needs beside it (another project's release it unpacks, a model), not
+// for bringing a second add-on along.
+const (
+	MaxFiles   = 8
+	MaxFilesMB = 128
+)
+
+// fileNamePattern is an extra file's name: a plain file name of letters, digits, dots, dashes,
+// underscores and pluses, not starting with a dot. It is joined to the add-on's bin folder, and shown
+// on the card and in the logs, so nothing that walks a path, hides, or reads as something else.
+var fileNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
+
+// ValidFileName reports whether name can be an extra file's name.
+func ValidFileName(name string) bool { return fileNamePattern.MatchString(name) && safename.OK(name) }
+
+// FilesFor is the extra files the build for arch brings.
+func (v Version) FilesFor(arch string) []File { return v.Files[arch] }
+
+// FileNames is the names of files, sorted.
+func FileNames(files []File) []string {
+	names := make([]string, 0, len(files))
+	for _, f := range files {
+		names = append(names, f.Name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// FilesMB is how much room files take, in whole megabytes, rounded up.
+func FilesMB(files []File) int64 {
+	var n int64
+	for _, f := range files {
+		n += f.Size
+	}
+	return (n + 1<<20 - 1) >> 20
+}
+
+// validFiles checks a version's extra files: for an architecture it has a binary for, each a plain
+// name given once, pinned, a few of them and not too large; and the same names for every build.
+func (v Version) validFiles(what string) error {
+	var first []string
+	firstArch := ""
+	for _, arch := range Arches {
+		files, listed := v.Files[arch]
+		_, built := v.Binaries[arch]
+		switch {
+		case listed && !built:
+			return fmt.Errorf("catalog: %s has extra files for %s, which it has no binary for", what, arch)
+		case listed && len(files) == 0:
+			return fmt.Errorf("catalog: %s lists no extra files for %s; leave %s out instead", what, arch, arch)
+		case len(files) > MaxFiles:
+			return fmt.Errorf("catalog: %s has %d extra files for %s, more than %d", what, len(files), arch, MaxFiles)
+		}
+		var total int64
+		seen := map[string]bool{}
+		for _, f := range files {
+			if !ValidFileName(f.Name) {
+				return fmt.Errorf("catalog: %s's extra file %q for %s is not a plain file name (letters, digits, dots, dashes, underscores and pluses, not starting with a dot)", what, f.Name, arch)
+			}
+			if seen[f.Name] {
+				return fmt.Errorf("catalog: %s lists the extra file %s twice for %s", what, f.Name, arch)
+			}
+			seen[f.Name] = true
+			if err := pinned(f.Binary); err != nil {
+				return fmt.Errorf("catalog: %s's extra file %s for %s: %w", what, f.Name, arch, err)
+			}
+			total += f.Size
+		}
+		if total > MaxFilesMB<<20 {
+			return fmt.Errorf("catalog: %s's extra files for %s come to more than %d MB", what, arch, MaxFilesMB)
+		}
+		// One addon.json names the files for every build (Manifest.Matches), so every build brings the
+		// same names; a build with none where another has some could never match it.
+		if !built || len(v.Files) == 0 {
+			continue
+		}
+		names := FileNames(files)
+		if firstArch == "" {
+			first, firstArch = names, arch
+		} else if !slices.Equal(first, names) {
+			return fmt.Errorf("catalog: %s's builds for %s and %s bring different extra files; one addon.json names them for both", what, firstArch, arch)
+		}
+	}
+	for arch := range v.Files {
+		if !slices.Contains(Arches, arch) {
+			return fmt.Errorf("catalog: %s has extra files for %q, which is not an architecture (%s)", what, arch, strings.Join(Arches, ", "))
+		}
+	}
+	return nil
 }
 
 // Port is one port, or one range of them, an add-on needs open on Wi-Fi.
@@ -238,6 +345,9 @@ func (v Version) valid(id string) error {
 		if err := pinned(b); err != nil {
 			return fmt.Errorf("catalog: %s's %s binary: %w", what, arch, err)
 		}
+	}
+	if err := v.validFiles(what); err != nil {
+		return err
 	}
 	if v.Manifest != nil {
 		if err := pinned(*v.Manifest); err != nil {
@@ -452,16 +562,32 @@ func (a Addon) Latest() (Version, bool) {
 }
 
 // Asks is what an add-on asks of the device beyond being run: what the owner agrees to with the box.
+// Files are the extra files its build for this device brings, by name and hash: what is put on the
+// device beside the program is agreed to as the program is, so a new or changed one asks again.
 type Asks struct {
-	Ports []Port `json:"ports"`
-	Root  bool   `json:"root"`
+	Ports []Port    `json:"ports"`
+	Root  bool      `json:"root"`
+	Files []FilePin `json:"files,omitempty"`
 }
 
-// Asks is what this version asks.
-func (v Version) Asks() Asks { return Asks{Ports: slices.Clone(v.Ports), Root: v.Root} }
+// FilePin is an extra file as it was agreed to.
+type FilePin struct {
+	Name   string `json:"name"`
+	SHA256 string `json:"sha256"`
+}
+
+// Asks is what this version asks of a device of the architecture arch.
+func (v Version) Asks(arch string) Asks {
+	a := Asks{Ports: slices.Clone(v.Ports), Root: v.Root}
+	for _, f := range v.FilesFor(arch) {
+		a.Files = append(a.Files, FilePin{Name: f.Name, SHA256: f.SHA256})
+	}
+	return a
+}
 
 // More is what a asks that was not agreed to in before, in words for the card: each port not covered
-// by one agreed to, and root when it was not. Nothing means the box need not be asked again.
+// by one agreed to, root when it was not, and each extra file not agreed to as it is now. Nothing means
+// the box need not be asked again.
 func (a Asks) More(before Asks) []string {
 	var more []string
 	if a.Root && !before.Root {
@@ -477,6 +603,15 @@ func (a Asks) More(before Asks) []string {
 		}
 		if !covered {
 			more = append(more, "port "+p.String())
+		}
+	}
+	for _, f := range a.Files {
+		i := slices.IndexFunc(before.Files, func(g FilePin) bool { return g.Name == f.Name })
+		switch {
+		case i < 0:
+			more = append(more, "the extra file "+f.Name)
+		case before.Files[i].SHA256 != f.SHA256:
+			more = append(more, "a changed "+f.Name)
 		}
 	}
 	return more

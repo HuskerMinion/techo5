@@ -9,16 +9,28 @@ import (
 )
 
 // Shown is a digest of what the card showed the owner before they ticked the box: the add-on, its
-// author, the version, and what that version asks of the device. The install form carries it back, and
+// author, the version, and what that version asks of the device, the extra files it brings among it. The install form carries it back, and
 // an install or update goes ahead only while the catalog still says the same, so the box agrees to what
 // was read, not to whatever a catalog fetched between the page and the press says.
 func Shown(a Addon, v Version) string {
+	// The files by name and hash, every build's: what is put on the device beside the program. Left out
+	// when there are none, so a listing without any is shown as it was before extra files.
+	var files map[string][]FilePin
+	for arch, fs := range v.Files {
+		if files == nil {
+			files = map[string][]FilePin{}
+		}
+		for _, f := range fs {
+			files[arch] = append(files[arch], FilePin{Name: f.Name, SHA256: f.SHA256})
+		}
+	}
 	b, _ := json.Marshal(struct {
 		ID, Name, Author, Version string
 		Ports                     []Port
 		Root                      bool
 		MemoryMB, DiskMB          int
-	}{a.ID, a.Name, a.Author, v.Version, v.Ports, v.Root, v.MemoryMB, v.DiskMB})
+		Files                     map[string][]FilePin `json:",omitempty"`
+	}{a.ID, a.Name, a.Author, v.Version, v.Ports, v.Root, v.MemoryMB, v.DiskMB, files})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:16])
 }

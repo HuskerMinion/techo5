@@ -807,7 +807,7 @@ func (m *Manager) fetchVersion(ctx context.Context, id string, v catalog.Version
 	if err != nil {
 		return man, err
 	}
-	if err := man.Matches(id, v); err != nil {
+	if err := man.Matches(id, v, d.Arch); err != nil {
 		return man, fmt.Errorf("addons: refused: %w", err)
 	}
 	if err := os.Chmod(mpath, 0o644); err != nil {
@@ -916,7 +916,7 @@ func (m *Manager) Install(ctx context.Context, id, version, shown string, agreed
 	}
 	now := m.clock.Now()
 	rec := record{ID: id, Version: v.Version, Name: entry.Name, Author: entry.Author, Arch: m.device().Arch, UID: uid,
-		Enabled: true, Agreed: v.Asks(), AgreedAt: now, InstalledAt: now, DiskMB: v.DiskMB}
+		Enabled: true, Agreed: v.Asks(m.device().Arch), AgreedAt: now, InstalledAt: now, DiskMB: v.DiskMB}
 
 	// Into place: the add-on's folder may already be there, holding the state a removal kept.
 	m.phase("installing")
@@ -973,7 +973,7 @@ func (m *Manager) offer(rec record) (catalog.Addon, catalog.Version, *Offer) {
 	if !ok || v.Version == rec.Version || !update.Newer(v.Version, rec.Version) {
 		return entry, v, nil
 	}
-	o := &Offer{Version: v.Version, More: v.Asks().More(rec.Agreed), Shown: catalog.Shown(entry, v)}
+	o := &Offer{Version: v.Version, More: v.Asks(m.device().Arch).More(rec.Agreed), Shown: catalog.Shown(entry, v)}
 	if ok, why := fits(v.MemoryMB); !ok {
 		o.Problem = "it " + why
 	}
@@ -1083,7 +1083,7 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 	// It stays as on or off as it was: an update installed while it was stopped is not a Start.
 	next.Version, next.Enabled, next.RolledBack, next.DiskMB = v.Version, wasOn, "", v.DiskMB
 	if len(o.More) > 0 {
-		next.Agreed, next.AgreedAt = merged(rec.Agreed, v.Asks()), m.clock.Now()
+		next.Agreed, next.AgreedAt = merged(rec.Agreed, v.Asks(m.device().Arch)), m.clock.Now()
 	}
 	m.modes(next, man)
 

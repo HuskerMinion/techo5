@@ -11,7 +11,8 @@
 // version entry once published may change except to be withdrawn (catalog.Unchanged).
 //
 // With -pin it measures a downloaded file instead, and prints the url, sha256 and size an entry pins it
-// by, so an entry is never typed by hand.
+// by, so an entry is never typed by hand; with -file as well, the pin is an extra file's, under that
+// name (catalog.File).
 package main
 
 import (
@@ -39,6 +40,7 @@ func main() {
 		signKey  = flag.String("sign-key", "", "the release signing key file")
 		pin      = flag.String("pin", "", "URL=FILE: print the url, sha256 and size an entry pins FILE by, and nothing else")
 		manifest = flag.String("manifest", "", "an add-on's addon.json to check, against its entry in -in when it has one, and nothing else")
+		file     = flag.String("file", "", "with -pin: the name an extra file is installed under, to print its pin as an entry's \"files\" lists it")
 	)
 	flag.Parse()
 
@@ -49,8 +51,12 @@ func main() {
 		}
 		return
 	}
+	if *file != "" && *pin == "" {
+		fmt.Fprintln(os.Stderr, "mkcatalog: -file goes with -pin")
+		os.Exit(1)
+	}
 	if *pin != "" {
-		if err := printPin(os.Stdout, *pin); err != nil {
+		if err := printPin(os.Stdout, *pin, *file); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -170,8 +176,15 @@ func checkManifest(w io.Writer, path, in string) error {
 		if c, err := catalog.Parse(body); err == nil {
 			if a, ok := c.Find(m.ID); ok {
 				if v, ok := a.Version(m.Version); ok {
-					if err := m.Matches(m.ID, v); err != nil {
-						return fmt.Errorf("mkcatalog: %s does not match its entry: %w", path, err)
+					// One addon.json serves every build, so it has to match the entry as each build's
+					// device reads it: the extra files are pinned per build.
+					for _, arch := range catalog.Arches {
+						if _, built := v.Binaries[arch]; !built {
+							continue
+						}
+						if err := m.Matches(m.ID, v, arch); err != nil {
+							return fmt.Errorf("mkcatalog: %s does not match its entry: %w", path, err)
+						}
 					}
 					fmt.Fprintf(w, "mkcatalog: %s is %s %s, and matches its entry\n", path, m.ID, m.Version)
 					return nil
@@ -183,11 +196,15 @@ func checkManifest(w io.Writer, path, in string) error {
 	return nil
 }
 
-// printPin writes the url, sha256 and size of a file as an entry pins it.
-func printPin(w io.Writer, spec string) error {
+// printPin writes the url, sha256 and size of a file as an entry pins it; with a name, as an extra
+// file under that name.
+func printPin(w io.Writer, spec, name string) error {
 	url, path, ok := strings.Cut(spec, "=")
 	if !ok || !strings.HasPrefix(url, "https://") || path == "" {
 		return fmt.Errorf("mkcatalog: -pin needs URL=FILE with an https url, not %q", spec)
+	}
+	if name != "" && !catalog.ValidFileName(name) {
+		return fmt.Errorf("mkcatalog: -file %q is not a plain file name (letters, digits, dots, dashes, underscores and pluses, not starting with a dot)", name)
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -199,7 +216,11 @@ func printPin(w io.Writer, spec string) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.MarshalIndent(update.Binary{URL: url, SHA256: hex.EncodeToString(h.Sum(nil)), Size: n}, "", "  ")
+	var pinned any = update.Binary{URL: url, SHA256: hex.EncodeToString(h.Sum(nil)), Size: n}
+	if name != "" {
+		pinned = catalog.File{Name: name, Binary: pinned.(update.Binary)}
+	}
+	b, _ := json.MarshalIndent(pinned, "", "  ")
 	_, err = fmt.Fprintln(w, string(b))
 	return err
 }
