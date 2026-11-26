@@ -50,7 +50,7 @@ func (r *roomsSource) load(ctx context.Context, live *hass.Live) (needs, error) 
 	r.mu.Lock()
 	r.plan = plan
 	r.mu.Unlock()
-	return needs{entities: ids, precision: hass.Precisions(entities)}, nil
+	return needs{entities: ids, precision: hass.Precisions(entities), listing: entities}, nil
 }
 
 // sections is a section a room: its name and climate over its tiles.
@@ -67,7 +67,7 @@ func (r *roomsSource) sections(l look) []Section {
 			if !ok {
 				continue
 			}
-			if t, keep := tileOf(e, p.name, l.precision); keep {
+			if t, keep := tileOf(e, p.name, l.precision, l.ha); keep {
 				tiles = append(tiles, t)
 			}
 		}
@@ -147,13 +147,13 @@ func planRooms(areas []hass.Area, floors []hass.Floor, devices []hass.Device, en
 
 // tileOf is how one entity looks as a tile, and whether it is worth one: a binary sensor only
 // when it says whether something is open.
-func tileOf(e hass.LiveEntity, room string, precision map[string]int) (Tile, bool) {
+func tileOf(e hass.LiveEntity, room string, precision map[string]int, ha *haLook) (Tile, bool) {
 	domain, _, _ := strings.Cut(e.ID, ".")
 	class, _ := e.Attrs["device_class"].(string)
 	if domain == "binary_sensor" && !openings[class] {
 		return Tile{}, false
 	}
-	return describe(e, nameOf(e, room), precision), true
+	return describeIn(e, nameOf(e, room), precision, ha), true
 }
 
 // describe is how any entity looks as a tile: its icon, its name, and its state in words, with the
@@ -161,6 +161,12 @@ func tileOf(e hass.LiveEntity, room string, precision map[string]int) (Tile, boo
 // front door, and a thermostat wants more than on and off (the screen opens its sheet instead).
 // precision is each entity's display precision from Home Assistant's registry, nil when unknown.
 func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
+	return describeIn(e, name, precision, nil)
+}
+
+// describeIn is describe with Home Assistant's own icons and state words to take first, where it has
+// them (haLook, #760); nil for the device's own alone.
+func describeIn(e hass.LiveEntity, name string, precision map[string]int, ha *haLook) Tile {
 	domain, _, _ := strings.Cut(e.ID, ".")
 	class, _ := e.Attrs["device_class"].(string)
 	t := Tile{Entity: e.ID, Name: name}
@@ -208,7 +214,13 @@ func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
 		t.Value = title(e.State)
 		t.On = e.State != "locked"
 	case "binary_sensor":
-		t.Value = binaryWords(class, e.State == "on")
+		// Home Assistant's words for the class or the integration's key ("Not charging", "OK"), then the
+		// device's own for the classes it knows.
+		if w, ok := ha.word(e, domain, class); ok {
+			t.Value = w
+		} else {
+			t.Value = binaryWords(class, e.State == "on")
+		}
 	case "scene", "script", "button", "input_button":
 		t.Value = title(domain)
 		service := map[string]string{"scene": "scene.turn_on", "script": "script.turn_on", "button": "button.press", "input_button": "input_button.press"}[domain]
@@ -232,7 +244,11 @@ func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
 	case "sensor", "input_number", "number", "counter":
 		t.Value = e.State
 		f, err := strconv.ParseFloat(e.State, 64)
-		if dp, ok := precision[e.ID]; ok && err == nil {
+		if w, ok := ha.word(e, domain, class); ok && err != nil {
+			// A state in words, an enum sensor's option: as Home Assistant says it ("No risk", not
+			// no_risk). A number is never looked up, and keeps its unit below.
+			t.Value = w
+		} else if dp, ok := precision[e.ID]; ok && err == nil {
 			// The owner's precision, or the integration's, as Home Assistant's own cards show it:
 			// a price to the tenth of a cent is no use rounded to the dime.
 			t.Value = fixed(f, dp)
@@ -248,13 +264,23 @@ func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
 		}
 		t.On = false
 	default:
-		t.Value = title(e.State)
+		if w, ok := ha.word(e, domain, class); ok {
+			t.Value = w // a vacuum's "Docked", a person's "Away", a select's option, in Home Assistant's words
+		} else {
+			t.Value = title(e.State)
+		}
 	}
 	t.Adjust = adjustOf(e, domain)
 	if e.State == "unavailable" || e.State == "unknown" {
 		t.Value, t.Gone, t.On, t.Tap, t.Adjust = title(e.State), true, false, nil, nil
 	}
-	t.Icon = iconOf(e, domain, class, t.On)
+	// The state's own icon first, then Home Assistant's for the entity (haLook), then the device's table.
+	if own, _ := e.Attrs["icon"].(string); own == "" {
+		t.Icon = ha.icon(e, domain, class)
+	}
+	if t.Icon == "" {
+		t.Icon = iconOf(e, domain, class, t.On)
+	}
 	return t
 }
 

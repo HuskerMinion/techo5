@@ -35,13 +35,19 @@ type Device struct {
 // show at all (settings and diagnostics are not, and nor is anything hidden), and how many decimals
 // its number is shown with. The precision lives in the registry, not in the state's attributes: it is
 // the owner's own setting, or else the one the integration suggests, and nil when there is neither.
+// Platform and TranslationKey are the integration behind it and its key in that integration's icons
+// and words, which Home Assistant's frontend picks an entity's icon and state words by (#760); Icon is
+// one set in the entity's settings, which its state's icon attribute also carries.
 type Registered struct {
-	ID        string `json:"ei"`
-	Device    string `json:"di"`
-	Area      string `json:"ai"`
-	Category  *int   `json:"ec"`
-	Hidden    bool   `json:"hb"`
-	Precision *int   `json:"dp"`
+	ID             string `json:"ei"`
+	Device         string `json:"di"`
+	Area           string `json:"ai"`
+	Category       *int   `json:"ec"`
+	Hidden         bool   `json:"hb"`
+	Precision      *int   `json:"dp"`
+	Platform       string `json:"pl"`
+	TranslationKey string `json:"tk"`
+	Icon           string `json:"ic"`
 }
 
 // Precisions is the display precision of each entity that has one, by entity id.
@@ -59,6 +65,15 @@ func Precisions(entities []Registered) map[string]int {
 // listing Home Assistant's own frontend formats numbers with. Registries reads the same listing; this
 // is for a dashboard that wants nothing else from the registries.
 func (l *Live) DisplayPrecision(ctx context.Context) (map[string]int, error) {
+	list, err := l.DisplayListing(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return Precisions(list), nil
+}
+
+// DisplayListing is every entity as the registry lists it for display (Registered).
+func (l *Live) DisplayListing(ctx context.Context) ([]Registered, error) {
 	raw, err := l.Call(ctx, map[string]any{"type": "config/entity_registry/list_for_display"})
 	if err != nil {
 		return nil, err
@@ -69,7 +84,7 @@ func (l *Live) DisplayPrecision(ctx context.Context) (map[string]int, error) {
 	if err := json.Unmarshal(raw, &display); err != nil {
 		return nil, err
 	}
-	return Precisions(display.Entities), nil
+	return display.Entities, nil
 }
 
 // Registries is the house's areas, floors, devices and entities.
@@ -101,7 +116,7 @@ func (l *Live) Registries(ctx context.Context) (areas []Area, floors []Floor, de
 
 // RegistryEntity is an entity as the full entity registry lists it, with the device it belongs to and the
 // integration that provides it. Registered is the display listing instead, which is built for drawing:
-// it has no platform, and no entity id under that name.
+// its entity id and platform go by short names, and an older Home Assistant may leave the platform out.
 type RegistryEntity struct {
 	ID       string `json:"entity_id"`
 	DeviceID string `json:"device_id"`

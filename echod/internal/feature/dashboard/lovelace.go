@@ -709,7 +709,7 @@ func (it tileItem) tile(l look, room string) Tile {
 		}
 		name = withoutRoom(name, room)
 	}
-	t := describe(e, name, l.precision)
+	t := describeIn(e, name, l.precision, l.ha)
 	if it.color.A != 0 && !t.Gone {
 		if domain, _, _ := strings.Cut(it.entity, "."); t.On || !colorsOnlyWhenActive[domain] {
 			t.Color = it.color
@@ -780,7 +780,7 @@ func (g graphNode) blocks(l look) []Block {
 	if name == "" {
 		name, _ = e.Attrs["friendly_name"].(string)
 	}
-	t := describe(e, name, l.precision)
+	t := describeIn(e, name, l.precision, l.ha)
 	return []Block{{Graph: &Graph{Name: name, Icon: orIcon(g.icon, t.Icon), Value: t.Value, Points: buckets(l.history[g.entity], g.hours, graphPoints)}}}
 }
 

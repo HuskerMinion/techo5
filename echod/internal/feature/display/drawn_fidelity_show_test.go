@@ -13,7 +13,7 @@ import (
 )
 
 // Drawn dashboard cards drawn closer to Home Assistant's own: a markdown card with its structure
-// (#757). Each draws whether or not SHOW_PREVIEW is set, and with it set is written there for the
+// (#757), and tiles with Home Assistant's own icons and words (#760). Each draws whether or not SHOW_PREVIEW is set, and with it set is written there for the
 // golden check (tools/golden).
 
 var fidelityAt = time.Date(2026, 10, 4, 14, 7, 0, 0, time.Local)
@@ -77,4 +77,27 @@ func TestDrawnMarkdownLayout(t *testing.T) {
 			t.Fatalf("a wrapped line is %d wide, over 200: %+v", w, line)
 		}
 	}
+}
+
+// iconsView is #760's table as the tiles draw it with Home Assistant's icons and words, and an icon
+// named hass: as Home Assistant still writes some.
+func iconsView() dashboard.Drawn {
+	return dashboard.Drawn{Sections: []dashboard.Section{{Blocks: []dashboard.Block{
+		{Heading: "Utility"},
+		{Tiles: []dashboard.Tile{
+			{Name: "Robot", Icon: "mdi:robot-vacuum", Value: "Docked"},
+			{Name: "Phone", Icon: "mdi:battery", Value: "Not charging"},
+			{Name: "Dehumidifier tank", Icon: "mdi:water-outline", Value: "OK"},
+			{Name: "Mains", Icon: "mdi:sine-wave", Value: "231 V"},
+			{Name: "Download", Icon: "mdi:speedometer", Value: "512 Mbit/s"},
+			{Name: "Energy meter", Icon: "mdi:counter", Value: "1204 kWh"},
+			{Name: "UV risk", Icon: "mdi:eye", Value: "No risk"},
+			{Name: "Old icon name", Icon: "hass:flash", Value: "On", On: true},
+		}},
+	}}}}
+}
+
+func TestDrawnIconsPreview(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	goldenDraw(t, "dash-icons-show8", show8Wide, show8High, drawnScene(iconsView()))
 }

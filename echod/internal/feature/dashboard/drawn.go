@@ -204,7 +204,9 @@ type needs struct {
 	pictures  []wanted
 	// precision is each entity's display precision, when the source has read the registry's display
 	// listing already (the Rooms dashboard does, for its areas); otherwise the session reads it.
+	// listing is that listing, which the entities' integrations and translation keys come from (haLook).
 	precision map[string]int
+	listing   []hass.Registered
 }
 
 // look is everything a source draws from.
@@ -217,6 +219,8 @@ type look struct {
 	// registry has it; an entity missing from it has none set (describe).
 	precision map[string]int
 	width     int // the screen's, for a card shown only on a wide or a narrow one
+	// ha is Home Assistant's own icons and state words for the entities on the page; nil for none.
+	ha *haLook
 	// room is the heading the cards are under in their section, often a room: an entity's own name
 	// is shown without it in front, as on the Rooms dashboard (withoutRoom).
 	room string
@@ -253,6 +257,7 @@ type session struct {
 	// precision is each entity's display precision, read when the dashboard loads and again when
 	// the entity registry changes (followPrecision); it is replaced whole, never changed in place.
 	precision map[string]int
+	ha        *haLook // replaced whole, as precision is
 	width     int
 	reload    bool // the connection was closed to read the dashboard again, not because it failed
 	view      Drawn
@@ -706,14 +711,20 @@ func (s *session) once() error {
 		longest = max(longest, h)
 	}
 	history := loadHistory(lctx, live, graphed, longest)
-	precision := need.precision
+	precision, listing := need.precision, need.listing
 	if err == nil && precision == nil {
 		// Without it a number is shown as trimNumber has it, which is how it was before the registry
 		// was read for this: worth a log line, not a dashboard that will not load.
-		if precision, err = live.DisplayPrecision(lctx); err != nil {
+		if listing, err = live.DisplayListing(lctx); err != nil {
 			slog.Info("drawn dashboard: no display precision from Home Assistant", "err", err)
-			precision, err = nil, nil
+			listing, err = nil, nil
+		} else {
+			precision = hass.Precisions(listing)
 		}
+	}
+	var ha *haLook
+	if err == nil {
+		ha = loadHALook(lctx, live, need.entities, listing)
 	}
 	lcancel()
 	if err != nil {
@@ -730,7 +741,7 @@ func (s *session) once() error {
 	}
 	s.mu.Lock()
 	s.view.Problem, s.view.Connect, s.view.Theme = "", false, theme
-	s.history, s.graphs, s.precision = history, need.graphs, precision
+	s.history, s.graphs, s.precision, s.ha = history, need.graphs, precision, ha
 	s.seed(need.pictures)
 	s.mu.Unlock()
 	s.publish()
@@ -834,12 +845,13 @@ func (s *session) followPrecision(subscribing, conn context.Context, live *hass.
 			mu.Unlock()
 			rctx, cancel := context.WithTimeout(conn, 30*time.Second)
 			defer cancel()
-			p, err := live.DisplayPrecision(rctx)
+			list, err := live.DisplayListing(rctx)
 			if err != nil {
 				return // the old ones stand, and a connection that ended is opened again anyway
 			}
 			s.mu.Lock()
-			s.precision = p
+			// A translation key or an icon set in the entity's settings is in the same listing.
+			s.precision, s.ha = hass.Precisions(list), s.ha.withListing(list)
 			s.mu.Unlock()
 			s.publishSoon()
 		})
@@ -853,7 +865,7 @@ func (s *session) followPrecision(subscribing, conn context.Context, live *hass.
 func (s *session) publish() {
 	s.mu.Lock()
 	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures,
-		precision: s.precision, width: s.width})
+		precision: s.precision, width: s.width, ha: s.ha})
 	for i := range sections {
 		for j := range sections[i].Blocks {
 			b := &sections[i].Blocks[j]
