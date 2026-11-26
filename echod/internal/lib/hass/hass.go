@@ -278,13 +278,28 @@ func (c *Client) send(ctx context.Context, method string, acc access, path strin
 // ErrNotFound is Home Assistant saying there is no such thing: for a state, an entity it does not have.
 var ErrNotFound = errors.New("404 Not Found")
 
-// Day is one day of a forecast.
+// Day is one day of a forecast, or one hour or half day of one that comes by the hour or twice a day.
 type Day struct {
 	When      time.Time
 	Condition string
 	High      float64
 	Low       float64
 	Rain      int // precipitation probability, percent, -1 when not given
+	// HasHigh and HasLow are whether the forecast gave them: an hour's has a temperature and no low.
+	HasHigh, HasLow bool
+	// Night is a twice-daily forecast's night (is_daytime false); a daily one has none.
+	Night bool
+}
+
+// forecastEntry is one entry of a forecast as Home Assistant sends it, from weather.get_forecasts or
+// weather/subscribe_forecast.
+type forecastEntry struct {
+	Datetime      string   `json:"datetime"`
+	Condition     string   `json:"condition"`
+	Temperature   *float64 `json:"temperature"`
+	Templow       *float64 `json:"templow"`
+	Precipitation *float64 `json:"precipitation_probability"`
+	IsDaytime     *bool    `json:"is_daytime"`
 }
 
 // Forecast is the daily forecast for a weather entity, as many days as it gives.
@@ -296,13 +311,7 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 	}
 	var resp struct {
 		ServiceResponse map[string]struct {
-			Forecast []struct {
-				Datetime      string   `json:"datetime"`
-				Condition     string   `json:"condition"`
-				Temperature   *float64 `json:"temperature"`
-				Templow       *float64 `json:"templow"`
-				Precipitation *float64 `json:"precipitation_probability"`
-			} `json:"forecast"`
+			Forecast []forecastEntry `json:"forecast"`
 		} `json:"service_response"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
@@ -312,30 +321,56 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 	if !ok {
 		return nil, fmt.Errorf("hass: no forecast for %s", entity)
 	}
-	days := make([]Day, 0, len(fc.Forecast))
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	for i, f := range fc.Forecast {
+	return forecastDays(fc.Forecast, 24*time.Hour), nil
+}
+
+// forecastDays is a forecast's entries as Days. step is how far apart entries are meant to be, for
+// one whose time can't be read: it is put where it comes in the list, from now.
+func forecastDays(list []forecastEntry, step time.Duration) []Day {
+	days := make([]Day, 0, len(list))
+	start := time.Now()
+	if step >= 24*time.Hour {
+		start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.Local)
+	} else {
+		start = start.Truncate(time.Hour)
+	}
+	for i, f := range list {
 		d := Day{Condition: f.Condition, Rain: -1}
 		if t, ok := forecastTime(f.Datetime); ok {
 			d.When = t
 		} else {
 			// A day whose date can't be read is the day it comes in the list, today first: left as the
 			// zero time, every such day read as a Monday.
-			d.When = today.AddDate(0, 0, i)
+			if step >= 24*time.Hour {
+				d.When = start.AddDate(0, 0, i)
+			} else {
+				d.When = start.Add(time.Duration(i) * step)
+			}
 		}
 		if f.Temperature != nil {
-			d.High = *f.Temperature
+			d.High, d.HasHigh = *f.Temperature, true
 		}
 		if f.Templow != nil {
-			d.Low = *f.Templow
+			d.Low, d.HasLow = *f.Templow, true
 		}
 		if f.Precipitation != nil {
 			d.Rain = int(*f.Precipitation)
 		}
+		d.Night = f.IsDaytime != nil && !*f.IsDaytime
 		days = append(days, d)
 	}
-	return days, nil
+	return days
+}
+
+// forecastStep is how far apart a forecast of a type's entries are.
+func forecastStep(kind string) time.Duration {
+	switch kind {
+	case "hourly":
+		return time.Hour
+	case "twice_daily":
+		return 12 * time.Hour
+	}
+	return 24 * time.Hour
 }
 
 // forecastLayouts are the forms a forecast's datetime comes in without a zone, as some integrations

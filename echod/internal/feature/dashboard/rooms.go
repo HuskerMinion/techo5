@@ -15,7 +15,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -227,17 +226,13 @@ func describeIn(e hass.LiveEntity, name string, precision map[string]int, ha *ha
 		t.Tap, t.On = toggle(service), false
 	case "weather":
 		// As the clock says it: the words, and the temperature when there is one.
-		t.Value = home.ConditionWords(e.State)
-		if temp, ok := e.Attrs["temperature"].(float64); ok {
-			unit, _ := e.Attrs["temperature_unit"].(string)
-			reading := trimNumber(temp) + "°"
-			if unit != "" && unit != "°F" && unit != "°C" {
-				reading += " " + unit
-			}
+		cond, temp := weatherNow(e)
+		t.Value = cond
+		if temp != "" {
 			if t.Value != "" {
-				t.Value += " · " + reading
+				t.Value += " · " + temp
 			} else {
-				t.Value = reading
+				t.Value = temp
 			}
 		}
 		t.On = false
@@ -510,7 +505,7 @@ func iconOf(e hass.LiveEntity, domain, class string, on bool) string {
 	case "person":
 		return "account"
 	case "weather":
-		return "weather-partly-cloudy"
+		return WeatherIcon(e.State)
 	case "button", "input_button":
 		return "gesture-tap-button"
 	case "input_number", "number", "counter":

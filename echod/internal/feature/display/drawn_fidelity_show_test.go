@@ -10,10 +10,11 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
 // Drawn dashboard cards drawn closer to Home Assistant's own: a markdown card with its structure
-// (#757), and tiles with Home Assistant's own icons and words (#760). Each draws whether or not SHOW_PREVIEW is set, and with it set is written there for the
+// (#757), a weather forecast card (#758), and tiles with Home Assistant's own icons and words (#760). Each draws whether or not SHOW_PREVIEW is set, and with it set is written there for the
 // golden check (tools/golden).
 
 var fidelityAt = time.Date(2026, 10, 4, 14, 7, 0, 0, time.Local)
@@ -100,4 +101,50 @@ func iconsView() dashboard.Drawn {
 func TestDrawnIconsPreview(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	goldenDraw(t, "dash-icons-show8", show8Wide, show8High, drawnScene(iconsView()))
+}
+
+// forecastView is #758's card, daily, beside one by the hour with no weather now, and a tile.
+func forecastView() dashboard.Drawn {
+	var daily, hourly []hass.Day
+	for i, c := range []string{"partlycloudy", "rainy", "lightning-rainy", "sunny", "snowy", "cloudy", "fog"} {
+		daily = append(daily, hass.Day{When: fidelityAt.AddDate(0, 0, i), Condition: c, High: float64(24 - i), Low: float64(13 - i),
+			HasHigh: true, HasLow: true})
+	}
+	for i, c := range []string{"partlycloudy", "cloudy", "rainy", "pouring", "rainy", "cloudy"} {
+		hourly = append(hourly, hass.Day{When: fidelityAt.Truncate(time.Hour).Add(time.Duration(i+1) * time.Hour), Condition: c,
+			High: float64(22 - i), HasHigh: true})
+	}
+	return dashboard.Drawn{Sections: []dashboard.Section{
+		{Blocks: []dashboard.Block{{Heading: "Weather"},
+			{Forecast: &dashboard.Forecast{Current: true, Name: "Forecast Home", Icon: "weather-partly-cloudy", Condition: "Partly cloudy",
+				Temp: "22°", Days: daily, Max: 5}}}},
+		{Blocks: []dashboard.Block{{Heading: "Today"},
+			{Forecast: &dashboard.Forecast{Name: "Forecast Home", Days: hourly, Hourly: true, Max: 5}},
+			{Tiles: []dashboard.Tile{{Name: "Porch", Icon: "outdoor-lamp", Value: "Off"}}}}},
+	}}
+}
+
+func TestDrawnForecastPreview(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	r := goldenDraw(t, "dash-forecast-show8", show8Wide, show8High, drawnScene(forecastView()))
+	// A narrow card, the Spot's column, fits fewer days than the five a wide one shows.
+	if wide, narrow := r.daysAcross(560, 1), r.daysAcross(220, 1); wide < 5 || narrow >= 5 || narrow < 2 {
+		t.Errorf("days across: %d wide, %d narrow", wide, narrow)
+	}
+}
+
+// The days are named by the day in the screen's language, an hour's forecast by the hour, and no more
+// are kept than the card asks for.
+func TestForecastCellsAreNamed(t *testing.T) {
+	f := forecastView().Sections[0].Blocks[1].Forecast
+	cells := forecastCells(*f, "de")
+	if len(cells) != 5 || cells[0].Name != "So" || cells[1].Icon != "weather-rainy" || !cells[0].HasLow {
+		t.Errorf("daily, in German: %+v", cells)
+	}
+	clock24.Store(false)
+	h := forecastView().Sections[1].Blocks[1].Forecast
+	cells = forecastCells(*h, "en")
+	if len(cells) != 5 || cells[0].Name != "3 PM" || cells[0].HasLow {
+		t.Errorf("hourly: %+v", cells)
+	}
 }

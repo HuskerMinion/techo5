@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -233,7 +235,7 @@ func (c *compiler) cards(v any) []node {
 // entityCards are the cards that are one entity each, which become a tile.
 var entityCards = map[string]bool{
 	"tile": true, "button": true, "entity": true, "light": true, "thermostat": true, "humidifier": true,
-	"media-control": true, "weather-forecast": true, "alarm-panel": true,
+	"media-control": true, "alarm-panel": true,
 	"custom:mushroom-entity-card": true, "custom:mushroom-light-card": true, "custom:mushroom-climate-card": true,
 	"custom:mushroom-cover-card": true, "custom:mushroom-fan-card": true, "custom:mushroom-media-player-card": true,
 	"custom:mushroom-lock-card": true, "custom:mushroom-person-card": true, "custom:mushroom-alarm-control-panel-card": true,
@@ -327,6 +329,9 @@ func (c *compiler) cardItself(card raw) node {
 			return group{headingNode{text: c.render(title, "")}, g}
 		}
 		return g
+
+	case kind == "weather-forecast":
+		return c.forecastCard(card)
 
 	case kind == "gauge":
 		e := str(card, "entity")
@@ -423,6 +428,86 @@ func (c *compiler) cardItself(card raw) node {
 		return nil
 	}
 	return listNode{items: []tileItem{{name: cardName(kind), icon: "card-outline", value: "Shown when streamed", fixed: true}}}
+}
+
+// forecastSlots is how many days a forecast card shows when it does not say, as Home Assistant's.
+const forecastSlots = 5
+
+// forecastCard is a weather forecast card (#758): the weather now, as its entity's tile, over the
+// days to come, which are asked for (a weather entity's state has carried none since Home Assistant
+// 2024.3). show_current and show_forecast leave either out; with no forecast it is the tile alone.
+func (c *compiler) forecastCard(card raw) node {
+	e := str(card, "entity")
+	if e == "" {
+		return nil
+	}
+	c.follow(e)
+	item := c.item(card, e)
+	if card["show_forecast"] == false {
+		return listNode{items: []tileItem{item}}
+	}
+	kind := cmp.Or(str(card, "forecast_type"), "daily")
+	n := forecastNode{item: item, want: forecastWant{entity: e, kind: kind}, current: card["show_current"] != false, max: forecastSlots}
+	if v, ok := card["forecast_slots"].(float64); ok && v >= 1 {
+		n.max = int(v)
+	}
+	c.need.forecasts = append(c.need.forecasts, n.want)
+	return n
+}
+
+// forecastNode is a weather forecast card.
+type forecastNode struct {
+	item    tileItem
+	want    forecastWant
+	current bool
+	max     int
+}
+
+func (f forecastNode) blocks(l look) []Block {
+	t := f.item.tile(l, l.room)
+	e := l.states[f.want.entity]
+	fc := &Forecast{Current: f.current, Name: t.Name, Icon: t.Icon, Gone: t.Gone, Tap: t.Tap, Hourly: f.want.kind == "hourly", Max: f.max}
+	if !t.Gone {
+		fc.Condition, fc.Temp = weatherNow(e)
+	} else {
+		fc.Condition = t.Value
+	}
+	now := time.Now()
+	for _, d := range l.forecasts[f.want.key()] {
+		// Twice a day is its days, as the card's row of days: the nights' lows are the days' already.
+		if f.want.kind == "twice_daily" && d.Night || over(d, fc.Hourly, now) {
+			continue
+		}
+		fc.Days = append(fc.Days, d)
+	}
+	return []Block{{Forecast: fc}}
+}
+
+// over is whether a forecast's day, or hour, is over by now: a forecast read a while ago, or one an
+// integration updates seldom, may still start with one.
+func over(d hass.Day, hourly bool, now time.Time) bool {
+	if d.When.IsZero() {
+		return false
+	}
+	if hourly {
+		return !d.When.Add(time.Hour).After(now)
+	}
+	y, m, day := now.In(time.Local).Date()
+	return d.When.In(time.Local).Before(time.Date(y, m, day, 0, 0, 0, 0, time.Local))
+}
+
+// weatherNow is a weather entity's condition in words and its temperature, as its tile says them: the
+// words the clock says it in, which are the device's own, not Home Assistant's.
+func weatherNow(e hass.LiveEntity) (cond, temp string) {
+	cond = home.ConditionWords(e.State)
+	if v, ok := e.Attrs["temperature"].(float64); ok {
+		unit, _ := e.Attrs["temperature_unit"].(string)
+		temp = trimNumber(v) + "°"
+		if unit != "" && unit != "°F" && unit != "°C" {
+			temp += " " + unit
+		}
+	}
+	return cond, temp
 }
 
 // rowsCard is an entities card: a card of rows, with any sections in it as headings of their own.
