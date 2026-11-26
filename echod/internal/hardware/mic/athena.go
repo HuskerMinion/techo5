@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/asp"
@@ -327,19 +328,54 @@ func athenaInit(k *athenaKernel) {
 	}
 	defer m.Close()
 	failed := 0
+	// The mute is read and the channels written as one, against athenaCodecCut: a mute from Home
+	// Assistant that lands while the capture opens is either seen here or written after these writes,
+	// never lost between the read and the write.
+	athenaChannels.Lock()
+	defer athenaChannels.Unlock()
 	cut := privacy.SoftwareCut()
+	here := privacy.MuteHeldHere()
+	skipped := false
 	for _, c := range k.controls {
 		v := c.value
-		// The software mute's own switches: a microphone opened while it is on opens with its channels
-		// off, so not one frame of the room reaches the bus (privacy, platform_athena.go).
-		if cut && athenaChannelEnable(c.name) {
-			v = 0
+		if athenaChannelEnable(c.name) {
+			var write bool
+			if v, write = athenaChannelValue(c.value, cut, here); !write {
+				skipped = true
+				continue
+			}
 		}
 		if !athenaWrite(m, c.name, v) {
 			failed++
 		}
 	}
 	slog.Info("athena: converter set up", "controls", len(k.controls), "failed", failed, "software_mute", cut)
+	if skipped {
+		if off, err := athenaCodecRead(); err == nil && off {
+			slog.Warn("athena: the converter's channels are off, from the daemon's software mute: " +
+				"lift it from Home Assistant or the screen to hear the microphones here")
+		}
+	}
+}
+
+// athenaChannels is held while the converter's channel switches are decided and written, by the
+// capture opening (athenaInit) and by the software mute (athenaCodecCut).
+var athenaChannels sync.Mutex
+
+// athenaChannelValue is what a channel enable gets when the capture opens, and whether it is written at
+// all. The software mute's own switches: a microphone opened while it is on opens with its channels off,
+// so not one frame of the room reaches the bus (privacy, platform_athena.go). Only the daemon, which
+// holds the mute (privacy.MuteHeldHere), switches them on. Any other process (the CLI's tools) has only
+// its own copy of the mute and would switch them on behind the daemon's back, so there they are only
+// ever switched off, and otherwise left as they are.
+func athenaChannelValue(want uint32, cut, here bool) (v uint32, write bool) {
+	if cut {
+		return 0, true
+	}
+	if !here {
+		return 0, false
+	}
+	return want, true
 }
 
 // athenaChannelEnable is whether a control is one of the mainline converter's channel enables, which
@@ -353,6 +389,8 @@ func athenaChannelEnable(name string) bool {
 // again (measured on a unit, 2026-11-22). It is the software mute's hold on the hardware on TECHO5's
 // mainline kernel, handed to privacy at start.
 func athenaCodecCut(cut bool) error {
+	athenaChannels.Lock()
+	defer athenaChannels.Unlock()
 	k := athenaRunning()
 	m, err := alsa.OpenMixer(Card)
 	if err != nil {
