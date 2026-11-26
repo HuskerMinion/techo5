@@ -109,8 +109,9 @@ At most 16 fields. With `"test": true` the card has a Test button.
 
 ## Connecting
 
-The daemon makes `/run/techo5-addons/<id>/api.sock` before the add-on starts, in a folder owned by the
-add-on's user with mode `0700`, and gives its path in `TECHO5_ADDON_API`. The socket stays through the
+The daemon makes `/run/techo5-addons/<id>/api.sock` before the add-on starts, owned by the add-on's
+user with mode `0600`, in a folder of root's with mode `0711` (the add-on can reach its socket, and
+put nothing beside it), and gives its path in `TECHO5_ADDON_API`. The socket stays through the
 add-on's restarts and goes when it stops.
 
 Who connects is the kernel's word (`SO_PEERCRED`): a user that isn't the add-on's, isn't an installed
@@ -121,8 +122,8 @@ message.
 
 Each message, either way, is a 4-byte big-endian length and then that many bytes of UTF-8 JSON, at most
 64 KB. Messages are read strictly: a key that isn't known, a key given twice or in another case, keys
-that aren't lowercase ASCII letters, digits and underscores, nesting deeper than 16, or anything after
-the value refuses the message.
+that aren't lowercase ASCII letters, digits and underscores, more than 256 keys in an object, nesting
+deeper than 16, or anything after the value refuses the message.
 
 | Message | Shape |
 | --- | --- |
@@ -145,18 +146,21 @@ at all is answered with id 0.
 | `rate_limited` | past a rate limit |
 | `busy` | a queue is full, a count is reached, or it is quiet hours |
 | `unavailable` | Home Assistant is not connected, or what it needs isn't there |
-| `internal` | the daemon failed |
+| `internal` | the device could not do it (the reason stays in the device's log) |
 
 ## Limits
 
 - 64 KB a message; one that says it is longer is answered `too_large` and skipped, and one claiming
   more than 1 MB is hung up on.
-- 20 requests a second on a connection, with a burst of 40.
+- 20 requests a second on a connection, with a burst of 40, counted as each message arrives, before
+  it is read.
 - 4 connections per add-on, 64 requests waiting for their answers on each.
 - Half a message has 5 seconds to arrive in full. An add-on that stops reading what it is sent is
   disconnected once 128 messages wait for it.
-- 20 requests refused for limits within a minute disconnect the add-on, and refuse it, for a minute.
-  Its card says so.
+- 20 requests refused for limits, or that don't read, within a minute disconnect the add-on, and
+  refuse it, for a minute. Its card says so. A header claiming more than 1 MB counts as one.
+- The device's log says each kind of refusal at most once a minute for each add-on; a connection
+  refused while the add-on is disconnected, or has all its connections, says nothing.
 
 ## Ops
 
@@ -208,10 +212,12 @@ PCM, 8 to 48 kHz, at most 5 seconds and 512 KB. At most one a second; `busy` in 
 
 `timer.start` `{"name": "rice", "seconds": 600}` (more than 0, at most 24 hours; a name of at most 64
 characters) sets one of the device's own timers and answers `{"id": "local:…"}`. It counts down on
-the clock and the ring, rings, is stopped by the stop word and the Stop button, and is kept over a
-restart, as any timer set on the device. An add-on has at most 8 at once (`busy`), and lists
+the clock and the ring, shown as the add-on's ("Meals: rice"), rings, and is stopped by the stop word
+and the Stop button. In quiet hours it runs out without a sound. An add-on has at most 8 at once
+(`busy`), starts and cancels them 8 at once and then one every 10 seconds (`rate_limited`), and lists
 (`{"timers": [{"id", "name", "left", "total", "running"}]}`) and cancels (`{"id": "local:…"}`) only
-its own. Its timers stay when it stops or crashes, and are canceled when it is removed.
+its own. Its timers stay when it stops or crashes, and are canceled when it is removed. They are not
+written down: after the daemon restarts, `timer.list` is empty and the add-on sets them again.
 
 ### awake.hold, awake.renew, awake.release
 
@@ -232,14 +238,17 @@ the card shows.
 `{"id": "step", "state": "Chop the onions"}` sets one of the add-on's entities: a number for a
 sensor (words, at most 255 characters, for a text one), `true` or `false` for a binary sensor or a
 switch, one of a select's options, a number within a number's bounds. A button has no state. At most 5
-a second for each entity. States are not saved: set them again after `hello`.
+a second for each entity, and 5 a second for all of them together; setting the state an entity has
+already costs nothing and is not sent on. States are not saved: set them again after `hello`.
 
 ### media.play, media.pause, media.resume, media.stop
 
 `media.play` `{"url": "https://…", "kind": "video", "title": "Step 3"}` plays a video full screen (not
 on a Dot: `unavailable`), or with `"kind": "audio"` audio on the speaker, from an http or https
-address. `media.pause`, `media.resume` and `media.stop` act on what the add-on started, while it is
-still what plays, and on nothing else (`bad_request`). `busy` in quiet hours.
+address, never from the device itself, loopback or link-local, whatever the name resolves to. At most
+one every 2 seconds. `media.pause`, `media.resume` and `media.stop` act on what the add-on started,
+while it is still what plays, and on nothing else (`bad_request`). `media.play` and `media.resume` are
+`busy` in quiet hours.
 
 ## Events
 
@@ -253,7 +262,9 @@ the command's button) nothing waits.
 ### timer
 
 `{"id": "local:…", "name": "rice", "state": "ringing"}`: one of the add-on's timers rang (`ringing`),
-its ring was stopped (`stopped`), or something other than the add-on canceled it (`canceled`).
+its ring was stopped (`stopped`), or something other than the add-on canceled it (`canceled`). One
+that ran out in quiet hours is `ringing` with `"quiet": true`: it made no sound, and no `stopped`
+follows.
 
 ### settings
 
@@ -293,10 +304,9 @@ and it calls `addon_command`.
 
 ## Storage
 
-The daemon writes nothing per message. The socket is on `/run`, in RAM. An add-on's settings are
-written to `/data/techo5-addons/<id>/settings.json` (root's, `0600`) only when Save changes them; its
-timers are written when one is set and when one ends, as any timer on the device. Queues, holds and
-entity states are in memory.
+The daemon writes nothing per message, and logs nothing per message or connection. The socket is on
+`/run`, in RAM. An add-on's settings are written to `/data/techo5-addons/<id>/settings.json` (root's,
+`0600`) only when Save changes them. Its timers, queues, holds and entity states are in memory only.
 
 ## The fake daemon
 

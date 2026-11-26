@@ -345,7 +345,21 @@ decisions, with these changes, each made for the reason given:
   the catalog, and a device that cannot drop root for an add-on serves it no socket.
 - **Timers stay when an add-on stops or crashes**, and are canceled when it is removed: they are the
   device's timers, and a kitchen timer should still ring when the add-on that set it restarts.
-  Keep-awake holds end when their connection drops, as planned.
+  They are **not written down**, unlike the plan's "saved like the others": each start and end
+  rewrote and synced the whole config, as often as an add-on liked. After a daemon restart the add-on
+  sets them again. They are shown as the add-on's ("Meals: rice"), start and cancel 8 at once and then
+  one every 10 s, and **run out silently in quiet hours** (the add-on is told). The consent line says
+  so. Keep-awake holds end when their connection drops, as planned.
+- **The socket's folder is root's, 0711**, not the add-on's, 0700: only the socket is the add-on's,
+  so it cannot fill /run, which is RAM.
+- **Nothing is logged per message or connection**: each kind of line once a minute per add-on.
+- **Entities** are set at most 5 times a second all together as well as each, and a state set again
+  is not sent on. Entities are read again when an add-on is installed or removed (the list was read
+  once, at start, which left the existing update entities waiting for a restart too); one whose key
+  another has is left out rather than failing the link, and an add-on whose names would be another's
+  is refused at install.
+- **Media** plays at most once every 2 s; an add-on's audio is fetched with a dialer that refuses the
+  device itself, loopback and link-local; resume is refused in quiet hours too.
 - **`speak.cancel` drops the words still waiting**; the ones being said are stopped by the stop word,
   as any announcement. Words are paced by the device's own sounding state, so the next waits for the
   last to be heard (at most a minute; 10 seconds when nothing sounds at all).
@@ -362,7 +376,6 @@ decisions, with these changes, each made for the reason given:
 - **Not built yet:** the blueprint for sentence triggers in `docs/`, the fake daemon's PNG of a scene
   (stage 2), and golden screens (stage 1 draws nothing on the device's screen).
 
-Storage, per day on a device with one add-on in use: nothing per message; a settings write each time
-Save changes them (a few hundred bytes, so a handful of writes in a day of setting up, none after);
-and each timer the add-on sets is written twice, when set and when it ends, as every device timer is
-(the whole of state.json each time, as for any timer: a cooking session of 10 timers is 20 writes).
+Storage, per day on a device with one add-on in use: nothing per message, nothing per timer, and
+nothing logged per message; a settings write each time Save changes them (a few hundred bytes, so a
+handful of writes in a day of setting up, none after). What the add-on writes itself is its own.
