@@ -22,7 +22,7 @@ import (
 //
 // Writing a number of seconds into rawDumpTrigger starts one: the frames exactly as ListenRaw hands
 // them (Channels at Rate, Bits wide little-endian: the microphones, then the reference) go to
-// rawDumpDir as rawdump-<unix seconds>.s24, and the trigger is removed when it is done. Nothing is
+// the dump folder as rawdump-<unix seconds>.s24, and the trigger is removed when it is done. Nothing is
 // recorded while the trigger is absent: all that runs is a look for it once a second.
 //
 // rawNativeTrigger does the same for the converter's own stream before the decimators (RawBlock): on the
@@ -31,11 +31,14 @@ import (
 // rawnative-<unix>-<rate>-<channels>.s<bits>, with the privacy cut's blocks written as silence so
 // the file keeps its time.
 //
-// The dumps go to flash rather than /tmp: /tmp is a 32 MB tmpfs, which a 10 s native dump on the
-// Dot 5 (23 MB) all but fills. rawDumpDir is root's alone (0700) and each file is created 0600 and
-// exclusively, so nobody else on the device (the add-ons) can read a recording. A dump is cut to the
-// room the folder's file system has, less dumpReserve, and a .part left by a dump the daemon did not
-// finish is removed when the next one starts. The files stay until someone deletes them.
+// The dumps go to a folder of their own rather than /tmp, which is a 32 MB tmpfs from v1.6.53 that a
+// 10 s native dump on the Dot 5 (23 MB) all but fills, and which anyone on the device can list. The
+// folder is root's alone (0700) and each file is created 0600 and exclusively, so nobody else on the
+// device (the add-ons) can read a recording. The folder is on flash where the dump fits there
+// (dumpSpots), and otherwise in memory under /run: the Dot 5's /data has only a few MB free. A dump
+// is cut to the room its folder has (in memory, to what the kernel says is available as well), less
+// a reserve, and a .part left by a dump the daemon did not finish is removed when the next one
+// starts. The files stay until someone deletes them, or on /run until the next boot.
 const (
 	rawNativeTrigger = "/run/techo5/rawnative"
 	rawDumpTrigger   = "/run/techo5/rawdump"
@@ -44,43 +47,108 @@ const (
 	// rawNativeMax: 2.3 MB a second at 96 kHz, six slots of four bytes.
 	rawNativeMax = 60
 
-	// dumpReserve is what a dump leaves free on its file system, for the state and the log.
-	dumpReserve = 64 << 20
+	// flashReserve is what a dump leaves free on flash, for the state and the log; ramReserve what it
+	// leaves of the memory available, for the daemon and the rest.
+	flashReserve = 16 << 20
+	ramReserve   = 64 << 20
 )
 
-// rawDumpDir is a variable for the tests.
-var rawDumpDir = "/data/techo5-linux/micdump"
+// dumpSpot is a folder a dump may go to; ram is a tmpfs, whose room is memory.
+type dumpSpot struct {
+	dir string
+	ram bool
+}
 
-// prepareDumpDir makes rawDumpDir root's alone, refusing one that is a link or someone else's,
-// clears what an unfinished dump left, and says how many bytes a dump may write there.
-func prepareDumpDir() (int64, error) {
-	if err := os.Mkdir(rawDumpDir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+// dumpSpots are tried in order, the first that fits the whole dump taken. A variable for the tests.
+var dumpSpots = []dumpSpot{
+	{dir: "/data/techo5-linux/micdump"},
+	{dir: "/run/techo5/micdump", ram: true},
+}
+
+// memAvailable is MemAvailable from /proc/meminfo, in bytes; a variable for the tests.
+var memAvailable = func() (int64, error) {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
 		return 0, err
 	}
-	fi, err := os.Lstat(rawDumpDir)
+	for _, line := range strings.Split(string(b), "\n") {
+		if rest, ok := strings.CutPrefix(line, "MemAvailable:"); ok {
+			kb, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimSpace(rest), " kB"), 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return kb << 10, nil
+		}
+	}
+	return 0, errors.New("no MemAvailable in /proc/meminfo")
+}
+
+// prepareDumpDir picks the folder for a dump of want bytes: the first of dumpSpots with room for
+// all of it, or else the one with the most. It says how many bytes the dump may write there.
+func prepareDumpDir(want int64) (string, int64, error) {
+	var (
+		best     string
+		bestRoom int64 = -1
+		errs     []error
+	)
+	for _, s := range dumpSpots {
+		room, err := prepareSpot(s)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if room >= want {
+			return s.dir, room, nil
+		}
+		if room > bestRoom {
+			best, bestRoom = s.dir, room
+		}
+	}
+	if bestRoom < 0 {
+		return "", 0, errors.Join(errs...)
+	}
+	return best, bestRoom, nil
+}
+
+// prepareSpot makes s's folder root's alone, refusing one that is a link or someone else's, clears
+// what an unfinished dump left, and says how many bytes a dump may write there.
+func prepareSpot(s dumpSpot) (int64, error) {
+	dir := s.dir
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return 0, err
+	}
+	fi, err := os.Lstat(dir)
 	if err != nil {
 		return 0, err
 	}
 	if !fi.IsDir() {
-		return 0, fmt.Errorf("%s is not a folder", rawDumpDir)
+		return 0, fmt.Errorf("%s is not a folder", dir)
 	}
 	if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Geteuid() {
-		return 0, fmt.Errorf("%s belongs to uid %d", rawDumpDir, st.Uid)
+		return 0, fmt.Errorf("%s belongs to uid %d", dir, st.Uid)
 	}
 	if fi.Mode().Perm() != 0o700 {
-		if err := os.Chmod(rawDumpDir, 0o700); err != nil {
+		if err := os.Chmod(dir, 0o700); err != nil {
 			return 0, err
 		}
 	}
-	parts, _ := filepath.Glob(filepath.Join(rawDumpDir, "*.part"))
+	parts, _ := filepath.Glob(filepath.Join(dir, "*.part"))
 	for _, p := range parts {
 		_ = os.Remove(p)
 	}
 	var fs syscall.Statfs_t
-	if err := syscall.Statfs(rawDumpDir, &fs); err != nil {
+	if err := syscall.Statfs(dir, &fs); err != nil {
 		return 0, err
 	}
-	return dumpRoom(int64(fs.Bavail)*int64(fs.Bsize), dumpReserve), nil
+	avail := int64(fs.Bavail) * int64(fs.Bsize)
+	if !s.ram {
+		return dumpRoom(avail, flashReserve), nil
+	}
+	mem, err := memAvailable()
+	if err != nil {
+		return 0, err
+	}
+	return dumpRoom(min(avail, mem), ramReserve), nil
 }
 
 // dumpRoom is what a dump may write where avail bytes are free and reserve must stay so.
@@ -115,11 +183,6 @@ func finishDump(out *os.File, path string) {
 // channel, since a write to flash must not hold the capture up; a block the writer is too slow for is
 // counted and dropped, which the log says.
 func nativeDump(secs int) {
-	room, err := prepareDumpDir()
-	if err != nil {
-		slog.Error("native dump", "err", err)
-		return
-	}
 	type block struct {
 		pcm                   []byte
 		rate, channels, width int
@@ -160,11 +223,18 @@ loop:
 					failed = true
 					break loop
 				}
-				path = rawDumpDir + "/rawnative-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" +
+				frame := b.channels * b.width
+				dir, room, err := prepareDumpDir(int64(secs) * int64(b.rate) * int64(frame))
+				if err != nil {
+					slog.Error("native dump", "err", err)
+					failed = true
+					break loop
+				}
+				path = dir + "/rawnative-" + strconv.FormatInt(time.Now().Unix(), 10) + "-" +
 					strconv.Itoa(b.rate) + "-" + strconv.Itoa(b.channels) + ".s" + strconv.Itoa(b.width*8)
-				want = dumpLength(secs, b.rate, b.channels*b.width, room)
+				want = dumpLength(secs, b.rate, frame, room)
 				if want == 0 {
-					slog.Error("native dump: no room", "dir", rawDumpDir, "free", room)
+					slog.Error("native dump: no room", "dir", dir, "free", room)
 					failed = true
 					break loop
 				}
@@ -235,17 +305,18 @@ func watchTrigger(busy *atomic.Bool, trigger string, def, most int, name string,
 }
 
 func (s *Source) rawDump(secs int) {
-	room, err := prepareDumpDir()
+	frame := Channels * Bits / 8
+	dir, room, err := prepareDumpDir(int64(secs) * int64(Rate) * int64(frame))
 	if err != nil {
 		slog.Error("raw dump", "err", err)
 		return
 	}
-	want := dumpLength(secs, Rate, Channels*Bits/8, room)
+	want := dumpLength(secs, Rate, frame, room)
 	if want == 0 {
-		slog.Error("raw dump: no room", "dir", rawDumpDir, "free", room)
+		slog.Error("raw dump: no room", "dir", dir, "free", room)
 		return
 	}
-	path := rawDumpDir + "/rawdump-" + strconv.FormatInt(time.Now().Unix(), 10) + ".s" + strconv.Itoa(Bits)
+	path := dir + "/rawdump-" + strconv.FormatInt(time.Now().Unix(), 10) + ".s" + strconv.Itoa(Bits)
 	f, err := createDump(path)
 	if err != nil {
 		slog.Error("raw dump", "err", err)

@@ -21,22 +21,32 @@ func TestDumpLengthFitsTheRoom(t *testing.T) {
 	}
 }
 
+// useSpots points the dumps at folders under a temporary directory for the test.
+func useSpots(t *testing.T, spots ...dumpSpot) {
+	old, oldMem := dumpSpots, memAvailable
+	t.Cleanup(func() { dumpSpots, memAvailable = old, oldMem })
+	dumpSpots = spots
+}
+
 func TestDumpFolderIsPrivate(t *testing.T) {
-	old := rawDumpDir
-	t.Cleanup(func() { rawDumpDir = old })
-	rawDumpDir = filepath.Join(t.TempDir(), "micdump")
-	if err := os.Mkdir(rawDumpDir, 0o755); err != nil {
+	dir := filepath.Join(t.TempDir(), "micdump")
+	useSpots(t, dumpSpot{dir: dir})
+	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stale := filepath.Join(rawDumpDir, "rawdump-1.s24.part")
+	stale := filepath.Join(dir, "rawdump-1.s24.part")
 	if err := os.WriteFile(stale, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := prepareDumpDir(); err != nil {
+	got, _, err := prepareDumpDir(0)
+	if err != nil {
 		t.Fatal(err)
 	}
-	fi, err := os.Stat(rawDumpDir)
+	if got != dir {
+		t.Fatalf("folder %s, want %s", got, dir)
+	}
+	fi, err := os.Stat(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +57,7 @@ func TestDumpFolderIsPrivate(t *testing.T) {
 		t.Errorf("stale .part still there: %v", err)
 	}
 
-	path := filepath.Join(rawDumpDir, "rawdump-2.s24")
+	path := filepath.Join(dir, "rawdump-2.s24")
 	f, err := createDump(path)
 	if err != nil {
 		t.Fatal(err)
@@ -69,14 +79,46 @@ func TestDumpFolderIsPrivate(t *testing.T) {
 }
 
 func TestDumpFolderRefusesALink(t *testing.T) {
-	old := rawDumpDir
-	t.Cleanup(func() { rawDumpDir = old })
-	dir := t.TempDir()
-	rawDumpDir = filepath.Join(dir, "micdump")
-	if err := os.Symlink(t.TempDir(), rawDumpDir); err != nil {
+	dir := filepath.Join(t.TempDir(), "micdump")
+	if err := os.Symlink(t.TempDir(), dir); err != nil {
 		t.Skip(err)
 	}
-	if _, err := prepareDumpDir(); err == nil {
+	useSpots(t, dumpSpot{dir: dir})
+	if _, _, err := prepareDumpDir(0); err == nil {
 		t.Error("prepareDumpDir took a link")
+	}
+}
+
+// Flash too full for the dump (the Dot 5's /data): it goes to the folder in memory, cut to the
+// memory available less the reserve.
+func TestDumpFallsBackToMemory(t *testing.T) {
+	base := t.TempDir()
+	flash, ram := filepath.Join(base, "flash"), filepath.Join(base, "ram")
+	useSpots(t, dumpSpot{dir: flash}, dumpSpot{dir: ram, ram: true})
+	memAvailable = func() (int64, error) { return ramReserve + 1000, nil }
+
+	// More than any test machine has free on its disk.
+	dir, room, err := prepareDumpDir(1 << 60)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != flash {
+		// The disk always has more room than the 1000 bytes the memory leaves.
+		t.Errorf("folder %s, want the one with the most room, %s", dir, flash)
+	}
+	dir, room, err = prepareDumpDir(1)
+	if err != nil || dir != flash || room <= 0 {
+		t.Errorf("a small dump: %s %d %v, want flash", dir, room, err)
+	}
+
+	// Flash unusable: memory, cut to the reserve.
+	useSpots(t, dumpSpot{dir: filepath.Join(base, "missing", "flash")}, dumpSpot{dir: ram, ram: true})
+	memAvailable = func() (int64, error) { return ramReserve + 1000, nil }
+	dir, room, err = prepareDumpDir(5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != ram || room != 1000 {
+		t.Errorf("folder %s with %d bytes, want %s with 1000", dir, room, ram)
 	}
 }
