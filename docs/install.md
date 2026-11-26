@@ -352,10 +352,12 @@ Spot, turn the dial to Radio. The device lists stations near home and popular on
 come from, and what plays a station, depends on the Home Assistant token:
 
 - **With the token**, the lists come from the Radio Browser integration Home Assistant sets up by
-  itself (if it is missing, add it under Devices & services), and a station plays through Home
-  Assistant: the device asks for it with `media_player.play_media` on its own player, and Home
-  Assistant fetches the stream and converts it for the device. "Near home" is worked out from the
-  location set in Home Assistant, so set that if the list looks like somebody else's country.
+  itself, and a station plays through Home Assistant: the device asks for it with
+  `media_player.play_media` on its own player, and Home Assistant fetches the stream and converts it
+  for the device. "Near home" is worked out from the location set in Home Assistant, so set that if
+  the list looks like somebody else's country. The integration is optional: if it is not set up, the
+  device asks radio-browser.info itself, as below, for stations near the place set on its setup
+  page, or near Home Assistant's location when no place is set there.
 - **Without it**, the device asks radio-browser.info itself, for stations near the place set on its
   setup page, and plays the stream itself, with no Home Assistant in the path. Only MP3 stations are
   listed then, the kind the device plays on its own, unless the device's Music Assistant connection

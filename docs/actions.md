@@ -2774,8 +2774,9 @@ Sample scripts, for stream addresses, Radio Browser and TuneIn stations, are und
 >   Assistant actions** turned on in the device's ESPHome entry (Configure). Without it, picking a
 >   favorite does nothing, and nothing on the device says why.
 > - The Radio Browser stations near your home, shown alongside your favorites, come through
->   `home_assistant`. Without it, the device asks radio-browser.info itself, for stations near the
->   place set on its setup page, and plays them itself.
+>   `home_assistant` and its Radio Browser integration. Without either, the device asks
+>   radio-browser.info itself, for stations near the place set on its setup page (or Home
+>   Assistant's location), and plays them itself.
 > - Call this once. The device keeps the wiring, and follows the entities from then on; call it again
 >   only to change something. Every argument goes in the call, as `""` for the ones you leave out.
 > - The device only reads `now`. Your play script, or an automation, has to set it to the station's
