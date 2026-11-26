@@ -88,13 +88,21 @@ func startWaitFor(service string) time.Duration {
 }
 
 // watchStart is a station just asked of Home Assistant through service: if nothing has come of it by the
-// time it has had (wait, startWaitFor), it is said so (noStart).
-func (f *Feature) watchStart(service, station string, wait time.Duration, at time.Time) {
-	f.mu.Lock()
-	f.startSeq++
-	seq := f.startSeq
-	f.mu.Unlock()
+// time it has had (wait, startWaitFor), it is said so (noStart). seq is the station's place among those
+// asked for (askSeq), taken when it was asked for rather than here.
+func (f *Feature) watchStart(service, station string, seq uint64, wait time.Duration, at time.Time) {
 	time.AfterFunc(wait, func() { f.noStart(service, station, seq, at, wait) })
+}
+
+// askSeq is the next station's place among those asked for, the one a watch's note is for. Under f.mu.
+//
+// It is taken as the station is checked as still chosen, before the call goes out, and not once the call
+// has gone: two quick taps are two goroutines, and the first can come back from its call after the second
+// has taken its place, which would leave the second's watch counting as one asked for since and the note
+// for the station still starting would never go up.
+func (f *Feature) askSeq() uint64 {
+	f.startSeq++
+	return f.startSeq
 }
 
 // externalPlaying is whether something this device did not start is playing on it: Music Assistant's

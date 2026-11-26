@@ -33,11 +33,22 @@ const (
 	photo3 = "aaaaaaaa-0000-0000-0000-000000000003"
 )
 
+// loopbackLet is whether the loopback is let through netguard, for the test running now (letLoopback).
+var loopbackLet atomic.Bool
+
+// netguard's rule is wrapped once, before any test, and never written again. Swapping it per test raced:
+// immichClient is the package's, and its transport can leave a dial running after Do has returned (a
+// connection let go of by an earlier request won the race), whose check reads the rule while the test's
+// cleanup was writing it back. Now that dial reads an atomic switch.
+func init() {
+	was := netguard.Refused
+	netguard.Refused = func(ip net.IP) bool { return !(loopbackLet.Load() && ip.IsLoopback()) && was(ip) }
+}
+
 // letLoopback lets the fake, on the loopback, through netguard for the length of a test.
 func letLoopback(t *testing.T) {
-	was := netguard.Refused
-	netguard.Refused = func(ip net.IP) bool { return !ip.IsLoopback() && was(ip) }
-	t.Cleanup(func() { netguard.Refused = was })
+	loopbackLet.Store(true)
+	t.Cleanup(func() { loopbackLet.Store(false) })
 }
 
 // fakeImmich is an Immich that answers as v3 does: albums, two pages of search, a preview.

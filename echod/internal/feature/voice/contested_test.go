@@ -13,13 +13,13 @@ type contest struct {
 	slot    int
 	at      time.Time
 	clarity float64
-	decide  chan func(bool)
+	decide  chan func(bool, bool)
 }
 
 func withContest(t *testing.T) *contest {
 	t.Helper()
-	ct := &contest{decide: make(chan func(bool), 1)}
-	SetConfirmedContest(func(slot int, at time.Time, clarity, _ float64, settled func(bool), decide func(bool)) {
+	ct := &contest{decide: make(chan func(bool, bool), 1)}
+	SetConfirmedContest(func(slot int, at time.Time, clarity, _ float64, settled func(bool), decide func(bool, bool)) {
 		ct.slot, ct.at, ct.clarity = slot, at, clarity
 		ct.decide <- decide
 	})
@@ -30,9 +30,15 @@ func withContest(t *testing.T) *contest {
 // decision waits for the claim, decides it, and hands the conversation what it posted.
 func (w *watcher) decision(ct *contest, answer bool) {
 	w.t.Helper()
+	w.decisionClaimed(ct, answer, true)
+}
+
+// decisionClaimed is decision saying whether the answer came of a claim.
+func (w *watcher) decisionClaimed(ct *contest, answer, claimed bool) {
+	w.t.Helper()
 	select {
 	case decide := <-ct.decide:
-		decide(answer)
+		decide(answer, claimed)
 	case <-time.After(2 * time.Second):
 		w.t.Fatal("the confirmed wake was never claimed")
 	}
@@ -148,7 +154,7 @@ func TestAFaintWakeIsNotClaimedAgain(t *testing.T) {
 	if err := config.Set().OnHA().ConfirmBelowScore(8); err != nil {
 		t.Fatal(err)
 	}
-	if !w.confirmFaint(0, w.at) {
+	if !w.confirmFaint(0, w.at, wakeClarity{}) {
 		t.Fatal("the faint wake was not asked about")
 	}
 	w.handle(event{kind: evWakeEnd})

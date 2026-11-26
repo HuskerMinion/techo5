@@ -62,6 +62,10 @@ type scene struct {
 	playing bool
 	paused  bool
 	muted   bool
+	// unlitMute is a mute on that no mute light shows: the software mute on the 2nd gen Show 8 on
+	// TECHO5's mainline kernel, whose red light is the button's latch alone (mute.UnlitMute). Show
+	// Microphone off never takes the pill away for it (micOffSaid).
+	unlitMute bool
 	// linkDown is what the device has lost, for the header to say: its Wi-Fi or Home Assistant
 	// (link_status.go). Empty while it has both.
 	linkDown string

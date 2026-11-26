@@ -94,15 +94,44 @@ type Block struct {
 	Rows    []Tile // an entities card: one thing a line
 	Title   string
 	Text    []string // paragraphs
-	Graph   *Graph
-	Gauge   *Gauge
-	Picture *Picture
+	// Marked is a markdown card's text with what structure it had kept: its headings, bullets, bold
+	// words and the gaps where blank lines were (#757). Text has the same words as plain paragraphs,
+	// for a card that fills the screen alone, whose words are drawn as large as they go.
+	Marked []TextLine
+	Graph  *Graph
+	Gauge  *Gauge
+	// Forecast is a weather forecast card: the weather now and the days to come (#758).
+	Forecast *Forecast
+	Picture  *Picture
 	// Pictures is a gallery: a grid of nothing but pictures, laid out abreast as Columns asks, each
 	// picture a tap of its own.
 	Pictures []Picture
 	Columns  int
 	// Color is a heading's or markdown card's color, used when it is alone on the page. Zero for none.
 	Color color.RGBA
+}
+
+// TextLine is one line of a markdown card: a heading, a bullet, a paragraph, or a gap where a blank
+// line was.
+type TextLine struct {
+	Kind  string // heading, bullet, para, gap
+	Level int    // a heading's: 1 for #, to 6
+	Runs  []TextRun
+}
+
+// TextRun is words of a line in one weight.
+type TextRun struct {
+	Text string
+	Bold bool
+}
+
+// Plain is the line's words without their weights.
+func (t TextLine) Plain() string {
+	var b strings.Builder
+	for _, r := range t.Runs {
+		b.WriteString(r.Text)
+	}
+	return b.String()
 }
 
 // Section is blocks that stay together, one column wide: a room, a section of a sections view, a card
@@ -115,6 +144,52 @@ type Section struct {
 type Graph struct {
 	Name, Icon, Value string
 	Points            []float64 // oldest first; NaN where there is nothing yet
+}
+
+// Forecast is a weather forecast card as Home Assistant draws it: the weather now, as a tile has it,
+// over the coming days (or hours), each with its name, its weather and its high and low.
+type Forecast struct {
+	Current         bool // the weather now is drawn (show_current)
+	Name, Icon      string
+	Condition, Temp string // "Partly cloudy", "22°"
+	Gone            bool   // the entity is unavailable
+	Tap             *Action
+	Days            []hass.Day // none until the forecast has come, or when the card shows none
+	Hourly          bool       // Days are hours, named by the hour rather than the day
+	Max             int        // at most this many (forecast_slots); a narrow card fits fewer
+}
+
+// WeatherIcon is a weather condition's icon, for a forecast's day and a weather tile.
+func WeatherIcon(cond string) string {
+	switch cond {
+	case "sunny":
+		return "weather-sunny"
+	case "clear-night":
+		return "weather-night"
+	case "cloudy":
+		return "weather-cloudy"
+	case "rainy":
+		return "weather-rainy"
+	case "pouring":
+		return "weather-pouring"
+	case "snowy":
+		return "weather-snowy"
+	case "snowy-rainy":
+		return "weather-snowy-rainy"
+	case "fog":
+		return "weather-fog"
+	case "hail":
+		return "weather-hail"
+	case "lightning":
+		return "weather-lightning"
+	case "lightning-rainy":
+		return "weather-lightning-rainy"
+	case "windy", "windy-variant":
+		return "weather-windy"
+	case "exceptional":
+		return "alert-circle-outline"
+	}
+	return "weather-partly-cloudy"
 }
 
 // Gauge is a reading on an arc between its ends.
@@ -175,7 +250,18 @@ type needs struct {
 	templates []template
 	graphs    map[string]int
 	pictures  []wanted
+	// precision is each entity's display precision, when the source has read the registry's display
+	// listing already (the Rooms dashboard does, for its areas); otherwise the session reads it.
+	// listing is that listing, which the entities' integrations and translation keys come from (haLook).
+	precision map[string]int
+	listing   []hass.Registered
+	forecasts []forecastWant
 }
+
+// forecastWant is a weather entity's forecast of a kind (daily, hourly, twice_daily) a card shows.
+type forecastWant struct{ entity, kind string }
+
+func (w forecastWant) key() string { return w.entity + "|" + w.kind }
 
 // look is everything a source draws from.
 type look struct {
@@ -183,7 +269,14 @@ type look struct {
 	rendered map[int]string
 	history  map[string][]point
 	pictures map[string]shot
-	width    int // the screen's, for a card shown only on a wide or a narrow one
+	// precision is how many decimals each entity's number is shown with, as Home Assistant's
+	// registry has it; an entity missing from it has none set (describe).
+	precision map[string]int
+	width     int // the screen's, for a card shown only on a wide or a narrow one
+	// ha is Home Assistant's own icons and state words for the entities on the page; nil for none.
+	ha *haLook
+	// forecasts are the weather forecasts the page's cards show, by forecastWant.key.
+	forecasts map[string][]hass.Day
 	// room is the heading the cards are under in their section, often a room: an entity's own name
 	// is shown without it in front, as on the Rooms dashboard (withoutRoom).
 	room string
@@ -217,10 +310,15 @@ type session struct {
 	history  map[string][]point
 	graphs   map[string]int // entity to hours shown, for trimming its history
 	pictures map[string]shot
-	width    int
-	reload   bool // the connection was closed to read the dashboard again, not because it failed
-	view     Drawn
-	gen      int // f.recent's when the session began (recent.put)
+	// precision is each entity's display precision, read when the dashboard loads and again when
+	// the entity registry changes (followPrecision); it is replaced whole, never changed in place.
+	precision map[string]int
+	ha        *haLook // replaced whole, as precision is
+	forecasts map[string][]hass.Day
+	width     int
+	reload    bool // the connection was closed to read the dashboard again, not because it failed
+	view      Drawn
+	gen       int // f.recent's when the session began (recent.put)
 
 	// hold is the page that was up when a tap went to this view, shown instead of this one until it
 	// is ready (ready) or until holdUntil, whichever is first: a view and its picture take a fraction
@@ -233,6 +331,9 @@ type session struct {
 	// soon is a rebuild waiting to happen: a house changes a lot of entities at once, and the page
 	// is rebuilt a few times a second at most, not once for each of them.
 	soon *time.Timer
+	// redraws says the page was rebuilt, to keepPictures: an image its server said not to keep is
+	// fetched again on the next one. Set when the session is made, nil in a test's session by hand.
+	redraws chan struct{}
 }
 
 // publishEvery is how often the page is rebuilt at most while entities change.
@@ -300,7 +401,8 @@ func (f *Feature) Drawn(width int) Drawn {
 			src = newLovelace(path)
 		}
 		s = &session{f: f, src: src, width: width, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
-			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]shot{}, gen: f.recent.generation()}
+			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]shot{}, forecasts: map[string][]hass.Day{},
+			gen: f.recent.generation(), redraws: make(chan struct{}, 1)}
 		if held != nil {
 			s.hold, s.holdUntil = held, time.Now().Add(holdFor)
 			// Nothing else may say there is something new by then: a dashboard that never loads.
@@ -670,6 +772,21 @@ func (s *session) once() error {
 		longest = max(longest, h)
 	}
 	history := loadHistory(lctx, live, graphed, longest)
+	precision, listing := need.precision, need.listing
+	if err == nil && precision == nil {
+		// Without it a number is shown as trimNumber has it, which is how it was before the registry
+		// was read for this: worth a log line, not a dashboard that will not load.
+		if listing, err = live.DisplayListing(lctx); err != nil {
+			slog.Info("drawn dashboard: no display precision from Home Assistant", "err", err)
+			listing, err = nil, nil
+		} else {
+			precision = hass.Precisions(listing)
+		}
+	}
+	var ha *haLook
+	if err == nil {
+		ha = loadHALook(lctx, live, need.entities, listing)
+	}
 	lcancel()
 	if err != nil {
 		// A sentence written for the screen as it is; anything else is the log's, an error being able
@@ -685,13 +802,13 @@ func (s *session) once() error {
 	}
 	s.mu.Lock()
 	s.view.Problem, s.view.Connect, s.view.Theme = "", false, theme
-	s.history, s.graphs = history, need.graphs
+	s.history, s.graphs, s.precision, s.ha = history, need.graphs, precision, ha
 	s.seed(need.pictures)
 	s.mu.Unlock()
 	s.publish()
 
 	safe.Go("dashboard pictures", func() {
-		keepPictures(ctx, need.pictures, s.got)
+		keepPictures(ctx, need.pictures, s.redraws, s.got)
 	})
 
 	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
@@ -730,6 +847,9 @@ func (s *session) once() error {
 			slog.Info("drawn dashboard: a template would not render", "err", err)
 		}
 	}
+	for _, w := range need.forecasts {
+		s.followForecast(fctx, ctx, live, w)
+	}
 	// A dashboard saved in Home Assistant's editor is read again: the connection is closed, and run
 	// opens a new one, which loads it as it now is.
 	if l, ok := s.src.(*lovelaceSource); ok {
@@ -750,16 +870,111 @@ func (s *session) once() error {
 			slog.Info("drawn dashboard: can't hear dashboard edits", "err", err)
 		}
 	}
+	s.followPrecision(fctx, ctx, live)
 	slog.Info("drawn dashboard following", "entities", len(ids), "templates", len(need.templates),
-		"graphs", len(need.graphs), "pictures", len(need.pictures), "theme", theme.Set)
+		"graphs", len(need.graphs), "forecasts", len(need.forecasts), "pictures", len(need.pictures), "theme", theme.Set)
 	<-live.Done()
 	return live.Err()
+}
+
+// forecastEvery is how often a forecast is read again where Home Assistant will not let it be
+// followed, as the clock's own forecast is (home.forecastEvery).
+const forecastEvery = 30 * time.Minute
+
+// followForecast keeps a forecast card's forecast current: followed as the integration updates it, or
+// on a Home Assistant without the subscription, read now and every forecastEvery while the connection
+// lasts. subscribing bounds the subscription's answer; conn is the connection's.
+func (s *session) followForecast(subscribing, conn context.Context, live *hass.Live, w forecastWant) {
+	set := func(days []hass.Day) {
+		s.mu.Lock()
+		s.forecasts[w.key()] = days
+		s.mu.Unlock()
+		s.publishSoon()
+	}
+	err := live.SubscribeForecast(subscribing, w.entity, w.kind, set)
+	if err == nil {
+		return
+	}
+	slog.Info("drawn dashboard: can't follow a forecast, reading it every half hour", "entity", w.entity, "err", err)
+	safe.Go("dashboard forecast", func() {
+		for {
+			rctx, cancel := context.WithTimeout(conn, 30*time.Second)
+			days, err := forecastRead(live, rctx, w.entity, w.kind)
+			cancel()
+			if err == nil {
+				set(days)
+			} else if conn.Err() == nil {
+				slog.Info("drawn dashboard: no forecast", "entity", w.entity, "err", err)
+			}
+			select {
+			case <-conn.Done():
+				return
+			case <-live.Done():
+				return
+			case <-time.After(forecastEvery):
+			}
+		}
+	})
+}
+
+// forecastRead reads a forecast once; a variable so that a test can stand in for Home Assistant.
+var forecastRead = func(live *hass.Live, ctx context.Context, entity, kind string) ([]hass.Day, error) {
+	return live.GetForecast(ctx, entity, kind)
+}
+
+// precisionSettle is how long the registry is left after a change before its display listing is read
+// again: one edit in Home Assistant, or an integration setting up, changes many entries at once.
+const precisionSettle = 2 * time.Second
+
+// followPrecision reads the display precisions again when the entity registry changes, so a precision
+// set in Home Assistant shows without the dashboard being opened again. subscribing bounds the
+// subscription's answer; conn is the connection's, which the readings after it go by.
+func (s *session) followPrecision(subscribing, conn context.Context, live *hass.Live) {
+	var mu sync.Mutex
+	var again *time.Timer
+	err := live.SubscribeEvents(subscribing, "entity_registry_updated", func(data map[string]any) {
+		// A rename or a move cannot change a precision; it is kept in the entry's options.
+		if action, _ := data["action"].(string); action == "update" {
+			if changes, _ := data["changes"].(map[string]any); changes != nil {
+				if _, ok := changes["options"]; !ok {
+					return
+				}
+			}
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if again != nil {
+			again.Reset(precisionSettle)
+			return
+		}
+		// On the connection's reader: the listing is read off it, which a call made here would wait on.
+		again = time.AfterFunc(precisionSettle, func() {
+			mu.Lock()
+			again = nil
+			mu.Unlock()
+			rctx, cancel := context.WithTimeout(conn, 30*time.Second)
+			defer cancel()
+			list, err := live.DisplayListing(rctx)
+			if err != nil {
+				return // the old ones stand, and a connection that ended is opened again anyway
+			}
+			s.mu.Lock()
+			// A translation key or an icon set in the entity's settings is in the same listing.
+			s.precision, s.ha = hass.Precisions(list), s.ha.withListing(list)
+			s.mu.Unlock()
+			s.publishSoon()
+		})
+	})
+	if err != nil {
+		slog.Info("drawn dashboard: can't hear registry changes", "err", err)
+	}
 }
 
 // publish rebuilds the page from what has arrived, and says there is something new to draw.
 func (s *session) publish() {
 	s.mu.Lock()
-	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures, width: s.width})
+	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures,
+		precision: s.precision, width: s.width, ha: s.ha, forecasts: s.forecasts})
 	for i := range sections {
 		for j := range sections[i].Blocks {
 			b := &sections[i].Blocks[j]
@@ -777,6 +992,11 @@ func (s *session) publish() {
 		s.hold = nil
 	}
 	s.mu.Unlock()
+	// Without waiting: one redraw said is as good as several, and the pictures may be mid-fetch.
+	select {
+	case s.redraws <- struct{}{}:
+	default:
+	}
 	s.f.Changed.Emit(struct{}{})
 }
 

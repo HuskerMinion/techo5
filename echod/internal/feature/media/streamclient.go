@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
@@ -70,6 +71,38 @@ func inHome(host string) bool {
 		}
 	}
 	return false
+}
+
+// guardedClient is streamClient for an address a program on the device chose, an add-on's: no proxy,
+// and a dialer that refuses, as it connects, the device itself, loopback and link-local (netguard),
+// whatever the name resolved to and wherever a redirect led. An add-on reaching services on the
+// device's loopback through its speaker would be the device fetching for it what it may not fetch
+// itself. The rest of the home network stays reachable: that is where its media servers are.
+var guardedClient = &http.Client{
+	Transport: useragent.Transport(&http.Transport{
+		DialContext:           guardedDial,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		MaxIdleConns:          2,
+		IdleConnTimeout:       30 * time.Second,
+	}),
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("too many redirects")
+		}
+		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+			return errors.New("a redirect to an address that is not http or https")
+		}
+		return nil
+	},
+}
+
+func guardedDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	c, err := netguard.Dialer(15*time.Second).DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return &icyConn{Conn: c}, nil
 }
 
 func icyDial(ctx context.Context, network, addr string) (net.Conn, error) {

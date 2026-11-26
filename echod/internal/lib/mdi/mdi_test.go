@@ -34,3 +34,12 @@ func TestNameIsRuneBackwards(t *testing.T) {
 		t.Error("a letter was named as an icon")
 	}
 }
+
+// An icon named by the set's old name, as Home Assistant still writes some, is the same icon (#760).
+func TestHassPrefixIsTheSameSet(t *testing.T) {
+	a, ok := Rune("hass:flash")
+	b, _ := Rune("mdi:flash")
+	if !ok || a != b {
+		t.Fatalf("hass:flash = %U, %v; mdi:flash = %U", a, ok, b)
+	}
+}

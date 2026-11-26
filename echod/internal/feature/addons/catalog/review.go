@@ -24,13 +24,20 @@ func Shown(a Addon, v Version) string {
 			files[arch] = append(files[arch], FilePin{Name: f.Name, SHA256: f.SHA256})
 		}
 	}
+	// What it uses of the add-on API, likewise left out when it uses none, so a listing from before the
+	// API is shown as it was.
 	b, _ := json.Marshal(struct {
 		ID, Name, Author, Version string
 		Ports                     []Port
 		Root                      bool
 		MemoryMB, DiskMB          int
 		Files                     map[string][]FilePin `json:",omitempty"`
-	}{a.ID, a.Name, a.Author, v.Version, v.Ports, v.Root, v.MemoryMB, v.DiskMB, files})
+		API                       int                  `json:",omitempty"`
+		Capabilities              []string             `json:",omitempty"`
+		Commands                  []string             `json:",omitempty"`
+		Entities                  []string             `json:",omitempty"`
+	}{a.ID, a.Name, a.Author, v.Version, v.Ports, v.Root, v.MemoryMB, v.DiskMB, files, v.API, v.Capabilities,
+		v.Commands, v.Entities})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:16])
 }

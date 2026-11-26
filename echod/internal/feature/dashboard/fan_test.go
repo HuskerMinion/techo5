@@ -44,7 +44,7 @@ func TestAFanIsReadForItsSheet(t *testing.T) {
 			n.Percentage != c.pct || n.Step != c.step || n.On != (c.state == "on") {
 			t.Errorf("%s: %+v", c.name, n)
 		}
-		tile := describe(hass.LiveEntity{ID: "fan.bedroom", State: c.state, Attrs: attrs}, "Fan")
+		tile := describe(hass.LiveEntity{ID: "fan.bedroom", State: c.state, Attrs: attrs}, "Fan", nil)
 		if (tile.Adjust != nil) != c.speed {
 			t.Errorf("%s: level %+v, want one: %v", c.name, tile.Adjust, c.speed)
 		}
@@ -126,6 +126,30 @@ func TestASlideAlongAFanSetsItsSpeed(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("no fan.set_percentage to %d in %v %v", pct, services, got)
+		}
+	}
+}
+
+// A running fan's tile says its speed, worded like a light's brightness (#761); one that is off, or
+// that has no speeds, says only on or off.
+func TestAFanTileSaysItsSpeed(t *testing.T) {
+	for _, c := range []struct {
+		state    string
+		features float64
+		attrs    map[string]any
+		want     string
+	}{
+		{"on", 1, map[string]any{"percentage": 20.0}, "On · 20%"},
+		{"on", 1, map[string]any{"percentage": 33.333}, "On · 33%"},
+		{"off", 1, map[string]any{"percentage": 0.0}, "Off"},
+		{"off", 1, map[string]any{"percentage": 20.0}, "Off"},
+		{"on", 16 | 32, map[string]any{"percentage": 50.0}, "On"}, // no set-speed bit
+		{"on", 1, map[string]any{}, "On"},                         // a speed it does not say
+	} {
+		e := hass.LiveEntity{ID: "fan.ceiling", State: c.state, Attrs: withFeatures(c.attrs, c.features)}
+		tile := describe(e, "Ceiling", nil)
+		if tile.Value != c.want || tile.Tap == nil || tile.Tap.Service != "fan.toggle" || tile.On != (c.state == "on") {
+			t.Errorf("%s %v %v: %+v, want %q", c.state, c.features, c.attrs, tile, c.want)
 		}
 	}
 }

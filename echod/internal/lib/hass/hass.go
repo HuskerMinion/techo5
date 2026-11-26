@@ -198,39 +198,58 @@ func (c *Client) do(method, path string, body any) ([]byte, error) {
 
 // doContext is do that gives up when ctx is done.
 func (c *Client) doContext(ctx context.Context, method, path string, body any) ([]byte, error) {
-	acc, err := c.token(ctx, false)
+	resp, out, err := c.request(ctx, method, path, body, nil)
 	if err != nil {
 		return nil, err
 	}
+	if err := statusError(method, path, resp); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// request is one request to Home Assistant with the token and hdr's headers, renewed and asked once
+// more if a sign-in's token is refused, with the reply as it came: what its status means is the
+// caller's (statusError), as a 304 is no failure to a fetch that asked whether a picture changed.
+func (c *Client) request(ctx context.Context, method, path string, body any, hdr http.Header) (*http.Response, []byte, error) {
+	acc, err := c.token(ctx, false)
+	if err != nil {
+		return nil, nil, err
+	}
 	if acc.URL == "" || acc.Token == "" {
-		return nil, errors.New("hass: no access configured")
+		return nil, nil, errors.New("hass: no access configured")
 	}
 	var payload []byte
 	if body != nil {
 		if payload, err = json.Marshal(body); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	resp, out, err := c.send(ctx, method, acc, path, payload)
+	resp, out, err := c.send(ctx, method, acc, path, payload, hdr)
 	if err == nil && resp.StatusCode == http.StatusUnauthorized && acc.Refresh != "" {
 		// A sign-in's token refused before its time (Home Assistant restarted with its clock off, say):
 		// renewed, and asked once more.
 		if acc, err = c.token(ctx, true); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		resp, out, err = c.send(ctx, method, acc, path, payload)
+		resp, out, err = c.send(ctx, method, acc, path, payload, hdr)
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	c.heard(acc.Token, resp.StatusCode != http.StatusUnauthorized)
+	return resp, out, nil
+}
+
+// statusError is what Home Assistant's reply to method on path means when it is not a success.
+func statusError(method, path string, resp *http.Response) error {
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
+		return fmt.Errorf("hass: %s %s: %w", method, path, ErrNotFound)
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
+		return fmt.Errorf("hass: %s %s: %s", method, path, resp.Status)
 	}
-	return out, nil
+	return nil
 }
 
 // heard notes whether Home Assistant took token on its last word. An answer about a token since
@@ -253,7 +272,7 @@ func (c *Client) Refused() bool {
 }
 
 // send is one request with acc's token, and the reply read whole.
-func (c *Client) send(ctx context.Context, method string, acc access, path string, payload []byte) (*http.Response, []byte, error) {
+func (c *Client) send(ctx context.Context, method string, acc access, path string, payload []byte, hdr http.Header) (*http.Response, []byte, error) {
 	var rd io.Reader
 	if payload != nil {
 		rd = bytes.NewReader(payload)
@@ -261,6 +280,9 @@ func (c *Client) send(ctx context.Context, method string, acc access, path strin
 	req, err := http.NewRequestWithContext(ctx, method, acc.URL+path, rd)
 	if err != nil {
 		return nil, nil, err
+	}
+	for k, v := range hdr {
+		req.Header[k] = v
 	}
 	req.Header.Set("Authorization", "Bearer "+acc.Token)
 	if payload != nil {
@@ -278,13 +300,28 @@ func (c *Client) send(ctx context.Context, method string, acc access, path strin
 // ErrNotFound is Home Assistant saying there is no such thing: for a state, an entity it does not have.
 var ErrNotFound = errors.New("404 Not Found")
 
-// Day is one day of a forecast.
+// Day is one day of a forecast, or one hour or half day of one that comes by the hour or twice a day.
 type Day struct {
 	When      time.Time
 	Condition string
 	High      float64
 	Low       float64
 	Rain      int // precipitation probability, percent, -1 when not given
+	// HasHigh and HasLow are whether the forecast gave them: an hour's has a temperature and no low.
+	HasHigh, HasLow bool
+	// Night is a twice-daily forecast's night (is_daytime false); a daily one has none.
+	Night bool
+}
+
+// forecastEntry is one entry of a forecast as Home Assistant sends it, from weather.get_forecasts or
+// weather/subscribe_forecast.
+type forecastEntry struct {
+	Datetime      string   `json:"datetime"`
+	Condition     string   `json:"condition"`
+	Temperature   *float64 `json:"temperature"`
+	Templow       *float64 `json:"templow"`
+	Precipitation *float64 `json:"precipitation_probability"`
+	IsDaytime     *bool    `json:"is_daytime"`
 }
 
 // Forecast is the daily forecast for a weather entity, as many days as it gives.
@@ -296,13 +333,7 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 	}
 	var resp struct {
 		ServiceResponse map[string]struct {
-			Forecast []struct {
-				Datetime      string   `json:"datetime"`
-				Condition     string   `json:"condition"`
-				Temperature   *float64 `json:"temperature"`
-				Templow       *float64 `json:"templow"`
-				Precipitation *float64 `json:"precipitation_probability"`
-			} `json:"forecast"`
+			Forecast []forecastEntry `json:"forecast"`
 		} `json:"service_response"`
 	}
 	if err := json.Unmarshal(out, &resp); err != nil {
@@ -312,30 +343,56 @@ func (c *Client) Forecast(entity string) ([]Day, error) {
 	if !ok {
 		return nil, fmt.Errorf("hass: no forecast for %s", entity)
 	}
-	days := make([]Day, 0, len(fc.Forecast))
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	for i, f := range fc.Forecast {
+	return forecastDays(fc.Forecast, 24*time.Hour), nil
+}
+
+// forecastDays is a forecast's entries as Days. step is how far apart entries are meant to be, for
+// one whose time can't be read: it is put where it comes in the list, from now.
+func forecastDays(list []forecastEntry, step time.Duration) []Day {
+	days := make([]Day, 0, len(list))
+	start := time.Now()
+	if step >= 24*time.Hour {
+		start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.Local)
+	} else {
+		start = start.Truncate(time.Hour)
+	}
+	for i, f := range list {
 		d := Day{Condition: f.Condition, Rain: -1}
 		if t, ok := forecastTime(f.Datetime); ok {
 			d.When = t
 		} else {
 			// A day whose date can't be read is the day it comes in the list, today first: left as the
 			// zero time, every such day read as a Monday.
-			d.When = today.AddDate(0, 0, i)
+			if step >= 24*time.Hour {
+				d.When = start.AddDate(0, 0, i)
+			} else {
+				d.When = start.Add(time.Duration(i) * step)
+			}
 		}
 		if f.Temperature != nil {
-			d.High = *f.Temperature
+			d.High, d.HasHigh = *f.Temperature, true
 		}
 		if f.Templow != nil {
-			d.Low = *f.Templow
+			d.Low, d.HasLow = *f.Templow, true
 		}
 		if f.Precipitation != nil {
 			d.Rain = int(*f.Precipitation)
 		}
+		d.Night = f.IsDaytime != nil && !*f.IsDaytime
 		days = append(days, d)
 	}
-	return days, nil
+	return days
+}
+
+// forecastStep is how far apart a forecast of a type's entries are.
+func forecastStep(kind string) time.Duration {
+	switch kind {
+	case "hourly":
+		return time.Hour
+	case "twice_daily":
+		return 12 * time.Hour
+	}
+	return 24 * time.Hour
 }
 
 // forecastLayouts are the forms a forecast's datetime comes in without a zone, as some integrations
@@ -395,15 +452,76 @@ func (c *Client) FetchURL(url string) ([]byte, error) {
 // errors; a caller that no longer wants the bytes (a picture that has been replaced) does not hold its
 // place for the client's whole timeout.
 func (c *Client) FetchURLContext(ctx context.Context, url string) ([]byte, error) {
-	if strings.HasPrefix(url, "/") {
-		return c.doContext(ctx, "GET", url, nil)
+	resp, out, own, err := c.fetchURL(ctx, url, nil)
+	if err != nil {
+		return nil, err
 	}
-	if rest, ok := ownURL(c.baseURL(), url); ok {
-		return c.doContext(ctx, "GET", rest, nil)
+	if err := fetchError(url, own, resp); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Fetched is a picture as FetchFresh got it, with what its server said about keeping it.
+type Fetched struct {
+	Body []byte
+	// NotModified is the server's 304: the bytes the ETag or Last-Modified asked about are still its
+	// own, and Body is empty.
+	NotModified bool
+	// CacheControl, ETag and LastModified are the reply's headers of those names, as they came.
+	CacheControl, ETag, LastModified string
+}
+
+// FetchFresh is FetchURLContext that also says what the server said about keeping the bytes, and asks
+// whether they have changed when it is given what a fetch before said they were (etag, lastModified):
+// a server that knows they have not answers 304 without sending them again. The token, the guarded
+// client for other hosts and the size limit are FetchURL's.
+func (c *Client) FetchFresh(ctx context.Context, url, etag, lastModified string) (Fetched, error) {
+	hdr := http.Header{}
+	if etag != "" {
+		hdr.Set("If-None-Match", etag)
+	}
+	if lastModified != "" {
+		hdr.Set("If-Modified-Since", lastModified)
+	}
+	resp, out, own, err := c.fetchURL(ctx, url, hdr)
+	if err != nil {
+		return Fetched{}, err
+	}
+	f := Fetched{CacheControl: resp.Header.Get("Cache-Control"), ETag: resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified")}
+	// Only a 304 to a question asked: one to a plain GET is a server confused, and nothing is kept to
+	// stand for the bytes it did not send.
+	if resp.StatusCode == http.StatusNotModified && len(hdr) > 0 {
+		f.NotModified = true
+		return f, nil
+	}
+	if err := fetchError(url, own, resp); err != nil {
+		return Fetched{}, err
+	}
+	f.Body = out
+	return f, nil
+}
+
+// fetchURL is one GET of url with hdr's headers, sent as FetchURL sends it, with the reply as it came
+// and the path on Home Assistant it went to, empty for another host.
+func (c *Client) fetchURL(ctx context.Context, url string, hdr http.Header) (*http.Response, []byte, string, error) {
+	own := ""
+	if strings.HasPrefix(url, "/") {
+		own = url
+	} else if rest, ok := ownURL(c.baseURL(), url); ok {
+		own = rest
+	}
+	if own != "" {
+		resp, out, err := c.request(ctx, "GET", own, nil, hdr)
+		return resp, out, own, err
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
+	}
+	for k, v := range hdr {
+		req.Header[k] = v
 	}
 	hc := c.outside
 	if hc == nil {
@@ -416,17 +534,26 @@ func (c *Client) FetchURLContext(ctx context.Context, url string) ([]byte, error
 			// The transport's own text repeats the whole address, login and query too.
 			err = ue.Err
 		}
-		return nil, fmt.Errorf("hass: GET %s: %w", withoutLogin(url), err)
+		return nil, nil, "", fmt.Errorf("hass: GET %s: %w", withoutLogin(url), err)
 	}
 	defer resp.Body.Close()
 	out, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
+	}
+	return resp, out, "", nil
+}
+
+// fetchError is what the reply to a fetch of url means when it is not a success: for a path on Home
+// Assistant (own), as do says it; for another host, without the address's login or query.
+func fetchError(url, own string, resp *http.Response) error {
+	if own != "" {
+		return statusError("GET", own, resp)
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("hass: GET %s: %s", withoutLogin(url), resp.Status)
+		return fmt.Errorf("hass: GET %s: %s", withoutLogin(url), resp.Status)
 	}
-	return out, nil
+	return nil
 }
 
 // withoutLogin is an address as an error or a log line may repeat it: no user:pass@, no query and no

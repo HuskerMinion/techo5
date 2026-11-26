@@ -25,11 +25,13 @@ var (
 	byRune map[rune]string
 )
 
-// Rune is the glyph for an icon, named as Home Assistant names it ("mdi:lightbulb") or bare
-// ("lightbulb").
+// Rune is the glyph for an icon, named as Home Assistant names it ("mdi:lightbulb", "hass:lightbulb")
+// or bare ("lightbulb").
 func Rune(name string) (rune, bool) {
 	once.Do(load)
-	r, ok := index[strings.TrimPrefix(strings.TrimSpace(name), "mdi:")]
+	// Home Assistant still draws an icon set as "hass:flash", the old name of the same set (#760).
+	name = strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(name), "hass:"), "mdi:")
+	r, ok := index[name]
 	return r, ok
 }
 

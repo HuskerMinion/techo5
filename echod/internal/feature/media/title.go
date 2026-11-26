@@ -17,6 +17,26 @@ import (
 // "Bluetooth" is named, empty for the device's own word for it.
 type Title struct{ Title, Subtitle, Source string }
 
+// End is how a track started with a title stopped being the one loaded (Player.OnNamedEnd).
+type End int
+
+const (
+	// EndItself is a track that played to its end.
+	EndItself End = iota
+	// EndFailed is one that could not be fetched or played.
+	EndFailed
+	// EndStopped is one stopped: the Stop buttons, the stop word, Home Assistant, the sleep timer.
+	EndStopped
+	// EndReplaced is one something else was played in place of, or took the speaker from.
+	EndReplaced
+)
+
+// NamedEnd is a named track's end: the Title it was started with (the same pointer), and how.
+type NamedEnd struct {
+	Title *Title
+	How   End
+}
+
 // titleFor is how long a title waits for its play_media. An automation sends the two one after the
 // other; one whose play_media never came (an error in between) must not name whatever plays hours later,
 // a Music Assistant track sent the same way included.

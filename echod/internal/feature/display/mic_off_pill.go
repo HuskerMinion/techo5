@@ -25,8 +25,9 @@ var micOffPillHidden atomic.Bool
 func micOffPillShown() bool { return !muteLightSaysIt() || !micOffPillHidden.Load() }
 
 // micOffSaid is whether the header's pill says the microphone is off in this frame: muted, and the
-// pill wanted.
-func (s scene) micOffSaid() bool { return s.muted && micOffPillShown() }
+// pill wanted, or muted in a way no light shows (scene.unlitMute), which the switch cannot leave to a
+// light that is out.
+func (s scene) micOffSaid() bool { return s.muted && (micOffPillShown() || s.unlitMute) }
 
 // micOffPillSwitch is the Home Assistant switch for it; wake redraws the screen once it changes.
 func micOffPillSwitch(wake func()) *esphome.Switch {

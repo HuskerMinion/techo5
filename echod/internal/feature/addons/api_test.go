@@ -1,0 +1,206 @@
+package addons
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
+)
+
+// fakeAPI records what the supervisor asked of the API's server.
+type fakeAPI struct {
+	mu     sync.Mutex
+	opened []APIGrant
+	events []string
+}
+
+func (f *fakeAPI) Open(g APIGrant) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.opened = append(f.opened, g)
+	f.events = append(f.events, "open "+g.ID)
+	return "/run/techo5-addons/" + g.ID + "/api.sock", nil
+}
+
+func (f *fakeAPI) Close(id string) {
+	f.mu.Lock()
+	f.events = append(f.events, "close "+id)
+	f.mu.Unlock()
+}
+
+func (f *fakeAPI) Removed(id string) {
+	f.mu.Lock()
+	f.events = append(f.events, "removed "+id)
+	f.mu.Unlock()
+}
+
+func (f *fakeAPI) saw() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.events)
+}
+
+// apiVersion is a version of the test add-on that speaks the API.
+func (r *rig) apiVersion(id, ver string) catalog.Version {
+	v := r.version(id, ver, []byte("{}"))
+	v.Requires, v.API = []string{"api1"}, 1
+	v.Capabilities, v.Commands = []string{"commands", "speak", "settings"}, []string{"next"}
+	b, _ := json.Marshal(catalog.Manifest{ID: id, Version: ver, Command: []string{id}, Ports: v.Ports, MemoryMB: v.MemoryMB,
+		API: 1, Capabilities: v.Capabilities, Commands: []addonapi.Command{{Name: "next"}},
+		Settings: &addonapi.Settings{Fields: []addonapi.Setting{{Key: "token", Label: "Token", Type: addonapi.TypeSecret}}}})
+	m := r.assets.put("/"+id+"/"+ver+"/addon.json", b)
+	v.Manifest = &m
+	return v
+}
+
+// An add-on that speaks the API is given its socket before it starts, named in TECHO5_ADDON_API, with
+// the capabilities it was agreed to; the socket goes when it stops, and what it set on the device when
+// it is removed. Its settings stay with its state when that is kept.
+func TestAnAPIAddonIsGivenItsSocket(t *testing.T) {
+	r := newRig(t)
+	api := &fakeAPI{}
+	r.m.SetAPI(api)
+	v := r.apiVersion("meals", "0.1.0")
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("meals", v)}})
+	r.run()
+	if err := r.m.Install(context.Background(), "meals", "0.1.0", r.shown("meals", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	r.waitState("meals", StateRunning)
+	sp := r.procs.last().spec
+	if !slices.Contains(sp.Env, "TECHO5_ADDON_API=/run/techo5-addons/meals/api.sock") {
+		t.Errorf("environment: %q", sp.Env)
+	}
+	api.mu.Lock()
+	g := api.opened[0]
+	api.mu.Unlock()
+	if g.UID != firstUID || !slices.Equal(g.Capabilities(), []string{"commands", "speak", "settings"}) ||
+		g.BinDir != filepath.Join(r.dir("meals"), "bin") {
+		t.Errorf("grant %+v, capabilities %v", g, g.Capabilities())
+	}
+	if got, ok := r.m.APIGrantOf("meals"); !ok || got.UID != firstUID {
+		t.Errorf("APIGrantOf: %+v %v", got, ok)
+	}
+
+	// A restart of its program keeps the socket where it was: it is opened once per start.
+	r.procs.last().exit(nil)
+	r.clock.waitPending(t, 1, restartFirst)
+	r.clock.Advance(restartFirst)
+	eventually(t, "a second start", func() bool { return r.procs.count() == 2 })
+	if n := strings.Count(strings.Join(api.saw(), ","), "open"); n != 1 {
+		t.Errorf("opened %d times across a restart: %v", n, api.saw())
+	}
+
+	if err := r.m.Stop("meals"); err != nil {
+		t.Fatal(err)
+	}
+	if got := api.saw(); got[len(got)-1] != "close meals" {
+		t.Errorf("after Stop: %v", got)
+	}
+	if err := os.WriteFile(filepath.Join(r.dir("meals"), "settings.json"), []byte(`{"token":"x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.m.Remove("meals", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := api.saw(); got[len(got)-1] != "removed meals" {
+		t.Errorf("after Remove: %v", got)
+	}
+	if !exists(filepath.Join(r.dir("meals"), "settings.json")) {
+		t.Error("its settings went with a removal that kept its state")
+	}
+	if _, ok := r.m.APIGrantOf("meals"); ok {
+		t.Error("a removed add-on still has a grant")
+	}
+}
+
+// What is granted is what the manifest uses and the owner agreed to: an add-on whose record agreed to
+// less (installed before an update that asked for more, say) is not granted the rest.
+func TestTheGrantIsWhatWasAgreedTo(t *testing.T) {
+	g := APIGrant{Man: catalog.Manifest{Capabilities: []string{"speak", "timers", "media"}},
+		Agreed: catalog.Asks{Capabilities: []string{"timers", "speak"}}}
+	if got := g.Capabilities(); !slices.Equal(got, []string{"speak", "timers"}) {
+		t.Errorf("granted %v", got)
+	}
+}
+
+// An add-on whose names in Home Assistant would be another installed add-on's is refused: meals'
+// button for next is addon_meals_next, which is what meals-next's update entity would be.
+func TestAnAddonWhoseNamesClashIsRefused(t *testing.T) {
+	r := newRig(t)
+	r.m.SetAPI(&fakeAPI{})
+	v := r.apiVersion("meals", "0.1.0")
+	w := r.version("meals-next", "0.1.0", nil)
+	w.Ports = nil
+	b, _ := json.Marshal(catalog.Manifest{ID: "meals-next", Version: "0.1.0", Command: []string{"meals-next"}, MemoryMB: w.MemoryMB})
+	m := r.assets.put("/meals-next/0.1.0/addon.json", b)
+	w.Manifest = &m
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("meals", v), entry("meals-next", w)}})
+	r.run()
+	if err := r.m.Install(context.Background(), "meals", "0.1.0", r.shown("meals", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	err := r.m.Install(context.Background(), "meals-next", "0.1.0", r.shown("meals-next", "0.1.0"), true)
+	if err == nil || !strings.Contains(err.Error(), "addon_meals_next") {
+		t.Errorf("a clashing install: %v", err)
+	}
+	if _, ok := r.m.addons["meals-next"]; ok {
+		t.Error("it was installed")
+	}
+}
+
+// An update that adds a command reaches Home Assistant at once: the entities are read again once it is
+// kept, as they are for an install. One that adds nothing there does not ask for that.
+func TestAnUpdateWithNewNamesRelists(t *testing.T) {
+	r := newRig(t)
+	r.m.SetAPI(&fakeAPI{})
+	var mu sync.Mutex
+	relists := 0
+	r.m.changed = func(entities bool) {
+		if entities {
+			mu.Lock()
+			relists++
+			mu.Unlock()
+		}
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return relists }
+	v1 := r.apiVersion("meals", "0.1.0")
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("meals", v1)}})
+	r.run()
+	if err := r.m.Install(context.Background(), "meals", "0.1.0", r.shown("meals", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	r.waitState("meals", StateRunning)
+	before := count()
+
+	v2 := r.version("meals", "0.2.0", []byte("{}"))
+	v2.Requires, v2.API = []string{"api1"}, 1
+	v2.Capabilities, v2.Commands = []string{"commands", "speak", "settings"}, []string{"back", "next"}
+	b, _ := json.Marshal(catalog.Manifest{ID: "meals", Version: "0.2.0", Command: []string{"meals"}, Ports: v2.Ports, MemoryMB: v2.MemoryMB,
+		API: 1, Capabilities: v2.Capabilities, Commands: []addonapi.Command{{Name: "next"}, {Name: "back"}},
+		Settings: &addonapi.Settings{Fields: []addonapi.Setting{{Key: "token", Label: "Token", Type: addonapi.TypeSecret}}}})
+	m := r.assets.put("/meals/0.2.0/addon.json", b)
+	v2.Manifest = &m
+	r.serve(catalog.Catalog{Format: 2, Serial: 2, Addons: []catalog.Addon{entry("meals", v1, v2)}})
+	if err := r.m.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- r.m.Update(context.Background(), "meals", r.offered("meals"), true, false) }()
+	eventually(t, "the new version to start", func() bool { return r.procs.count() == 2 })
+	r.clock.waitPending(t, 1, trialFor)
+	r.clock.Advance(trialFor)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if count() != before+1 {
+		t.Errorf("relisted %d times for an update that added a command", count()-before)
+	}
+}

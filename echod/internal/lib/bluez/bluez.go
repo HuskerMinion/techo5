@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 
@@ -673,14 +674,84 @@ func (a *Adapter) device(address string) (dbus.BusObject, error) {
 
 // Pair bonds with a device; bluetoothd asks the agent to confirm, which it does. A speaker that
 // pairs with a fixed PIN and refuses 0000 is tried with the other common ones (pairWithPINs).
+//
+// The device is trusted before the first try. A device bluetoothd only knows from discovery is
+// "temporary", and when a pairing with it fails bluetoothd makes it temporary again and removes it
+// at once (BlueZ 5.86 device_bonding_complete and connect_failed_callback) unless it is paired or
+// trusted: the next PIN's Pair then went to an object that was gone (techo5-dot#56). A pairing that
+// fails in the end takes that trust back and forgets the device, as bluetoothd would have.
 func (a *Adapter) Pair(ctx context.Context, address string) error {
-	o, err := a.device(address)
-	if err != nil {
-		return err
+	d, ok := a.Device(address)
+	if !ok {
+		return fmt.Errorf("bluez: no device %s", address)
 	}
-	return pairWithPINs(ctx, o.Path(), func() error {
+	o := a.conn.Object(service, d.Path)
+	trust := func() {
+		if d.Trusted {
+			return
+		}
+		if err := o.Call(propsIfc+".Set", 0, deviceIfc, "Trusted", dbus.MakeVariant(true)).Err; err != nil {
+			slog.Debug("bluetooth: trusting before pairing", "device", address, "err", err)
+		}
+	}
+	trust()
+	err := pairWithPINs(ctx, o.Path(), func() error {
 		return o.CallWithContext(ctx, deviceIfc+".Pair", 0).Err
+	}, func(ctx context.Context) bool {
+		if !waitDevice(ctx, o, deviceBackTimeout) {
+			return false
+		}
+		trust() // a new object, temporary again
+		return true
 	})
+	if err != nil && !d.Trusted {
+		a.untrustUnpaired(o)
+	}
+	return err
+}
+
+// deviceBackTimeout is how long a speaker bluetoothd dropped after a refused PIN is waited for: a
+// speaker still in pairing mode answers the next inquiry, a few seconds away.
+var deviceBackTimeout = 15 * time.Second
+
+// waitDevice waits up to d for the device's object to be on the bus again. bluetoothd is asked, not
+// the list: the list may still hold the device until the InterfacesRemoved signal is in, and the
+// object's path is the same when discovery finds the device again (dev_ and its address).
+func waitDevice(ctx context.Context, o dbus.BusObject, d time.Duration) bool {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+	for {
+		var v dbus.Variant
+		if o.CallWithContext(ctx, propsIfc+".Get", 0, deviceIfc, "Address").Store(&v) == nil {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// untrustUnpaired undoes Pair's trust when the pairing failed. Paired is asked of bluetoothd rather
+// than read from the list: a pairing can be reported failed after the bond was made (the wall clock
+// sees this), and the signal saying so may not be in yet. A device that is paired after all keeps
+// its trust; one that is not is removed, which is what bluetoothd does with a device found by
+// discovery that failed to pair, and what it no longer does once trusted.
+func (a *Adapter) untrustUnpaired(o dbus.BusObject) {
+	var v dbus.Variant
+	if err := o.Call(propsIfc+".Get", 0, deviceIfc, "Paired").Store(&v); err != nil {
+		return // gone already
+	}
+	if paired, _ := v.Value().(bool); paired {
+		return
+	}
+	if err := o.Call(propsIfc+".Set", 0, deviceIfc, "Trusted", dbus.MakeVariant(false)).Err; err != nil {
+		slog.Debug("bluetooth: untrusting after a failed pairing", "err", err)
+	}
+	if err := a.obj.Call(adapterIfc+".RemoveDevice", 0, o.Path()).Err; err != nil {
+		slog.Debug("bluetooth: forgetting after a failed pairing", "err", err)
+	}
 }
 
 // Trust lets the device connect on its own later, which earbuds do when they come out of the case.

@@ -23,7 +23,7 @@ type watched struct {
 }
 
 func watch(line privacy.Mute, muted bool) *watched {
-	w := &watched{Mute: &Mute{sw: &esphome.Switch{}, line: line}}
+	w := &watched{Mute: &Mute{sw: &esphome.Switch{}, line: line, store: func(bool) {}}}
 	w.sw.Set(muted)
 	w.button = func() (bool, time.Time) {
 		w.mu.Lock()

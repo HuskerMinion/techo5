@@ -13,8 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/image/font"
-
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
@@ -712,81 +710,13 @@ func (r *paint) tessControl(row string, a image.Rectangle, t tessera.Placed, pal
 	return []dashTile{z}
 }
 
-// tessDays draws a forecast in b, as many days as fit: side by side, each its name, its weather and its
-// high and low, or one a line when down is set. k is the tile's scale.
+// tessDays draws a Tessera tile's forecast in b (dayCells), as many days as fit.
 func (r *paint) tessDays(b image.Rectangle, days []tessera.Day, down bool, pal dashPal, k float64) {
-	sc := func(n int) int { return int(float64(n)*k + 0.5) }
-	name, hi := r.textFace(false, sc(18)), r.textFace(true, sc(20))
-	if name == nil || hi == nil || b.Dx() <= 0 || b.Dy() <= 0 {
-		return
+	cells := make([]dayCell, len(days))
+	for i, d := range days {
+		cells[i] = dayCell{Name: d.Name, Icon: d.Icon, High: d.High, Low: d.Low, HasHigh: d.HasHigh, HasLow: d.HasLow}
 	}
-	temp := func(d tessera.Day) (string, string) {
-		h, l := "", ""
-		if d.HasHigh {
-			h = strconv.FormatFloat(math.Round(d.High), 'f', 0, 64) + "°"
-		}
-		if d.HasLow {
-			l = strconv.FormatFloat(math.Round(d.Low), 'f', 0, 64) + "°"
-		}
-		return h, l
-	}
-	if down {
-		// A line a day, spread over the room up to half as far apart again.
-		line := r.s(sc(40))
-		n := min(len(days), b.Dy()/max(line, 1))
-		if n > 0 {
-			line = min(b.Dy()/n, r.s(sc(60)))
-		}
-		// The names in a column as wide as the widest, the temperatures at the right, and the weather
-		// in the middle of what is between.
-		names := 0
-		for _, d := range days[:n] {
-			names = max(names, r.width(name, d.Name))
-		}
-		names = min(names, b.Dx()/3)
-		for i, d := range days[:n] {
-			y := b.Min.Y + i*line
-			base := y + line/2 + r.s(sc(7))
-			r.text(name, r.fit(name, d.Name, names), b.Min.X, base, pal.sub)
-			h, l := temp(d)
-			x := b.Max.X
-			if l != "" {
-				x -= r.width(name, l)
-				r.text(name, l, x, base, pal.sub)
-				x -= r.s(sc(8))
-			}
-			x -= r.width(hi, h)
-			r.text(hi, h, x, base, pal.text)
-			if gap := image.Rect(b.Min.X+names, y, x, y+line).Inset(r.s(sc(4))); gap.Dx() >= r.s(sc(20)) {
-				// At most two thirds of the gap, in the Show 5's pixels that icon sizes are in.
-				r.mdiIconIn(d.Icon, gap, min(sc(26), gap.Dx()*66/max(r.s(100), 1)), pal.text)
-			}
-		}
-		return
-	}
-	col := r.s(sc(62))
-	n := min(len(days), b.Dx()/max(col, 1))
-	if n == 0 {
-		return
-	}
-	col = b.Dx() / n
-	icon := min(b.Dy()/2, r.s(sc(40)), b.Dy()-r.s(sc(22))-r.s(sc(44)))
-	if icon < r.s(sc(16)) {
-		return // no room for a day's weather
-	}
-	top := b.Min.Y + (b.Dy()-(r.s(sc(22))+icon+r.s(sc(44))))/2
-	for i, d := range days[:n] {
-		x := b.Min.X + i*col
-		center := func(face font.Face, s string, y int, c color.RGBA) {
-			s = r.fit(face, s, col)
-			r.text(face, s, x+(col-r.width(face, s))/2, y, c)
-		}
-		center(name, d.Name, top+r.s(sc(18)), pal.sub)
-		r.mdiIconIn(d.Icon, image.Rect(x, top+r.s(sc(22)), x+col, top+r.s(sc(22))+icon), sc(30), pal.text)
-		h, l := temp(d)
-		center(hi, h, top+r.s(sc(22))+icon+r.s(sc(20)), pal.text)
-		center(name, l, top+r.s(sc(22))+icon+r.s(sc(42)), pal.sub)
-	}
+	r.dayCells(b, cells, down, pal, k)
 }
 
 // tessFrac is how far v is from lo to hi, from 0 to 1: 0 for a value that is not a number, which would

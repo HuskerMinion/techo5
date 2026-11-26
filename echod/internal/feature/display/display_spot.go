@@ -40,6 +40,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
@@ -69,6 +70,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
 
@@ -1471,6 +1473,7 @@ func (d *Display) Start(context.Context) error {
 	d.r = newRoundRenderer(dev.Canvas())
 	fw, fh := dev.FrameSize()
 	w, h := dev.Size()
+	addonhost.SetScreenSize(w, h) // what hello tells an add-on
 	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
 	d.settleScreen(dev)
 	slog.Info("screen open", "fb", dev.String())
@@ -1592,7 +1595,7 @@ func (d *Display) frame() (next time.Duration) {
 	_, reminding := remind.Get().Showing()
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
-		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active()
+		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active() || keepawake.Held()
 	if d.awayTick(now, on, busy, view.Phase != "idle", nightNow(now)) {
 		d.mu.Lock()
 		on = d.on

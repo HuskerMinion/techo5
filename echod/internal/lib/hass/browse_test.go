@@ -2,6 +2,8 @@ package hass
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -119,5 +121,23 @@ func TestEntities(t *testing.T) {
 	}
 	if len(list) != 2 || list[0].ID != "weather.forecast_home" || list[1].Name != "Backyard" {
 		t.Fatalf("entities = %+v", list)
+	}
+}
+
+func TestUnknownMediaSource(t *testing.T) {
+	missing := &CommandError{Command: "media_source/browse_media", Code: "browse_media_failed",
+		Message: "Failed to browse media with content ID media-source://radio_browser/local: Unknown media source: radio_browser"}
+	if !UnknownMediaSource(fmt.Errorf("wrapped: %w", missing), "radio_browser") {
+		t.Error("the missing integration was not recognized")
+	}
+	if UnknownMediaSource(missing, "immich") {
+		t.Error("another domain's absence was taken for this one's")
+	}
+	failing := &CommandError{Command: "media_source/browse_media", Code: "browse_media_failed", Message: "Connection timed out"}
+	if UnknownMediaSource(failing, "radio_browser") || UnknownMediaSource(errors.New("Unknown media source: radio_browser"), "radio_browser") {
+		t.Error("a failure was taken for a missing integration")
+	}
+	if got := missing.Error(); got != "hass: media_source/browse_media: browse_media_failed "+missing.Message {
+		t.Errorf("error reads %q", got)
 	}
 }

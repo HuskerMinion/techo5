@@ -34,6 +34,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
 // Format is the newest catalog format this build reads, and FormatV1 the first, which devices before
@@ -47,9 +48,10 @@ const (
 )
 
 // Features are what a format 2 version can require that this build knows: "files", the extra files a
-// version brings (Version.Files). A version that requires anything else is for a newer TECHO5, and is
-// skipped. Each feature here is a field a version may use only when it requires the feature.
-var Features = []string{"files"}
+// version brings (Version.Files), and "api1", the add-on API's first level (Version.API, pkg/addonapi).
+// A version that requires anything else is for a newer TECHO5, and is skipped. Each feature here is a
+// field a version may use only when it requires the feature.
+var Features = []string{"files", "api1"}
 
 // Catalog is the whole file.
 type Catalog struct {
@@ -136,6 +138,15 @@ type Version struct {
 	Root     bool   `json:"root"`
 	MemoryMB int    `json:"memory_mb"`
 	DiskMB   int    `json:"disk_mb"`
+
+	// API is the add-on API level the version speaks, as its addon.json says (requires "api1"), and
+	// Capabilities what it uses of it, each a line on the consent screen. Commands are the names of the
+	// commands it declares and Entities its entities as domain.id ("sensor.step"), which the consent
+	// screen lists and which ask again when an update adds one.
+	API          int      `json:"api,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
+	Commands     []string `json:"commands,omitempty"`
+	Entities     []string `json:"entities,omitempty"`
 
 	// Withdrawn, when not empty, is why this version is no longer listed (a later one may be).
 	Withdrawn string `json:"withdrawn,omitempty"`
@@ -551,6 +562,9 @@ func (v Version) valid(id string, format int) error {
 	if err := ValidPorts(v.Ports, v.Root); err != nil {
 		return fmt.Errorf("catalog: %s: %w", what, err)
 	}
+	if err := v.validAPI(); err != nil {
+		return fmt.Errorf("catalog: %s: %w", what, err)
+	}
 	switch {
 	case v.MemoryMB <= 0:
 		return fmt.Errorf("catalog: %s gives no memory use", what)
@@ -566,7 +580,55 @@ func (v Version) uses() []string {
 	if len(v.Files) > 0 {
 		f = append(f, "files")
 	}
+	if v.API > 0 || len(v.Capabilities) > 0 || len(v.Commands) > 0 || len(v.Entities) > 0 {
+		f = append(f, "api1")
+	}
 	return f
+}
+
+// refPattern is an entity as the catalog lists it, domain and id.
+var refPattern = regexp.MustCompile(`^[a-z_]+\.[a-z][a-z0-9_]{0,31}$`)
+
+// validAPI checks what a version lists of the add-on API, as its manifest's validAPI does: the level,
+// the capabilities, and the commands and entities there exactly when their capabilities are.
+func (v Version) validAPI() error {
+	declares := len(v.Capabilities) > 0 || len(v.Commands) > 0 || len(v.Entities) > 0
+	switch {
+	case v.API == 0 && declares:
+		return errors.New("it lists capabilities, commands or entities without an api level")
+	case v.API == 0:
+		return nil
+	case v.API != addonapi.Version:
+		return fmt.Errorf("API level %d is not one this build speaks (%d)", v.API, addonapi.Version)
+	case v.Root:
+		return errors.New("an add-on that runs as root cannot use the API")
+	}
+	if err := ValidCapabilities(v.Capabilities); err != nil {
+		return err
+	}
+	has := func(c string) bool { return slices.Contains(v.Capabilities, c) }
+	switch {
+	case has(addonapi.CapCommands) != (len(v.Commands) > 0):
+		return errors.New("commands are listed with the commands capability, and only with it")
+	case has(addonapi.CapEntities) != (len(v.Entities) > 0):
+		return errors.New("entities are listed with the entities capability, and only with it")
+	case len(v.Commands) > addonapi.MaxCommands:
+		return fmt.Errorf("it lists %d commands, more than %d", len(v.Commands), addonapi.MaxCommands)
+	case len(v.Entities) > addonapi.MaxEntities:
+		return fmt.Errorf("it lists %d entities, more than %d", len(v.Entities), addonapi.MaxEntities)
+	}
+	for i, c := range v.Commands {
+		if !addonapi.ValidName(c) || slices.Contains(v.Commands[:i], c) {
+			return fmt.Errorf("the command %q is not a name, or is listed twice", c)
+		}
+	}
+	for i, e := range v.Entities {
+		domain, _, _ := strings.Cut(e, ".")
+		if !refPattern.MatchString(e) || !slices.Contains(addonapi.EntityDomains, domain) || slices.Contains(v.Entities[:i], e) {
+			return fmt.Errorf("the entity %q is not domain.id of a domain an add-on may have, or is listed twice", e)
+		}
+	}
+	return nil
 }
 
 // validRequires checks what a version requires against what it uses. Format 1 has no requires, nor any
@@ -801,10 +863,16 @@ func (a Addon) Latest() (Version, bool) {
 // Asks is what an add-on asks of the device beyond being run: what the owner agrees to with the box.
 // Files are the extra files its build for this device brings, by name and hash: what is put on the
 // device beside the program is agreed to as the program is, so a new or changed one asks again.
+//
+// Capabilities, Commands and Entities are what it uses of the add-on API: a new capability, command or
+// entity asks again, as a new port does.
 type Asks struct {
-	Ports []Port    `json:"ports"`
-	Root  bool      `json:"root"`
-	Files []FilePin `json:"files,omitempty"`
+	Ports        []Port    `json:"ports"`
+	Root         bool      `json:"root"`
+	Files        []FilePin `json:"files,omitempty"`
+	Capabilities []string  `json:"capabilities,omitempty"`
+	Commands     []string  `json:"commands,omitempty"`
+	Entities     []string  `json:"entities,omitempty"`
 }
 
 // FilePin is an extra file as it was agreed to.
@@ -815,7 +883,8 @@ type FilePin struct {
 
 // Asks is what this version asks of a device of the architecture arch.
 func (v Version) Asks(arch string) Asks {
-	a := Asks{Ports: slices.Clone(v.Ports), Root: v.Root}
+	a := Asks{Ports: slices.Clone(v.Ports), Root: v.Root, Capabilities: slices.Clone(v.Capabilities),
+		Commands: slices.Clone(v.Commands), Entities: slices.Clone(v.Entities)}
 	for _, f := range v.FilesFor(arch) {
 		a.Files = append(a.Files, FilePin{Name: f.Name, SHA256: f.SHA256})
 	}
@@ -849,6 +918,21 @@ func (a Asks) More(before Asks) []string {
 			more = append(more, "the extra file "+f.Name)
 		case before.Files[i].SHA256 != f.SHA256:
 			more = append(more, "a changed "+f.Name)
+		}
+	}
+	for _, c := range a.Capabilities {
+		if !slices.Contains(before.Capabilities, c) {
+			more = append(more, "the "+c+" capability")
+		}
+	}
+	for _, c := range a.Commands {
+		if !slices.Contains(before.Commands, c) {
+			more = append(more, "the command "+c)
+		}
+	}
+	for _, e := range a.Entities {
+		if !slices.Contains(before.Entities, e) {
+			more = append(more, "the entity "+e)
 		}
 	}
 	return more

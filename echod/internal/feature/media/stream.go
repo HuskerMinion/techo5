@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	neturl "net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -56,6 +57,12 @@ type Stream struct {
 
 	// ended says a track stopped of its own accord, for whoever put it on to decide what that means.
 	ended func(item string)
+
+	// namedEnd is told, once, how a track started with a title stopped being the one loaded (End): a
+	// program that started its own track (an add-on, feature/addonhost) is told what became of it, and
+	// an end is the one thing it cannot work out afterwards from what is loaded. nil tells nobody. Called
+	// without mu held, before changed, so whoever is told reads the stream after it as settled.
+	namedEnd func(title *Title, how End)
 
 	// handOff is given a url that Play started and the device turned out not to decode, for the music
 	// library to play instead (library.go), and whether that is still wanted: it is not once anything
@@ -137,6 +144,9 @@ type track struct {
 	failed      error
 	// heardOnce closes heard: a resumed live stream (resume.go) fetches again, and arrives again.
 	heardOnce sync.Once
+
+	// guarded is a track a program on the device chose (PlayGuarded): fetched by guardedClient.
+	guarded bool
 
 	// handOff is a track Play started, whose url goes to the stream's handOff if it cannot be decoded.
 	// PlayChecked's caller is waiting for the answer, and hands it on itself.
@@ -244,15 +254,21 @@ func dbGain(db int) float32 {
 //
 // It does not take the speaker from a reply or an announcement that is sounding. Those are seconds
 // long and end on their own, and the track waits behind them rather than talking over them.
-func (m *Stream) Play(url string) { m.play(url, true, nil) }
+func (m *Stream) Play(url string) { m.play(url, true, nil, false) }
 
 // PlayOnly is Play for a url the device must play itself or not at all: never handed to the music
 // library when it cannot be decoded.
-func (m *Stream) PlayOnly(url string) { m.play(url, false, nil) }
+func (m *Stream) PlayOnly(url string) { m.play(url, false, nil, false) }
 
 // PlayTitled is PlayOnly for a url Home Assistant named first (media_title): title goes with the track,
 // for the screen and the sensors, for as long as it is loaded. A nil title is PlayOnly.
-func (m *Stream) PlayTitled(url string, title *Title) { m.play(url, false, title) }
+func (m *Stream) PlayTitled(url string, title *Title) { m.play(url, false, title, false) }
+
+// PlayGuarded is PlayTitled for an address a program on the device chose (an add-on's media.play,
+// feature/addonhost): fetched with a dialer that refuses the device itself, loopback and link-local
+// whatever the name resolves to and wherever a redirect leads (guardedClient), and not logged by its
+// address, as the program may play as often as its limit lets it.
+func (m *Stream) PlayGuarded(url string, title *Title) { m.play(url, false, title, true) }
 
 // Title is what the loaded track was named, playing or paused; nil when it was not named or nothing is
 // loaded.
@@ -280,7 +296,7 @@ func (m *Stream) PlayChecked(url string, within time.Duration) error {
 // PlayTitledChecked is PlayChecked for a url named by the device itself, like a news update: title goes
 // with the track, as PlayTitled's does.
 func (m *Stream) PlayTitledChecked(url string, title *Title, within time.Duration) error {
-	t := m.play(url, false, title)
+	t := m.play(url, false, title, false)
 	if t == nil {
 		return errors.New("this device has no speaker")
 	}
@@ -312,17 +328,23 @@ func (m *Stream) drop(t *track) {
 	t.stop()
 }
 
-func (m *Stream) play(url string, handOff bool, title *Title) *track {
+func (m *Stream) play(url string, handOff bool, title *Title, guarded bool) *track {
 	if m == nil {
-		slog.Warn("asked to play media with no speaker", "url", url)
+		if !guarded {
+			slog.Warn("asked to play media with no speaker", "url", safeURL(url))
+		}
 		return nil
 	}
 
 	live := liveURL(url)
-	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff, title: title}
+	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff, title: title, guarded: guarded}
 	t.live.Store(live)
 	t, ctx := m.start(t)
-	slog.Info("playing media", "url", url, "live", live)
+	if guarded {
+		slog.Debug("playing media for a program on the device", "live", live)
+	} else {
+		slog.Info("playing media", "url", safeURL(url), "live", live)
+	}
 
 	safe.Go("media", func() {
 		itself := false
@@ -349,7 +371,12 @@ func (m *Stream) play(url string, handOff bool, title *Title) *track {
 			}
 		}
 		if err != nil && ctx.Err() == nil {
-			slog.Error("playing media failed", "err", err)
+			// Go's errors carry the address, query and all; an add-on's is not said at all but at Debug.
+			if t.guarded {
+				slog.Debug("media of a program on the device failed")
+			} else {
+				slog.Error("playing media failed", "err", safeErr(err, url))
+			}
 			t.failed = err
 			if t.handOff && m.handOff != nil && IsUnplayable(err) {
 				wanted := func() bool {
@@ -455,8 +482,18 @@ func (m *Stream) start(t *track) (*track, context.Context) {
 	// background wanting the speaker.
 	m.bg.Took(m)
 
+	m.tellEnd(previous, EndReplaced)
 	m.changed()
 	return t, ctx
+}
+
+// tellEnd tells namedEnd how t, a track that was the one loaded, ended, when it had a title. Each
+// track is told once: whichever of start, stopIf and finished took it off the stream is the one that
+// tells, and the others find it gone already.
+func (m *Stream) tellEnd(t *track, how End) {
+	if t != nil && t.title != nil && m.namedEnd != nil {
+		m.namedEnd(t.title, how)
+	}
 }
 
 // Pause stops the track where it is. What was queued but not heard is kept, so resuming does not
@@ -526,14 +563,14 @@ func (m *Stream) unpauseIf(ok func(t *track, bySender bool) bool) bool {
 }
 
 // Stop ends the track. There is nothing to come back to afterwards.
-func (m *Stream) Stop() { m.stopIf(nil) }
+func (m *Stream) Stop() { m.stopIf(nil, EndStopped) }
 
 // stopLoaded is Stop for something else taking the speaker: it ends a track that is loaded and does
 // nothing with none. Unlike Stop it is not an ask of its own, so a hand-off on its way is still wanted
 // when the music library's stream for it is what arrives (#649); a track loaded since has overtaken it
 // already.
 func (m *Stream) stopLoaded() {
-	m.stopIf(func(t *track, _ bool) bool { return t != nil })
+	m.stopIf(func(t *track, _ bool) bool { return t != nil }, EndReplaced)
 }
 
 // stopPaused ends the received track named name if it is the one loaded and the listener has it
@@ -542,12 +579,12 @@ func (m *Stream) stopLoaded() {
 func (m *Stream) stopPaused(name string) bool {
 	return m.stopIf(func(t *track, paused bool) bool {
 		return t != nil && t.received && t.item == name && paused
-	})
+	}, EndStopped)
 }
 
 // stopIf ends the track if ok, given it (nil with none loaded) and whether it is paused, says so, and
-// says whether it did; a nil ok ends it whatever it is.
-func (m *Stream) stopIf(ok func(t *track, paused bool) bool) bool {
+// says whether it did; a nil ok ends it whatever it is. how is what its end is told as (namedEnd).
+func (m *Stream) stopIf(ok func(t *track, paused bool) bool, how End) bool {
 	if m == nil {
 		return false
 	}
@@ -571,6 +608,7 @@ func (m *Stream) stopIf(ok func(t *track, paused bool) bool) bool {
 	}
 	t.stop()
 	m.flush()
+	m.tellEnd(t, how)
 	m.changed()
 	return true
 }
@@ -710,10 +748,19 @@ func (m *Stream) finished(t *track, itself bool) {
 
 	m.bg.Gave(m)
 
-	slog.Info("media finished", "item", t.item, "by itself", itself)
+	if t.guarded {
+		slog.Debug("media of a program on the device finished", "by itself", itself)
+	} else {
+		slog.Info("media finished", "item", safeURL(t.item), "by itself", itself)
+	}
 	if itself && t.item != "" && len(t.sounds) == 0 && m.ended != nil {
 		m.ended(t.item)
 	}
+	how := EndItself
+	if t.failed != nil {
+		how = EndFailed
+	}
+	m.tellEnd(t, how)
 	m.changed()
 }
 
@@ -745,7 +792,11 @@ func (m *Stream) run(ctx context.Context, t *track, url string) error {
 		return err
 	}
 
-	resp, err := streamClient.Do(req)
+	client := streamClient
+	if t.guarded {
+		client = guardedClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -937,9 +988,40 @@ func (m *Stream) Heard(name string) (time.Duration, bool) {
 	if t == nil || !t.received || t.item != name {
 		return 0, false
 	}
+	return m.heardOf(t, kept), true
+}
+
+// heardOf is how far into t, the track loaded, the room has heard, kept samples being set aside for a
+// pause. Wants write.
+func (m *Stream) heardOf(t *track, kept int) time.Duration {
 	frames := int64(t.queued/speaker.Channels) - int64(m.out.Queued()) - int64(kept/speaker.Channels)
 	at := time.Duration(frames)*time.Second/speaker.Rate - speaker.OutputLatency
-	return max(at, 0), true
+	return max(at, 0)
+}
+
+// Named is what the track started with title is doing, while it is the one loaded (ok): paused or not,
+// whether any of it has reached the speaker yet (heard; until then it is still arriving), and how far
+// into it the room has heard. It is how a program that started its own track (PlayNamed) follows it,
+// and it says nothing about any other track.
+func (m *Stream) Named(title *Title) (paused, heard bool, at time.Duration, ok bool) {
+	if m == nil || title == nil {
+		return false, false, 0, false
+	}
+	m.write.Lock()
+	defer m.write.Unlock()
+	m.mu.Lock()
+	t := m.track
+	paused, kept := m.paused, len(m.rewind)
+	m.mu.Unlock()
+	if t == nil || t.title != title {
+		return false, false, 0, false
+	}
+	select {
+	case <-t.heard:
+		heard = true
+	default:
+	}
+	return paused, heard, m.heardOf(t, kept), true
 }
 
 // Requeue ducks what is already queued, which is up to a second of music the room would otherwise hear
@@ -1033,4 +1115,27 @@ func supported(fmtChunk []byte) error {
 		return fmt.Errorf("cannot play %d Hz %d channel %d bit audio", rate, channels, bits)
 	}
 	return nil
+}
+
+// safeURL is a media address as the log says it: without a login, a query or a fragment, where a
+// token or a password is carried. Anything that is not an address (a sound's name) is as it is.
+func safeURL(raw string) string {
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	u.User = nil
+	if u.RawQuery != "" {
+		u.RawQuery = "…"
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
+// safeErr is err's words with the address in them said as safeURL says it.
+func safeErr(err error, raw string) string {
+	if raw == "" {
+		return err.Error()
+	}
+	return strings.ReplaceAll(err.Error(), raw, safeURL(raw))
 }

@@ -51,6 +51,11 @@ type process interface {
 	// Stop asks it to stop, and kills what is left of it after stopGrace. It returns at once; Wait
 	// says when it has gone.
 	Stop()
+	// Pid is its process id, which its writes are measured from (writes.go).
+	Pid() int
+	// Wrote is what it, and the children it reaped, wrote toward storage, once Wait has returned;
+	// false when that is not known.
+	Wrote() (uint64, bool)
 }
 
 // shell is what an unprivileged add-on is started through, to lower its limits before it runs (limited).
@@ -149,6 +154,21 @@ type osProcess struct {
 }
 
 func (p *osProcess) Wait() error { <-p.done; return p.err }
+
+func (p *osProcess) Pid() int { return p.cmd.Process.Pid }
+
+// Wrote is from wait4's rusage: ru_oublock is the kernel's write_bytes in 512-byte blocks, for the
+// program and every child it reaped, so the last of what it wrote before it exited is counted too.
+func (p *osProcess) Wrote() (uint64, bool) {
+	if p.cmd.ProcessState == nil {
+		return 0, false
+	}
+	ru, ok := p.cmd.ProcessState.SysUsage().(*syscall.Rusage)
+	if !ok || ru.Oublock < 0 {
+		return 0, false
+	}
+	return uint64(ru.Oublock) * 512, true
+}
 
 func (p *osProcess) Stop() {
 	pgid := -p.cmd.Process.Pid

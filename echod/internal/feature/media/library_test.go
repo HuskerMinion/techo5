@@ -255,7 +255,7 @@ func TestAnUndecodableStationHasNotEndedByItself(t *testing.T) {
 	s.handOff = func(string, func() bool) {}
 	url := aacStation(t)
 	// Started as the radio page starts it, and as the voice assistant does.
-	waitDone(t, s.play(url, true, nil))
+	waitDone(t, s.play(url, true, nil, false))
 	if err := s.PlayChecked(url, 5*time.Second); !IsUnplayable(err) {
 		t.Fatalf("checked: %v", err)
 	}

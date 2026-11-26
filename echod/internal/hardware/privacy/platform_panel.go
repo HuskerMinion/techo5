@@ -27,6 +27,7 @@ func (p panelMute) Toggle() (bool, error) {
 	return p.Get()
 }
 func (panelMute) HardwareActs(bool) bool { return false }
+func (panelMute) heldByTheDaemon()       {}
 func (panelMute) Lag() time.Duration     { return 0 }
 func (panelMute) Persisted() bool        { return softwareCut.Load() }
 func (panelMute) Observe(fn func()) (cancel func()) {

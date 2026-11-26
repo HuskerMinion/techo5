@@ -3,6 +3,7 @@
 package video
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -295,7 +296,13 @@ func (f *Feature) begin(id uint64, req Request) {
 	if old != nil {
 		old.stop(true)
 	}
-	slog.Info("video: starting", "id", id, "url", Redacted(uu), "origin", req.Origin, "from", req.From)
+	// An add-on's is said at Debug: it may start videos as often as its limit lets it, and the log is on
+	// the flash.
+	level := slog.LevelInfo
+	if req.Origin == FromAddon {
+		level = slog.LevelDebug
+	}
+	slog.Log(context.TODO(), level, "video: starting", "id", id, "url", Redacted(uu), "origin", req.Origin, "from", req.From)
 	f.Changed.Emit(struct{}{})
 	f.runs.Add(1)
 	safe.Go("video", func() {
@@ -331,10 +338,13 @@ func (f *Feature) sessionEnded(s *session, err error, itself bool) {
 	}
 	shown, dropped, _ := s.numbers()
 	switch {
+	case err != nil && s.req.Origin == FromAddon:
+		slog.Debug("video: could not be played", "id", s.id, "err", err)
 	case err != nil:
-		slog.Warn("video: could not be played", "id", s.id, "err", err)
+		// The decoder's words can carry the address, query and all.
+		slog.Warn("video: could not be played", "id", s.id, "err", strings.ReplaceAll(err.Error(), s.u.String(), Redacted(s.u)))
 	default:
-		slog.Info("video: over", "id", s.id, "by itself", itself, "shown", shown, "dropped", dropped)
+		slog.Log(context.TODO(), s.level(), "video: over", "id", s.id, "by itself", itself, "shown", shown, "dropped", dropped)
 	}
 	if current {
 		f.Changed.Emit(struct{}{})

@@ -70,6 +70,8 @@ type ListedTimer struct {
 	// Silent is one started with timer_start_silent, which only shows and does not ring: the wait of an
 	// automation, which cancels it itself.
 	Silent bool `json:"silent"`
+	// Owner is the add-on that set it, when one did (its label then starts with the add-on's name).
+	Owner string `json:"owner,omitempty"`
 }
 
 // listing builds the answer from what the device holds; kept apart from the Alarms so it can be tested
@@ -111,7 +113,7 @@ func listing(now time.Time, v View, timers []timer.Countdown, rung *timer.Rung) 
 	for _, c := range timers {
 		l.Timers = append(l.Timers, ListedTimer{
 			ID: c.ID, Label: c.Name, Left: int(c.Left.Round(time.Second) / time.Second),
-			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local, Silent: c.Silent,
+			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local, Silent: c.Silent, Owner: c.Owner,
 		})
 	}
 	return l

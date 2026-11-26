@@ -467,6 +467,7 @@ var doneSaid = map[string]string{
 	"removed":    "Removed.",
 	"reached":    "The trainer answered.",
 	"trusted":    "Trusted. Test it again.",
+	"tested":     "The add-on says these settings work. They are not saved until Save is pressed.",
 }
 
 // doneWords is what the page says for a redirect's code; anything else is a save.
@@ -503,6 +504,10 @@ func doneCode(what string, r *http.Request) string {
 		return "reached"
 	case "wakeclips-trust":
 		return "trusted"
+	case "addon-settings":
+		if r.PostFormValue("test") != "" {
+			return "tested"
+		}
 	}
 	return "1"
 }

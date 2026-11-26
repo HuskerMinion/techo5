@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"hash/fnv"
 	"image"
 	"image/color"
 	_ "image/jpeg" // camera snapshots
@@ -25,7 +26,8 @@ import (
 )
 
 // Pictures on a drawn dashboard: a camera's latest snapshot, or a picture card's image. A camera is
-// fetched again every few seconds while the page is up; an image, now and then.
+// fetched again every few seconds while the page is up; an image, as its server's caching headers
+// say (keepFor), and now and then when they say nothing.
 
 const (
 	cameraEvery  = 5 * time.Second
@@ -34,6 +36,15 @@ const (
 	// fails again, up to pictureEvery: a Home Assistant restarting is back well before ten minutes.
 	pictureRetry = 30 * time.Second
 )
+
+// pictureFloor is the soonest an image is fetched again, however often the page is redrawn and
+// whatever its server says: an image at a fixed address that changes (a camera's snapshot, a picker's
+// thumbnails, a player's cover) sent no-store is fetched on the page's next redraw, and a page redrawn
+// a few times a second must not ask a server that often. A variable for the tests, as pictureTick.
+var pictureFloor = 2 * time.Second
+
+// pictureTick is how often the pictures are looked over to see which is due.
+var pictureTick = time.Second
 
 // wanted is one picture a dashboard shows: a camera entity, or an image's address.
 type wanted struct {
@@ -65,40 +76,137 @@ type shot struct {
 	size     image.Point
 	tooLarge bool
 	failed   bool // it could not be fetched or read
+	// noStore is its server having said no-store: drawn on the page it was fetched for, and not kept
+	// for the next one (recent), which fetches it afresh.
+	noStore bool
 }
 
-// fetchPicture gets one picture, decoded.
-func fetchPicture(ctx context.Context, w wanted) (shot, error) {
-	var b []byte
-	var err error
+// keeping is what an image's server said about keeping it when it was last fetched, which says when it
+// is fetched again (keepFor) and how (fetchPicture).
+type keeping struct {
+	// url is the address fetched, which etag and lastModified are about: an image picked in the media
+	// browser is resolved to a new signed address each time, and another address's validators are not
+	// asked about.
+	url                string
+	etag, lastModified string
+	noStore            bool
+	// revalidate is no-cache, or a max-age of 0: kept, and asked about again on the page's next
+	// redraw, with the validators when there are any.
+	revalidate bool
+	maxAge     time.Duration // a max-age above 0; 0 when the server gave none
+	// sum is the bytes' hash: the same bytes sent again (a server that sends no validators) are not
+	// decoded and drawn again.
+	sum uint64
+}
+
+// keepingFrom is what f's headers say about keeping the image fetched from url.
+func keepingFrom(url string, f hass.Fetched) keeping {
+	k := keeping{url: url, etag: f.ETag, lastModified: f.LastModified}
+	k.cacheControl(f.CacheControl)
+	return k
+}
+
+// cacheControl reads a Cache-Control header into k: no-store, no-cache and max-age, the directives a
+// private cache of one picture acts on. Anything else (private, public, must-revalidate, s-maxage, a
+// directive of an extension) changes nothing here.
+func (k *keeping) cacheControl(h string) {
+	k.noStore, k.revalidate, k.maxAge = false, false, 0
+	for _, d := range strings.Split(h, ",") {
+		name, value, _ := strings.Cut(strings.TrimSpace(d), "=")
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "no-store":
+			k.noStore = true
+		case "no-cache":
+			// With a field list too (no-cache="Set-Cookie"): read as the whole reply, the safe side.
+			k.revalidate = true
+		case "max-age":
+			n, err := strconv.ParseInt(strings.Trim(strings.TrimSpace(value), `"`), 10, 64)
+			switch {
+			case err != nil || n < 0:
+				// Not a number: nothing said.
+			case n == 0:
+				k.revalidate = true
+			default:
+				k.maxAge = time.Duration(min(n, int64(pictureEvery/time.Second))) * time.Second
+			}
+		}
+	}
+}
+
+// keepFor is how long an image fetched with k is kept before it is fetched again at the latest, and
+// whether it is fetched again sooner, on the page's next redraw (no-store and no-cache), not before
+// pictureFloor. A max-age is kept for, between pictureFloor and pictureEvery; an image whose server
+// said nothing, pictureEvery, as ever.
+func keepFor(k keeping) (time.Duration, bool) {
+	switch {
+	case k.noStore || k.revalidate:
+		return pictureEvery, true
+	case k.maxAge > 0:
+		return min(max(k.maxAge, pictureFloor), pictureEvery), false
+	}
+	return pictureEvery, false
+}
+
+// fetchPicture gets one picture, decoded, with what its server said about keeping it. was is what it
+// said the last time the picture was fetched and loaded (empty the first time): asked with its
+// validators, a server that answers 304, or bytes the same as before, leave the picture as it is drawn
+// (same), not decoded again.
+func fetchPicture(ctx context.Context, w wanted, was keeping) (sh shot, k keeping, same bool, err error) {
 	if w.camera != "" {
 		// Asked for at the size it is kept: a camera whose integration scales its snapshot then sends
 		// a small one. Many ignore the width and send their own size, which pictureMost then bounds.
-		b, err = hass.Get().Fetch("/api/camera_proxy/" + w.camera + "?width=" + strconv.Itoa(w.width()))
-	} else {
-		u := w.url
-		if strings.HasPrefix(u, mediaSource) {
-			// An image picked in the editor's media browser: Home Assistant says where it is, signed
-			// for a short while, so it is asked again each time.
-			rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-			var r hass.Resolved
-			r, err = hass.Get().ResolveMedia(rctx, u)
-			cancel()
-			if err != nil {
-				return shot{failed: true}, err
-			}
-			u = r.URL
+		b, err := hass.Get().Fetch("/api/camera_proxy/" + w.camera + "?width=" + strconv.Itoa(w.width()))
+		if err != nil {
+			return shot{failed: true}, keeping{}, false, err
 		}
-		if strings.HasPrefix(u, "/") {
-			b, err = hass.Get().Fetch(u)
-		} else {
-			b, err = hass.Get().FetchURL(u)
-		}
+		sh, err := decodePicture(ctx, b, w)
+		return sh, keeping{}, false, err
 	}
+	u := w.url
+	if strings.HasPrefix(u, mediaSource) {
+		// An image picked in the editor's media browser: Home Assistant says where it is, signed
+		// for a short while, so it is asked again each time.
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		r, err := hass.Get().ResolveMedia(rctx, u)
+		cancel()
+		if err != nil {
+			return shot{failed: true}, keeping{}, false, err
+		}
+		u = r.URL
+	}
+	var etag, modified string
+	if was.url == u {
+		etag, modified = was.etag, was.lastModified
+	}
+	f, err := hass.Get().FetchFresh(ctx, u, etag, modified)
 	if err != nil {
-		return shot{failed: true}, err
+		return shot{failed: true}, keeping{}, false, err
 	}
-	return decodePicture(ctx, b, w)
+	if f.NotModified {
+		// A 304 may say anew how long to keep it, and the validators to ask with next; what it leaves
+		// out stands as the full reply said it.
+		k = was
+		if f.CacheControl != "" {
+			k.cacheControl(f.CacheControl)
+		}
+		if f.ETag != "" {
+			k.etag = f.ETag
+		}
+		if f.LastModified != "" {
+			k.lastModified = f.LastModified
+		}
+		return shot{noStore: k.noStore}, k, true, nil
+	}
+	k = keepingFrom(u, f)
+	h := fnv.New64a()
+	_, _ = h.Write(f.Body)
+	k.sum = h.Sum64()
+	if was.sum != 0 && was.sum == k.sum {
+		return shot{noStore: k.noStore}, k, true, nil
+	}
+	sh, err = decodePicture(ctx, f.Body, w)
+	sh.noStore = k.noStore
+	return sh, k, false, err
 }
 
 // decodePicture is a fetched picture decoded and shrunk to as wide as it is kept, unless it would take
@@ -227,33 +335,73 @@ func retryAfter(w wanted, failed bool, retry map[string]time.Duration) time.Dura
 	return wait
 }
 
+// plan is when one picture is fetched again.
+type plan struct {
+	at   time.Time // when it was last fetched
+	next time.Time // when it is fetched again at the latest
+	// onRedraw is its being fetched again on the page's next redraw after at, pictureFloor after at
+	// at the soonest: an image its server said not to keep, or to ask about each time.
+	onRedraw bool
+	keep     keeping // what its server said, for the next fetch; empty after one that failed
+}
+
+// due is whether the picture is to be fetched now, the page having last been redrawn at redrawn.
+func (p *plan) due(now, redrawn time.Time) bool {
+	if !now.Before(p.next) {
+		return true
+	}
+	return p.onRedraw && redrawn.After(p.at) && now.Sub(p.at) >= pictureFloor
+}
+
 // keepPictures fetches the pictures until ctx ends, handing each one to got as it arrives, and a
-// picture too large to show, or one that would not load, to got as that.
-func keepPictures(ctx context.Context, list []wanted, got func(key string, s shot)) {
+// picture too large to show, or one that would not load, to got as that. A picture fetched again and
+// found the same is not handed over again: nothing on the page changed. redraws says the page was
+// redrawn, which a picture its server said not to keep is fetched again on.
+func keepPictures(ctx context.Context, list []wanted, redraws <-chan struct{}, got func(key string, s shot)) {
 	if len(list) == 0 {
 		return
 	}
-	next := map[string]time.Time{}
+	plans := map[string]*plan{}
 	retry := map[string]time.Duration{} // an image's wait after it last failed (retryAfter)
+	var redrawn time.Time
 	for {
 		for _, w := range list {
-			if time.Now().Before(next[w.key()]) {
+			p := plans[w.key()]
+			if p != nil && !p.due(time.Now(), redrawn) {
 				continue
 			}
-			sh, err := fetchPicture(ctx, w)
+			var was keeping
+			if p != nil {
+				was = p.keep
+			}
+			sh, k, same, err := fetchPicture(ctx, w, was)
 			if ctx.Err() != nil {
 				return
 			}
 			if err != nil && !errors.Is(err, errTooLarge) {
 				slog.Debug("dashboard picture", "which", w.key(), "err", err)
 			}
-			next[w.key()] = time.Now().Add(retryAfter(w, sh.failed, retry))
-			got(w.key(), sh)
+			np := &plan{at: time.Now()}
+			wait := retryAfter(w, sh.failed, retry)
+			if !sh.failed {
+				np.keep = k
+				if w.camera == "" {
+					wait, np.onRedraw = keepFor(k)
+				}
+			}
+			np.next = np.at.Add(wait)
+			plans[w.key()] = np
+			if !same {
+				got(w.key(), sh)
+			}
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second):
+		case <-redraws:
+			// Looked over at once: a picture due on this redraw whose floor has passed is fetched now.
+			redrawn = time.Now()
+		case <-time.After(pictureTick):
 		}
 	}
 }
@@ -275,11 +423,11 @@ const (
 )
 
 // put keeps sh as key's picture, the newest, for a page that began at gen. A picture that would not
-// load is not kept: the next view asks for it afresh.
+// load, or one its server said not to store, is not kept: the next view asks for it afresh.
 func (r *recent) put(gen int, key string, sh shot) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if gen != r.gen || sh.failed {
+	if gen != r.gen || sh.failed || sh.noStore {
 		return
 	}
 	r.drop(key)

@@ -398,3 +398,29 @@ func TestAScoreThatNeverComesHoldsNothingLong(t *testing.T) {
 		t.Errorf("wake_score is %q, and none came", data["wake_score"])
 	}
 }
+
+// The wake's clarity goes out beside its score, to a tenth of a dB, only on a turn Nearest device
+// measured one for (#727): a zero from a device that never measured is no reading.
+func TestWakeClarityOnlyWhenMeasured(t *testing.T) {
+	got := caught(t)
+
+	turn := Get().Begin(1, "okay nabu", WakeWord)
+	turn.Clarified(12.345)
+	turn.Ends(Answered)
+	if data := one(t, got); data["wake_clarity"] != "12.3" {
+		t.Errorf("wake_clarity %q, want 12.3", data["wake_clarity"])
+	}
+
+	turn = Get().Begin(1, "okay nabu", WakeWord)
+	turn.Clarified(0)
+	turn.Ends(Answered)
+	if data := one(t, got); data["wake_clarity"] != "0.0" {
+		t.Errorf("a measured zero: wake_clarity %q, want 0.0", data["wake_clarity"])
+	}
+
+	turn = Get().Begin(1, "okay nabu", Button)
+	turn.Ends(Answered)
+	if data, ok := one(t, got)["wake_clarity"]; ok {
+		t.Errorf("wake_clarity %q on a turn nothing measured", data)
+	}
+}
