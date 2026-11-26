@@ -1,3 +1,6 @@
+// Freq follows SpeexDSP's MDF echo canceller (libspeexdsp/mdf.c) closely, with its thresholds and
+// constants: Copyright (C) 2003-2008 Jean-Marc Valin, BSD 3-Clause License (see NOTICE).
+
 package aec
 
 import (
@@ -25,6 +28,7 @@ import (
 // adds no delay.
 type Freq struct {
 	b, n, parts int
+	rate        int
 
 	bg, fg [][]complex128 // per partition, n bins
 	x      [][]complex128 // reference spectra, x[(head+p)%parts] is p blocks old
@@ -42,10 +46,18 @@ type Freq struct {
 	sumAdapt float64
 	adapted  bool
 
+	// screwedUp counts blocks in which the filter added echo rather than removing it (fifty at once
+	// for a non-finite or absurd one); at freqScrewedUp it starts over, as SpeexDSP's does.
+	screwedUp int
+	// saturated holds adaptation off for that many more blocks after a clipped microphone sample, so
+	// the clipping's distortion is not learned as the room.
+	saturated int
+
 	davg1, davg2, dvar1, dvar2 float64
 
-	block    int
-	adapting atomic.Bool
+	block        int
+	sinceRefresh int // blocks since powSum was last summed afresh
+	adapting     atomic.Bool
 
 	sumD, sumE float64
 	out        []int16
@@ -63,14 +75,26 @@ const (
 	// freqReg is what the reference power per bin is never taken below: about -90 dBFS of white noise
 	// in a bin, so a bin the music leaves empty learns nothing rather than everything.
 	freqReg = 1e-9
+
+	// freqClip is SpeexDSP's "arbitrary test for saturation in the microphone signal".
+	freqClip = 32000
+	// freqScrewedUp is how many blocks of added echo it takes for a reset.
+	freqScrewedUp = 50
+	// freqPowRefresh: every that many blocks powSum is summed again from the spectra, so the
+	// rounding a running sum gathers does not stay.
+	freqPowRefresh = 1024
 )
 
-// NewFreq builds a frequency-domain canceller reaching taps samples (rounded up to whole blocks).
-func NewFreq(taps int) (*Freq, error) {
+// NewFreq builds a frequency-domain canceller reaching taps samples (rounded up to whole blocks) at
+// rate samples a second.
+func NewFreq(taps, rate int) (*Freq, error) {
 	if taps <= 0 {
 		return nil, fmt.Errorf("aec: taps must be positive, got %d", taps)
 	}
-	f := &Freq{}
+	if rate <= 0 {
+		return nil, fmt.Errorf("aec: rate must be positive, got %d", rate)
+	}
+	f := &Freq{rate: rate}
 	f.init(taps)
 	f.adapting.Store(true)
 	return f, nil
@@ -81,8 +105,8 @@ func (f *Freq) init(taps int) {
 	b := freqBlock
 	n := 2 * b
 	parts := (taps + b - 1) / b
-	adapting := f.adapting.Load()
-	*f = Freq{b: b, n: n, parts: parts} //nolint:govet // adapting is stored again below
+	adapting, rate, out := f.adapting.Load(), f.rate, f.out
+	*f = Freq{b: b, n: n, parts: parts, rate: rate, out: out} //nolint:govet // adapting is stored again below
 	f.adapting.Store(adapting)
 	mk := func() [][]complex128 {
 		m := make([][]complex128, parts)
@@ -136,6 +160,9 @@ func (f *Freq) Process(mic, ref []int16) ([]int16, error) {
 	f.out = f.out[:len(mic)]
 	for at := 0; at < len(mic); at += f.b {
 		for i := 0; i < f.b; i++ {
+			if m := mic[at+i]; m <= -freqClip || m >= freqClip {
+				f.saturated = f.parts + 1
+			}
 			x := float64(ref[at+i]) / full
 			d := float64(mic[at+i]) / full
 			f.xin[i] = x - freqPreemp*f.memX
@@ -151,6 +178,9 @@ func (f *Freq) Process(mic, ref []int16) ([]int16, error) {
 			f.sumE = f.sumE*(1-1.0/erleTau) + v*v
 			s := math.Round(v * full)
 			f.out[at+i] = int16(max(min(s, math.MaxInt16), math.MinInt16))
+		}
+		if f.screwedUp >= freqScrewedUp {
+			f.Reset()
 		}
 	}
 	return f.out, nil
@@ -227,14 +257,27 @@ func (f *Freq) step() {
 		X0[i] = complex(f.xtime[i], 0)
 	}
 	f.fft(X0, false)
-	for k := 0; k <= h; k++ {
-		f.powSum[k] = max(f.powSum[k]+real(X0[k]*cmplx.Conj(X0[k])), 0)
+	f.sinceRefresh++
+	if f.sinceRefresh >= freqPowRefresh {
+		f.sinceRefresh = 0
+		for k := 0; k <= h; k++ {
+			var s float64
+			for _, X := range f.x {
+				s += real(X[k] * cmplx.Conj(X[k]))
+			}
+			f.powSum[k] = s
+		}
+	} else {
+		for k := 0; k <= h; k++ {
+			f.powSum[k] = max(f.powSum[k]+real(X0[k]*cmplx.Conj(X0[k])), 0)
+		}
 	}
 
 	f.filterOut(f.fg, f.yf)
 	f.filterOut(f.bg, f.yb)
-	var sff, see, sxx, syy, sey, dbf float64
+	var sff, see, sxx, syy, sey, dbf, sdd float64
 	for i := 0; i < b; i++ {
+		sdd += f.d[i] * f.d[i]
 		f.ef[i] = f.d[i] - f.yf[i]
 		f.eb[i] = f.d[i] - f.yb[i]
 		sff += f.ef[i] * f.ef[i]
@@ -283,6 +326,26 @@ func (f *Freq) step() {
 		f.davg1, f.davg2, f.dvar1, f.dvar2 = 0, 0, 0, 0
 	}
 
+	// SpeexDSP's check that the filter is not making things worse, its limits taken from int16 units
+	// to these (1/32768²): a non-finite or absurd block silences the output and counts fifty, one
+	// whose error has four times the microphone's power counts one, and any other clears the count.
+	const absurd, floor = 1e9 / (full * full), 10000.0 / 64 / (full * full)
+	nf := float64(n)
+	switch {
+	case !(syy >= 0 && sxx >= 0 && see >= 0) || !(sff < nf*absurd && syy < nf*absurd && sxx < nf*absurd):
+		f.screwedUp += freqScrewedUp
+		for i := range f.ef {
+			f.ef[i] = 0
+		}
+	case sff/4 > sdd+nf*floor:
+		f.screwedUp++
+	default:
+		f.screwedUp = 0
+	}
+	if f.screwedUp >= freqScrewedUp {
+		return // Process starts it over after this block
+	}
+
 	// Spectra of the background's error and echo estimate.
 	for i := range f.E {
 		f.E[i], f.Y[i] = 0, 0
@@ -296,7 +359,7 @@ func (f *Freq) step() {
 
 	// How much of the echo is left in the error: the leak, from how the error's spectrum moves with
 	// the echo estimate's.
-	beta0, betaMax := 2*float64(b)/16000, .5*float64(b)/16000
+	beta0, betaMax := 2*float64(b)/float64(f.rate), .5*float64(b)/float64(f.rate)
 	beta := min(beta0*syy/see, betaMax)
 	const specAvg = 0.05
 	var pey, pyy float64
@@ -343,6 +406,12 @@ func (f *Freq) step() {
 			f.p1[k] = rate / (f.powSum[k] + freqReg*float64(n))
 		}
 		f.sumAdapt += rate
+	}
+
+	// While the microphone has lately clipped, nothing is learned.
+	if f.saturated > 0 {
+		f.saturated--
+		return
 	}
 
 	// The update, every partition; one of them a block has its gradient constrained to the filter's

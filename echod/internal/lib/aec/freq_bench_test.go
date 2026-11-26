@@ -16,7 +16,7 @@ func benchFrames() ([]int16, []int16) {
 
 // One 20 ms frame. 50 a second is real time.
 func BenchmarkFreqFrame(b *testing.B) {
-	f, _ := NewFreq(1024)
+	f, _ := NewFreq(1024, 16000)
 	mic, ref := benchFrames()
 	for b.Loop() {
 		_, _ = f.Process(mic, ref)

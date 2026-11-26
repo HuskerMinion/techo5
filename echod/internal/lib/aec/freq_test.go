@@ -56,7 +56,7 @@ func TestFreqCancelsTheTopOfTheBandToo(t *testing.T) {
 		}
 		return 10 * math.Log10(top(mic)/top(out))
 	}
-	fq, err := NewFreq(1024)
+	fq, err := NewFreq(1024, 16000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,14 +72,14 @@ func TestFreqCancelsTheTopOfTheBandToo(t *testing.T) {
 }
 
 func TestFreqTakesWholeBlocksOnly(t *testing.T) {
-	f, _ := NewFreq(1024)
+	f, _ := NewFreq(1024, 16000)
 	if _, err := f.Process(make([]int16, 100), make([]int16, 100)); err != ErrLength {
 		t.Errorf("a frame of 100: %v", err)
 	}
 	if f.Taps() != 1024 {
 		t.Errorf("taps %d", f.Taps())
 	}
-	if _, err := NewFreq(0); err == nil {
+	if _, err := NewFreq(0, 16000); err == nil {
 		t.Error("no taps accepted")
 	}
 }
@@ -87,7 +87,7 @@ func TestFreqTakesWholeBlocksOnly(t *testing.T) {
 // Silence, full scale, a reference with no echo and an echo with no reference: nothing goes non-finite
 // and the filter keeps canceling afterwards.
 func TestFreqStaysFiniteUnderAdversarialInput(t *testing.T) {
-	f, _ := NewFreq(1024)
+	f, _ := NewFreq(1024, 16000)
 	rng := rand.New(rand.NewSource(2))
 	mic, ref := make([]int16, 320), make([]int16, 320)
 	for round := 0; round < 2000; round++ {
@@ -119,4 +119,69 @@ func TestFreqStaysFiniteUnderAdversarialInput(t *testing.T) {
 	if e := f.ERLE(); math.IsNaN(e) || math.IsInf(e, 0) {
 		t.Fatalf("ERLE %v", e)
 	}
+}
+
+func TestFreqNeedsARate(t *testing.T) {
+	if _, err := NewFreq(1024, 0); err == nil {
+		t.Error("no rate accepted")
+	}
+}
+
+// A clipped microphone sample holds learning off for a filter's length and one block more, and
+// what the filter knew stays.
+func TestFreqHoldsOffAfterAClip(t *testing.T) {
+	f, _ := NewFreq(256, 16000)
+	mic, ref := make([]int16, freqBlock), make([]int16, freqBlock)
+	for i := range mic {
+		mic[i], ref[i] = int16(i*100), int16(i*100)
+	}
+	mic[3] = 32000
+	if _, err := f.Process(mic, ref); err != nil {
+		t.Fatal(err)
+	}
+	// The block that clipped already counts one down.
+	if f.saturated != f.parts {
+		t.Fatalf("saturated %d after a clip, want %d", f.saturated, f.parts)
+	}
+	mic[3] = 0
+	for i := 0; i < f.parts; i++ {
+		if _, err := f.Process(mic, ref); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.saturated != 0 {
+		t.Errorf("saturated %d a filter's length later", f.saturated)
+	}
+	if f.block != 0 {
+		t.Errorf("%d updates while held off", f.block)
+	}
+}
+
+// A filter that keeps adding echo starts over, as SpeexDSP's does.
+func TestFreqStartsOverWhenItAddsEcho(t *testing.T) {
+	f, _ := NewFreq(256, 16000)
+	rng := rand.New(rand.NewSource(3))
+	mic, ref := make([]int16, freqBlock), make([]int16, freqBlock)
+	for i := range ref {
+		ref[i] = int16(rng.NormFloat64() * 3000)
+	}
+	// A foreground that turns the reference into ten times itself on a silent microphone.
+	for p := range f.fg {
+		for k := range f.fg[p] {
+			f.fg[p][k] = 0
+		}
+	}
+	for k := range f.fg[0] {
+		f.fg[0][k] = 10
+		f.bg[0][k] = 10
+	}
+	for i := 0; i < freqScrewedUp; i++ {
+		if _, err := f.Process(mic, ref); err != nil {
+			t.Fatal(err)
+		}
+		if f.fg[0][0] == 0 {
+			return // started over
+		}
+	}
+	t.Errorf("still the bad filter after %d blocks of added echo (count %d)", freqScrewedUp, f.screwedUp)
 }

@@ -152,7 +152,7 @@ const (
 )
 
 func newCascade(taps int) (*cascade, error) {
-	f, err := aec.NewFreq(taps)
+	f, err := aec.NewFreq(taps, Rate)
 	if err != nil {
 		return nil, err
 	}
@@ -174,8 +174,8 @@ func (c *cascade) Process(mic, ref []int16) ([]int16, error) {
 	}
 	for i := range mic {
 		d, o := float64(mic[i]), float64(out[i])
-		c.sumD = c.sumD*(1-1.0/8000) + d*d
-		c.sumE = c.sumE*(1-1.0/8000) + o*o
+		c.sumD = c.sumD*(1-1.0/aec.ERLETau) + d*d
+		c.sumE = c.sumE*(1-1.0/aec.ERLETau) + o*o
 	}
 	return out, nil
 }
