@@ -227,7 +227,7 @@ func (f *Feature) buildAlertsFrom(src alertSource, lat, lon float64) (AlertView,
 	return AlertView{}, nil
 }
 
-// buildAlertsAt is the NWS's alerts for a home at lat, lon, wherever the setting says they come from.
+// buildAlertsAt is the NWS's alerts for a home at lat, lon, whatever source home's country picks.
 func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 	if !inUS(lat, lon) {
 		return AlertView{}, nil

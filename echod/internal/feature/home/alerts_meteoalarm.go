@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	neturl "net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -525,7 +526,9 @@ func readFeed(ctx context.Context, url string, area homeArea) (entries []maEntry
 		}
 		var e maEntry
 		if err := xml.Unmarshal(chunk, &e); err != nil {
-			return nil, 0, fmt.Errorf("%w: %v", errFeed, err)
+			// One bad entry costs only itself: the rest of the country's feed is still home's.
+			slog.Warn("alerts: a MeteoAlarm entry could not be read", "feed", url, "err", err)
+			continue
 		}
 		if area.at(e, e.outlines()) {
 			entries = append(entries, e)
@@ -681,8 +684,8 @@ func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertV
 	caps := map[string]*capAlert{}
 	fetches := 0
 	for _, key := range order {
-		if !strings.HasPrefix(key, "http") {
-			continue
+		if !fromMeteoAlarm(key) {
+			continue // a link elsewhere is not followed: the warning is shown from its feed entry
 		}
 		if c, ok := old[key]; ok {
 			caps[key] = c
@@ -734,6 +737,15 @@ func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertV
 	}
 	f.alerts.mu.Unlock()
 	return v, nil
+}
+
+// fromMeteoAlarm is whether a warning's CAP link is on MeteoAlarm's own host, the feeds' own: a link
+// a feed entry names elsewhere is not fetched.
+func fromMeteoAlarm(link string) bool {
+	feeds, err1 := neturl.Parse(meteoAlarmFeeds)
+	u, err2 := neturl.Parse(link)
+	return err1 == nil && err2 == nil && u.Scheme == feeds.Scheme && u.Host == feeds.Host &&
+		strings.HasPrefix(u.Path, "/api/")
 }
 
 func readCAP(ctx context.Context, url string) (*capAlert, error) {

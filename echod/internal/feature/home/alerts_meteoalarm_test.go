@@ -355,3 +355,42 @@ func TestFromTitle(t *testing.T) {
 		}
 	}
 }
+
+// A warning's CAP link is followed only on MeteoAlarm's own host; one elsewhere is shown from its
+// feed entry alone.
+func TestCAPOnlyFromMeteoAlarm(t *testing.T) {
+	defer func(f string) { meteoAlarmFeeds = f }(meteoAlarmFeeds)
+	meteoAlarmFeeds = "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-"
+	for link, want := range map[string]bool{
+		"https://feeds.meteoalarm.org/api/v1/warnings/feeds-spain/490833f7": true,
+		"http://feeds.meteoalarm.org/api/v1/warnings/feeds-spain/490833f7":  false,
+		"https://evil.example/api/v1/warnings/feeds-spain/490833f7":         false,
+		"https://feeds.meteoalarm.org.evil.example/api/v1/warnings/x":       false,
+		"https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-spain":   false,
+		"id-old": false,
+	} {
+		if got := fromMeteoAlarm(link); got != want {
+			t.Errorf("%s: %v, want %v", link, got, want)
+		}
+	}
+}
+
+// One entry that cannot be read costs only itself: home's other entries in the feed still count.
+func TestMeteoAlarmBadEntrySkipped(t *testing.T) {
+	useConfig(t, config.Place{Name: "Santander", Lat: 43.46, Lon: -3.80, Country: "ES"})
+	m := &fakeMeteoAlarm{caps: map[string]string{}}
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+	defer func(f string) { meteoAlarmFeeds = f }(meteoAlarmFeeds)
+	meteoAlarmFeeds = srv.URL + "/feeds/meteoalarm-legacy-atom-"
+	later := time.Now().Add(6 * time.Hour).UTC().Format(time.RFC3339)
+	good := entry(srv.URL, "w", "EMMA_ID:ES133", "Litoral cántabro", "Yellow Wind Warning issued for Spain - Litoral", "Alert", later)
+	bad := `<entry><cap:geocode><valueName>EMMA_ID</valueName><value>ES133</value></cap:geocode><title>broken</entry>`
+	m.mu.Lock()
+	m.feeds = map[string]string{"spain": feed(bad, good)}
+	m.mu.Unlock()
+	v, err := (&Feature{}).buildMeteoAlarm(context.Background(), 43.46, -3.80)
+	if err != nil || len(v.Here) != 1 {
+		t.Errorf("with one bad entry: %d alerts, %v; want the good one", len(v.Here), err)
+	}
+}

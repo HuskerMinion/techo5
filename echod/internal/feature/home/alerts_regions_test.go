@@ -192,3 +192,55 @@ func TestOutlinesMatchedInFull(t *testing.T) {
 }
 
 func fmtLatLon(lat, lon float64) string { return fmt.Sprintf("%.4f,%.4f", lat, lon) }
+
+// A region download that fails waits before it is tried again, twice as long after each failure up
+// to a day, and from the start again once one succeeds.
+func TestRegionsFailedDownloadBacksOff(t *testing.T) {
+	g := useSampleRegions(t)
+	ctx := context.Background()
+	g.mu.Lock()
+	geo := g.geo
+	g.geo = []byte("{") // cut off, as a download that never finishes is
+	g.mu.Unlock()
+	tries := func() int { return g.count("/tree") }
+	ago := func(d time.Duration) {
+		regionStore.Lock()
+		regionStore.tried = time.Now().Add(-d)
+		regionStore.Unlock()
+	}
+	waiting := func() time.Duration {
+		regionStore.Lock()
+		defer regionStore.Unlock()
+		return regionStore.wait
+	}
+
+	regionsAround(ctx, 47.07, 15.44)
+	if tries() != 1 || waiting() != time.Hour {
+		t.Fatalf("first failure: %d tries, waiting %v; want 1 and an hour", tries(), waiting())
+	}
+	regionsAround(ctx, 47.07, 15.44)
+	if tries() != 1 {
+		t.Errorf("tried again at once (%d tries)", tries())
+	}
+	for _, want := range []time.Duration{2 * time.Hour, 4 * time.Hour, 8 * time.Hour, 16 * time.Hour, 24 * time.Hour, 24 * time.Hour} {
+		ago(waiting() + time.Minute)
+		regionsAround(ctx, 47.07, 15.44)
+		if waiting() != want {
+			t.Errorf("after %d tries waiting %v, want %v", tries(), waiting(), want)
+		}
+	}
+	n := tries()
+	ago(23 * time.Hour)
+	regionsAround(ctx, 47.07, 15.44)
+	if tries() != n {
+		t.Error("tried again before a day had passed")
+	}
+
+	g.mu.Lock()
+	g.geo = geo
+	g.mu.Unlock()
+	ago(waiting() + time.Minute)
+	if len(regionsAround(ctx, 47.07, 15.44)) == 0 || waiting() != 0 {
+		t.Errorf("a download that worked: waiting %v, want none", waiting())
+	}
+}

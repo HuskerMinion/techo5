@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/useragent"
 )
 
 // MeteoAlarm's warning regions around home, from MeteoAlarm's own geocode files
@@ -40,8 +42,11 @@ var regionsDir = func() string { return filepath.Join(mapDir, "meteoalarm") }
 const (
 	// regionsCheck is how often whether MeteoAlarm has published newer geocode files is asked.
 	regionsCheck = 30 * 24 * time.Hour
-	// regionsRetry is how long a failed download waits before it is tried again.
-	regionsRetry = time.Hour
+	// regionsRetry is how long a failed download first waits before it is tried again; each failure
+	// after doubles it, up to regionsRetryMost, so a device that cannot finish the 30 MB (slow Wi-Fi)
+	// does not fetch it again and again.
+	regionsRetry     = time.Hour
+	regionsRetryMost = 24 * time.Hour
 	// regionsKeepKm is how far from home a region is kept: past the coastal reach, so a sea area off
 	// home is kept too.
 	regionsKeepKm = 20
@@ -49,7 +54,7 @@ const (
 
 // maClient fetches MeteoAlarm's feeds and files: a country's feed or the geocode file takes longer
 // than a map tile.
-var maClient = &http.Client{Timeout: 5 * time.Minute}
+var maClient = &http.Client{Timeout: 5 * time.Minute, Transport: useragent.Transport(nil)}
 
 // regionNames are names MeteoAlarm's geocode file has garbled, by code.
 var regionNames = map[string]string{
@@ -79,12 +84,14 @@ type regionJS struct {
 var regionStore struct {
 	sync.Mutex
 	file  *regionsFile
-	tried time.Time // when a download last failed
+	tried time.Time     // when a download last failed
+	wait  time.Duration // how long since then before it is tried again; 0 when none has failed
 }
 
 // regionsAround are the regions near home, from the file kept on the device, downloaded first when
 // there is none for this place, or when MeteoAlarm has published newer files since it was made. On a
-// failure what was kept is used, or none, and the download waits a while before it is tried again.
+// failure what was kept is used, or none, and the download waits before it is tried again, longer
+// after each failure.
 func regionsAround(ctx context.Context, lat, lon float64) []maRegion {
 	regionStore.Lock()
 	defer regionStore.Unlock()
@@ -94,14 +101,16 @@ func regionsAround(ctx context.Context, lat, lon float64) []maRegion {
 		regionStore.file = f
 	}
 	stale := f == nil || time.Since(f.Checked) > regionsCheck
-	if stale && time.Since(regionStore.tried) > regionsRetry {
+	if stale && (regionStore.wait == 0 || time.Since(regionStore.tried) > regionStore.wait) {
 		nf, err := refreshRegions(ctx, f, lat, lon)
 		if err != nil {
 			regionStore.tried = time.Now()
-			slog.Warn("alerts: MeteoAlarm's regions could not be fetched", "err", err)
+			regionStore.wait = min(max(regionStore.wait*2, regionsRetry), regionsRetryMost)
+			slog.Warn("alerts: MeteoAlarm's regions could not be fetched", "err", err, "next try in", regionStore.wait)
 		} else {
 			f = nf
 			regionStore.file = f
+			regionStore.wait = 0
 		}
 	}
 	if f == nil {
