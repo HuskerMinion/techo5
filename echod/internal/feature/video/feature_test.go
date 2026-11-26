@@ -212,6 +212,41 @@ func TestACoveredVideoPausesUnderIt(t *testing.T) {
 	}
 }
 
+// A video is running, for a stop said to the device, while it plays and while something over it holds
+// it paused (a turn's listening screen, where the "stop" is said), and not once somebody paused it or
+// it has stopped.
+func TestAVideoRunsWhileCoveredNotWhilePaused(t *testing.T) {
+	f := fake(t, 100000, true)
+	if f.Running() {
+		t.Error("running with no video")
+	}
+	if _, err := f.Play(Request{URL: "http://192.168.1.20/a.mp4"}); err != nil {
+		t.Fatal(err)
+	}
+	until(t, f, Playing)
+	if !f.Running() {
+		t.Error("a playing video is not running")
+	}
+	f.Covered(true)
+	until(t, f, Paused)
+	if !f.Running() {
+		t.Error("a video paused under a cover is not running")
+	}
+	f.Covered(false)
+	until(t, f, Playing)
+	f.Pause()
+	until(t, f, Paused)
+	if f.Running() {
+		t.Error("a video somebody paused is running")
+	}
+	f.Resume()
+	until(t, f, Playing)
+	f.Stop()
+	if f.Running() {
+		t.Error("a stopped video is running")
+	}
+}
+
 // The first DLNA video from an address asks on the screen: Not now leaves it and refuses that address
 // for a while; Allow plays it and remembers the address, which does not ask again.
 func TestADLNAVideoAsksFirst(t *testing.T) {

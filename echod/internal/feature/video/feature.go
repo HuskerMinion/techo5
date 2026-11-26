@@ -628,6 +628,17 @@ func (f *Feature) Covered(on bool) {
 	}
 }
 
+// Running is whether a video is up and going: playing or loading, or paused only because something
+// covered it (Covered), as the listening screen of a turn does. It is what a stop said to the device
+// can mean, where a video somebody paused is not: the stop word only acts while the device is doing
+// something, and a turn opened over a playing video pauses it before the "stop" in it is heard.
+func (f *Feature) Running() bool {
+	f.mu.Lock()
+	s, held := f.cur, f.heldByUs
+	f.mu.Unlock()
+	return s != nil && (held || !s.paused())
+}
+
 // State is the player now.
 func (f *Feature) State() State {
 	f.mu.Lock()
@@ -740,6 +751,7 @@ func Seekable(id uint64) (ok, known bool)    { return Get().Seekable(id) }
 func Refit(id uint64) (Aspect, error)        { return Get().Refit(id) }
 func Refittable(id uint64) (ok, known bool)  { return Get().Refittable(id) }
 func Current() State                         { return Get().State() }
+func Running() bool                          { return Get().Running() }
 func SetOn(on bool)                          { Get().SetOn(on) }
 func SetDLNA(on bool)                        { Get().SetDLNA(on) }
 func Listen(fn func())                       { Get().Changed.Listen(func(struct{}) { fn() }) }

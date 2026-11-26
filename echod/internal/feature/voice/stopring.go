@@ -10,6 +10,9 @@ import (
 // on their own.
 type stopVocab struct {
 	asks, fillers map[string]bool
+	// videos are the words said around a stop meant for a video ("the video", "playing"), which count
+	// only in a turn opened over one (stopsVideo): "stop playing" over a ring is not about the ring.
+	videos map[string]bool
 }
 
 // stopVocabs are the words a request to stop a ring is made of, and nothing else, one language at a
@@ -30,6 +33,9 @@ type stopVocab struct {
 // German "halt mal" ("hold on"), no "gata" ("done", "ready"), no "chega" ("arrives" as well as
 // "enough").
 //
+// The third list of each is the words for a video and its playing, which count only for a stop said
+// in a turn opened over a video (stopsVideo).
+//
 // The languages are those of the screen, and Portuguese, Russian and Hebrew, which people speak to it
 // in (#741). "stop" asks in every one of them, and "ok" and "okay" go with any of them, as speech to
 // text writes them so in most languages.
@@ -37,88 +43,113 @@ var stopVocabs = []stopVocab{
 	// English. "time" is there because speech to text often writes "timer" so (#724): over a ring,
 	// "stop time" can only mean the ring.
 	vocab("stop off",
-		"turn it that the alarm timer ringing please now shut up time timers alarms"),
+		"turn it that the alarm timer ringing please now shut up time timers alarms",
+		"video videos movie film stream streaming clip playing play this"),
 	// German: "Stopp", "Timer aus", "mach den Wecker aus, bitte".
 	vocab("stopp stoppen halt aus ausmachen ausschalten abschalten",
-		"mach mache schalt schalte den die das der es ihn wecker timer alarm bitte jetzt sofort"),
+		"mach mache schalt schalte den die das der es ihn wecker timer alarm bitte jetzt sofort",
+		"video film stream wiedergabe abspielen"),
 	// Spanish: "para", "detén la alarma", "basta ya", "apaga el temporizador por favor".
 	vocab("para pare parar detén deten detente detener basta apaga apágala apágalo apagala apagalo apagar",
-		"la el lo alarma alarmas temporizador temporizadores ya ahora eso por favor"),
+		"la el lo alarma alarmas temporizador temporizadores ya ahora eso por favor",
+		"video vídeo película pelicula reproducción reproduccion"),
 	// French: "arrête", "arrête l'alarme", "éteins le minuteur s'il te plaît". The apostrophe keeps
 	// "l'alarme" and "s'il" one word each.
 	vocab("arrête arrete arrêtez arretez arrêter arreter stoppe éteins eteins éteindre eteindre",
-		"le la l'alarme alarme réveil reveil minuteur minuterie sonnerie ça ca s'il te vous plaît plait maintenant tout de suite"),
+		"le la l'alarme alarme réveil reveil minuteur minuterie sonnerie ça ca s'il te vous plaît plait maintenant tout de suite",
+		"vidéo video film lecture"),
 	// Italian: "ferma", "spegni la sveglia", "basta, per favore".
 	vocab("ferma fermala fermalo fermati fermare basta spegni spegnila spegnilo spegnere stoppa",
-		"la il lo l'allarme allarme sveglia timer per favore adesso ora subito"),
+		"la il lo l'allarme allarme sveglia timer per favore adesso ora subito",
+		"video film riproduzione"),
 	// Dutch: "stop", "zet de wekker uit", "stop maar".
 	vocab("stoppen uit uitzetten",
-		"zet het de die dat wekker timer alarm nu alsjeblieft alstublieft graag even maar oké"),
+		"zet het de die dat wekker timer alarm nu alsjeblieft alstublieft graag even maar oké",
+		"video film afspelen"),
 	// Portuguese: "para", "desliga o alarme", "pare o despertador por favor".
 	vocab("para pare parar desliga desligue desligar",
-		"o a isso alarme alarmes despertador temporizador timer por favor agora já ja"),
+		"o a isso alarme alarmes despertador temporizador timer por favor agora já ja",
+		"vídeo video filme"),
 	// Polish: "stop", "wyłącz budzik", "zatrzymaj to, proszę".
 	vocab("zatrzymaj wyłącz wylacz przestań przestan",
-		"to ten go budzik alarm minutnik timer proszę prosze teraz już juz"),
+		"to ten go budzik alarm minutnik timer proszę prosze teraz już juz",
+		"wideo film filmik odtwarzanie"),
 	// Catalan and Valencian: "para", "atura l'alarma", "apaga-la, si us plau". A hyphen parts "apaga-la"
 	// into two words, which both count.
 	vocab("para pare atura atura't aturar apaga apagar prou",
-		"la el l'alarma alarma despertador temporitzador si us plau per favor ara ja això aixo"),
+		"la el l'alarma alarma despertador temporitzador si us plau per favor ara ja això aixo",
+		"vídeo video"),
 	// Galician: "para", "apaga a alarma", "detén o temporizador por favor".
 	vocab("para pare parar detén deten apaga apagar basta",
-		"a o alarma temporizador despertador por favor xa agora iso"),
+		"a o alarma temporizador despertador por favor xa agora iso",
+		"vídeo video"),
 	// Romanian: "oprește", "oprește alarma", "oprește-l, te rog". Written with ş or ș alike
 	// (stopFold).
 	vocab("oprește opreste",
-		"l o te rog acum alarma alarmă alarmele timerul timer cronometrul deșteptătorul desteptatorul"),
+		"l o te rog acum alarma alarmă alarmele timerul timer cronometrul deșteptătorul desteptatorul",
+		"videoclipul videoul filmul redarea"),
 	// Turkish: "dur", "alarmı durdur", "kapat lütfen".
 	vocab("dur durdur kapat",
-		"alarm alarmı alarmi zamanlayıcı zamanlayici zamanlayıcıyı zamanlayiciyi onu lütfen lutfen şimdi simdi artık artik tamam"),
+		"alarm alarmı alarmi zamanlayıcı zamanlayici zamanlayıcıyı zamanlayiciyi onu lütfen lutfen şimdi simdi artık artik tamam",
+		"video videoyu filmi"),
 	// Russian: "стоп", "выключи будильник", "хватит, пожалуйста".
 	vocab("стоп хватит выключи выключить останови прекрати",
-		"будильник таймер сигнал его это пожалуйста сейчас уже"),
+		"будильник таймер сигнал его это пожалуйста сейчас уже",
+		"видео фильм"),
 	// Hebrew: "עצור", "די", "כבה את השעון המעורר".
 	vocab("עצור עצרי די תפסיק תפסיקי כבה כבי",
-		"את זה השעון המעורר הטיימר האזעקה בבקשה עכשיו"),
+		"את זה השעון המעורר הטיימר האזעקה בבקשה עכשיו",
+		"הסרטון הווידאו הוידאו הסרט"),
 	// Japanese is written without spaces, so each way of saying it is one word here.
-	vocab("ストップ 止めて とめて 止めてください とめてください アラームを止めて アラーム止めて タイマーを止めて タイマー止めて", ""),
+	vocab("ストップ 止めて とめて 止めてください とめてください アラームを止めて アラーム止めて タイマーを止めて タイマー止めて", "", ""),
 }
 
 // vocab makes a stopVocab of space-separated words, with "stop" asking in it and "ok" and "okay" said
 // around it.
-func vocab(asks, fillers string) stopVocab {
-	v := stopVocab{asks: map[string]bool{"stop": true}, fillers: map[string]bool{"ok": true, "okay": true}}
+func vocab(asks, fillers, videos string) stopVocab {
+	v := stopVocab{asks: map[string]bool{"stop": true}, fillers: map[string]bool{"ok": true, "okay": true}, videos: map[string]bool{}}
 	for _, w := range strings.Fields(stopFold.Replace(asks)) {
 		v.asks[w] = true
 	}
 	for _, w := range strings.Fields(stopFold.Replace(fillers)) {
 		v.fillers[w] = true
 	}
+	for _, w := range strings.Fields(stopFold.Replace(videos)) {
+		v.videos[w] = true
+	}
 	return v
 }
 
 // stopsRing reports whether a transcript asks for the ring to stop: only the words of one language
 // above, and at least one of them a word that asks.
-func stopsRing(text string) bool {
+func stopsRing(text string) bool { return stopAsked(text, false) }
+
+// stopsVideo reports whether a transcript asks for the video playing to stop: what stops a ring, or
+// the same with the words for a video or its playing around it ("stop playing", "stop the video",
+// "arrête la vidéo"). Said in a turn opened over a playing video, which the turn's screen paused under
+// it, so Home Assistant has nothing of the device's playing to stop.
+func stopsVideo(text string) bool { return stopAsked(text, true) }
+
+func stopAsked(text string, video bool) bool {
 	words := stopSplit(text)
 	if len(words) == 0 {
 		return false
 	}
 	for _, v := range stopVocabs {
-		if v.stops(words) {
+		if v.stops(words, video) {
 			return true
 		}
 	}
 	return false
 }
 
-func (v stopVocab) stops(words []string) bool {
+func (v stopVocab) stops(words []string, video bool) bool {
 	asks := false
 	for _, w := range words {
 		switch {
 		case v.asks[w]:
 			asks = true
-		case !v.fillers[w]:
+		case !v.fillers[w] && !(video && v.videos[w]):
 			return false
 		}
 	}

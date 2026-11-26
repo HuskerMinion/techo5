@@ -1600,8 +1600,8 @@ listening, even after a question. Said with more, like "thanks, and what time is
 ordinary turn.
 
 **The stop word.** Say "stop", with no wake word, while the device is making a sound: it stops a
-ringing alarm or timer, an answer, an announcement or the music. After an alarm it also lets go of a
-wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
+ringing alarm or timer, an answer, an announcement or the music, and it ends a video playing on the
+screen (music is paused, a video stopped). After an alarm it also lets go of a wake light held on. With nothing playing it does nothing, so "stop the timer" said to Home Assistant
 isn't cut off. **Stop word threshold** (on the device's microphone in Home Assistant, 0.70 to start
 with) sets how sure it has to be. At the top of its range, the stop word is off. A "stop" that came
 close and wasn't heard leaves a `wake near miss` line with `slot=101` in the device's log, and shows in
@@ -1628,7 +1628,11 @@ else: "stop", "turn off the timer", "stop the alarm, please", or the same in the
 and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
 "выключи будильник"). The ring ending is the answer: the request ends there, quietly, and Home
 Assistant's reply to it isn't played, even when the stop word heard the "stop" and ended the ring
-first. A sentence with anything more in it ("stop the music") goes to Home Assistant as any other.
+first. A video playing on the screen stops the same way: "stop", "stop playing" or "stop the video"
+(and the same in those languages: "Stopp das Video", "arrête la vidéo") after the wake word ends the
+video and the request with it, quietly, instead of going to Home Assistant, which has no video of the
+device's to stop. With a ring over the video, the ring is what stops. A sentence with anything more in
+it ("stop the music") goes to Home Assistant as any other.
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,

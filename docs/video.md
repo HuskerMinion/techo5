@@ -120,7 +120,9 @@ A live stream can't be moved through: the app is told so, and it plays on.
   with fit again. It's there for a video the Show can move through itself, one that says how long it
   is. A live stream, or a Plex transcode that only its app can move through, doesn't have it, since
   starting one again would start it wherever its server does.
-- **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was.
+- **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was. So does saying
+  "stop" (the [stop word](setup.md#two-wake-words-two-assistants), no wake word needed), or the wake word and "stop",
+  "stop playing" or "stop the video".
 - A call, an alarm or a timer ringing, the settings, a camera or a voice turn goes on top. The video
   pauses under it and goes on once it's gone.
 - **At night** a video plays at the night light's level (half brightness if you haven't chosen a

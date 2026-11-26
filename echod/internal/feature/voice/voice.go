@@ -28,6 +28,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/buttons"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
@@ -410,6 +411,8 @@ var (
 	musicPlaying = func() bool { return media.Get().Audible() }
 	pauseMusic   = func() { media.Get().PauseAudible() }
 	releaseRing  = ring.Release
+	videoRunning = video.Running
+	stopVideo    = video.Stop
 )
 
 // Interrupt is the stop word.
@@ -419,6 +422,17 @@ var (
 // would be worse than not listening for it at all. Nothing is playing then, so there is nothing the word
 // could sensibly mean.
 func (v *Voice) Interrupt() {
+	// "<wake word>, stop" over a video: the turn's listening screen covered it and paused it under it,
+	// so nothing sounds, and the music below cannot find it either; the video is what was meant. While
+	// the turn thinks too, as the stop word can be heard only once the speaker has finished, and
+	// canceling the turn alone would put the video back on with the question gone. A ring over the
+	// video is what is reached for first (Stop).
+	if p := v.turn.Phase(); (p == phaseListening || p == phaseThinking) && !ring.IsSounding() && videoRunning() {
+		slog.Info("stop word after the wake word: stopping the video")
+		v.turn.Cancel()
+		stopVideo()
+		return
+	}
 	// "<wake word>, stop" over music: the stop word hears "stop" while the turn the wake word opened is
 	// still listening, and it is the music that was meant, not the question that has not been asked.
 	if v.turn.Phase() == phaseListening && !ring.IsSounding() {
@@ -430,7 +444,7 @@ func (v *Voice) Interrupt() {
 		}
 	}
 	if !speaker.Sound().Busy() && !ring.IsSounding() {
-		if !musicPlaying() {
+		if !musicPlaying() && !videoRunning() {
 			// Nothing audible, but the wake light held at full after an alarm (#161) is the device
 			// plainly doing something, and stop is what somebody waking under it says to turn it off.
 			if releaseRing() {
@@ -469,6 +483,15 @@ func (v *Voice) Stop() bool {
 	// An announcement outside a turn: nothing is listening, but something is playing.
 	if sound := speaker.Sound(); sound.Busy() {
 		sound.Silence()
+		return true
+	}
+
+	// A video is stopped, not paused as music is: its sound is a track of the media player's, which
+	// a pause would hold with the picture still up, and a stop said at a video means to take it down,
+	// as the screen's own Stop does. Before the music, which would find that track.
+	if videoRunning() {
+		slog.Info("stop: ending the video")
+		stopVideo()
 		return true
 	}
 

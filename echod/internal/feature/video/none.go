@@ -15,6 +15,7 @@ func Resume()                          {}
 func Seek(uint64, time.Duration) error { return ErrNotHere }
 func Seekable(uint64) (ok, known bool) { return false, true }
 func Current() State                   { return State{Phase: Idle} }
+func Running() bool                    { return false }
 func SetOn(bool)                       {}
 func SetDLNA(bool)                     {}
 func Listen(func())                    {}

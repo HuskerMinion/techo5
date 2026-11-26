@@ -257,6 +257,12 @@ type conversation struct {
 	// ring is answered by the ring ending, whenever that was.
 	overRing bool
 
+	// overVideo says a video was playing when this turn opened, which the turn's screen paused under
+	// it (video.Covered). A stop said in the turn is meant for it: Home Assistant has nothing of the
+	// device's playing to stop, and its "OK, stopped." would leave the video going on once the turn
+	// was over.
+	overVideo bool
+
 	// closing says what was heard was only a way of ending the conversation ("thank you", "that's
 	// all"), so the reply to it is the last thing said: no follow-up listens after it (#510).
 	// closingExact is that it was the phrase alone, with no filler before it or name after it (#532).
@@ -720,6 +726,22 @@ func (c *conversation) turnEvent(e event) {
 			return
 		}
 
+		// The same for a video the turn was opened over: "stop", "stop playing", "stop the video" end it
+		// here, and the turn ends quietly with it, the picture going being the answer. A ring over the
+		// video is what a stop is for first, so not while one sounds or the turn was opened over one.
+		if c.overVideo && !c.overRing && !ring.IsSounding() && c.phase != phaseIdle && stopsVideo(e.text) {
+			slog.Info("heard a stop in a turn opened over a video, stopping it", "slot", c.slot+1)
+			// Before the turn ends, so the screen it leaves has no video to uncover and carry on.
+			stopVideo()
+			c.clearPending()
+			c.idle("stopped the video", activity.Answered)
+			if !c.stopsAtOnce() {
+				c.draining = true
+				c.grace = time.NewTimer(drainFor)
+			}
+			return
+		}
+
 		// A wake word followed by only what speech-to-text writes for noise was a wake by mistake. It
 		// ends here, before the answer to "Thank you." is spoken to an empty room. A follow-up is left
 		// alone: "yeah" and "okay" are answers there.
@@ -1144,6 +1166,9 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	c.lookHere = false
 	// A silenced ring still counts as sounding (ring.Silence), so a wake word said at one is seen here.
 	c.overRing = ring.IsSounding()
+	// Asked before the turn's screen comes up and pauses the video, and after it too (a follow-up)
+	// that pause still counts as playing (video.Running).
+	c.overVideo = videoRunning()
 	c.closing, c.closingExact = false, false
 	// Counted from the wake word: a turn it opens starts again, a follow-up is one more in a row.
 	if n.followUp {
