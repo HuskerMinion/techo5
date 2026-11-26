@@ -245,6 +245,12 @@ type Player struct {
 	// - so a listener works out for itself whether anything did, on the far side of a channel.
 	OnNowPlaying hook.Hook[struct{}]
 
+	// OnNamedEnd fires once for each track started with a title (PlayNamed, and a named play_media)
+	// when it stops being the one loaded, saying how: what a program that started its own track (an
+	// add-on) is told about it, without being told what came next. Listeners must not block, and must not
+	// call back into the player: it runs on whatever stopped or replaced the track.
+	OnNamedEnd hook.Hook[NamedEnd]
+
 	// OnReceiverPlays fires with a received track's name when its sender, having paused on its own,
 	// is heard playing again without saying so (senderPlaysAgain). Listeners must not block: it runs
 	// on the goroutine reading the sender's audio.
@@ -554,6 +560,7 @@ func build() *Player {
 	}
 	p.stream = NewStream(speaker.Sound(), speaker.Get(), p.refresh, p.OnEnd.Emit)
 	p.stream.senderPlays = p.senderPlaysAgain
+	p.stream.namedEnd = func(t *Title, how End) { p.OnNamedEnd.Emit(NamedEnd{Title: t, How: how}) }
 	p.stream.handOff = p.handOff
 
 	// Volume acts on every tap and on every repeat, so a held button ramps.
@@ -1882,6 +1889,11 @@ func (p *Player) PlayNamed(url string, title *Title) {
 // Loaded is the title the loaded track was started with, nil when it was given none or nothing is
 // loaded.
 func (p *Player) Loaded() *Title { return p.stream.Title() }
+
+// Named is what the track started with title is doing while it is the one loaded (Stream.Named).
+func (p *Player) Named(title *Title) (paused, heard bool, at time.Duration, ok bool) {
+	return p.stream.Named(title)
+}
 
 // Receiving names what is being played from a remote, empty when nothing is.
 func (p *Player) Receiving() string { return p.stream.Receiving() }

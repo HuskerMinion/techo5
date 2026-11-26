@@ -58,6 +58,12 @@ type Stream struct {
 	// ended says a track stopped of its own accord, for whoever put it on to decide what that means.
 	ended func(item string)
 
+	// namedEnd is told, once, how a track started with a title stopped being the one loaded (End): a
+	// program that started its own track (an add-on, feature/addonhost) is told what became of it, and
+	// an end is the one thing it cannot work out afterwards from what is loaded. nil tells nobody. Called
+	// without mu held, before changed, so whoever is told reads the stream after it as settled.
+	namedEnd func(title *Title, how End)
+
 	// handOff is given a url that Play started and the device turned out not to decode, for the music
 	// library to play instead (library.go), and whether that is still wanted: it is not once anything
 	// else was played or the stream stopped. nil leaves it failed.
@@ -476,8 +482,18 @@ func (m *Stream) start(t *track) (*track, context.Context) {
 	// background wanting the speaker.
 	m.bg.Took(m)
 
+	m.tellEnd(previous, EndReplaced)
 	m.changed()
 	return t, ctx
+}
+
+// tellEnd tells namedEnd how t, a track that was the one loaded, ended, when it had a title. Each
+// track is told once: whichever of start, stopIf and finished took it off the stream is the one that
+// tells, and the others find it gone already.
+func (m *Stream) tellEnd(t *track, how End) {
+	if t != nil && t.title != nil && m.namedEnd != nil {
+		m.namedEnd(t.title, how)
+	}
 }
 
 // Pause stops the track where it is. What was queued but not heard is kept, so resuming does not
@@ -547,14 +563,14 @@ func (m *Stream) unpauseIf(ok func(t *track, bySender bool) bool) bool {
 }
 
 // Stop ends the track. There is nothing to come back to afterwards.
-func (m *Stream) Stop() { m.stopIf(nil) }
+func (m *Stream) Stop() { m.stopIf(nil, EndStopped) }
 
 // stopLoaded is Stop for something else taking the speaker: it ends a track that is loaded and does
 // nothing with none. Unlike Stop it is not an ask of its own, so a hand-off on its way is still wanted
 // when the music library's stream for it is what arrives (#649); a track loaded since has overtaken it
 // already.
 func (m *Stream) stopLoaded() {
-	m.stopIf(func(t *track, _ bool) bool { return t != nil })
+	m.stopIf(func(t *track, _ bool) bool { return t != nil }, EndReplaced)
 }
 
 // stopPaused ends the received track named name if it is the one loaded and the listener has it
@@ -563,12 +579,12 @@ func (m *Stream) stopLoaded() {
 func (m *Stream) stopPaused(name string) bool {
 	return m.stopIf(func(t *track, paused bool) bool {
 		return t != nil && t.received && t.item == name && paused
-	})
+	}, EndStopped)
 }
 
 // stopIf ends the track if ok, given it (nil with none loaded) and whether it is paused, says so, and
-// says whether it did; a nil ok ends it whatever it is.
-func (m *Stream) stopIf(ok func(t *track, paused bool) bool) bool {
+// says whether it did; a nil ok ends it whatever it is. how is what its end is told as (namedEnd).
+func (m *Stream) stopIf(ok func(t *track, paused bool) bool, how End) bool {
 	if m == nil {
 		return false
 	}
@@ -592,6 +608,7 @@ func (m *Stream) stopIf(ok func(t *track, paused bool) bool) bool {
 	}
 	t.stop()
 	m.flush()
+	m.tellEnd(t, how)
 	m.changed()
 	return true
 }
@@ -739,6 +756,11 @@ func (m *Stream) finished(t *track, itself bool) {
 	if itself && t.item != "" && len(t.sounds) == 0 && m.ended != nil {
 		m.ended(t.item)
 	}
+	how := EndItself
+	if t.failed != nil {
+		how = EndFailed
+	}
+	m.tellEnd(t, how)
 	m.changed()
 }
 
@@ -966,9 +988,40 @@ func (m *Stream) Heard(name string) (time.Duration, bool) {
 	if t == nil || !t.received || t.item != name {
 		return 0, false
 	}
+	return m.heardOf(t, kept), true
+}
+
+// heardOf is how far into t, the track loaded, the room has heard, kept samples being set aside for a
+// pause. Wants write.
+func (m *Stream) heardOf(t *track, kept int) time.Duration {
 	frames := int64(t.queued/speaker.Channels) - int64(m.out.Queued()) - int64(kept/speaker.Channels)
 	at := time.Duration(frames)*time.Second/speaker.Rate - speaker.OutputLatency
-	return max(at, 0), true
+	return max(at, 0)
+}
+
+// Named is what the track started with title is doing, while it is the one loaded (ok): paused or not,
+// whether any of it has reached the speaker yet (heard; until then it is still arriving), and how far
+// into it the room has heard. It is how a program that started its own track (PlayNamed) follows it,
+// and it says nothing about any other track.
+func (m *Stream) Named(title *Title) (paused, heard bool, at time.Duration, ok bool) {
+	if m == nil || title == nil {
+		return false, false, 0, false
+	}
+	m.write.Lock()
+	defer m.write.Unlock()
+	m.mu.Lock()
+	t := m.track
+	paused, kept := m.paused, len(m.rewind)
+	m.mu.Unlock()
+	if t == nil || t.title != title {
+		return false, false, 0, false
+	}
+	select {
+	case <-t.heard:
+		heard = true
+	default:
+	}
+	return paused, heard, m.heardOf(t, kept), true
 }
 
 // Requeue ducks what is already queued, which is up to a second of music the room would otherwise hear
