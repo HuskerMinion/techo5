@@ -128,8 +128,9 @@ func TestMediaStatePosition(t *testing.T) {
 	}
 	r.setStatus(playing())
 	// The device nudging far more often than the position may be said.
-	stop := make(chan struct{})
+	stop, nudged := make(chan struct{}), make(chan struct{})
 	go func() {
+		defer close(nudged)
 		for {
 			select {
 			case <-stop:
@@ -149,7 +150,9 @@ func TestMediaStatePosition(t *testing.T) {
 		}
 		break
 	}
+	// The nudger is waited out, so no "playing" from it can land after the pause below.
 	close(stop)
+	<-nudged
 	if len(got) < 3 || len(got) > 7 {
 		t.Errorf("%d positions in 550 ms at one every 100 ms", len(got))
 	}
