@@ -1,8 +1,6 @@
 package media
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,14 +15,11 @@ import (
 func titledPlayer(t *testing.T) (*Player, string) {
 	t.Helper()
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
-	t.Cleanup(srv.Close)
+	radio := station(t, nil)
 	d := speaker.NewDriver(speaker.New())
 	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
 	t.Cleanup(p.stream.Stop)
-	return p, srv.URL
+	return p, radio
 }
 
 // playMedia is Home Assistant's play_media, not an announcement.

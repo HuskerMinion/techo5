@@ -3,7 +3,6 @@ package echod
 import (
 	"errors"
 	"fmt"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,15 +40,7 @@ func newKernelCmd() *cobra.Command {
 		return p, nil
 	}
 	// reboot restarts the device, leaving why for the next boot's reason.
-	reboot := func(why string) error {
-		bootreason.Mark(why)
-		syscall.Sync()
-		err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
-		if err != nil {
-			bootreason.Unmark()
-		}
-		return err
-	}
+	reboot := bootreason.Reboot
 	status := &cobra.Command{
 		Use:   "status",
 		Short: "The kernel's trial state and the kernel this slot carries",

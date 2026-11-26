@@ -96,6 +96,11 @@ func (c Client) Skip(ctx context.Context, queueID string, seconds int) error {
 	return c.do(ctx, "player_queues/skip", map[string]any{"queue_id": queueID, "seconds": seconds}, nil)
 }
 
+// Seek moves what the queue queueID plays to position, in whole seconds from the start of the item.
+func (c Client) Seek(ctx context.Context, queueID string, position int) error {
+	return c.do(ctx, "player_queues/seek", map[string]any{"queue_id": queueID, "position": max(position, 0)}, nil)
+}
+
 // SetSpeed sets how fast the audiobook or podcast episode the queue queueID plays goes, from 0.5 to 3
 // times; the server refuses it for anything else.
 func (c Client) SetSpeed(ctx context.Context, queueID string, speed float64) error {

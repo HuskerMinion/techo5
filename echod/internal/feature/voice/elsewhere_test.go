@@ -84,7 +84,7 @@ func TestAFailedPlayerFallsBackOnce(t *testing.T) {
 	close(release)
 	playing := 0
 	for i := 0; i < 2; i++ {
-		if c.playElsewhere(t.Context(), url, func() { playing++ }, false) {
+		if c.playElsewhere(t.Context(), 1, url, func() { playing++ }, false) {
 			t.Fatal("a failed call counted as played elsewhere")
 		}
 	}
@@ -105,7 +105,7 @@ func TestAnUnavailablePlayerIsNotCalled(t *testing.T) {
 	config.Set().Brain().SetReplyPlayer("media_player.dot")
 	url, release := heldSpeech(t)
 	close(release)
-	if c.playElsewhere(t.Context(), url, nil, false) {
+	if c.playElsewhere(t.Context(), 1, url, nil, false) {
 		t.Fatal("an unavailable player counted as played elsewhere")
 	}
 	if len(*got) != 0 {
@@ -119,11 +119,11 @@ func TestRepliesStayHereWithoutAPlayerOrUrl(t *testing.T) {
 	c := thinkingTurn(t)
 	url, release := heldSpeech(t)
 	close(release)
-	if c.playElsewhere(t.Context(), url, nil, false) {
+	if c.playElsewhere(t.Context(), 1, url, nil, false) {
 		t.Error("sent with no player chosen")
 	}
 	config.Set().Brain().SetReplyPlayer("media_player.dot")
-	if c.playElsewhere(t.Context(), "", nil, false) {
+	if c.playElsewhere(t.Context(), 1, "", nil, false) {
 		t.Error("sent a stream, which has no url")
 	}
 	if len(*got) != 0 {

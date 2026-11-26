@@ -183,7 +183,10 @@ stopdhcp() {
 # background, and one holding fd 9 would hold the lock for as long as it lives, and every later run of
 # this, the keeper's minute among them, would wait for it for good.
 dhcp() {
-	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p $ROOT/run/udhcpc.pid -s "$SCRIPT" > $ROOT/tmp/udhcpc.log 2>&1 9>&-
+	# Its log in root's own scratch folder (techo5-lib.sh, t5_tmp), not /tmp: this runs as root, from
+	# the daemon too, and a link another user left at a fixed name in /tmp would be written through.
+	[ -d $ROOT/run/techo5 ] || mkdir -p -m 0700 $ROOT/run/techo5
+	pidof udhcpc >/dev/null || udhcpc -i $IF -b -R -t 10 -p $ROOT/run/udhcpc.pid -s "$SCRIPT" > $ROOT/run/techo5/udhcpc.log 2>&1 9>&-
 	echo dhcp > $APPLIED
 }
 

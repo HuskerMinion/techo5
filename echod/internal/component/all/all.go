@@ -11,6 +11,7 @@ package all
 import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/android/setup"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/activity"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/addons"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/api"
@@ -63,6 +64,7 @@ import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/timezone"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/touched"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/ultrasound"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/wakeword"

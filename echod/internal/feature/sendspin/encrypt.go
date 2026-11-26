@@ -3,6 +3,7 @@ package sendspin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -21,9 +22,16 @@ import (
 // from before encryption knows only the unencrypted wire, and the device still plays to it: a server
 // that does not answer client/init with server/init is remembered, and the next connection from it is
 // unencrypted, as every connection was before.
+//
+// That fallback is only for a server that has never spoken encrypted with the device. Its unencrypted
+// hello carries the factory MAC as client_id, where an encrypted one carries the device's key, so
+// Music Assistant keeps the two as two players: a device that fell back from a server it had been
+// talking encrypted with, after one hang-up, swapped players under its owner's automations and groups
+// for a day, then swapped back (#721). A server that has spoken encrypted is held to it, and a hang-up
+// from it is only a failed connection, tried again as any is.
 
 // keysPath is the device's Sendspin identity and its pairings. A variable for the tests.
-var keysPath = layout.StateDir + "/sendspin-keys.json"
+var keysPath = layout.SendspinKeysPath
 
 // keys is the store, opened on first use. A store that cannot be opened leaves the device on the
 // unencrypted wire, which is how it played before, rather than without music, and is tried again on
@@ -98,6 +106,37 @@ func markUnencrypted(peer string, yes bool) {
 	}
 }
 
+// downgradeAfter is how long a server that has spoken encrypted Sendspin must go on hanging up on
+// client/init (or keeping silent), with no encrypted handshake in between, before it is taken for one
+// from before encryption after all: a Music Assistant downgraded to a version from before it. It is as
+// long as a server from before encryption is left unencrypted (unencryptedFor), so a device waits as
+// long for a downgraded server as for an updated one. A restart or a busy server is over in minutes,
+// and only a reply that is not server/init says sooner, in so many words, that the server is old.
+const downgradeAfter = 24 * time.Hour
+
+// errHungUp is a server that has spoken encrypted hanging up on client/init: a failed connection,
+// which the caller backs off from and tries again, encrypted.
+var errHungUp = errors.New("sendspin: the server hung up on the encrypted handshake; it has spoken encrypted before, so it is tried encrypted again")
+
+// fallBack reports whether a handshake that ended in err is to make the next connection with peer
+// unencrypted: a server that does not speak encrypted Sendspin, rather than one that has and failed.
+func fallBack(st *secure.Store, peer string, err error) bool {
+	if !errors.Is(err, secure.ErrNotEncrypted) {
+		return false
+	}
+	if !errors.Is(err, secure.ErrHungUp) {
+		return true // it answered client/init with something else
+	}
+	since, spoken := st.HungUp(peer)
+	switch {
+	case !spoken:
+		return true
+	case since.IsZero():
+		return false // the clock is not set yet, so no streak is being counted
+	}
+	return time.Since(since) >= downgradeAfter
+}
+
 // errTryUnencrypted is a connection spent on a server that does not speak encrypted Sendspin. It has
 // read client/init as a broken hello, so this connection is over; the next is made unencrypted.
 var errTryUnencrypted = errors.New("sendspin: the server does not speak encrypted Sendspin; the next connection is unencrypted")
@@ -120,12 +159,18 @@ func secured(ctx context.Context, conn *websocket.Conn, peer string) (ws *websoc
 		return conn, true, nil
 	}
 	c, err := secure.Handshake(conn, st)
-	if errors.Is(err, secure.ErrNotEncrypted) {
+	if fallBack(st, peer, err) {
 		markUnencrypted(peer, true)
 		return nil, false, errTryUnencrypted
 	}
+	if errors.Is(err, secure.ErrHungUp) {
+		return nil, false, fmt.Errorf("%w: %v", errHungUp, err)
+	}
 	if err != nil {
 		return nil, false, err
+	}
+	if err := st.SpokeEncrypted(peer, c.ServerID); err != nil {
+		slog.Warn("sendspin: could not record the server as encrypted", "err", err)
 	}
 	slog.Info("sendspin encrypted", "psk", c.Category, "credential_mismatch", c.Mismatch)
 	mac, _ := layout.FactoryMAC()

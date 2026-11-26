@@ -83,6 +83,8 @@ type scene struct {
 	// The dashboard page, drawn instead of the clock while showDash is set: how it is shown, and
 	// when streamed, what arrived.
 	showDash    bool
+	showCast    bool // a phone is casting to the screen (cast.go)
+	showCastAsk bool // and the page is the question about a phone waiting to be accepted, for the tap's latch (castLatch)
 	dashHide    bool // the Show dashboard handle setting is off: no bar on the edge (#564)
 	dashAsked   bool // the dashboard a tap on the night screen opened (dashNight): shown over the night clock
 	dashMode    config.DashboardMode
@@ -155,6 +157,8 @@ type scene struct {
 	nowPlaying    bool
 	modernMusic   bool
 	musicPosition media.Position
+	// musicSeek is how a place chosen on the page's bar is sent, if it can be (seekbar.go).
+	musicSeek seekView
 
 	// showDrawer is Cameras and Radio, in from the right over the idle page: drawerTab is which,
 	// drawerScroll how far its list is scrolled, drawerPick a list of choices open over it, and
@@ -277,6 +281,9 @@ type scene struct {
 	// libraryWord is the word on the Now Playing page's Library button, back to the music library;
 	// empty for no button (no Music Assistant set up).
 	libraryWord string
+	// queue is the Queue button beside the star: Library is there and what plays is Music Assistant's
+	// (queueShown).
+	queue bool
 	// spoken is an audiobook or a podcast episode playing, as Music Assistant says (listening.go): the
 	// page's back and forward go 30 seconds, and Now Playing has its speed, as fast as speed.
 	spoken bool
@@ -331,11 +338,18 @@ type scene struct {
 	// video is the video player (feature/video); showVideo is its page, over everything but what covers
 	// it (videoCovered), and videoLive that page with its picture coming, when only its controls are
 	// drawn on the canvas; videoControls is the controls being up. showVideoAsk is the question about a
-	// DLNA video, videoAsk what it asks (render_video.go).
+	// DLNA video, videoAsk what it asks (render_video.go). videoSkip is a back and a forward on the
+	// controls, for a DLNA video whose controller is listening for them (dlna.VideoSkippable), and
+	// videoSeek the bar over them, for a video somebody can move through (seekbar.go). videoFit is the
+	// button for the way the picture takes the screen, for a video the player can start again where it
+	// is (videoFittableNow).
 	video         video.State
 	showVideo     bool
 	videoLive     bool
 	videoControls bool
+	videoSkip     bool
+	videoSeek     seekView
+	videoFit      bool
 	showVideoAsk  bool
 	videoAsk      videoAsk
 
@@ -388,8 +402,10 @@ type renderer struct {
 
 	// videoZones are the video page's controls where they were last drawn, under zmu, and videoOver
 	// what of the canvas goes over the picture (render_video.go).
-	videoZones []image.Rectangle
+	videoZones []videoZone
 	videoOver  image.Rectangle
+	// seekBars is the bar to seek on that a page drew, the video's or Now Playing's (seekbar.go).
+	seekBars seekBars
 
 	// callBarAt and hangAt are the call over the page and its Hang up where they were last drawn, under
 	// zmu, and empty when the frame drew none (render_callbar.go).
@@ -646,6 +662,9 @@ func (r *renderer) draw(s scene) {
 	// drawn (publishSkip, registered before the overlays' own defers so it runs after them).
 	r.skipDrawn, r.skipDrawnOffer = image.Rectangle{}, skipOffer{}
 	defer r.publishSkip(s)
+	// The bar to seek on the same way: only one this frame draws, and from when it is done.
+	r.seekBars.begin()
+	defer r.seekBars.publish()
 	// The call over the page the same way: a frame that does not draw it leaves nothing of it to tap.
 	// What a frame draws is published only once it is done, so a tap while the next frame is drawn
 	// still finds the bar the screen shows, never the call page's hang-up below it.
@@ -683,6 +702,7 @@ func (r *renderer) draw(s scene) {
 		if r.rainbowKept(s) {
 			// The page as it was, its taps as they were: only Rainbow is drawn again.
 			r.keepCallBar()
+			r.seekBars.keep() // the bar it drew too, so it is not drawn as one to seek on that takes no finger
 			r.appsNext = r.appsDrawn.Load()
 			r.turnCue(s)
 			return
@@ -835,6 +855,13 @@ func (r *renderer) draw(s scene) {
 		}
 		return
 	}
+	if s.showCast {
+		r.castPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.showDeck {
 		r.deckPage(s)
 		if s.showVolume {
@@ -922,6 +949,10 @@ func (r *renderer) draw(s scene) {
 			onPhoto(func() { r.slideshowScreensaverPage(s) })
 		} else if s.nowPlaying {
 			r.nowPlaying(s)
+			if s.showDrawer || s.appsPop {
+				// What slides in over the page takes the fingers there: its bar is not one to seek on.
+				r.seekBars.begin()
+			}
 		} else {
 			// walnut is read inside, so the patches are made of the palette onPhoto puts in force.
 			page := func() { r.readableOver(behind, walnut, slideshowWash, func() { r.bigClock(s) }) }

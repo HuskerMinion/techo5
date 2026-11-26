@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 )
@@ -20,6 +21,8 @@ const (
 	videoButtonH = 76
 	videoGap     = 16
 	videoIcon    = 44
+	// videoSeekH is the strip grown above the buttons for the bar to seek on, when the video has one.
+	videoSeekH = 34
 )
 
 // videoButtons are the controls, left to right: play or pause and stop on the left, quieter and louder
@@ -33,6 +36,23 @@ func (r *renderer) videoButtons() (play, stop, quieter, louder image.Rectangle) 
 	louder = image.Rect(r.w-r.margin-w, y, r.w-r.margin, y+h)
 	quieter = louder.Sub(image.Pt(w+gap, 0))
 	return play, stop, quieter, louder
+}
+
+// videoSkipButtons are the back and forward a DLNA video has while its controller listens
+// (videoSkip): after stop, in the left group.
+func (r *renderer) videoSkipButtons() (back, next image.Rectangle) {
+	_, stop, _, _ := r.videoButtons()
+	step := image.Pt(r.s(videoButtonW)+r.s(videoGap), 0)
+	back = stop.Add(step)
+	return back, back.Add(step)
+}
+
+// videoFitButton is the button for the way the picture takes the screen (videoFit): before quieter, in
+// the right group, so the left group keeps play and stop where a hand knows them, and back and forward
+// after them.
+func (r *renderer) videoFitButton() image.Rectangle {
+	_, _, quieter, _ := r.videoButtons()
+	return quieter.Sub(image.Pt(r.s(videoButtonW)+r.s(videoGap), 0))
 }
 
 // videoPage draws the video page and says what of it goes over the picture.
@@ -94,7 +114,12 @@ func (r *renderer) videoWords(s scene) {
 
 // videoControls draws the strip of controls and remembers where they are, for a tap.
 func (r *renderer) videoControls(s scene) image.Rectangle {
-	strip := image.Rect(0, r.h-r.s(videoStripH), r.w, r.h)
+	base := r.h - r.s(videoStripH)
+	strip := image.Rect(0, base, r.w, r.h)
+	seek := s.videoSeek.tappable()
+	if seek {
+		strip.Min.Y -= r.s(videoSeekH)
+	}
 	op := draw.Src // over a clear canvas: the panel blends it over the picture
 	if !s.videoLive {
 		op = draw.Over // over the page's own black, which the panel shows as it is
@@ -106,10 +131,26 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	if s.video.Phase == video.Paused {
 		mark = "play"
 	}
-	for _, b := range []struct {
+	type button struct {
 		rect image.Rectangle
 		icon string
-	}{{play, mark}, {stop, "stop"}, {quieter, "volume-minus"}, {louder, "volume-plus"}} {
+	}
+	buttons := []button{{play, mark}, {stop, "stop"}, {quieter, "volume-minus"}, {louder, "volume-plus"}}
+	zones := []videoZone{{play, videoTapPlay}, {stop, videoTapStop}, {quieter, videoTapQuieter}, {louder, videoTapLouder}}
+	lastLeft, firstRight := stop, quieter
+	if s.videoSkip {
+		back, next := r.videoSkipButtons()
+		buttons = append(buttons, button{back, "skip-previous"}, button{next, "skip-next"})
+		zones = append(zones, videoZone{back, videoTapBack}, videoZone{next, videoTapNext})
+		lastLeft = next
+	}
+	if s.videoFit {
+		fit := r.videoFitButton()
+		buttons = append(buttons, button{fit, videoFitIcon(s.video.Aspect)})
+		zones = append(zones, videoZone{fit, videoTapFit})
+		firstRight = fit
+	}
+	for _, b := range buttons {
 		style := btnSecondary
 		if b.rect == play {
 			style = btnPrimary
@@ -118,7 +159,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 		r.mdiIcon(b.icon, b.rect.Min.X+(b.rect.Dx()-r.s(videoIcon))/2, b.rect.Min.Y+(b.rect.Dy()-r.s(videoIcon))/2, videoIcon, fg)
 	}
 	// The name and where it is, between the two groups.
-	left, right := stop.Max.X+r.s(28), quieter.Min.X-r.s(28)
+	left, right := lastLeft.Max.X+r.s(28), firstRight.Min.X-r.s(28)
 	name := s.video.Title
 	if name == "" {
 		name = s.video.Host
@@ -126,21 +167,39 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 	if s.demo && name != "" {
 		name = "A film"
 	}
-	at := videoTime(s.video.Pos)
-	if s.video.Dur > 0 {
-		at += " / " + videoTime(s.video.Dur)
+	at := videoTime(s.videoSeek.at(s.video.Pos))
+	if dur := videoLength(s); dur > 0 {
+		at += " / " + videoTime(dur)
 	}
-	if s.video.Phase == video.Loading || !s.video.Frames {
+	if (s.video.Phase == video.Loading || !s.video.Frames) && !s.videoSeek.shown {
 		at = tr("ui_loading")
 	}
-	mid := strip.Min.Y + strip.Dy()/2
+	mid := base + r.s(videoStripH)/2
+	if seek {
+		// Along the top of the strip, over the buttons and the width of the page: the whole of the
+		// video from one margin to the other, for a finger to place a tap in.
+		r.seekBar(s.videoSeek, r.margin, r.w-r.margin, strip.Min.Y+r.s(videoSeekH)/2+r.s(4), s.video.Pos, s.videoSeek.dur,
+			videoTrack, amber)
+	}
 	r.text(r.small, r.fit(r.small, name, right-left), left, mid-r.s(4), cream)
 	r.text(r.tiny, at, left, mid+r.s(32), dim)
 
 	r.zmu.Lock()
-	r.videoZones = []image.Rectangle{play, stop, quieter, louder}
+	r.videoZones = zones
 	r.zmu.Unlock()
 	return strip
+}
+
+// videoLength is how long the video on the page runs: the player's say, or the DLNA renderer's when the
+// player has none (a continuous transcode, whose controller can still be asked to move through it).
+func videoLength(s scene) time.Duration {
+	if s.videoSeek.start > 0 {
+		return s.videoSeek.dur // the whole film's: the stream playing is only the rest of it
+	}
+	if s.video.Dur > 0 {
+		return s.video.Dur
+	}
+	return s.videoSeek.dur
 }
 
 // videoTapped is which control a tap landed on, as last drawn. A finger is a little wider than a
@@ -148,12 +207,7 @@ func (r *renderer) videoControls(s scene) image.Rectangle {
 func (r *renderer) videoTapped(at image.Point) videoTap {
 	r.zmu.Lock()
 	defer r.zmu.Unlock()
-	for i, z := range r.videoZones {
-		if at.In(z.Inset(-r.s(8))) {
-			return videoTap(i + 1)
-		}
-	}
-	return videoTapNone
+	return videoZoneAt(r.videoZones, at, r.s(8))
 }
 
 // videoAskPage is the question about a DLNA video from an address that has not been allowed: who is

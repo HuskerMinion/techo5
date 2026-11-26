@@ -139,9 +139,14 @@ func (o *out) open(sampleRate, channels, bitDepth int) error {
 
 	o.mu.Lock()
 	o.ready = true
+	held := o.held
 	o.mu.Unlock()
 
-	o.p.Attach(o)
+	// Not while stood down: a new stream/start without an end, during a cast, would take the speaker's
+	// one slot and leave the cast silent. Resume takes it back when the hold ends.
+	if !held {
+		o.p.Attach(o)
+	}
 	return nil
 }
 
@@ -450,7 +455,13 @@ func (o *out) Suspend() {
 func (o *out) Resume() {
 	o.mu.Lock()
 	o.held = false
+	ready := o.ready
 	o.mu.Unlock()
+	// A cast (or anything else that attached while this was stood down) took the speaker's one source
+	// slot and cleared it when it ended: take it back, or the music carries on in silence.
+	if ready {
+		o.p.Attach(o)
+	}
 	slog.Info("sendspin resume", "queued_ms", o.queuedMs())
 }
 

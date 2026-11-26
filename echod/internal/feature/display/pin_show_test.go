@@ -31,12 +31,12 @@ func TestTheShowsTapsGoThroughTheLock(t *testing.T) {
 	}
 	pinPress("cancel")
 
-	d.picker = "theme"
-	d.r.zones = []zone{{r: image.Rect(0, 0, 100, 100), kind: zoneOption, opt: 1, label: "Theme"}}
-	before := config.Get().Screen.Theme
+	d.picker = "screenlang"
+	d.r.zones = []zone{{r: image.Rect(0, 0, 100, 100), kind: zoneOption, opt: 1, label: "Screen language"}}
+	before := config.Get().Screen.Language
 	d.nextTap(50, 50)
-	if p := pinNow(time.Now()); !p.open || p.what != "Theme" || config.Get().Screen.Theme != before {
-		t.Errorf("a choice in the locked Theme list: pad up %v for %q, theme %q (was %q)", p.open, p.what, config.Get().Screen.Theme, before)
+	if p := pinNow(time.Now()); !p.open || p.what != "Screen language" || config.Get().Screen.Language != before {
+		t.Errorf("a choice in the locked Screen language list: pad up %v for %q, language %q (was %q)", p.open, p.what, config.Get().Screen.Language, before)
 	}
 }
 

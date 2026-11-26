@@ -3,8 +3,6 @@ package media
 import (
 	"context"
 	"math"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -32,15 +30,13 @@ func TestAStationStartedDuringAPausedTurnPlaysAfterIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // a station: it never ends
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 
 	d := speaker.NewDriver(speaker.New())
 	a := d.Backgrounds()
 	s := NewStream(d, speaker.New(), func() {}, func(string) {})
-	a.Took(other{}) // Music Assistant, playing
+	t.Cleanup(s.Stop) // registered after the station, so it is stopped first, a test that fails part way too
+	a.Took(other{})   // Music Assistant, playing
 
 	a.Duck("turn", true) // the turn starts
 	release := make(chan struct{})
@@ -48,7 +44,7 @@ func TestAStationStartedDuringAPausedTurnPlaysAfterIt(t *testing.T) {
 		<-release
 		return nil
 	})
-	s.Play(srv.URL) // Home Assistant starts the station while the reply sounds
+	s.Play(radio) // Home Assistant starts the station while the reply sounds
 	close(release)
 	select {
 	case <-reply.Done():
@@ -63,7 +59,6 @@ func TestAStationStartedDuringAPausedTurnPlaysAfterIt(t *testing.T) {
 	if holds != 0 || gated {
 		t.Fatalf("the station is still held after the turn: holds=%d gated=%v", holds, gated)
 	}
-	s.Stop()
 }
 
 // "Stop playing" by voice, with music set to pause for a turn: the turn pauses the station and the
@@ -76,15 +71,13 @@ func TestAStationPlaysAfterBeingStoppedDuringAPausedTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 
 	d := speaker.NewDriver(speaker.New())
 	a := d.Backgrounds()
 	s := NewStream(d, speaker.New(), func() {}, func(string) {})
-	s.Play(srv.URL) // the station is playing
+	t.Cleanup(s.Stop)
+	s.Play(radio) // the station is playing
 
 	a.Duck("turn", true) // "stop playing" starts a turn
 	release := make(chan struct{})
@@ -101,14 +94,13 @@ func TestAStationPlaysAfterBeingStoppedDuringAPausedTurn(t *testing.T) {
 	}
 	a.Duck("turn", false)
 
-	s.Play(srv.URL) // later: "play the station"
+	s.Play(radio) // later: "play the station"
 	s.mu.Lock()
 	holds, gated := s.holds, s.gate != nil
 	s.mu.Unlock()
 	if holds != 0 || gated {
 		t.Fatalf("a station started after the stop is held: holds=%d gated=%v", holds, gated)
 	}
-	s.Stop()
 }
 
 // The sequence as it really went on a Show: the station, paused by "stop playing", is stood down
@@ -118,18 +110,16 @@ func TestAStationPlaysAfterBeingStoppedDuringAPausedTurn(t *testing.T) {
 func TestAStationThatTakesTheSpeakerBackFromAnotherPlays(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done()
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 
 	d := speaker.NewDriver(speaker.New())
 	a := d.Backgrounds()
 	s := NewStream(d, speaker.New(), func() {}, func(string) {})
-	s.Play(srv.URL)
+	t.Cleanup(s.Stop)
+	s.Play(radio)
 	s.Pause()       // "stop playing" is a pause
 	a.Took(other{}) // Music Assistant starts a song and stands the station down
-	s.Play(srv.URL) // "play the station": it takes the speaker back
+	s.Play(radio)   // "play the station": it takes the speaker back
 
 	s.mu.Lock()
 	holds, gated := s.holds, s.gate != nil
@@ -137,7 +127,6 @@ func TestAStationThatTakesTheSpeakerBackFromAnotherPlays(t *testing.T) {
 	if holds != 0 || gated {
 		t.Fatalf("the station took the speaker back and is still held: holds=%d gated=%v", holds, gated)
 	}
-	s.Stop()
 }
 
 // The level a duck asks for is the level applied, rather than the setting being read again in here: a

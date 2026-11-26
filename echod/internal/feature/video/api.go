@@ -2,6 +2,7 @@ package video
 
 import (
 	"errors"
+	"net"
 	"time"
 )
 
@@ -14,9 +15,29 @@ const (
 	FromHomeAssistant Origin = iota
 
 	// FromDLNA is a DLNA controller, which anybody on the network can be: the first video from an
-	// address asks on the screen first.
+	// address asks on the screen first, unless the controller is on the device itself (FromDevice).
 	FromDLNA
 )
+
+// FromDevice is whether a DLNA controller's address is the device's own loopback (127.0.0.0/8, ::1):
+// a program on the device driving the renderer on localhost, which plays without asking, as
+// play_video's videos do.
+//
+// Loopback alone used to be enough, as putting a program there took root. With add-ons running as users
+// of their own (feature/addons) it is not: the renderer gives a loopback address as From only when the
+// program at the other end runs as root, or as an add-on the owner installed and agreed to, whose
+// warning says it can drive the device (feature/dlna, controller; lib/peeruid). Any other user on the
+// device comes as "a program on this device (user N)", which is not an address, and is asked about.
+//
+// From is the connection's own source address (the renderer's RemoteAddr), never a header, so a
+// request cannot claim it. Nobody on the network can be it either: the kernel drops a packet that
+// arrives on Wi-Fi from a loopback source, and the answer to one would go out on loopback, so no
+// connection gets made. A connection the device makes to its own Wi-Fi address comes from that
+// address, not loopback: an add-on calls 127.0.0.1 (or [::1]) to be taken as the device's.
+func FromDevice(from string) bool {
+	ip := net.ParseIP(from)
+	return ip != nil && ip.IsLoopback()
+}
 
 // Request is a video to play.
 type Request struct {
@@ -26,6 +47,10 @@ type Request struct {
 	Origin Origin
 	// From is the address that asked, for a DLNA controller: what the screen names and remembers.
 	From string
+
+	// Start is where in the video to begin: zero for its start, else where a seek moved it to (Seek).
+	// A video that says no length (a live stream) starts where it is, whatever this says.
+	Start time.Duration
 }
 
 // Phase is what the player is doing, as Home Assistant's Video sensor says it.
@@ -55,6 +80,9 @@ type State struct {
 	// Frames is whether the picture has begun to arrive.
 	Frames bool
 
+	// Aspect is how the picture takes the screen (Refit): AspectFit for every video as it starts.
+	Aspect Aspect
+
 	// AskID is the DLNA video whose question is on the screen, when there is one: while another video
 	// plays, the state is that video's, and this is how the one asking knows it is still asked about.
 	AskID uint64
@@ -83,6 +111,9 @@ var (
 	// ErrBusy is a DLNA video from one address while the screen is asking about another's: the question
 	// on the screen is not changed under the finger answering it.
 	ErrBusy = errors.New("video: the screen is asking about another video")
+	// ErrNotSeekable is a seek in a video that cannot be moved through: a live stream, which says no
+	// length, or a video that is no longer the one up.
+	ErrNotSeekable = errors.New("video: this video cannot be moved through")
 	// ErrNotInstalled is an image without the decoder.
 	ErrNotInstalled = errors.New("video: this image has no video decoder")
 )

@@ -738,3 +738,45 @@ func TestALateAnswerIsNotALaterPausesAnswer(t *testing.T) {
 	snd.answer()
 	waitUntil(t, "the second pause to be taken", func() bool { return !taken().IsZero() })
 }
+
+// A receiver that takes a skip itself (ReceiverSkip: DLNA's renderer) is asked for a next or a previous
+// while it says somebody hears it, and SkipReaches says so; with nobody listening it is not asked, and
+// a skip finds nothing to reach, as for any other received track.
+func TestAReceiverTakesItsOwnSkipWhileHeard(t *testing.T) {
+	const name = "DLNA (takes its own skip)"
+	var heard atomic.Bool
+	asked := make(chan Transport, 4)
+	ReceiverSkip(name, heard.Load, func(tr Transport) { asked <- tr })
+	t.Cleanup(func() { receiverSkips.Delete(name) })
+	p, _ := receivedPlayer(name)
+
+	if p.SkipReaches() {
+		t.Error("a skip reaches with nobody listening")
+	}
+	p.Transport(TransportNext)
+	select {
+	case tr := <-asked:
+		t.Fatalf("asked %v with nobody listening", tr)
+	default:
+	}
+
+	heard.Store(true)
+	if !p.SkipReaches() {
+		t.Error("a skip does not reach with somebody listening")
+	}
+	p.Transport(TransportNext)
+	p.Transport(TransportPrevious)
+	for _, want := range []Transport{TransportNext, TransportPrevious} {
+		select {
+		case tr := <-asked:
+			if tr != want {
+				t.Fatalf("asked %v, want %v", tr, want)
+			}
+		default:
+			t.Fatalf("not asked for %v", want)
+		}
+	}
+	if p.Receiving() != name {
+		t.Error("a skip passed on ended the track here")
+	}
+}

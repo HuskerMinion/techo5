@@ -251,6 +251,41 @@ screensaver up now, as if the screen had been idle for the whole wait, for an au
 "everybody left" or "movie time". A tap takes it down as usual. A press does nothing when there is
 no screensaver to show (Slideshow is not on Screensaver, or no photo has arrived yet), when the
 screen is out, or while something else has the screen (a request, a call, a ring, the settings).
+**Hide screensaver** (a button beside it) takes the screensaver down to the clock, as a tap does,
+and the idle wait starts again from the press. It does nothing when no screensaver is up.
+
+To have the screensaver only at the times an automation chooses, and never by itself after the wait
+otherwise, leave **Slideshow** on **Background** or **Off** and let the automation switch it: set
+`select.<node>_slideshow` to **Screensaver**, then press **Show screensaver**; to end it, set
+Slideshow back, which takes the screensaver down and keeps it from coming back by itself. While
+Slideshow is on Screensaver it is the ordinary screensaver: after a tap it comes back once the screen
+has been idle for the wait. From
+**Off** the first photo is fetched after the switch, so give it a few seconds before the press (a
+press before a photo has arrived does nothing); from **Background** a photo is already there.
+
+```yaml
+# Up at 20:00 and down at 23:00. In between, a tap takes it down and it comes back after the
+# idle wait; after 23:00 it does not come back by itself.
+- alias: Photos in the evening
+  triggers:
+    - trigger: time
+      at: "20:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: Screensaver }
+    - delay: 10
+    - action: button.press
+      target: { entity_id: button.office_show_screensaver }
+- alias: Photos off at night
+  triggers:
+    - trigger: time
+      at: "23:00:00"
+  actions:
+    - action: select.select_option
+      target: { entity_id: select.office_slideshow }
+      data: { option: "Off" }
+```
 
 The same settings are entities in Home Assistant, and the folder can be set with the
 [`home_slideshow` action](actions.md#set-the-slideshows-photo-source). Given the folder that is
@@ -539,6 +574,11 @@ HTTP.
   this device's, so the delay is set here: the device places the group's audio that much later, it
   applies as soon as it is changed, even in a song that is playing, and 0 plays as Music Assistant
   schedules it.
+  Since v1.6.49 (dot-v1.0.76, spot-v1.4.49) the device talks to Music Assistant encrypted, as Sendspin
+  1.0 asks, and is known there by its encryption key, not its MAC address any more. That makes Music
+  Assistant create a new player for the device, unless Music Assistant carries the old one over
+  ([music-assistant/support#7199](https://github.com/music-assistant/support/issues/7199)). Move
+  your automations and groups to the new player, or remove the old one.
 - **Snapcast.** The device can also be a client of a [Snapcast](https://github.com/snapcast/snapcast)
   server, in step with the house's other Snapcast clients. In Home Assistant, set **Snapcast server**
   (Playback, Configuration) to the server's address, `192.168.1.20` or `192.168.1.20:1704` (1704
@@ -612,11 +652,90 @@ HTTP.
   Jellyfin, Plex or Emby, a NAS's music app, foobar2000, Windows' Cast to device. It plays MP3, FLAC
   and WAV; most apps and servers convert anything else when asked. The song's name, artist and cover
   show as now playing, the app's volume slider sets the device's volume, and play, pause and stop go
-  both ways. Skipping within a song is not supported yet. It is off until turned on: anyone on the
+  both ways. Moving within a song (the app's slider, DLNA's Seek) works for an MP3 or WAV file, and
+  a FLAC that has a seek table (most do), when the server sends parts of a file, as Jellyfin, Plex,
+  Emby, MiniDLNA and BubbleUPnP do: the device fetches the song again from the new place. A FLAC
+  without a seek table, a live stream, and a server that only sends whole files can't be moved
+  through, and the app is told so (it can ask the renderer which it can do, and Seek is listed only
+  when it works). An MP3's new place is worked out from the file's length, or from its own table of
+  contents when it has one, so in a variable bit rate file without one it can land a second or two
+  off. It is off until turned on: anyone on the
   same network can play to it while it is on, as with any DLNA speaker, and can also ask what it is
-  playing, including the song's address (some servers put a login token in it, as with any DLNA
-  speaker). With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
-  ([Video](video.md)).
+  playing. Only the app that sent the song is told its address and description whole; anyone else
+  asking is told them with whatever looks like a login in each address blanked (a Plex server's
+  `X-Plex-Token`, an `api_key`, a Subsonic server's password), so the token some servers put in
+  them is not handed to every device on the network. With **Video** and **DLNA video** on as well (Show and Spot), it takes videos too
+  ([Video](video.md)). A program of your own on the device (one started from `rc.local`, see
+  [Running something of your own at boot](#running-something-of-your-own-at-boot)) can use it as
+  well, at `http://127.0.0.1:8181/dlna/device.xml`, while the DLNA switch is on: a video sent from
+  the device itself plays without the question on the screen when the program runs as root (one
+  started from `rc.local`, which only someone with a root shell could have put there) or is an add-on
+  you installed from the [Add-ons](#add-ons) card, whose warning says it can drive the device. A
+  program on the device running as any other user is asked about, as a device on the network is. A
+  program that passes on requests from other
+  devices on the network has to check them itself: the question is not asked for them. The device fetches the song or video from the address it is given, which
+  cannot be the device itself.
+
+  <a id="plex"></a>**Plex.** Casting from Plex runs this way, as an add-on:
+  [techo5-plex](https://github.com/HuskerMinion/techo5-plex) makes the device a player in Plex apps
+  and hands what they cast to the renderer. It is installed on each device you want to cast to; its
+  README says how. It needs DLNA, Video and DLNA video on.
+
+  <a id="dlna-next-and-previous"></a>**Next and previous.** A DLNA renderer has no queue: the app
+  or program that sends it songs does. So next and previous pressed on the device, for a song or
+  video the renderer is playing (the Now Playing buttons on the Show, a swipe on the Spot, the
+  video's back and forward, the next song word for a song), are passed on to the app that sent it,
+  when it subscribed to the renderer's AVTransport events and said it acts on them (below), to skip
+  in its own queue and send the next song with `SetAVTransportURI` as it would at a song's end. UPnP has no word for this, so it is one of TECHO5's own state variables in a
+  `LastChange` event of its own (listed in the AVTransport description):
+
+  ```xml
+  <Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/">
+    <InstanceID val="0">
+      <X_TECHO5_Request val="next:3"/>
+    </InstanceID>
+  </Event>
+  ```
+
+  `val` is `next` or `previous`, a colon and the press's number: `next:3`, then `previous:4`. The
+  number goes up by one with each press, from 1 when the daemon starts, and never repeats while it
+  runs, so two presses of next in a row are `next:5` and `next:6`: a controller can take a value
+  that differs from the last one it saw as a new press.
+
+  A place chosen on the device's own screen (the bar on Now Playing or under a video's controls) is
+  sent the same way, as `seek`, a colon, the place in whole seconds from the start, and then the
+  number, which is shared with next and previous: `seek:95:7` is "go to 1:35", the seventh request.
+  The number is always after the last colon. It is sent only for a song or video the renderer can't
+  move through itself (a live transcode, as a Plex add-on might send) that says how long it is: one
+  the renderer can move through it moves itself, as for the app's Seek, and the app sees the new
+  place in the position it reads. The controller can send the stream again from that place with
+  `SetAVTransportURI`.
+
+  Each request goes only to a controller that said it acts on it, and only to the one that sent
+  the song or video playing: it names the requests it acts on in an `X-TECHO5-Requests` header on
+  its AVTransport SUBSCRIBE, `X-TECHO5-Requests: next, previous, seek` for all three (any of them
+  alone works too). Most controllers (Home Assistant's DLNA player, Music Assistant, BubbleUPnP)
+  send no such header and ignore TECHO5's own requests, so buttons that asked them would do
+  nothing: with no such subscriber, the device offers no back and forward on a DLNA video, the
+  next song word only fires its event (`asked: false`), the buttons on the Now Playing page and a
+  swipe on the Spot do what they do for a station, and a song or video the renderer can't move
+  through has no bar to tap. The events that follow a request (the state changing) don't carry it
+  again, and the state sent on subscribing never has one. The song here plays on until the
+  controller sends another. Controllers that don't know the variable ignore it, as UPnP says to.
+
+  A controller that sends a film again from a place as one continuous stream (a transcode that
+  begins at 0:53:00, say) can say where in the whole film the stream begins, so that the screen
+  shows the film's own time and a place chosen on the bar is asked for in it. It is TECHO5's own
+  `start` attribute on the `res` of the description, in its own namespace:
+
+  ```xml
+  <res protocolInfo="http-get:*:video/mp2t:*" duration="0:44:00"
+       xmlns:techo5="urn:techo5:dlna" techo5:start="0:53:00">http://...</res>
+  ```
+
+  `duration` stays the stream's own length (here the 44 minutes left of a 1:37:00 film), as do the
+  positions the renderer reports; `start` is `H:MM:SS`, and a seek the screen asks for is in the
+  whole film's time (`seek:3300:8` for 0:55:00).
 - **A phone over Bluetooth.** On the Show, the Spot and the Dot, the **Bluetooth phone**
   switch, in Home Assistant, lets a phone play to the device as to any Bluetooth speaker. For two
   minutes the device can be found and paired with, with no scan for speakers, and a phone connects
@@ -982,8 +1101,12 @@ other Shows don't have the switches.
 - **Now playing layout** (Display → Home screen). **Classic** is the default. **Modern** puts
   square artwork beside the track details and transport controls on rectangular screens with room
   for the layout. It takes effect immediately and is saved across restarts. Elapsed time and duration
-  appear when the source reports both, as Music Assistant over Sendspin can. This setting applies
-  to the full page.
+  appear with a bar when the source reports both, as Music Assistant over Sendspin and DLNA can: under
+  the song on Modern, beside the line above the song on Classic. Tap the bar, or slide a finger along
+  it, to move within the song, for a Music Assistant track on this device's queue (it needs the Music
+  Assistant token on the setup page) and a DLNA song that can be moved through (see
+  [DLNA](#dlna-next-and-previous)). For anything else, Spotify Connect and AirPlay included, the bar
+  only shows where the song is. This setting applies to the full page.
 - **Now playing** (the full page, or a strip over the clock). Once the music is
   paused or stopped for 30 seconds, the full page goes by itself: to the strip when the setting uses
   one, otherwise back to the clock, or to the dashboard when **Dashboard when idle** is on (the Spot
@@ -1486,6 +1609,24 @@ close it came there is what says whether to lower the threshold. How close a "st
 answer came is also in the log, one line an answer (see
 [Watching the wake word scores](#watching-the-wake-word-scores)).
 
+**Stop word**, beside the threshold, picks the word: **Stop**, the English one that comes with the
+device and the default, or one of the wake word models the device has, such as a "Stopp" of your own
+trained on German voices, sent the way [a wake word of your own](#a-wake-word-of-your-own) is. The
+word chosen does everything the built-in one does, at the same threshold and with the same allowance
+over a ring or an answer, and the built-in one isn't listened for while it does. The list leaves out
+the wake words chosen now (a word can't open a turn and stop one at once) and a model of your own
+called "Stop", which couldn't be told from the built-in one: give it another name. If the model
+chosen goes from the device, or is chosen as a wake word, the built-in **Stop** listens in its place,
+the list shows **Stop** and the device's log says why. The choice is kept, so the word comes back with
+the model. Like the [hang-up word](phone.md#a-hang-up-word), it is the device's own: a settings file
+doesn't change it, and the remote API can read it but not change it.
+
+With the wake word first, a ringing alarm or timer stops when what's heard is a stop and nothing
+else: "stop", "turn off the timer", "stop the alarm, please", or the same in the screen's languages
+and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
+"выключи будильник"). A sentence with anything more in it ("stop the music") goes to Home Assistant
+as any other.
+
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
 for the logbook or a dashboard. Like any sensor, they go into Home Assistant's history, as plain text
@@ -1565,6 +1706,10 @@ What goes and what stays:
 - With Reply delivery set to *Early*, the player is handed the reply as soon as Home Assistant starts
   making its speech, so a long answer starts there while the agent is still writing it, as it does on
   this device. Otherwise the reply is sent once it is written.
+- While a player is chosen, Home Assistant makes the replies at full quality (48 kHz) rather than the
+  16 kHz this device's own speaker needs, so they sound as good on the other speaker as it can play
+  them. Choosing a player or clearing the box has Home Assistant reconnect to the device once it is
+  idle, which is when the change takes effect; a reply that falls back to this device still plays.
 
 Listening again after a reply: this device cannot hear when another speaker finishes. It waits for the
 length of the reply plus two seconds, then listens, so a question gets its answer without the wake
@@ -1668,10 +1813,10 @@ Only microWakeWord models are taken (`"type": "micro"` in the `.json`), with a `
 1 MB, and up to 20 sent this way. **Remove** takes one sent from the page off the device; the wake
 words that came with the device or from Home Assistant can't be removed there. A wake word the device
 is listening for can't be removed or sent again either: pick another one first. Neither can one
-chosen as the [volume down word](#the-volume-down-word), the [volume up or next song
-word](#the-volume-up-and-next-song-words) or the [hang-up word](phone.md#a-hang-up-word), even while
-it's off (for being a wake word too, or with no music or call): set that word's list to **None** or
-another word first. The page says "listening for that wake word" in each case.
+chosen as the [stop word](#two-wake-words-two-assistants), the [volume down
+word](#the-volume-down-word), the [volume up or next song word](#the-volume-up-and-next-song-words)
+or the [hang-up word](phone.md#a-hang-up-word), even while it's off (for being a wake word too, or
+with no music or call): set that word's list to **None**, **Stop** or another word first. The page says "listening for that wake word" in each case.
 
 Or, through Home Assistant:
 
@@ -1725,9 +1870,10 @@ music plays, never during a call, a talk through a camera, a request or a ring, 
 speaker muted, no allowance while the speaker plays), and is off until you choose a word.
 
 - **Next song word** asks whoever is sending the music for the next song when the device can ask:
-  Music Assistant, or a phone playing over AirPlay or Bluetooth. With nobody to ask (a client that
-  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect or DLNA that
-  can't be asked) it only fires the [command word event](actions.md#command-word-events), with
+  Music Assistant, a phone playing over AirPlay or Bluetooth, or a DLNA app or program that listens to
+  the renderer ([DLNA next and previous](#dlna-next-and-previous)). With nobody to ask (a client that
+  sends one track at a time, the device's own radio stations, or a sender like Spotify Connect, or DLNA
+  with nobody listening, that can't be asked) it only fires the [command word event](actions.md#command-word-events), with
   `asked: false`, and whoever plays the music skips on that.
 - One model can't be two of these: chosen for more than one, it listens only as the first, in the
   order volume down, volume up, next song. The others keep their choice and listen again once it's
@@ -1830,6 +1976,15 @@ What is sent, and when:
 - The newest 100 clips of each kind are still all the device keeps, so a clip that has not been sent by
   the time it is pushed out is gone, and sending never uses more disk. **Wake clips unsent** shows how
   many are waiting, and **Wake clip sending** the last problem.
+- Where clips wait: on TECHO5 Linux, a new clip of a kind that is sent waits in RAM, not on the
+  device's flash, and is deleted once the trainer has it, so it no longer shows in `wake_clips` or the
+  **Wake clips** counts after that. Kinds you chose not to send, every clip while sending is off, and
+  the takes from **Record wake word** are kept on flash as before. A clip still waiting after 30
+  minutes (the trainer is down), or once the clips waiting fill their room in RAM (a sixty-fourth of
+  the board's memory, from 4 MB to 16 MB: about 8 MB with 512 MB, about 16 MB with 1 GB or more), moves
+  to flash and waits there, and so does every clip waiting when the daemon stops for a restart or a
+  reboot. A power cut loses what was waiting in RAM. On Fire OS and a Panel clips always wait on the
+  device.
 - Only to your home network or your Tailscale network. The address has to be a private one
   (`192.168.x.y`, `10.x.y.z`, `172.16.x.y` to `172.31.x.y`, a Tailscale address, `100.64.x.y` to
   `100.127.x.y` or `fd7a:115c:a1e0::`, or another link-local address or `fc00::/7`), or a name, like a
@@ -2356,10 +2511,20 @@ back as you left it.
 
 A **settings lock** (Show and Spot, off by default) is a PIN the device asks for before its settings
 change, so guests and children can use the device without changing how it is set up. The settings
-screen still opens without it, and what is part of using the device stays open to everyone: alarms
-and timers, the volume, bass and treble, the headphone output, the microphone, the wake sound, the
-sleep timer, and the brightness. Every other setting shows a padlock after its name and asks for the
-PIN when it is tapped. The PIN pad shows which setting it is for, and the setting changes once the
+screen still opens without it, and how the device looks, sounds and is used here stays open to
+everyone: alarms and timers; the volume, bass and treble, the headphone output and the microphone; the
+wake word (while one is set: where none is, choosing one would turn listening on, so that asks for
+the PIN), the wake sound and the speaking voice; quiet hours, do not disturb and the sleep timer; the
+brightness and the night; the skin, theme, colors, font, text size and clock; and how the clock,
+pop-ups, photos and calendar look. What the device connects to, shares or takes from other systems
+asks for the PIN: everything under Connections, Privacy & Security and General (Wi-Fi, Bluetooth,
+SSH, updates, the time zone, the screen language), streaming and Music Assistant on the Sound card,
+which calendars and photo folders it shows, presence detection, the speaker gain, and the wake word's
+threshold, which decides how much it hears and sends on. So does what reaches past the device: Now
+playing following another player (which puts that player's controls here), a camera's sound on this
+speaker, the call button (which dials the phone book), and Ignore room lights (which changes the
+light Home Assistant's automations see). The voice assistant itself is chosen in Home Assistant. A
+setting behind the lock shows a padlock after its name and asks for the PIN when it is tapped. The PIN pad shows which setting it is for, and the setting changes once the
 PIN is right. Once the PIN is in, the rest stay open until the settings close or are left alone for
 two minutes. Set it under Settings → Privacy & Security, on the setup page (Privacy), or with the
 [settings_lock_pin action](actions.md#set-the-settings-locks-pin). Five wrong tries in a row make
@@ -2667,10 +2832,10 @@ clock is looked for and starts again afterwards. A Dot that is being set up over
 has the radio lent out: **Pair the clock** says the radio is busy rather than searching underneath
 the setup connection; try again once Wi-Fi setup has finished.
 
-Tested on a Show 8 (1st gen, crown). It should work on the other boards whose Bluetooth is the
-daemon's — checkers, cronos, crown, athena and the Dot 3rd gen — but not on the Panel, whose Bluetooth is
-Android's, nor on the Echo Dot 2nd gen or the Echo 2nd gen, whose kernels have no RFCOMM: the clock isn't
-offered there. The Skylight has not been tried.
+Tested on a Show 8 (1st gen, crown) and an Echo Dot 2nd gen (biscuit). It should work on the other
+boards whose Bluetooth is the daemon's — checkers, cronos, crown, athena, the Spot, the Echo 2nd gen,
+the Dot 3rd gen and the Echo Input — but not on the Panel, whose Bluetooth is Android's. The Skylight
+has not been tried.
 
 ## More
 
@@ -2696,7 +2861,198 @@ button, and the Echo Input has only its action and mute buttons. The device acts
   `press`, `triple_press`. An automation for a single press that should stay quiet on a double can
   wait half a second for a `double_press` before it acts.
 
+### Add-ons
+
+Add-ons are programs others have made for TECHO5, such as
+[techo5-plex](https://github.com/HuskerMinion/techo5-plex), which makes a Show a player in Plex apps.
+They run on the device from userdata, so they outlast updates, and are installed, updated and removed
+on the setup page's **Add-ons** card (**System** tab). The card has three parts:
+
+- **Available:** the add-ons in TECHO5's catalog, each with its author, what it does, its version and
+  the TECHO5 version it needs, a link to its own page, and what it asks for: the network ports it needs
+  opened, whether it runs as root, any extra files it downloads beside its program (by name and
+  size), and roughly how much memory and storage it uses. One made for
+  another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
+  installed from the card yet, and one that needs more memory than the device can spare are listed
+  too, grayed out with the reason.
+- **Installed:** whether each one is running, **Start** and **Stop**, the last lines of its log, **Update**
+  when the catalog has a newer version, **Remove**, and a link to its own page if it has one.
+- **Found on this device, not from the catalog:** programs started by hand from `rc.local` (below).
+
+Every install shows this warning first, and you have to tick the box under it to go on:
+
+> **Add-ons run on this device with access to its microphones, speaker, network and your Home Assistant
+> connection.** They are made and kept by their authors, not by TECHO5. Being listed here means it was
+> looked over when it was added. It doesn't mean it's safe, that it will keep working, or that later
+> versions were checked. Only install add-ons from people you trust.
+>
+> [ ] I understand the risk and want to install **name** by **author**.
+
+Installing is only possible on the setup page, behind its Allow on the device (or the action button on
+a Dot), never from Home Assistant, a voice command or the screen, so the warning is always seen. An
+update that asks for more than the version before (a new port, root, or an extra file that is new or
+changed) shows the warning and the box again. Home Assistant gets an **update** entity for each installed add-on, like the firmware's: it can
+install an update from there only when the update asks for nothing new, and otherwise says to use the
+setup page.
+
+How the device runs them:
+
+- **Only from the catalog.** The catalog (`catalog.json` in
+  [techo5-addons](https://github.com/HuskerMinion/techo5-addons), published as `catalog-v2.json` and
+  `catalog.json`, below) is signed with the
+  same key as TECHO5's own releases, over text of its own so it can never pass for a firmware manifest,
+  and the device believes it only with that signature. It names each version's download and its SHA-256,
+  and the manifest it ships (`addon.json`) by its hash too, as well as any extra files it brings: the
+  device refuses a download that doesn't match, and an add-on whose manifest asks for more than the
+  catalog shows or names other extra files than the catalog pins. A signed catalog expires a
+  month after it was signed (every TECHO5 (Show) release signs it again): past that, installed add-ons keep running
+  but nothing is offered, and the card says why. A device never goes back to an older catalog than one
+  it has seen.
+- **What you agreed to.** The install and update forms carry back what the card showed; if the catalog
+  changed in between, nothing is installed and the card shows the new listing.
+- **Not as root.** Each add-on runs as a user of its own, never given to another add-on, with its
+  `state` folder as its home, unless its manifest asks for root (something like a VPN, which makes a
+  network interface needs it); the card then says so in bold. It can't gain privileges through a setuid
+  program (no_new_privs), has at most 128 processes and threads and a bounded address space, can't read
+  TECHO5's state or logs, and can't use Bluetooth or publish names through Avahi on the system bus.
+  When it stops or is removed, everything its user still runs is killed, and what it left in `/tmp`
+  and `/dev/shm` goes.
+- **Only its ports.** The ports an add-on declares are opened on Wi-Fi while it runs, one rule each, in
+  a chain of the daemon's own (`TECHO5-ADDONS`) at the top of the firewall, and closed again when it
+  stops or is removed.
+- **Kept running.** It is started after the daemon is up, and restarted if it stops, waiting longer each
+  time; after five quick crashes in a row it is left stopped, and the card says so until **Start**.
+- **A bounded log**, at most about 512 KB on the device's storage, shown on its card. What it keeps in
+  its `state` folder is held to four times the storage its listing gives (at least 64 MB); one that
+  grows past that is stopped, and the card says so.
+- **Memory checked first.** An add-on that would leave less than 100 MB of memory for TECHO5 is not
+  installed or started, and the card says why; one that can't start for memory is tried again, like a
+  crash. An Echo Dot 2nd gen has about 445 MB free.
+- **Updates are tried first.** The new version is downloaded beside the old one and checked, then
+  started; if it doesn't stay up for a minute, the old one goes back, its extra files with it, and the
+  card says so. A device that loses power in the middle of an update puts the old version back when it
+  starts again.
+- **Remove** stops it, closes its ports and deletes its folder, `/data/techo5-addons/<id>`. What
+  it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
+  the box to delete it too.
+
+An add-on is a program on the device, so TECHO5 trusts it as it trusts itself: a video it sends to the
+device's own DLNA renderer plays without the question on the screen, for example. That is what "access
+to … your Home Assistant connection" in the warning means.
+
+The Echo Show builds (Show 8 2nd gen and Skylight included), the Echo Spot and the TECHO5 Dot builds run
+add-ons; a Dot only while it runs TECHO5's Linux, not Fire OS. TECHO5 Panel doesn't: Android 10 and
+later don't let an app run programs it downloads, and its setup page says so in a line instead of the
+card.
+
+#### Getting an add-on listed
+
+The catalog has its own repository, [techo5-addons](https://github.com/HuskerMinion/techo5-addons).
+Open its [Submit an add-on](https://github.com/HuskerMinion/techo5-addons/issues/new?template=submit-addon.yml)
+form with your add-on's repository and the release to list. Its
+[README](https://github.com/HuskerMinion/techo5-addons#for-authors-getting-an-add-on-listed) says in
+full what an add-on needs and how it is reviewed. In short, it needs:
+
+- release assets for `arm` (and `arm64` if you build one), static binaries that run on TECHO5's Linux,
+  and any extra files the program needs beside it (below);
+- an `addon.json` in the same release, such as techo5-plex's:
+
+  ```json
+  {
+    "id": "techo5-plex",
+    "version": "0.2.0",
+    "command": ["techo5-plex"],
+    "args": ["-data", "{state}"],
+    "ports": [
+      {"proto": "tcp", "port": 32500, "why": "Plex apps control the player"},
+      {"proto": "tcp", "port": 32501, "why": "its link page"},
+      {"proto": "udp", "from": 32410, "to": 32414, "why": "Plex finds players"}
+    ],
+    "root": false,
+    "page": "http://{device}:32501/",
+    "memory_mb": 40
+  }
+  ```
+
+  `command` is the program's name (the binary is installed under it), `{state}` is the add-on's own
+  folder for what it keeps, which outlives updates, and `{device}` is the device's address as the
+  browser reached it. A port below 1024 is refused unless it runs as root, and one of TECHO5's own is
+  refused always.
+
+- **Extra files**, when the program needs more than itself: another project's release it unpacks, a
+  model. `addon.json` names them, `"files": ["netbird.tar.gz"]`, and the catalog entry pins each one
+  as it pins the binary (an https URL, its SHA-256 and its size), under the TECHO5 build that gets it,
+  `arm` or `arm64`, whatever is inside: an `arm` program that unpacks another project's `linux_arm64`
+  archive lists that archive under `arm`:
+
+  ```json
+  "requires": ["files"],
+  "binaries": {
+    "arm": {"url": "https://github.com/example/techo5-netbird/releases/download/v0.2.0/techo5-netbird-arm", "sha256": "…", "size": 9000000}
+  },
+  "files": {
+    "arm": [
+      {"name": "netbird.tar.gz", "url": "https://github.com/netbirdio/netbird/releases/download/vX.Y.Z/netbird_X.Y.Z_linux_arm64.tar.gz", "sha256": "…", "size": 15000000}
+    ]
+  }
+  ```
+
+  The device downloads and checks each one as it does the program, and installs them read-only (root's,
+  `0644`) in the add-on's `bin` folder beside the program, under those names; an update, going back,
+  and removal treat them as part of the program. The program finds that folder in
+  `TECHO5_ADDON_BIN`, and its `state` folder in `TECHO5_ADDON_STATE`. Names are plain file names
+  (letters, digits, `.`, `-`, `_` and `+`, not starting with a dot, not ending in `.part`, not the
+  program's own name, and neither another's name nor the program's followed by a dot), at most
+  8 of them and 128 MB together, and every build lists the same names, since one `addon.json` serves
+  them all. An add-on downloads nothing else at run time: what it runs is what was looked over. A
+  version with extra files says so in `"requires": ["files"]` (below).
+
+- **`requires`**, the features a version needs beyond the catalog's first format (today only
+  `files`). The catalog is format 2: a device skips a version that requires a feature it doesn't know,
+  rather than refusing the whole catalog, and an add-on with no version it can read is shown grayed out
+  as needing a newer TECHO5. Everything else stays strict: a key the format doesn't know is refused
+  anywhere but in a version skipped this way, so a version that uses a new field has to require the
+  feature that brings it, and one that requires a feature has to use it.
+
+  Devices up to v1.6.53 read only format 1, and refuse the whole catalog for one field they don't
+  know. So the catalog is published as two files from the one source: `catalog-v2.json`, everything in
+  format 2, which newer devices fetch first, and `catalog.json`, format 1 as before, with every version
+  that requires anything left out (and an add-on with nothing left, left out too), which older devices
+  go on reading. A newer device takes `catalog.json` only while `catalog-v2.json` isn't published.
+  Both carry one serial, so a device that has believed one never takes an older one of either, and
+  each is signed under its own text, so neither's signature passes for the other's.
+
+We look it over, as with techo5-sound-ai and techo5-netbird, add an entry for that version to the
+catalog and sign it. `go run ./cmd/mkcatalog -manifest addon.json` (from `echod`) checks a manifest the
+way a device does. Each new version gets a new entry: a version is never trusted because an earlier
+one was. A listing that has to come out stays in the catalog marked withdrawn, with the reason: devices
+that have it say it's no longer listed and suggest removing it, but don't remove it themselves.
+
+For the maintainer: `tools/sign-catalog.ps1` signs the catalog from a techo5-addons checkout:
+`-Catalog`, else `$env:TECHO5_ADDONS`, else `techo5-addons` beside this checkout (which also covers a
+worktree beside it), else `E:\projects\techo5-addons`. It signs only a `catalog.json` that is committed
+in a checkout at its `origin/main`, with `mkcatalog` built from a clean checkout of this repository at
+its `origin/main`. It checks the catalog (`mkcatalog`), refuses one whose `serial` is below the
+published one's, or the same serial with different entries (the same entries again only renew the
+expiry; a device never takes an older catalog than it has) or that changes a version published in
+either file, writes `catalog-v2.json` and `catalog.json` from it, signs both with the release key, and
+publishes the four files (with `catalog-v2.json.sig` and `catalog.json.sig`) on this repository's
+`addons` release, which is what devices fetch. `tools/release.ps1` runs it with every release, as a dry run before it publishes
+anything and for real at the end, and attaches the catalog to the release as well (its `-AddonCatalog`
+is passed on as `-Catalog`). Once the `addons` release has `catalog.json`, it checks against
+`catalog-v2.json` as well and refuses to sign without it, as `catalog.json` alone doesn't hold every
+version; the one signing that first publishes `catalog-v2.json` says so with `-FirstFormat2`
+(`release.ps1 -FirstFormat2Catalog`), which is refused once it is published. `mkcatalog -pin URL=FILE` prints the url, sha256 and size an entry pins a
+downloaded file by; with `-file NAME` as well, it prints an extra file's pin under that name.
+
 ### Running something of your own at boot
+
+`rc.local` keeps working exactly as before for anything installed by hand, and is the way to run
+something that isn't in the catalog. The Add-ons card lists what it can see of such programs, under
+**Found on this device, not from the catalog**, with the same warning (and no box): the programs on
+userdata that `rc.local` names, and those running from userdata now. It shows their paths only, and
+can't update or remove them. When an add-on you installed by hand is in the catalog, remove its lines
+from `rc.local` (and its firewall lines), reboot, and install it from the card.
 
 An update replaces the root filesystem, so anything added to it is gone afterwards; userdata is what
 outlives an update. A script at `/data/techo5-linux/rc.local` that is executable is started once at
@@ -2732,6 +3088,25 @@ The Dot builds are small. The Echo Dot 2nd gen has about 445 MB of its 481 MB fr
 running, and the Echo Dot 3rd gen about 420 MB of its 470 MB when idle, with about 1 GB free on
 userdata. A helper that uses up the memory can get the daemon stopped, and an update that cannot keep
 the daemon up is rolled back, so keep what runs there light. The Echo Spot has 2 GB of memory.
+
+The device's firewall lets in from the network only the ports TECHO5 serves. It runs once, early in
+the boot, before the network and before `rc.local`, and is not run again when the network changes,
+so rules a script adds stay for as long as the device is up. A helper that listens on a port of its
+own opens it in a chain of its own, put first in INPUT (a rule appended after TECHO5's is never
+reached), for IPv4 and IPv6 alike. For a TCP port 32500, say:
+
+```sh
+for T in iptables-legacy ip6tables-legacy; do
+	$T -N MYHELPER-IN 2> /dev/null
+	$T -F MYHELPER-IN
+	$T -A MYHELPER-IN -p tcp --dport 32500 -j ACCEPT
+	$T -C INPUT -i wlan0 -j MYHELPER-IN 2> /dev/null || $T -I INPUT 1 -i wlan0 -j MYHELPER-IN
+done
+```
+
+Run again, it leaves one copy of each. Use the `-legacy` tools: the kernel has no nftables. The chain
+lets the port in and nothing else, and what it does not take goes on to TECHO5's rules as before.
+Talking to the daemon on the device itself, at `127.0.0.1`, needs no rule: loopback is never filtered.
 
 Anyone with SSH or a root shell can leave a script here that runs at every boot, so only put
 something here you trust.

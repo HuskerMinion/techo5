@@ -198,16 +198,24 @@ func TestMusicNotHeardInTimeRingsTheAlarmSound(t *testing.T) {
 // alarm sound as well.
 func TestMusicThatStopsRingsTheAlarmSound(t *testing.T) {
 	m := fakeMusic(t)
+	// When the alarm last looked and heard the music: it counts from there, and a look that comes late
+	// (a loaded machine) makes that earlier than when the music stopped.
+	var lastHeard atomic.Int64
+	wakeHeard = func() bool {
+		on := m.heard.Load()
+		if on {
+			lastHeard.Store(time.Now().UnixNano())
+		}
+		return on
+	}
 	a, src := wakeAlarm(t, radio)
 	a.fire(src, time.Now())
 	until(t, "the music", func() bool { return m.heard.Load() })
 	time.Sleep(wakeWithin / 2)
 	m.heard.Store(false) // the station dropped
-	at := time.Now()
 	until(t, "the alarm sound", func() bool { _, _, sounds, _ := m.state(); return sounds == 1 })
-	// Counted from when it was last heard, which is up to a look before it stopped.
-	if d := time.Since(at); d < wakeWithin-2*wakeEvery {
-		t.Errorf("the alarm sound came %v after the music stopped, before it had %v to come back", d, wakeWithin)
+	if d := time.Since(time.Unix(0, lastHeard.Load())); d < wakeWithin-3*wakeEvery { // the alarm's own look starts a moment before this one
+		t.Errorf("the alarm sound came %v after the music was last heard, before it had %v to come back", d, wakeWithin)
 	}
 	if !a.Ringing() {
 		t.Error("the alarm stopped ringing")

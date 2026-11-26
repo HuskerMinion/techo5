@@ -92,7 +92,8 @@ type Timers struct {
 	// up. Kept so a save meanwhile writes them back rather than dropping them.
 	waiting []config.LocalTimer
 	stop    func()
-	rang    string // the name of what is ringing, for the screen
+	rang    string    // the name of what is ringing, for the screen
+	rangAt  time.Time // when it began, for alarms_list's ringing
 	shown   []led.Color
 
 	// Changed fires when a timer starts, changes, ends or rings, and when the ringing stops.
@@ -100,7 +101,9 @@ type Timers struct {
 }
 
 // Countdown is a timer as the screen shows it. Local is one of the device's own, which the screen
-// may cancel; Home Assistant's are canceled where they were set.
+// may cancel; Home Assistant's are canceled where they were set. Silent is one of the device's own
+// started with timer_start_silent: it shows a wait an automation keeps, so the automation ends it, and
+// the screen and the assistant leave it alone the way they leave Home Assistant's.
 type Countdown struct {
 	ID     string
 	Name   string
@@ -108,6 +111,7 @@ type Countdown struct {
 	Total  time.Duration
 	Active bool
 	Local  bool
+	Silent bool
 }
 
 // List is every timer, soonest running first and paused ones after.
@@ -115,7 +119,7 @@ func (t *Timers) List(now time.Time) []Countdown {
 	t.mu.Lock()
 	out := make([]Countdown, 0, len(t.held))
 	for id, c := range t.held {
-		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active, Local: c.local})
+		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active, Local: c.local, Silent: c.silent})
 	}
 	t.mu.Unlock()
 	slices.SortFunc(out, func(a, b Countdown) int {
@@ -135,6 +139,20 @@ func (t *Timers) RingingName() (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.rang, t.stop != nil
+}
+
+// Rung is a timer ringing now: its name, and when it began to ring.
+type Rung struct {
+	Name  string
+	Since time.Time
+}
+
+// RingingNow is the timer ringing now, if one is. It is what alarms_list answers as its ringing when no
+// alarm is (#736): a ringing timer has left the list of timers, so nothing else there would say so.
+func (t *Timers) RingingNow() (Rung, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return Rung{Name: t.rang, Since: t.rangAt}, t.stop != nil
 }
 
 // timer is one of them. left is what was last known and at is when that was true, so a running timer
@@ -806,14 +824,14 @@ func (t *Timers) startRinging(name string) {
 		ring.Again()
 		return
 	}
-	t.rang = name
+	t.rang, t.rangAt = name, time.Now()
 	t.stop = ring.Start("timer", name, speaker.TimerSound(), t.rungOut)
 }
 
 // rungOut is the bell telling the timers their ring is over, however that came about.
 func (t *Timers) rungOut() {
 	t.mu.Lock()
-	t.stop, t.rang = nil, ""
+	t.stop, t.rang, t.rangAt = nil, "", time.Time{}
 	t.mu.Unlock()
 	t.show()
 	t.Changed.Emit(struct{}{})

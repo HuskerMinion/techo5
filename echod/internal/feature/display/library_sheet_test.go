@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -419,7 +420,7 @@ func TestTheLibrarysTaps(t *testing.T) {
 	tap(libFind(t, zones, libPartShuffle, -1))
 	waitUntil(t, "Shuffle's two calls", func() bool { return len(asked()) == 4 })
 	tap(libFind(t, zones, libPartItem, 2))
-	waitUntil(t, "the track's call", func() bool { return len(asked()) == 5 })
+	waitUntil(t, "the track's calls", func() bool { return len(asked()) == 6 })
 	if !d.libraryViewNow().sheet.isLit(2) {
 		t.Error("the track tapped is not lit")
 	}
@@ -428,7 +429,9 @@ func TestTheLibrarysTaps(t *testing.T) {
 		{Entity: "media_player.ma_kitchen", Service: "music_assistant.play_media", Data: map[string]any{"media_id": album, "media_type": "album", "enqueue": "replace"}},
 		{Entity: "media_player.ma_kitchen", Service: "media_player.shuffle_set", Data: map[string]any{"shuffle": true}},
 		{Entity: "media_player.ma_kitchen", Service: "music_assistant.play_media", Data: map[string]any{"media_id": album, "media_type": "album", "enqueue": "replace"}},
-		{Entity: "media_player.ma_kitchen", Service: "music_assistant.play_media", Data: map[string]any{"media_id": "library://track/2", "media_type": "track", "enqueue": "replace"}},
+		// A track plays on through the rest of its list, in order.
+		{Entity: "media_player.ma_kitchen", Service: "media_player.shuffle_set", Data: map[string]any{"shuffle": false}},
+		{Entity: "media_player.ma_kitchen", Service: "music_assistant.play_media", Data: map[string]any{"media_id": []string{"library://track/2", "library://track/3", "library://track/4"}, "media_type": "track", "enqueue": "replace"}},
 	}
 	if got := fmt.Sprint(asked()); got != fmt.Sprint(want) {
 		t.Errorf("asked\n%s\nwant\n%s", got, fmt.Sprint(want))
@@ -447,6 +450,29 @@ func TestTheLibrarysTaps(t *testing.T) {
 	tap(libFind(t, zones, libPartDone, -1))
 	if d.libraryViewNow() != nil {
 		t.Error("Done left the library up")
+	}
+}
+
+func TestATrackTapInSearchPlaysOnlyTheHit(t *testing.T) {
+	noLibrary(t)
+	asked := recordTaps(t)
+	r := newRenderer(image.NewRGBA(image.Rect(0, 0, showWide, showHigh)))
+	d := &Display{r: r, poke: make(chan struct{}, 1)}
+	const target = "media_player.ma_kitchen"
+	tracks := libEntries("track", 3)
+	sheet := libSheetWith(libSearch, nil, target)
+	search := &sheet.roots[libSearch]
+	search.query = "harbor"
+	search.sections = []libSection{{word: libTracks, show: libShowTracks, kind: "track", entries: tracks}}
+	setLibUp(d, &sheet)
+
+	zones, _ := libDraw(r, sheet)
+	d.libraryTap(libMiddle(libFind(t, zones, libPartItem, 1)))
+	waitUntil(t, "the search hit to play", func() bool { return len(asked()) > 0 })
+	want := []dashboard.Action{{Entity: target, Service: "music_assistant.play_media",
+		Data: map[string]any{"media_id": tracks[1].URI, "media_type": "track", "enqueue": libEnqueueReplace}}}
+	if got := asked(); !reflect.DeepEqual(got, want) {
+		t.Errorf("asked %v, want %v", got, want)
 	}
 }
 
@@ -1215,5 +1241,59 @@ func TestLibDuration(t *testing.T) {
 		if got := libDuration(in); got != want {
 			t.Errorf("%d seconds: %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A track tapped in a list of tracks queues the tracks after it, up to libPlayListMax in all; other
+// lists, and anything but replacing the queue, play or queue the one item alone.
+func TestATrackTapQueuesTheRestOfItsList(t *testing.T) {
+	tracks := libEntries("track", 150)
+	list := libSection{word: -1, show: libShowTracks, kind: "track", entries: tracks}
+	if got := libTracksAfter(list, 149); len(got) != 0 {
+		t.Errorf("the last track has %d after it", len(got))
+	}
+	if got := libTracksAfter(list, 2); len(got) != libPlayListMax-1 || got[0].URI != tracks[3].URI || got[len(got)-1].URI != tracks[libPlayListMax+1].URI {
+		t.Errorf("tracks after the third: %d, want %d from %s", len(got), libPlayListMax-1, tracks[3].URI)
+	}
+	list.entries = []musicassistant.Entry{tracks[0], {Name: "no URI"}, {URI: "library://album/1", MediaType: "album"}, tracks[1]}
+	if got := libTracksAfter(list, 0); len(got) != 1 || got[0].URI != tracks[1].URI {
+		t.Errorf("tracks after the first, skipping the ones that are not playable tracks: %+v", got)
+	}
+	for _, s := range []libSection{
+		{show: libShowGrid, kind: "track", entries: tracks},
+		{show: libShowTracks, kind: "", entries: tracks}, // mixed results, as in Recent or Browse
+		{show: libShowTracks, kind: "chapter", entries: tracks},
+	} {
+		if got := libTracksAfter(s, 0); got != nil {
+			t.Errorf("show %d kind %q queued %d tracks after the first", s.show, s.kind, len(got))
+		}
+	}
+
+	// A list page plays on; a search hit and a favorite song play alone (#694).
+	for what, want := range map[int]int{libAlbum: 2, libPlaylist: 2, libSearch: 0, libFavorites: 0} {
+		p := &libPage{what: what, sections: []libSection{{word: -1, show: libShowTracks, kind: "track", entries: tracks[:3]}}}
+		if got := libTapPlaysOn(p, 0, 0); len(got) != want {
+			t.Errorf("page %d: a tap on the first track queued %d after it, want %d", what, len(got), want)
+		}
+	}
+
+	var mu sync.Mutex
+	var plays []map[string]any
+	noLibrary(t)
+	prev := sheetTap
+	sheetTap = func(a dashboard.Action) {
+		mu.Lock()
+		defer mu.Unlock()
+		if a.Service == "music_assistant.play_media" {
+			plays = append(plays, a.Data)
+		}
+	}
+	t.Cleanup(func() { sheetTap = prev })
+	d := &Display{poke: make(chan struct{}, 1)}
+	d.libPlay("media_player.ma_kitchen", tracks[0], "track", false, libEnqueueNext, tracks[1])
+	mu.Lock()
+	defer mu.Unlock()
+	if len(plays) != 1 || plays[0]["media_id"] != tracks[0].URI {
+		t.Errorf("Play next with a list asked %v, want the track alone", plays)
 	}
 }

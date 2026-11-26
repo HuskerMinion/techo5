@@ -9,6 +9,9 @@ func AthenaMainline() bool { return false }
 // runs the Show build.
 func Skylight() bool { return false }
 
+// ThinkSmart is never true on a Dot, a Spot or a panel: the ThinkSmart View runs the Show build.
+func ThinkSmart() bool { return false }
+
 // SoundCard: every Dot, Spot and panel plays on card 0.
 func SoundCard() string { return "" }
 

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/dlna"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/screen"
 )
@@ -37,7 +39,97 @@ const (
 	videoTapStop
 	videoTapQuieter
 	videoTapLouder
+	// The back and forward a DLNA video has while its controller listens (videoSkip), drawn after
+	// the rest. The Spot's video screen has no skip buttons, so its build never names them.
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapBack
+	//lint:ignore U1000 used by the Show's video screen (video.go), not the Spot's
+	videoTapNext
+	// The button that takes the picture round its ways of taking the screen (videoRefit), for a video
+	// the player can start again where it is (video.Refittable).
+	videoTapFit
 )
+
+// videoZone is a control on the video page as last drawn, and what a tap on it is.
+type videoZone struct {
+	r   image.Rectangle
+	tap videoTap
+}
+
+// videoZoneAt is the control a tap at at landed on, a finger reach (pixels) wider than its edges.
+func videoZoneAt(zones []videoZone, at image.Point, reach int) videoTap {
+	for _, z := range zones {
+		if at.In(z.r.Inset(-reach)) {
+			return z.tap
+		}
+	}
+	return videoTapNone
+}
+
+// The player's say on the way the picture takes the screen; tests put their own in.
+var (
+	videoFittable = video.Refittable
+	videoRefitTo  = video.Refit
+)
+
+// videoFittableNow is whether the video in st gets the button for its way of taking the screen: a
+// video the player can start again where it is, once that is known.
+func videoFittableNow(st video.State) bool {
+	if !st.Active() || st.Phase == video.Asking {
+		return false
+	}
+	ok, known := videoFittable(st.ID)
+	return ok && known
+}
+
+// videoRefit takes the video on to its next way of taking the screen. It is not waited for: the
+// player stops and starts the decoder.
+func videoRefit(id uint64) {
+	a, err := videoRefitTo(id)
+	if err != nil {
+		slog.Info("screen: the video's picture was not changed", "err", err)
+		return
+	}
+	slog.Info("screen: the video's picture", "aspect", a)
+}
+
+// videoFitIcon is the button's icon: the way the picture takes the screen now, so a glance at it says
+// which it is with no words to translate. Whole with bars is a screen with the picture fitted in it,
+// filling is a crop, stretching is a picture pulled out to the page's edges.
+func videoFitIcon(a video.Aspect) string {
+	switch a {
+	case video.AspectFill:
+		return "crop"
+	case video.AspectStretch:
+		return "stretch-to-page-outline"
+	}
+	return "fit-to-screen-outline"
+}
+
+// videoBarUp is whether a finger on the video page may be its bar's (seekGesture): while the controls
+// it is drawn with are up (as a tap on the page finds them, videoGesture), or while a finger that came
+// down on it is still on it. With the controls away, the bar the last frame drew is not there to the
+// eye, and a tap that brings the controls back must not move the video as well.
+func (d *Display) videoBarUp(st video.State) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	up := time.Now().Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames
+	return up || d.seekF.landed || d.seekF.moving
+}
+
+// videoSkippable is whether the video the player has is a DLNA video whose controller hears a next or
+// a previous from the device (dlna.VideoSkippable): only then are they offered, never as buttons that
+// do nothing.
+func videoSkippable(st video.State) bool {
+	return st.Origin == video.FromDLNA && st.Active() && dlna.Get().VideoSkippable(st.ID)
+}
+
+// videoSkip passes a back or a forward on the video page to the DLNA controller (dlna.Skip).
+func videoSkip(t media.Transport) {
+	if !dlna.Get().Skip(t) {
+		slog.Info("screen: a skip on a video with nobody to hear it", "transport", t)
+	}
+}
 
 // videoAsk is the question about a DLNA video, as drawn.
 type videoAsk struct {
@@ -49,6 +141,10 @@ type videoAsk struct {
 // videoStrip is the controls' shade: dark enough for white over any picture, light enough to see the
 // picture through.
 var videoStrip = color.RGBA{0x00, 0x00, 0x00, 0xb0}
+
+// videoTrack is the bar to seek on where the video has not reached: white at a third, premultiplied as
+// the canvas is, so the strip shows through it as the picture shows through the strip.
+var videoTrack = color.RGBA{0x55, 0x55, 0x55, 0x55}
 
 // videoTime is a place in a video as a player says it: 4:05, or 1:04:05 past an hour.
 func videoTime(d time.Duration) string {

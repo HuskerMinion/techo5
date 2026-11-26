@@ -484,11 +484,17 @@ func libWord(i int) string {
 // sheet's own; from a card, target is empty and the player is found for entity, the card's media
 // player, or for this device when the card names none.
 func (d *Display) openLibrary(target, entity string, fromCard bool) {
+	d.openLibraryOn(target, entity, fromCard, libArtists)
+}
+
+// openLibraryOn is openLibrary on tab. The queue tab needs the player's queue, so from a card it is read
+// once the player is found.
+func (d *Display) openLibraryOn(target, entity string, fromCard bool, tab int) {
 	c, set := libClient()
 	// The player and the sheet's entity are Home Assistant entity ids (they can carry a room or a name),
 	// kept out of the log and so out of a diagnostics bundle.
 	slog.Info("dashboard music library", "set", set)
-	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1}
+	l := &librarySheet{opening: libOpenings.Add(1), target: target, finding: fromCard, set: set, base: c.URL, from: entity, lit: -1, tab: tab}
 	for i := range l.roots {
 		l.roots[i] = newLibPage(i, musicassistant.Entry{})
 	}
@@ -508,10 +514,13 @@ func (d *Display) openLibrary(target, entity string, fromCard bool) {
 				}
 			})
 			d.wake()
+			if set && tab == libQueue {
+				d.libLoad(l.roots[tab].id)
+			}
 		}()
 	}
-	if set {
-		d.libLoad(l.roots[libArtists].id)
+	if set && !(fromCard && tab == libQueue) {
+		d.libLoad(l.roots[tab].id)
 	}
 }
 
@@ -1033,7 +1042,7 @@ func (d *Display) libraryTap(x, y int) bool {
 			// A chapter plays its book from the top and is then moved to where the chapter starts.
 			d.libPlayChapter(l, p.entry, e, z.index)
 		default:
-			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace)
+			d.libPlayTapped(l, e, kind, false, z.index, libEnqueueReplace, libTapPlaysOn(p, sec, i)...)
 		}
 	}
 	d.wake()
@@ -1295,11 +1304,11 @@ var libLeaveAfter = time.AfterFunc
 // libPlayTapped plays e from a tap, lights what was tapped (lit), and then leaves the library for what
 // is playing (libLeave). A tap that showed nothing was tapped again, and when Music Assistant was slow
 // both plays went through, the first heard for a few seconds before the second replaced it.
-func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind string, shuffle bool, lit int, enqueue string) {
+func (d *Display) libPlayTapped(l *librarySheet, e musicassistant.Entry, kind string, shuffle bool, lit int, enqueue string, rest ...musicassistant.Entry) {
 	if l.target == "" || e.URI == "" {
 		return
 	}
-	d.libPlay(l.target, e, kind, shuffle, enqueue)
+	d.libPlay(l.target, e, kind, shuffle, enqueue, rest...)
 	d.editLibrary(func(n *librarySheet) { n.lit, n.litUntil = lit, time.Now().Add(tapLit) })
 	// Play replaces the queue and leaves the library for what is now playing; queueing more (next, add)
 	// keeps the library up so the owner can go on adding.
@@ -1380,18 +1389,23 @@ func nowPlayingLibraryWord() string {
 // reopenLibrary is the Now Playing page's Library button: the dashboard up with the library over it,
 // as the last play on this device left it, on the page and at the place it was; a fresh library on
 // this device's player when there is none to go back to. What moves on by itself (the favorites, what
-// was played lately, the queue) is read afresh if that is what it shows.
-func (d *Display) reopenLibrary() {
+// was played lately, the queue) is read afresh if that is what it shows. With queue it opens on the
+// queue tab, what plays next, in place of where it was left (the Queue button).
+func (d *Display) reopenLibrary(queue bool) {
 	if !d.openDashboard() {
 		return
 	}
 	last := libLast.Load()
 	if last == nil {
-		slog.Info("dashboard music library from now playing", "back", false)
-		d.openLibrary("", "", true)
+		slog.Info("dashboard music library from now playing", "back", false, "queue", queue)
+		if queue {
+			d.openLibraryOn("", "", true, libQueue)
+		} else {
+			d.openLibrary("", "", true)
+		}
 		return
 	}
-	slog.Info("dashboard music library from now playing", "back", true)
+	slog.Info("dashboard music library from now playing", "back", true, "queue", queue)
 	l := *last
 	l.opening = libOpenings.Add(1)
 	l.menu, l.typing, l.drag, l.lit = libMenu{}, false, libDrag{}, -1
@@ -1409,9 +1423,14 @@ func (d *Display) reopenLibrary() {
 	for i := range l.stack {
 		unstick(&l.stack[i])
 	}
+	if queue {
+		// The queue tab, read afresh, as a tap on the tab would.
+		l.tab, l.stack = libQueue, nil
+		l.roots[libQueue].loaded, l.roots[libQueue].sections, l.roots[libQueue].problem, l.roots[libQueue].scroll = false, nil, "", 0
+	}
 	cur := l.current()
 	// How far a book or an episode was listened to has moved on too.
-	id, fresh := cur.id, len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue) || libListening(cur.what) && cur.loaded
+	id, fresh := cur.id, !queue && len(l.stack) == 0 && (l.tab == libFavorites || l.tab == libRecent || l.tab == libQueue) || libListening(cur.what) && cur.loaded
 	ask := !cur.loaded && (len(l.stack) > 0 || l.tab != libSearch) // a search not yet typed waits
 	libPics.setChanged(d.wake)
 	d.mu.Lock()
@@ -1445,19 +1464,33 @@ const (
 // libEnqueueReplace it replaces what was queued and plays now; libEnqueueNext and libEnqueueAdd leave
 // what is playing and only add to the queue. An artist, album or playlist replacing the queue sets its
 // shuffle first, on or off, so that Play plays it in order after a Shuffle.
-func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, shuffle bool, enqueue string) {
+//
+// rest are the tracks that follow e in the list it was tapped in. With libEnqueueReplace they are queued
+// behind e, which then plays on through them; the shuffle is set off first, as for an album.
+func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, shuffle bool, enqueue string, rest ...musicassistant.Entry) {
 	if target == "" || e.URI == "" {
 		return
 	}
-	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle, "enqueue", enqueue)
+	if enqueue != libEnqueueReplace {
+		rest = nil
+	}
+	slog.Info("dashboard music library play", "uri", e.URI, "type", kind, "shuffle", shuffle, "enqueue", enqueue, "queued after", len(rest))
 	play := func() {
-		data := map[string]any{"media_id": e.URI, "media_type": kind, "enqueue": enqueue}
+		data := map[string]any{"media_id": any(e.URI), "media_type": kind, "enqueue": enqueue}
+		if len(rest) > 0 {
+			// Home Assistant's play_media takes a list of items, which Music Assistant queues in order.
+			ids := []string{e.URI}
+			for _, r := range rest {
+				ids = append(ids, r.URI)
+			}
+			data["media_id"] = ids
+		}
 		if enqueue == libEnqueueRadio {
 			data["enqueue"], data["radio_mode"] = libEnqueueReplace, true
 		}
 		libTap(dashboard.Action{Entity: target, Service: "music_assistant.play_media", Data: data})
 	}
-	container := kind == "artist" || kind == "album" || kind == "playlist"
+	container := kind == "artist" || kind == "album" || kind == "playlist" || len(rest) > 0
 	// Next and add only append: the queue, and so what is playing, is left as it is, so no putOn and no
 	// shuffle. Only replacing the queue marks what is now on and may shuffle a container first.
 	if enqueue != libEnqueueReplace || !container {
@@ -1476,6 +1509,38 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 		libTap(dashboard.Action{Entity: target, Service: "media_player.shuffle_set", Data: map[string]any{"shuffle": shuffle}})
 		libAfter(libShuffleFirst, play)
 	}()
+}
+
+// libPlayListMax is how many tracks a tap on one plays on through, itself and those after it.
+const libPlayListMax = 100
+
+// libTapPlaysOn is what a tap on track i of section sec of p queues behind it. A track tapped in a list
+// plays on through the rest of the list. A search hit plays alone, and so does a favorite: the
+// Favorites tab is a row of each kind, not a list someone put in order, and a play-through would also
+// turn shuffle off, where a tap on one favorite song has always left it as it was.
+func libTapPlaysOn(p *libPage, sec, i int) []musicassistant.Entry {
+	if p.what == libSearch || p.what == libFavorites || sec < 0 || sec >= len(p.sections) {
+		return nil
+	}
+	return libTracksAfter(p.sections[sec], i)
+}
+
+// libTracksAfter is the tracks that follow item i of section s, to be queued behind it when it is
+// tapped: only in a list of tracks, and no more than libPlayListMax-1 of them.
+func libTracksAfter(s libSection, i int) []musicassistant.Entry {
+	if s.show != libShowTracks || s.kind != "track" || i < 0 || i >= len(s.entries) {
+		return nil
+	}
+	var rest []musicassistant.Entry
+	for _, e := range s.entries[i+1:] {
+		if len(rest) == libPlayListMax-1 {
+			break
+		}
+		if e.URI != "" && libEntryType(e, s.kind) == "track" {
+			rest = append(rest, e)
+		}
+	}
+	return rest
 }
 
 // libQueueShuffle sets the shuffle of target's queue through Music Assistant's own API, and says

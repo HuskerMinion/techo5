@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Screen is what the picture is made for: the canvas the daemon draws on (960×480 on the Show 5,
@@ -50,6 +51,84 @@ func FitIn(i Info, s Screen) Fit {
 }
 
 func even(v int) int { return v &^ 1 }
+
+// Aspect is how the picture takes the screen. It is chosen with a button on the video page's controls
+// for the video playing, and is not a setting: every video starts as AspectFit, and the button only
+// helps the one in front of somebody (a film encoded with its bars in, or with the wrong shape), so it
+// goes with that video (#733).
+type Aspect int
+
+const (
+	// AspectFit is the whole picture, as large as the screen takes it, with bars (FitIn).
+	AspectFit Aspect = iota
+	// AspectFill is the screen filled with the picture's shape kept, what overhangs cut off about its
+	// middle.
+	AspectFill
+	// AspectStretch is the whole picture made the screen's shape.
+	AspectStretch
+	aspects // how many there are
+)
+
+// Next is the way after a, round again to AspectFit after AspectStretch.
+func (a Aspect) Next() Aspect {
+	if a < 0 || a+1 >= aspects {
+		return AspectFit
+	}
+	return a + 1
+}
+
+func (a Aspect) String() string {
+	switch a {
+	case AspectFill:
+		return "fill"
+	case AspectStretch:
+		return "stretch"
+	}
+	return "fit"
+}
+
+// Cut is how much of the picture is kept, as shares of its width and height about its middle: 1 and 1
+// for all of it.
+type Cut struct{ W, H float64 }
+
+// cutMin is the most of a side kept that is still taken as all of it: a picture within half a percent
+// of the screen's shape is not worth a crop, which would only move it by a pixel.
+const cutMin = 0.995
+
+// PlaceIn is where the picture goes on the screen taken the way a says, and how much of it is kept
+// first. AspectFit is FitIn, all of it kept. AspectFill keeps the share of the longer side that has the
+// screen's shape and fills the screen with it; AspectStretch fills the screen with all of it.
+//
+// The share is cut before the picture is scaled, not after as the camera view's coverFilter does: the
+// scaler then makes only the pixels shown, not a picture larger than the screen to throw part of away,
+// and the share is worked out from the picture's shape as it is meant to be seen (Display), so an
+// anamorphic DVD is cut in the right place, where scaling its stored pixels to cover the screen would
+// not be.
+func PlaceIn(i Info, s Screen, a Aspect) (Fit, Cut) {
+	all := Cut{1, 1}
+	if a != AspectFill && a != AspectStretch {
+		return FitIn(i, s), all
+	}
+	whole := Fit{W: max(even(s.W), 2), H: max(even(s.H), 2)}
+	dw, dh := i.Display()
+	if a == AspectStretch || dw <= 0 || dh <= 0 || s.W <= 0 || s.H <= 0 {
+		return whole, all
+	}
+	pic, scr := dw/dh, float64(s.W)/float64(s.H)
+	c := all
+	if pic > scr {
+		c.W = scr / pic // wider than the screen: its sides go
+	} else {
+		c.H = pic / scr // taller: its top and foot go
+	}
+	if c.W >= cutMin {
+		c.W = 1
+	}
+	if c.H >= cutMin {
+		c.H = 1
+	}
+	return whole, c
+}
 
 // Rate is a frame rate as a fraction, which is how a frame's time is worked out without drift:
 // frame n is at n×Den/Num seconds.
@@ -113,6 +192,12 @@ type Decoding struct {
 	// Proxy is the daemon's guard proxy, for a kernel that cannot fence the decoder (guard.go); empty
 	// when it can.
 	Proxy string
+
+	// Start is where in the video to begin (a seek), zero for its start.
+	Start time.Duration
+
+	// Aspect is how the picture takes the screen (PlaceIn).
+	Aspect Aspect
 }
 
 // netArgs are the input options every run of the decoder has: the network only, and patience for it.
@@ -156,14 +241,20 @@ func ProbeArgs(url, caFile string, insecure bool, proxy string) []string {
 	return append(a, "-i", url)
 }
 
-// Filter is the picture's way from the decoder to the panel: an even frame rate first, so frame n is
-// at n frames' time and late frames can be told; scaled to its place in the cheap 4:2:0 form, the bars
-// added, turned for the panel, and only then made the panel's pixels, which is where the cost is
-// (docs/cast-plan.md, step 0).
-func Filter(i Info, s Screen) string {
-	fit := FitIn(i, s)
+// Filter is the picture's way from the decoder to the panel, taken the way a says (PlaceIn): an even
+// frame rate first, so frame n is at n frames' time and late frames can be told; what is not kept cut
+// off; scaled to its place in the cheap 4:2:0 form, the bars added, turned for the panel, and only then
+// made the panel's pixels, which is where the cost is (docs/cast-plan.md, step 0).
+func Filter(i Info, s Screen, a Aspect) string {
+	fit, cut := PlaceIn(i, s, a)
 	r := FrameRate(i.FPS)
 	f := "fps=fps=" + r.String() + ":start_time=0"
+	if cut.W < 1 || cut.H < 1 {
+		// Worked out by ffmpeg from the picture as it arrives (already turned upright, as ffmpeg turns
+		// a phone's video before the filters), kept even for the 4:2:0 form, and centered, which is
+		// crop's own default.
+		f += fmt.Sprintf(",crop=%s:%s", cropSide("iw", cut.W), cropSide("ih", cut.H))
+	}
 	f += fmt.Sprintf(",scale=%d:%d:flags=fast_bilinear,format=yuv420p", fit.W, fit.H)
 	if fit.W != s.W || fit.H != s.H {
 		f += fmt.Sprintf(",pad=%d:%d:%d:%d:black", even(s.W), even(s.H), fit.X, fit.Y)
@@ -207,9 +298,18 @@ func DecodeArgs(d Decoding) []string {
 	// Past 720p every core, and best effort even so: the decoder's own shortcuts (skipping the
 	// deblocking) make ffmpeg 8 refuse to open the picture's output when given on its command line.
 	a = append(a, "-threads", strconv.Itoa(t))
+	if d.Start > 0 {
+		// Before -i, so it is the input that is moved through: ffmpeg asks the server for the part
+		// there (a Range request into an MP4, the right parts of an HLS playlist) rather than decoding
+		// its way to it. It still decodes from the key frame before the time and drops what comes
+		// before it, so the picture starts where it was asked to; its times then count from zero
+		// again, as a video's from its start do, and the clock and the sound's padding go on as
+		// they would.
+		a = append(a, "-ss", strconv.FormatFloat(d.Start.Seconds(), 'f', 3, 64))
+	}
 	a = append(a, "-i", d.URL)
 	a = append(a, "-map", "0:v:"+strconv.Itoa(d.Info.VideoIndex), "-an", "-sn", "-dn",
-		"-vf", Filter(d.Info, d.Screen), "-fps_mode", "passthrough",
+		"-vf", Filter(d.Info, d.Screen, d.Aspect), "-fps_mode", "passthrough",
 		"-f", "rawvideo", "-pix_fmt", pixOr(d.Screen.PixFmt), "pipe:3")
 	if d.Info.AudioIndex >= 0 {
 		a = append(a, "-map", "0:a:"+strconv.Itoa(d.Info.AudioIndex), "-vn", "-sn", "-dn",
@@ -217,6 +317,14 @@ func DecodeArgs(d Decoding) []string {
 			"-f", "s16le", "pipe:1")
 	}
 	return a
+}
+
+// cropSide is crop's expression for keeping share of side (iw or ih): the side itself for all of it.
+func cropSide(side string, share float64) string {
+	if share >= 1 {
+		return side
+	}
+	return fmt.Sprintf("trunc(%s*%.6f/2)*2", side, share)
 }
 
 func pixOr(p string) string {

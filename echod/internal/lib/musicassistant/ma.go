@@ -257,26 +257,56 @@ type PlayerState struct {
 	} `json:"output_protocols"`
 }
 
-// Player is the player that is this device, found by its own id there (its Sendspin client id, the
-// factory MAC). Music Assistant 2.10 gathers a device's ways in (Sendspin, Home Assistant, DLNA) under
-// one player with an id of its own, and limits a user to players by that id, so the device's own id is
-// looked for among each player's protocols, in the players this token may use.
-func (c Client) Player(ctx context.Context, own string) (PlayerState, error) {
+// Player is the player that is this device, found by its own ids there (its Sendspin client ids: the
+// key, then the factory MAC). Music Assistant 2.10 gathers a device's ways in (Sendspin, Home
+// Assistant, DLNA) under one player with an id of its own, and limits a user to players by that id,
+// so each id is looked for among each player's protocols, in the players this token may use.
+//
+// A device has two ids since Sendspin is encrypted (#679): Music Assistant names its Sendspin player
+// by the key, and the player it had under the MAC from before stays on, unavailable (#721). Looked for
+// by its MAC alone, the device was not found at all, or found only as not connected (#738). So a
+// connected player is taken over one that is not, and between two alike, the earlier id's.
+func (c Client) Player(ctx context.Context, own ...string) (PlayerState, error) {
 	var all []PlayerState
 	if err := c.do(ctx, "players/all", map[string]any{}, &all); err != nil {
 		return PlayerState{}, err
 	}
-	for _, p := range all {
-		if strings.EqualFold(p.ID, own) {
+	var found PlayerState
+	ok := false
+	for _, id := range own {
+		if id == "" {
+			continue
+		}
+		p, has := playerBy(all, id)
+		if !has {
+			continue
+		}
+		if p.Available {
 			return p, nil
 		}
+		if !ok {
+			found, ok = p, true
+		}
+	}
+	if ok {
+		return found, nil
+	}
+	return PlayerState{}, errors.New("music assistant has no player for this device that this token may use; in Music Assistant, add this device to the user's allowed players")
+}
+
+// playerBy is the player among all that is id, or that has it among its protocols.
+func playerBy(all []PlayerState, id string) (PlayerState, bool) {
+	for _, p := range all {
+		if strings.EqualFold(p.ID, id) {
+			return p, true
+		}
 		for _, o := range p.Protocols {
-			if strings.EqualFold(o.ID, own) {
-				return p, nil
+			if strings.EqualFold(o.ID, id) {
+				return p, true
 			}
 		}
 	}
-	return PlayerState{}, errors.New("music assistant has no player for this device that this token may use; in Music Assistant, add this device to the user's allowed players")
+	return PlayerState{}, false
 }
 
 // Stop stops the player id (its own id at the server, as Player gives it).
@@ -301,7 +331,7 @@ func (c Client) Resume(ctx context.Context, id string) error {
 // ErrOvertaken is a play that something asked for since has made unwanted.
 var ErrOvertaken = errors.New("something else was asked for meanwhile")
 
-// PlayChecked plays uri on the player that is this device (own: its id, as Player takes it) and waits,
+// PlayChecked plays uri on the player that is this device (own: its ids, as Player takes them) and waits,
 // up to within, for the server to say it is playing there, looking every poll, for as long as wanted
 // says it is still wanted (nil for always). A player the server has no connection to is told as that
 // before anything is asked of it, since nothing it is given could be heard.
@@ -309,8 +339,8 @@ var ErrOvertaken = errors.New("something else was asked for meanwhile")
 // What was playing there is stopped first, so that its "playing" is not taken for this one's. A play
 // that does not start in time, or that something else overtook, is stopped too: otherwise the server
 // can start it late, over whatever the device went on to play.
-func (c Client) PlayChecked(ctx context.Context, own, uri string, within, poll time.Duration, wanted func() bool) error {
-	p, err := c.Player(ctx, own)
+func (c Client) PlayChecked(ctx context.Context, own []string, uri string, within, poll time.Duration, wanted func() bool) error {
+	p, err := c.Player(ctx, own...)
 	if err != nil {
 		return err
 	}
@@ -320,7 +350,7 @@ func (c Client) PlayChecked(ctx context.Context, own, uri string, within, poll t
 	if p.State == "playing" {
 		_ = c.Stop(ctx, p.ID)
 		for end := time.Now().Add(5 * time.Second); time.Now().Before(end); {
-			if st, err := c.Player(ctx, own); err != nil || st.State != "playing" {
+			if st, err := c.Player(ctx, own...); err != nil || st.State != "playing" {
 				break
 			}
 			select {
@@ -352,7 +382,7 @@ func (c Client) PlayChecked(ctx context.Context, own, uri string, within, poll t
 			stop()
 			return ErrOvertaken
 		}
-		if st, err := c.Player(ctx, own); err == nil && st.State == "playing" {
+		if st, err := c.Player(ctx, own...); err == nil && st.State == "playing" {
 			return nil
 		}
 		if time.Now().After(deadline) {

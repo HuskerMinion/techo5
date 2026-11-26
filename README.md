@@ -80,6 +80,15 @@ How it compares with EchoLocal, EchoMuse, echo-dot-assist, Kiosk Satellite and V
 
 The bigger changes of September to November 2026. Every release lists the rest.
 
+- 💾 **About 95% fewer writes to the built-in storage, and add-ons from the setup page** (v1.6.53). Measured
+  on an Echo Show 8 2nd gen, the device went from about 770 MB written a day to about 35 MB: Bluetooth's
+  cache of nearby names lives in memory, the log is saved every few minutes (and at once on a warning),
+  the journal commits once a minute, and wake clips bound for a trainer wait in memory. At the old rate
+  a cheap eMMC could wear out in a few years; at the new one, even by a pessimistic guess, it should
+  outlast the rest of the device by decades. The setup page has an Add-ons card: a signed list, a warning before
+  every install, each add-on run as its own user ([docs/setup.md](docs/setup.md#add-ons)). The first
+  listing, the [Plex player](https://github.com/HuskerMinion/techo5-plex), is installed from it once its
+  next release is listed; until then it is installed by hand.
 - 📞 **Call by wake word, Hang up bar, repeating alarms** (v1.6.28). A wake word can call a phone book
   contact ([#463](https://github.com/HuskerMinion/techo5/pull/463)), calls can keep the page on screen
   with a Hang up bar ([#459](https://github.com/HuskerMinion/techo5/pull/459)), and the Set an alarm
@@ -480,6 +489,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🎙️ **Two wake words, two assistants** | microWakeWord runs on the device and listens for two wake words at once, each with its own Home Assistant assistant: "Okay Nabu" for a local one and "Hey Jarvis" for a cloud one, say. Each has its own sensitivity, sounds, ring and follow-up. Twelve words come with it ("Alexa", "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Computer" and more), and you can add your own. Say "stop", with no wake word, to stop an alarm, an answer or the music. Echo cancellation keeps it listening over music. [docs/setup.md](docs/setup.md#two-wake-words-two-assistants) |
 | 🧠 **Voice without Home Assistant, if you want** | Instead of Assist, the device can use your own speech servers (Wyoming: faster-whisper and Piper) and a chat model (llama.cpp, Ollama or anything OpenAI-style). It sets timers and alarms, plays the radio, the news update you ask for (Fox, NPR, ABC or your own) and Music Assistant, changes the volume and calls other devices, and can look things up with SearXNG. Or answer a wake word with a realtime voice at OpenAI, xAI or Gemini, with your own key. [docs/setup.md](docs/setup.md#voice-without-home-assistant) |
 | 🔐 **Secure by default** | SSH is keys-only and off until you turn it on; keys arrive only through Home Assistant. The camera and screen web pages start closed, and a firewall lets in nothing on Wi-Fi but what the device serves. No password logins, not even in rescue. |
+| 💾 **Easy on the flash** | The built-in storage is what wears out first on an old Echo, so TECHO5 keeps what changes often in memory: Bluetooth's name cache, temporary files, wake clips waiting to be sent. It saves its log every few minutes rather than every few seconds. Measured on a Show 8 2nd gen, about 35 MB written a day, roughly 95% less than before v1.6.53. |
 | 🔄 **Updates that can't brick it** | Signed releases install over the air from Home Assistant's update card into the spare of two root filesystem slots, boot on trial, and fall back on their own if the new one doesn't settle. Follow the stable or the dev channel, and let it install on its own between 2 and 5 AM if you like. |
 | 📺 **A screen that's actually useful** | Clock and weather, the conversation as it happens, a glance strip of chips from Home Assistant along the foot of the clock, a calendar, now playing with song, cover art and lyrics, your Home Assistant dashboards, forecasts, a live rain radar, the National Weather Service's alerts (in the U.S.), live cameras from Home Assistant or go2rtc, up to six at once, notifications, timers and alarms, Wi-Fi setup, Home Assistant's to-do and shopping lists, 13 themes, ten fonts, ten languages (five with the whole screen translated, Spanish part of it, and Dutch, Portuguese and Russian the clock and weather), and 15 clock styles you swipe between. Auto-brightness follows the room's light. |
 | 📅 **A calendar on the screen** | Home Assistant's calendars, or any calendar's own iCal link: a day and a week on their hours, the month, Coming up with the weather, event icons and countdowns, pop-ups for the calendars you choose, and the next event under the clock. [docs/setup.md](docs/setup.md#calendar) |
@@ -490,6 +500,7 @@ slot system, phone calls, and a minimal Alpine root filesystem in place of Andro
 | 🎬 **Videos on the screen** | An address from Home Assistant's `play_video` action, or a video from a DLNA app or media server (BubbleUPnP, Jellyfin, Plex, Windows' Cast to device), plays full screen with its sound, on the Show and the Spot. H.264 at 720p plays best. Off until you turn it on, and a DLNA video from a new address asks on the screen first. [docs/video.md](docs/video.md) |
 | 📻 **Weather and radio with no setup** | A new Show uses the forecast every Home Assistant has, and lists the radio stations near home from Home Assistant's Radio Browser. Pick another weather entity (your own station, say) on the screen, and keep your own favorite stations too. |
 | ⏰ **Alarms that ring on their own** | Set on the screen, by Home Assistant, or followed from its helpers; they ring from the Show's own clock even when Home Assistant is down. Snooze included, and the screen can wake you with a sunrise before the sound. |
+| 📲 **Cast from your phone** | Share a YouTube video, a file, or your whole screen from an Android phone ([TECHO5 Cast](https://github.com/asmsaifs/techo5-cast)) and it plays on the Show, picture and sound, encrypted and with no server between. Off until you turn it on, paired by a QR code on the screen, and the Show asks before a phone casts. [How it works](docs/cast.md). |
 | 🎧 **Bluetooth, rebuilt** | Earbuds and speakers over A2DP, plus a Home Assistant Bluetooth proxy, on a kernel rebuilt with Bluetooth from the LineageOS source. |
 | 📞 **A speakerphone again** | Calls through your own SIP provider: "call Alex" by voice, calls that ring on the screen, calls between your own devices, and a help call that alerts your phones and dials people in turn. Encrypted end to end to the provider, and off until you sign it in. [docs/phone.md](docs/phone.md) |
 | 👶 **A baby monitor** | A private link plays the room's sound live in a phone's browser, on the Show, the Spot and the Dot. Off until you turn it on; the screen (or the Dot's light ring) shows when someone is listening, and the mute switch stops it. [docs/setup.md](docs/setup.md#the-baby-monitor) |
@@ -677,8 +688,10 @@ the backup. Every step: **[docs/install-skylight.md](docs/install-skylight.md)**
   [wakesmith](https://github.com/HuskerMinion/wakesmith), or by hand in any language.
 - [CONTRIBUTING.md](CONTRIBUTING.md): reporting problems, trying a build on your device, and pull requests.
 - [Add-ons others have made](docs/external-asp.md#add-ons-others-have-made): extras made and kept by
-  their authors, not by TECHO5, that run from userdata and outlast updates. Making one of your own:
-  [running something at boot](docs/setup.md#running-something-of-your-own-at-boot).
+  their authors, not by TECHO5, that run from userdata and outlast updates. Those in TECHO5's catalog are
+  installed from the setup page ([Add-ons](docs/setup.md#add-ons)). Making one of your own:
+  [running something at boot](docs/setup.md#running-something-of-your-own-at-boot), and
+  [getting it listed](docs/setup.md#getting-an-add-on-listed).
 
 ## Sister projects
 

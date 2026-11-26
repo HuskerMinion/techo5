@@ -1,0 +1,103 @@
+From: Andrea Mattera <26578395+m0s4ik@users.noreply.github.com>
+Subject: [PATCH] ASoC: qcom: q6asm-dai: play a free-running ring like a DMA buffer
+
+Not upstream: carried by thinksmart-view-debian (driver/q6asm), on top of
+0001-0003.
+
+q6asm_dai_ack() hands the DSP one period buffer for every whole period
+appl_ptr moved past queue_ptr. Users that run the ring as a DMA buffer,
+with stop_threshold at the boundary, may never move the slave's
+appl_ptr: dmix mixes into the mmapped ring ahead of hw_ptr and expects
+the hardware to keep reading it. Nothing reaches the DSP, no write done
+comes back, hw_ptr stays at 0 and dmix never finishes draining.
+
+When a playback stream starts with stop_threshold >= boundary, queue the
+whole ring once (the periods ack has not queued yet) and then one
+period on every write done, as the old event-driven code did, and make
+ack a no-op for that run. The DSP reads each buffer in ring order, so
+the position stays that of a DMA engine; with the silence fill that
+dmix asks for, a period nobody wrote in time plays as silence. The
+flag is cleared on STOP and on every prepare, so streams driven by
+appl_ptr (the default stop_threshold) are unchanged.
+
+---
+ sound/soc/qcom/qdsp6/q6asm-dai.c | 28 ++++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+--- a/sound/soc/qcom/qdsp6/q6asm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6asm-dai.c
+@@ -64,6 +64,7 @@
+ 	uint64_t copied_total;
+ 	uint16_t bits_per_sample;
+ 	snd_pcm_uframes_t queue_ptr;
++	bool free_run;
+ 	uint16_t source; /* Encoding source bit mask */
+ 	struct audio_client *audio_client;
+ 	uint32_t next_track_stream_id;
+@@ -189,6 +190,10 @@
+ 		break;
+ 	case ASM_CLIENT_EVENT_DATA_WRITE_DONE:
+ 		snd_pcm_period_elapsed(substream);
++		/* free-running ring: hand the DSP the next period, as a DMA would read it */
++		if (READ_ONCE(prtd->free_run) && prtd->state == Q6ASM_STREAM_RUNNING)
++			q6asm_write_async(prtd->audio_client, prtd->stream_id,
++					  prtd->pcm_count, 0, 0, 0);
+ 		break;
+ 	case ASM_CLIENT_EVENT_DATA_READ_DONE:
+ 		snd_pcm_period_elapsed(substream);
+@@ -245,6 +250,7 @@
+ 
+ 	/* ALSA resets appl_ptr for every prepare, including xrun recovery. */
+ 	prtd->queue_ptr = 0;
++	WRITE_ONCE(prtd->free_run, false);
+ 
+ 	ret = q6asm_map_memory_regions(substream->stream, prtd->audio_client,
+ 				       prtd->phys,
+@@ -318,6 +324,10 @@
+ 	struct q6asm_dai_rtd *prtd = runtime->private_data;
+ 	int i, ret = 0, avail_periods;
+ 
++	/* a free-running ring is fed from the write-done events, not from appl_ptr */
++	if (READ_ONCE(prtd->free_run))
++		return 0;
++
+ 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK && prtd->state == Q6ASM_STREAM_RUNNING) {
+ 		avail_periods = (runtime->control->appl_ptr - prtd->queue_ptr)/runtime->period_size;
+ 		for (i = 0; i < avail_periods; i++) {
+@@ -338,18 +348,35 @@
+ static int q6asm_dai_trigger(struct snd_soc_component *component,
+ 			     struct snd_pcm_substream *substream, int cmd)
+ {
+-	int ret = 0;
++	int i, ret = 0;
+ 	struct snd_pcm_runtime *runtime = substream->runtime;
+ 	struct q6asm_dai_rtd *prtd = runtime->private_data;
+ 
+ 	switch (cmd) {
+ 	case SNDRV_PCM_TRIGGER_START:
++		/*
++		 * With stop_threshold at the boundary (dmix and other free-running
++		 * users) appl_ptr may never move: the ring is played like a DMA
++		 * buffer. Queue the whole ring once, then one period per write done.
++		 */
++		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK &&
++		    runtime->stop_threshold >= runtime->boundary) {
++			for (i = prtd->queue_ptr / runtime->period_size; i < runtime->periods; i++) {
++				ret = q6asm_write_async(prtd->audio_client, prtd->stream_id,
++							prtd->pcm_count, 0, 0, 0);
++				if (ret < 0)
++					return ret;
++			}
++			WRITE_ONCE(prtd->free_run, true);
++		}
++		fallthrough;
+ 	case SNDRV_PCM_TRIGGER_RESUME:
+ 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+ 		ret = q6asm_run_nowait(prtd->audio_client, prtd->stream_id,
+ 				       0, 0, 0);
+ 		break;
+ 	case SNDRV_PCM_TRIGGER_STOP:
++		WRITE_ONCE(prtd->free_run, false);
+ 		ret = q6asm_cmd_nowait(prtd->audio_client, prtd->stream_id,
+ 				       CMD_EOS);
+ 		break;

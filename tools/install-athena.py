@@ -1494,6 +1494,11 @@ def boot_layer_install(a, adb, parts, backup, current_boot):
             time.sleep(5)
         if re.search(r'ab=[ab]- daemon=\d', seen):
             note('the boot layer started slot %s, and TECHO5 runs' % re.search(r'ab=([ab])-', seen).group(1))
+        elif console.blocked:
+            # Said by name when the console was there all along but could not be opened (#729): the
+            # usual reason this watch sees nothing, and one the person can fix.
+            note('the USB serial console did not show a slot started by the boot layer within 5 minutes:\n   %s\n'
+                 "   The Show's screen says what it is doing." % console.waiting_hint())
         else:
             note('the USB serial console did not show a slot started by the boot layer within 5 minutes. That may\n'
                  "   only be this computer not seeing the console: the Show's screen says what it is doing.")

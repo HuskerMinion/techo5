@@ -52,7 +52,7 @@ func (r *renderer) nowPlaying(s scene) {
 		label += "  ·  " + station
 		headline, sub = rd.Title, rd.Artist
 	}
-	r.text(r.small, label, r.margin, r.s(150), amber)
+	r.labelRow(s, label, starting == "")
 	if s.hasLyric && rd.Title != "" && starting == "" {
 		r.lyricLines(s.lyric, rd)
 	} else {
@@ -60,6 +60,33 @@ func (r *renderer) nowPlaying(s scene) {
 	}
 
 	r.transportRow(s)
+}
+
+// labelRow is the row over the song: what plays and from where, and to its right, when the song's
+// source says how far into it it is (and bar), the bar the modern page has under its song, with the
+// time gone at its left and the song's length at its right. The page has no room for it between the
+// words and the buttons, which the lyrics fill. It is one to seek on when what plays can be moved from
+// here (musicSeekRoute), and otherwise one that only shows.
+func (r *renderer) labelRow(s scene, label string, bar bool) {
+	y := r.s(150)
+	p := s.musicPosition
+	if !bar || p.Dur <= 0 {
+		r.text(r.small, r.clipTo(r.small, label, r.w-2*r.margin), r.margin, y, amber)
+		return
+	}
+	// The label has the left half at least; the bar the rest, starting past the label's end.
+	gap := r.s(32)
+	label = r.clipTo(r.small, label, r.w/2-r.margin-gap)
+	r.text(r.small, label, r.margin, y, amber)
+	x0 := max(r.margin+r.width(r.small, label)+gap, r.w/2)
+	elapsed := p.Now(s.now)
+	total := musicTime(p.Dur)
+	// Both ends as wide as the length, so the bar does not move as the time gone grows.
+	w, room := r.width(r.tiny, total), r.s(14)
+	mid := y - r.s(9) // level with the middle of the label's letters
+	r.seekBar(s.musicSeek, x0+w+room, r.w-r.margin-w-room, mid, elapsed, p.Dur, ember, amber)
+	r.text(r.tiny, musicTime(s.musicSeek.at(elapsed)), x0, mid+r.s(7), dim)
+	r.text(r.tiny, total, r.w-r.margin-w, mid+r.s(7), dim)
 }
 
 // songLines is the middle of the page without words: the song (or the station) large, who plays it under.
@@ -148,7 +175,7 @@ func (r *renderer) musicFooter(s scene) {
 	r.text(doneFace, word, done.Min.X+(done.Dx()-r.width(doneFace, word))/2, done.Min.Y+done.Dy()/2+r.s(8), doneCol)
 
 	// The star saves what is playing to favorites, and fills in once it has.
-	fav := r.favButton()
+	fav, queue := r.musicSideButtons(s.queue, s.spoken)
 	r.buttonFace(fav, float64(fav.Dy())/2, btnSecondary)
 	// The icon font's star, not one drawn as a polygon: the same outline the rest of the program would
 	// draw, and filled in once the station is saved.
@@ -168,6 +195,10 @@ func (r *renderer) musicFooter(s scene) {
 		r.mdiIcon("bookshelf", x, b.Min.Y+(b.Dy()-icon)/2, 24, col)
 		r.text(doneFace, s.libraryWord, x+icon+gap, b.Min.Y+b.Dy()/2+r.s(8), col)
 	}
+	if !queue.Empty() {
+		col := r.buttonFace(queue, float64(queue.Dy())/2, btnSecondary)
+		r.mdiIconIn("playlist-play", queue, 32, col)
+	}
 	// An audiobook's or an episode's playback speed, which a tap steps on.
 	r.drawSpeed(s)
 	r.drawSeek(s)
@@ -184,6 +215,28 @@ func (r *renderer) libraryButton(word string, modern bool) image.Rectangle {
 		return image.Rect(x, done.Min.Y, x+w, done.Max.Y)
 	}
 	return image.Rect(r.w-r.margin-w, done.Min.Y, r.w-r.margin, done.Max.Y)
+}
+
+// queueShown is whether the page has the Queue button: Library is there (libraryWord) and what plays
+// is a Music Assistant track, whose queue is what comes next. AirPlay, Bluetooth and a station of this
+// device's own have nothing in that queue, so the button opened an empty or unrelated list (#700). A
+// followed player keeps it, as it had it: the library may be what started that player's music.
+func queueShown(libraryWord string, rd home.Radio) bool {
+	return libraryWord != "" && (rd.MA || rd.Followed)
+}
+
+// musicSideButtons gives drawing and touch the same Favorites and Queue positions. When Queue is
+// shown (queueShown), the two icons share the Favorites button's usual space beside Done.
+func (r *renderer) musicSideButtons(queueOn, spoken bool) (fav, queue image.Rectangle) {
+	fav = r.favButton()
+	if !queueOn || spoken {
+		return fav, queue
+	}
+	gap := r.s(12)
+	size := (fav.Dx() - gap) / 2
+	top := fav.Min.Y + (fav.Dy()-size)/2
+	return image.Rect(fav.Min.X, top, fav.Min.X+size, top+size),
+		image.Rect(fav.Max.X-size, top, fav.Max.X, top+size)
 }
 
 // buttonReach is one of the now-playing page's buttons grown to what a finger on it hits: a little to

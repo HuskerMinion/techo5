@@ -44,6 +44,11 @@ var (
 	// read-only.
 	UpdatingPath = StateDir + "/updating"
 
+	// SendspinKeysPath is the device's Sendspin identity and its pairings (feature/sendspin/secure).
+	// Here, not in feature/sendspin, because what looks the device up in Music Assistant by its key id
+	// sits below that package.
+	SendspinKeysPath = StateDir + "/sendspin-keys.json"
+
 	// LinuxDir is where the Linux image installs the daemon, and the fallback when the executable's
 	// own path cannot be read.
 	LinuxDir = "/usr/local/bin"
@@ -124,6 +129,10 @@ var RecordingDir = StateDir + "/recordings"
 
 // WakeClipDir holds the kept wake word clips, a folder for each kind (feature/detect, clips.go).
 var WakeClipDir = StateDir + "/wake-clips"
+
+// WakeClipRAMDir is where clips that are being sent wait instead, when it is on a tmpfs (Linux's /run),
+// so that a clip that only passes through is never written to eMMC (feature/detect, clipsram.go).
+var WakeClipRAMDir = "/run/techo5/wake-clips"
 
 // MAC normalizes an address into the form Home Assistant compares against, and reports "" for
 // anything that would not identify a device. idme writes twelve hex digits with no separators.

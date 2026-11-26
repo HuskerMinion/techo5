@@ -38,6 +38,8 @@ var sectionFor = map[string]string{
 	"babylink":      "baby", "babylight": "baby",
 	"screenkey":      "screenpage",
 	"update-install": "updates", "update-check": "updates", "update-auto": "updates",
+	"addon-install": "addons", "addon-update": "addons", "addon-start": "addons", "addon-stop": "addons",
+	"addon-remove": "addons", "addon-check": "addons",
 	"sound-play": "sounds", "sound-remove": "sounds",
 	"wakeword-remove": "wakewords",
 	"wakeclips-test":  "wakeclips", "wakeclips-trust": "wakeclips", "wakeclips-keep": "wakeclips",

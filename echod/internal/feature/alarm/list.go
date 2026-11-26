@@ -20,6 +20,8 @@ type Listing struct {
 type ListedRing struct {
 	Label string `json:"label"`
 	Since string `json:"since"`
+	// Kind is "alarm" or "timer", so an automation can tell a ringing alarm from a ringing timer (#736).
+	Kind string `json:"kind"`
 }
 
 type ListedAlarm struct {
@@ -65,14 +67,22 @@ type ListedTimer struct {
 	// Local is a timer of the device's own, which timer_cancel can cancel. The others are Home
 	// Assistant's, canceled where they were set.
 	Local bool `json:"local"`
+	// Silent is one started with timer_start_silent, which only shows and does not ring: the wait of an
+	// automation, which cancels it itself.
+	Silent bool `json:"silent"`
 }
 
 // listing builds the answer from what the device holds; kept apart from the Alarms so it can be tested
-// without one.
-func listing(now time.Time, v View, timers []timer.Countdown) Listing {
+// without one. rung is the timer ringing, nil when none is.
+func listing(now time.Time, v View, timers []timer.Countdown, rung *timer.Rung) Listing {
 	l := Listing{Alarms: []ListedAlarm{}, Snoozed: []ListedSnooze{}, Followed: []ListedHelper{}, Timers: []ListedTimer{}}
-	if v.Ringing != nil {
-		l.Ringing = &ListedRing{Label: v.Ringing.Label, Since: stamp(v.Ringing.At)}
+	switch {
+	case v.Ringing != nil:
+		l.Ringing = &ListedRing{Label: v.Ringing.Label, Since: stamp(v.Ringing.At), Kind: "alarm"}
+	case rung != nil:
+		// A ringing timer has left the timers, and rings from the timers' own ring rather than the
+		// alarms', so without this nothing in the answer would say it rings (#736).
+		l.Ringing = &ListedRing{Label: rung.Name, Since: stamp(rung.Since), Kind: "timer"}
 	}
 	for _, al := range v.Local {
 		next := ""
@@ -101,7 +111,7 @@ func listing(now time.Time, v View, timers []timer.Countdown) Listing {
 	for _, c := range timers {
 		l.Timers = append(l.Timers, ListedTimer{
 			ID: c.ID, Label: c.Name, Left: int(c.Left.Round(time.Second) / time.Second),
-			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local,
+			Total: int(c.Total.Round(time.Second) / time.Second), Running: c.Active, Local: c.Local, Silent: c.Silent,
 		})
 	}
 	return l

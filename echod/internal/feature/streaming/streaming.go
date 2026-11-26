@@ -35,6 +35,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 )
 
@@ -249,8 +250,11 @@ func (f *Feature) settle(parent context.Context) {
 	if !runAirPlay && !runSpotify {
 		return
 	}
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
-		slog.Error("streaming: making its run folder failed", "err", err)
+	// The receivers' configuration and the pipes their events come back on, which the daemon reads and
+	// writes as root: the folder has to be root's own, not a link or a folder another user made at the
+	// name while /run was writable by anyone (an older initramfs mounted it so).
+	if !rootonly.MkdirAll(runDir, 0o755) {
+		slog.Error("streaming: its run folder is missing, or is not root's; the receivers are not started", "dir", runDir)
 		return
 	}
 	name := config.Get().Device.Name

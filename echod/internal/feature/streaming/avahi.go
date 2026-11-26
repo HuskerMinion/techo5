@@ -13,6 +13,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 )
 
 // avahiConf announces what the receivers register and nothing of its own: no workstation record and no
@@ -54,7 +55,12 @@ func runAvahiOnce(ctx context.Context) {
 		slog.Error("streaming: writing avahi's configuration failed", "err", err)
 		return
 	}
-	// Where avahi keeps its pid; /run is cleared at boot.
+	// Where avahi keeps its pid; /run is cleared at boot. avahi makes the folder its own user's, so only
+	// a link, or something that is not a folder, is taken away first: avahi starts as root, and would
+	// follow a link another user left at the name.
+	if st, err := os.Lstat("/run/avahi-daemon"); err == nil && !st.IsDir() {
+		_ = os.Remove("/run/avahi-daemon")
+	}
 	_ = os.MkdirAll("/run/avahi-daemon", 0o755)
 	ensureBus()
 	// avahi drops root for its own user by itself.
@@ -90,6 +96,10 @@ const busStarting = "/run/techo5-dbus-starting"
 func ensureBus() {
 	if busUp() {
 		return
+	}
+	// A lock nobody of root's made is not a start in hand: it goes, rather than hold the bus up.
+	if _, err := os.Lstat(busStarting); err == nil && !rootonly.Dir(busStarting) {
+		_ = os.RemoveAll(busStarting)
 	}
 	if err := os.Mkdir(busStarting, 0o755); err != nil {
 		// Bluetooth's start has it in hand.

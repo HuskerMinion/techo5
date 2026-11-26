@@ -64,7 +64,12 @@ var AnimationScripts = []string{StartAnimation, StopAnimation}
 // The Echo Input (2018, cupcake) runs the Dot 3's build: the same MT8516 board, kernel, sound card
 // and four microphones, with no speaker (the 3.5 mm line out and Bluetooth are its outputs), one RGB
 // LED in place of the ring and no volume keys. What differs is asked of Cupcake.
-var Board, Model, DefaultName = boardInfo(detectBoard())
+//
+// The Echo Dot 5th gen (2022, cannoli) is built apart again (-tags dot,cannoli): an MT8519 on Amazon's
+// 5.4 kernel, its microphones read off UL9 on the speaker's card (card 0) with the HiFi5 DSP left out, a
+// MAX98396 amplifier and an ISSI IS31FL3246 ring, so its capture, speaker and ring are its own; the
+// buttons and the mute latch are the Dot 3's. Cannoli says so where code shared with the other Dots has to know.
+var Board, Model, DefaultName = buildBoard()
 
 const (
 	boardBiscuit = "biscuit"

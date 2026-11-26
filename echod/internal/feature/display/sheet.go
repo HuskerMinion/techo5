@@ -505,7 +505,7 @@ func connectionRows(sv sheetView) []settingRow {
 		ts := tailscale.Get().State()
 		rows = append(rows, settingRow{id: "tailscale", label: "Tailscale", sub: tailscaleSub(ts), kind: ctlToggle, on: ts.On})
 	}
-	return rows
+	return append(rows, castRows()...)
 }
 
 // tailscaleSub is the Tailscale row's line: where the device stands on the tailnet.
@@ -1430,6 +1430,8 @@ func (d *Display) rowTap(id string, p part, opt int) {
 		if armed {
 			safe.Go("bluetooth forget from the screen", btaudio.Get().Forget)
 		}
+	case "cast", "castpair":
+		d.castRowTap(id)
 	case "pair":
 		d.closeSheet()
 		btaudio.Get().SetPairing(true)

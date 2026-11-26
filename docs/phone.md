@@ -228,7 +228,7 @@ sound, the encryption setting and **Hang up** are the same as for any other call
 Choose a word in **Hang-up word** (the device's microphone settings in Home Assistant) and saying it
 during a call hangs the call up, or declines one ringing here. It is heard on the device, so it works
 with Home Assistant down. It is **None**, off, until chosen. The list has **Stop**, which has the stop
-word do it, and every wake word the device has but the ones chosen as wake words, so one of your own
+word do it (whichever word **Stop word** is set to, setup.md), and every wake word the device has but the ones chosen as wake words, so one of your own
 ("hang up", say) can do it, added the way a wake word of your own is (setup.md).
 
 - A call being placed is never ended this way, only one ringing here or one that is up. The

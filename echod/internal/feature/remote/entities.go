@@ -25,7 +25,7 @@ var readOnly = []string{
 	"wifi_quiet_hours", "wifi_quiet_hours_start", "wifi_quiet_hours_end",
 	// Listening, watching and keeping.
 	"mic_mute", "microphone_asp_selected", "intercom_drop_in", "talk_back", "record_takes", "baby_monitor", "baby_monitor_light", "camera_live", "screen_camera_dot", "keep_wake_clips", "send_wake_clips_to", "keep_recordings_1",
-	"keep_recordings_2", "presence", "presence_detection", "gestures", "wake_word_on_home_assistant",
+	"keep_recordings_2", "presence", "presence_sensitivity", "presence_detection", "gestures", "wake_word_on_home_assistant",
 	"confirm_wake_with_home_assistant",
 	// The words of a request kept off Home Assistant's history (Send voice text).
 	"send_voice_text",
@@ -33,6 +33,9 @@ var readOnly = []string{
 	"wake_assistant_1", "wake_assistant_2", "wake_threshold_1", "wake_threshold_2",
 	"wake_playing_threshold_1", "wake_playing_threshold_2", "confirm_threshold", "confirm_below_nearest_score",
 	"max_listen_1", "max_listen_2",
+	// Which model the stop word listens with (#741): what the microphones listen for, as the hang-up
+	// word's select is. Its threshold stays writable, as it has been.
+	"stop_word",
 	// New uses of the microphones and the camera: measuring the room, listening for claps, a finger held
 	// on the clock, serving the camera, and which device answers a wake word.
 	"ambient_noise_sensor", "clap_gesture", "clap_sensitivity", "clock_hold_gesture", "camera_streaming", "camera_login_from_ha",

@@ -36,9 +36,12 @@ func newMixerCmd() *cobra.Command {
 					return err
 				}
 				for _, ctl := range controls {
+					// A control the driver will not read (the Dot 5's DSP controls without the DSP) is
+					// said and skipped, not the end of the list.
 					v, err := m.Get(ctl)
 					if err != nil {
-						return err
+						fmt.Fprintf(out, "%3d  %-40s (unreadable: %v)\n", ctl.Numid, ctl.Name, err)
+						continue
 					}
 					fmt.Fprintf(out, "%3d  %-40s %s\n", ctl.Numid, ctl.Name, describe(ctl, v))
 				}

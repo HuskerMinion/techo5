@@ -26,9 +26,10 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 		},
 		Followed: []Followed{{Entity: "input_datetime.school", Label: "School run", Armed: true}},
 	}
-	timers := []timer.Countdown{{ID: "local:x", Name: "Pasta", Left: 272 * time.Second, Total: 600 * time.Second, Active: true, Local: true}}
+	timers := []timer.Countdown{{ID: "local:x", Name: "Pasta", Left: 272 * time.Second, Total: 600 * time.Second, Active: true, Local: true},
+		{ID: "local:y", Name: "Pairing", Left: time.Minute, Total: 2 * time.Minute, Active: true, Local: true, Silent: true}}
 
-	l := listing(now, v, timers)
+	l := listing(now, v, timers, nil)
 
 	if l.Ringing != nil {
 		t.Errorf("nothing is ringing, got %+v", l.Ringing)
@@ -50,6 +51,10 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 	if got := l.Timers[0]; got.ID != "local:x" || got.Left != 272 || got.Total != 600 || !got.Local || !got.Running {
 		t.Errorf("timer = %+v", got)
 	}
+	// A silent timer says so, for an automation that lists the timers and leaves its own waits be (#723).
+	if l.Timers[0].Silent || !l.Timers[1].Silent {
+		t.Errorf("silent = %v, %v; want only the timer_start_silent one silent", l.Timers[0].Silent, l.Timers[1].Silent)
+	}
 	if got := l.Followed[0]; got.Next != "" || got.Label != "School run" {
 		t.Errorf("a helper with no usable time has no next: %+v", got)
 	}
@@ -57,7 +62,7 @@ func TestListingCarriesIdsAndNextTimes(t *testing.T) {
 
 // Home Assistant needs a JSON object, and lists that are empty rather than null are easier to template.
 func TestAnEmptyListingIsAnObjectOfEmptyLists(t *testing.T) {
-	b, err := json.Marshal(listing(time.Now(), View{}, nil))
+	b, err := json.Marshal(listing(time.Now(), View{}, nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,5 +216,26 @@ func TestSwitchActionsAskOnlyForWhatTheyUse(t *testing.T) {
 	}
 	if err := a.switchByID(true, ""); err == nil || !strings.Contains(err.Error(), "no alarm id") {
 		t.Errorf("a blank id: %v", err)
+	}
+}
+
+// A ringing timer is the listing's ringing when no alarm rings, named and timed, and says it is a timer
+// (#736): it has left the timers, so nothing else in the answer would say so. A ringing alarm comes first.
+func TestARingingTimerIsListedAsRinging(t *testing.T) {
+	loc := time.FixedZone("test", -5*3600)
+	now := time.Date(2026, 11, 22, 15, 58, 12, 0, loc)
+	rung := &timer.Rung{Name: "Pasta", Since: now.Add(-3 * time.Second)}
+
+	l := listing(now, View{}, nil, rung)
+	want := ListedRing{Label: "Pasta", Since: "2026-11-22T15:58:09-05:00", Kind: "timer"}
+	if l.Ringing == nil || *l.Ringing != want {
+		t.Errorf("ringing = %+v, want %+v", l.Ringing, want)
+	}
+
+	alarm := &Ring{Label: "Wake up", At: now.Add(-time.Minute)}
+	l = listing(now, View{Ringing: alarm}, nil, rung)
+	want = ListedRing{Label: "Wake up", Since: "2026-11-22T15:57:12-05:00", Kind: "alarm"}
+	if l.Ringing == nil || *l.Ringing != want {
+		t.Errorf("with an alarm ringing too, ringing = %+v, want %+v", l.Ringing, want)
 	}
 }

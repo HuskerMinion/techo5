@@ -78,27 +78,44 @@ func TestShowScenesDraw(t *testing.T) {
 		// Music Assistant's track, carried over Sendspin: named, with the three buttons.
 		"nowplaying-music-assistant": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
+		// Live Music Assistant radio with a song and artist: the station joins the source line.
+		"nowplaying-music-assistant-radio": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
+			radio: home.Radio{Playing: true, Now: "Music Assistant  ·  YES 933", Title: "Take It Easy", Artist: "Eagles", Music: true}},
 		// With Music Assistant set up: the Library button at the right end of the foot, back to the library.
-		"nowplaying-library": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library",
+		"nowplaying-library": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", queue: true,
 			bt:    btaudio.State{Connected: "Phone"},
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
-		"nowplaying-modern-library": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Bibliothèque",
+		"nowplaying-modern-library": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Bibliothèque", queue: true,
 			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
 		// An audiobook from the library: back and forward 30 seconds, and its speed beside the Library button.
-		"nowplaying-book": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", spoken: true, speed: 1.25,
+		"nowplaying-book": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", queue: true, spoken: true, speed: 1.25,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Northern Lights", Artist: "Ann Author"}},
-		"nowplaying-modern-book": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library",
+		"nowplaying-modern-book": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", queue: true,
 			spoken: true, speed: 1,
 			radio:         home.Radio{Now: "Music Assistant", Title: "Northern Lights", Artist: "Ann Author", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 1500 * time.Second, Dur: 3600 * time.Second, Rate: 1}},
 		// A song Music Assistant can move through: back 15 and forward 30 seconds, above the Library button on
 		// the classic page and under the three buttons on the modern one.
-		"nowplaying-seek": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+		"nowplaying-seek": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", queue: true, seek: true,
 			radio: home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
-		"nowplaying-modern-seek": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", seek: true,
+		"nowplaying-modern-seek": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", queue: true, seek: true,
 			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
 			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
+		// How far into the song it is, on the classic page: beside the label, with the time each side.
+		// Spotify's only shows; Music Assistant's is one to seek on, here with a finger choosing a place
+		// on it (the knob, and the time it would go to). The modern page's the same way.
+		"nowplaying-position": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky,
+			radio:         home.Radio{Playing: true, Now: "Spotify", Title: "Take It Easy", Artist: "Eagles", Music: true},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1}},
+		"nowplaying-seekbar": {now: at, phase: "idle", nowPlaying: true, playing: true, weather: sky, libraryWord: "Library", queue: true, seek: true,
+			radio:         home.Radio{Playing: true, Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1},
+			musicSeek:     seekView{route: seekMusic, dur: 222 * time.Second, shown: true, to: 160 * time.Second}},
+		"nowplaying-modern-seekbar": {now: at, phase: "idle", nowPlaying: true, modernMusic: true, playing: true, weather: sky, libraryWord: "Library", queue: true, seek: true,
+			radio:         home.Radio{Now: "Music Assistant", Title: "After the Rain", Artist: "The Glass Hours", Thumb: previewMusicCover()},
+			musicPosition: media.Position{At: at, Pos: 86 * time.Second, Dur: 222 * time.Second, Rate: 1},
+			musicSeek:     seekView{route: seekMusic, dur: 222 * time.Second, shown: true, to: 160 * time.Second}},
 		"nowplaying-music-assistant-paused": {now: at, phase: "idle", nowPlaying: true, paused: true, weather: sky,
 			radio: home.Radio{Now: "Music Assistant", Title: "Some Jazz", Artist: "The Quartet", Music: true}},
 		// A station tapped and not playing yet: the page is up at once and says so.
@@ -251,10 +268,10 @@ func TestShowScenesDraw(t *testing.T) {
 		"clock-music-strip": {now: at, phase: "idle", weather: sky, strip: true, playing: true,
 			radio: home.Radio{Now: "Music Assistant", Title: "Reason That I Sing", Artist: "Release", Music: true}},
 		// With Music Assistant set up: the Library button after forward, clear of the X.
-		"clock-music-strip-library": {now: at, phase: "idle", weather: sky, strip: true, playing: true, libraryWord: "Library",
+		"clock-music-strip-library": {now: at, phase: "idle", weather: sky, strip: true, playing: true, libraryWord: "Library", queue: true,
 			radio: home.Radio{Now: "Music Assistant", Title: "Reason That I Sing", Artist: "Release", Music: true}},
 		// An episode in the strip: back and forward 30 seconds.
-		"clock-music-strip-book": {now: at, phase: "idle", weather: sky, strip: true, playing: true, libraryWord: "Library", spoken: true, speed: 1,
+		"clock-music-strip-book": {now: at, phase: "idle", weather: sky, strip: true, playing: true, libraryWord: "Library", queue: true, spoken: true, speed: 1,
 			radio: home.Radio{Now: "Music Assistant", Title: "Harbor Lights, Episode 12", Artist: "Harbor Radio"}},
 		"clock-music-strip-paused": {now: at, phase: "idle", weather: sky, strip: true, paused: true,
 			radio: home.Radio{Now: "Music Assistant", Title: "A Very Long Song Title That Has To Be Cut Short", Artist: "Somebody", Music: true}},

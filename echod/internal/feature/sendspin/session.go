@@ -158,7 +158,11 @@ func newSession(conn *websocket.Conn, o *out, bg *speaker.Arbiter, name string, 
 		SupportedRoles:   roles,
 		ArtworkV1Support: artwork,
 
-		// The factory mac: survives a reinstall, a rename and a new address.
+		// The factory mac: survives a reinstall, a rename and a new address. An encrypted session
+		// swaps it for the device's key (secure.Bridge), and this hello goes out as it is only to a
+		// server from before encryption, which knows the device by its mac: the key would make it a
+		// new player there, as it is to an encrypted server. Which one a server sees is kept steady
+		// in encrypt.go instead (#721).
 		ClientID: mac,
 		DeviceInfo: protocol.DeviceInfo{
 			ProductName:     layout.Model,
@@ -598,6 +602,10 @@ func (s *session) progress(m *protocol.MetadataState) {
 		Dur:   time.Duration(m.Progress.TrackDuration) * time.Millisecond,
 		Rate:  float64(m.Progress.PlaybackSpeed) / 1000,
 	})
+	if m.Progress.TrackDuration == 0 {
+		// Record the live flag on the stored track when progress arrives after metadata.
+		media.Get().TrackLive()
+	}
 }
 
 // took records what the controller role may ask the server for. The server decides whether to act on a

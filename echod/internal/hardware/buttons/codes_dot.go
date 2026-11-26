@@ -20,6 +20,10 @@ var codes = boardCodes(layout.Cupcake())
 // (gpio-privacy, KEY_MUTE). It has no volume keys, so they are not offered to Home Assistant, where
 // they would sit at unknown for good (Missing), and what holds one of them (the reset combination) is
 // not looked for (echo-dot-assist, docs/re-cupcake.md).
+//
+// The Echo Dot 5th gen (cannoli) has the Dot's four, the same codes: volume and action on gpio-keys
+// (from its CPLD), mute on gpio-privacy-button (its device tree, cannoli-cheesecake.dtsi). Its SoC
+// keypad (mtk-kpd, event0) declares a power key, but the case has no button for it, so it is not offered.
 func boardCodes(cupcake bool) map[uint16]Name {
 	if cupcake {
 		return map[uint16]Name{

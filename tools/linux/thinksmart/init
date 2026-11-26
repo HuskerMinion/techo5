@@ -1,0 +1,339 @@
+#!/bin/busybox.static sh
+# TECHO5 /sbin/init of the store for the Lenovo ThinkSmart View (CD-18781Y; Qualcomm APQ8053), on the
+# msm8953-mainline kernel (TECHO5's build, kernel/) running the Show's 32-bit userspace. It is the Skylight /init (tools/linux/skylight/init) with the ThinkSmart View's
+# boot chain and storage under it.
+#
+# The boot chain is lk2nd, which reads the kernel and the device tree from the first partition of an
+# MBR inside what was Android's system partition (extlinux.conf there). There is no initramfs: the
+# kernel makes the MBR's two partitions in the device mapper from its command line (dm-mod.create,
+# mkimage.sh), system1 and system2, and mounts system2, the store, read-only as / with this script as
+# its /sbin/init. So the store is found in the device mapper and not by a GPT name. The data partition is the
+# eMMC's own, as on the Skylight (repartition.sh makes it).
+#
+#   system1       /boot   ext2, lk2nd's: extlinux/extlinux.conf, the kernel and device tree it names
+#                         (k-<sum>/), and the A/B record (techo5-ab); mounted here and left mounted,
+#                         so a slot reaches it at /store/boot
+#   system2       store   ext4, label techo5-store: this root, with the slots
+#   techo5-data   data    ext4, a GPT partition after system: TECHO5's state, its techo5 directory
+#                         bound to /data
+#
+# The kernel's drivers are built in, and probed before this root was mounted, so those that want
+# firmware found none. Their firmware is partly the unit's own (the audio DSP's and the video
+# decoder's are in the modem partition), so before a slot starts this links it where the kernel will
+# look, then starts those drivers again. The firmware tree belongs to the units, not to a slot, so it
+# lives in the store and is bound into the slot that boots.
+#
+# Every slot carries its own kernel, and the boot layer (lk2nd-ab, beside this script) starts the slot
+# with it: first thing here, lk2nd-ab reads the A/B record, and either names the slot this kernel is
+# for, or puts another kernel where lk2nd starts it and restarts (a good slot's on system1, a slot on
+# trial once from the recovery partition). A kernel on trial (techo5.kernel=trial) that cannot hand
+# over to its slot restarts, which is back on system1's kernel and takes a try, instead of staying as
+# the rescue environment. Without a record (an image from before the boot layer) slotctl picks the
+# slot, as on the Skylight.
+#
+# Then pivot into the slot, or stay here as the rescue environment (USB serial where the kernel has
+# the gadget, Wi-Fi, SSH with a bench key).
+BB=/bin/busybox.static
+export T5_PRODUCT="ThinkSmart View Linux"
+
+$BB grep -q '^proc /proc ' /proc/mounts 2>/dev/null || $BB mount -t proc proc /proc
+$BB grep -q '^sysfs /sys ' /proc/mounts || $BB mount -t sysfs sysfs /sys
+$BB grep -q '^devtmpfs /dev ' /proc/mounts || $BB mount -t devtmpfs -o mode=0755 devtmpfs /dev
+$BB mdev -s
+exec > /dev/kmsg 2>&1
+
+# dmpart is the block device of the device mapper's partition of this name (system1 and so on, as
+# dm-mod.create named them), by the kernel's own node: the /dev/mapper names are udev's, and may not be here.
+dmpart() {
+	for d in /sys/block/dm-*; do
+		[ "$($BB cat "$d/dm/name" 2>/dev/null)" = "$1" ] && { echo "/dev/${d##*/}"; return 0; }
+	done
+	return 1
+}
+# part is an eMMC partition by its GPT name.
+part() {
+	for u in /sys/class/block/mmcblk0p*/uevent; do
+		$BB grep -qx "PARTNAME=$1" "$u" 2>/dev/null && { echo "/dev/$($BB basename "$($BB dirname "$u")")"; return 0; }
+	done
+	return 1
+}
+BOOT_DEV=$(dmpart system1)
+STORE_DEV=$(dmpart system2)
+DATA_DEV=$(part techo5-data)
+export BOOT_DEV STORE_DEV DATA_DEV
+
+# Breadcrumbs go to the kernel log; this board has no misc partition to keep them in. Once /data is
+# there they are kept in a file as well, which is what a boot that never got a network leaves to read.
+CRUMB=0
+CRUMBS=
+crumb() {
+	CRUMB=$((CRUMB+1))
+	echo "techo5 crumb $CRUMB: $*"
+	[ -n "$CRUMBS" ] && echo "$CRUMB $*" >> "$CRUMBS" 2>/dev/null
+}
+log() { crumb "$*"; }
+crumb "thinksmart init started, kernel $($BB uname -r) $($BB uname -m), store $STORE_DEV data $DATA_DEV boot $BOOT_DEV"
+
+$BB mkdir -p /dev/pts
+$BB grep -q ' /dev/pts ' /proc/mounts || $BB mount -t devpts devpts /dev/pts
+$BB grep -q ' /run ' /proc/mounts || $BB mount -t tmpfs tmpfs /run
+$BB mount -t tmpfs tmpfs /tmp
+echo 7 4 1 7 > /proc/sys/kernel/printk
+crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes"
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+. /lib/techo5-lib.sh
+# The boot text the way the unit stands, portrait or landscape (the accelerometer's driver is built
+# in and has probed by now).
+sh /usr/local/sbin/thinksmart-console 2>&1 | while read -r l; do crumb "console: $l"; done
+
+# --- The boot layer (lk2nd-ab). Before anything slower: a boot that ends in a restart into another
+# kernel should take as little time as it can.
+AB=none
+AB_SLOT=
+if [ -e /.techo5-store ] && [ -n "$BOOT_DEV" ]; then
+	if mount -t ext2 -o rw,sync,noatime,nodev,noexec,nosuid "$BOOT_DEV" /boot 2>/tmp/boot.err; then
+		if [ -e /rescue ]; then
+			AB=rescue
+		else
+			AB_SLOT=$(sh /usr/local/sbin/lk2nd-ab boot 2>/tmp/lk2nd-ab.err)
+			case $? in
+			0) AB=slot;;
+			3) AB=none;;
+			*) AB=noslot;;
+			esac
+			while read -r l; do crumb "$l"; done < /tmp/lk2nd-ab.err
+			crumb "boot layer: $AB${AB_SLOT:+, slot $AB_SLOT}"
+		fi
+	else
+		crumb "system1 did not mount: $(cat /tmp/boot.err)"
+	fi
+fi
+
+store_rw() { mount -o remount,rw / 2>/dev/null || { crumb "store: remount rw failed"; return 1; }; }
+store_ro() { sync; mount -o remount,ro / 2>/dev/null || crumb "store: remount ro failed"; }
+
+# --- techo5-data. A new image leaves the partition unformatted and says so with /format-data in the
+# store: it is made here, once, and the marker goes. Without the marker a partition that does not
+# mount is left alone, since it may hold a unit's state that only needs a repair.
+if [ -n "$DATA_DEV" ] && [ -e /format-data ] && ! mount -t ext4 -o ro $DATA_DEV /userdata 2>/dev/null; then
+	if mkfs.ext4 -q -F -L techo5-data -m 0 $DATA_DEV > /tmp/mkfs-data.log 2>&1; then
+		crumb "techo5-data: formatted (a new image)"
+	else
+		crumb "techo5-data: formatting failed: $(tail -1 /tmp/mkfs-data.log)"
+	fi
+fi
+umount /userdata 2>/dev/null
+[ -e /format-data ] && { store_rw && rm -f /format-data; store_ro; }
+if [ -n "$DATA_DEV" ] && mount -t ext4 -o noatime,nosuid,nodev $DATA_DEV /userdata 2>/dev/null &&
+	mkdir -p /userdata/techo5 && mount --bind /userdata/techo5 /data; then
+	crumb "techo5-data mounted; /data is its techo5 directory"
+else
+	mount -t tmpfs -o mode=0755 tmpfs /data
+	crumb "techo5-data mount failed; /data is a tmpfs"
+fi
+mkdir -p /data/techo5-linux
+LOGDIR=/data/techo5-linux
+CRUMBS=$LOGDIR/init.log
+# A bench image may carry a network (mkstore.sh -W), for a unit that has none saved yet.
+if [ -s /root/wpa_supplicant.conf ] && ! grep -q '^network={' $LOGDIR/wpa_supplicant.conf 2>/dev/null; then
+	(umask 077; cp /root/wpa_supplicant.conf $LOGDIR/wpa_supplicant.conf) && WIFI_SEEDED=1
+fi
+echo "=== boot, kernel $(uname -r), uptime $(cut -d' ' -f1 /proc/uptime)" > "$CRUMBS" 2>/dev/null
+
+[ -n "${WIFI_SEEDED:-}" ] && crumb "wifi: the bench image's network copied to this unit"
+
+# --- Firmware. The audio DSP's (adsp.*), and the video decoder's, are in the unit's modem
+# partition, as Android left them; the rest is in the store's /lib/firmware, from the kernel's
+# packages. The kernel looks in one extra directory before its own, so that directory is a tmpfs of
+# links to the modem partition's files, as postmarketOS's msm-firmware-loader makes it. It is mounted
+# under /lib/firmware, which is bound into the slot with it, so the links hold in the slot too.
+FWDIR=/lib/firmware/msm-firmware-loader
+if [ -d $FWDIR ] && modem=$(part modem); then
+	mount -t tmpfs -o mode=755,nodev,noexec,nosuid tmpfs $FWDIR
+	mkdir -p $FWDIR/mnt/modem $FWDIR/target
+	if mount -o ro,nodev,noexec,nosuid "$modem" $FWDIR/mnt/modem 2>/tmp/modem.err; then
+		for f in $FWDIR/mnt/modem/image/*; do
+			[ -e "$f" ] && ln -s "$f" "$FWDIR/target/${f##*/}"
+		done
+		# The video decoder's driver asks for its firmware under qcom/venus-<version>.
+		if [ -e $FWDIR/target/venus.mdt ]; then
+			for v in venus-1.8 venus-4.2 venus-5.2 venus-5.4; do
+				mkdir -p $FWDIR/target/qcom/$v
+				for f in $FWDIR/target/venus.*; do ln -s "$f" "$FWDIR/target/qcom/$v/${f##*/}"; done
+			done
+		fi
+		printf %s $FWDIR/target > /sys/module/firmware_class/parameters/path
+		crumb "firmware: $(ls $FWDIR/target | wc -l) files from the modem partition"
+	else
+		crumb "firmware: the modem partition did not mount: $(cat /tmp/modem.err)"
+	fi
+else
+	crumb "firmware: no modem partition or no $FWDIR; the audio DSP has no firmware"
+fi
+
+# --- Drivers. The built-in ones whose firmware was not there at their probe, started again now that
+# it is (/usr/local/sbin/thinksmart-drivers, which the slot runs too).
+sh /usr/local/sbin/thinksmart-drivers 2>&1 | while read -r l; do crumb "drivers: $l"; done
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+crumb "drivers: remote processors $(cat /sys/class/remoteproc/remoteproc*/state 2>/dev/null | tr '\n' ' ')"
+
+TRIAL=
+grep -qw techo5.kernel=trial /proc/cmdline && TRIAL=1 && crumb "this is a kernel on trial, started once from recovery"
+
+MODE=none
+[ -e /.techo5-store ] && MODE=store
+crumb "store: $MODE, active=$(cat /active 2>/dev/null) a=$(cat /slots/a.state 2>/dev/null) b=$(cat /slots/b.state 2>/dev/null)"
+
+snapshot() {
+	{
+		echo "=== $(date) uptime $(cut -d' ' -f1 /proc/uptime) mode $MODE"
+		echo "--- slots"; STORE=/ slotctl status 2>&1
+		echo "--- dmesg tail"; dmesg | tail -60
+		echo "--- ip"; ip addr 2>&1
+		echo "--- mounts"; cat /proc/mounts
+		echo "--- mem"; head -3 /proc/meminfo
+	} > /tmp/snapshot 2>&1
+	cp /tmp/snapshot $LOGDIR/rescue.log 2>/dev/null
+	sync
+}
+
+MOVED=
+move_mounts() {
+	for m in data run tmp dev sys proc; do
+		mkdir -p /newroot/$m 2>/dev/null
+		mount --move /$m /newroot/$m && MOVED="$m $MOVED" || crumb "moving /$m failed"
+	done
+}
+move_back() {
+	for m in $MOVED; do $BB mount --move /newroot/$m /$m; done
+	MOVED=
+}
+
+boot_slot() {
+	slot=$1
+	root=/slots/$slot
+	[ -x $root/sbin/init ] || [ -L $root/sbin/init ] || { crumb "slot $slot has no /sbin/init"; return 1; }
+	[ -d $root/store ] || { crumb "slot $slot has no /store to put the old root on"; return 1; }
+	mount --bind $root /newroot || { crumb "bind mount of slot $slot failed"; return 1; }
+	# The firmware, with the modem partition's under it: the store's, in every slot.
+	if [ -d /newroot/lib/firmware ]; then
+		mount --rbind /lib/firmware /newroot/lib/firmware || crumb "binding /lib/firmware into slot $slot failed"
+	else
+		crumb "slot $slot has no /lib/firmware; it runs without the store's"
+	fi
+	mkdir -p /run/techo5
+	echo $slot > /run/techo5/slot
+	crumb "pivoting into slot $slot ($(cat $root/etc/techo5-release 2>/dev/null))"
+	CRUMBS=
+	sync
+	kill -9 -1 2>/dev/null
+	move_mounts
+	cd /newroot
+	if $BB pivot_root . store; then
+		exec /store/bin/busybox.static chroot . /sbin/init
+		echo "techo5: chroot into slot $slot after pivot_root failed" > /dev/kmsg
+		/store/bin/busybox.static reboot -f
+	fi
+	crumb "pivot_root failed; chroot with the store bound at /store"
+	cd /
+	if mount --bind / /newroot/store; then
+		exec $BB chroot /newroot /sbin/init
+	fi
+	crumb "chroot into slot $slot failed"
+	umount /newroot/store 2>/dev/null
+	cd /
+	move_back
+	umount -l /newroot/lib/firmware 2>/dev/null
+	umount /newroot 2>/dev/null
+	rm -f /run/techo5/slot
+	CRUMBS=$LOGDIR/init.log
+	return 1
+}
+
+if [ $MODE = store ]; then
+	if [ -e /rescue ]; then
+		store_rw && rm -f /rescue; store_ro
+		crumb "rescue marker found: staying on the store root this boot"
+		: > /tmp/rescue-asked
+	elif [ $AB = slot ]; then
+		crumb "the boot layer starts slot $AB_SLOT: no slotctl next"
+		boot_slot "$AB_SLOT"
+		crumb "slot $AB_SLOT did not start"
+	elif [ $AB = noslot ]; then
+		crumb "the boot layer has no bootable slot"
+	else
+		store_rw
+		if slot=$(STORE=/ slotctl next 2>/tmp/slotctl.err); then
+			store_ro
+			crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+			boot_slot "$slot"
+		else
+			store_ro
+			crumb "slotctl: $(tr '\n' ' ' < /tmp/slotctl.err)"
+		fi
+	fi
+fi
+
+# A kernel on trial goes no further: the restart is system1's kernel, which counts the try.
+if [ -n "$TRIAL" ] && [ ! -e /tmp/rescue-asked ]; then
+	crumb "the kernel on trial could not start a slot; restarting into system1's"
+	snapshot 2>/dev/null
+	sync
+	reboot -f
+fi
+
+# --- Rescue: no slot to boot, or one was asked for. USB serial where the kernel has the gadget,
+# Wi-Fi with the network the unit already knows, SSH only with a key the store image was built with.
+crumb "rescue mode ($MODE)"
+hostname techo5-rescue
+
+rescue_screen() {
+	[ -x /usr/local/bin/fbprobe ] || return 0
+	killall fbprobe 2>/dev/null
+	/usr/local/bin/fbprobe -hold 1000h -title RESCUE -lines \
+"This device could not start its system.|Nothing is lost - your data is intact.|It joins the Wi-Fi network it already knows.|github.com/HuskerMinion/techo5|$1" \
+		> /tmp/fbprobe.log 2>&1 &
+}
+if [ -e /tmp/rescue-asked ]; then
+	rescue_screen "Rescue was asked for (slotctl rescue)."
+else
+	rescue_screen "No bootable slot; the store is intact."
+fi
+
+t5_usb_acm
+(
+	while true; do
+		[ -e /dev/ttyGS0 ] || mdev -s
+		if [ -e /dev/ttyGS0 ]; then
+			setsid sh -c 'exec sh -l < /dev/ttyGS0 > /dev/ttyGS0 2>&1'
+		fi
+		sleep 2
+	done
+) &
+mkdir -p $LOGDIR/dropbear
+ln -sfn $LOGDIR/dropbear /run/dropbear
+if [ -s /root/.ssh/authorized_keys ]; then
+	t5_dropbear $LOGDIR/dropbear -s
+else
+	crumb "ssh: no key in /root/.ssh; USB serial console only"
+fi
+snapshot
+
+(
+	t5_wifi_conf $LOGDIR/wpa_supplicant.conf
+	if t5_wifi_up builtin $LOGDIR/wpa_supplicant.conf; then
+		crumb "rescue: Wi-Fi $IP"
+		t5_ntp
+	fi
+	t5_wifi_watch $LOGDIR/wpa_supplicant.conf
+	snapshot
+) &
+
+ssh_note=
+[ -s /root/.ssh/authorized_keys ] && ssh_note=", SSH with the bench key"
+crumb "rescue ready$ssh_note"
+while true; do
+	sleep 60
+	snapshot
+done

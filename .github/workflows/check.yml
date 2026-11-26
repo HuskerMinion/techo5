@@ -27,7 +27,7 @@ jobs:
       - name: Build and vet
         working-directory: echod
         run: |
-          for tags in "" dot dot,donut spot panel; do
+          for tags in "" dot dot,donut dot,cannoli spot panel; do
             echo "== tags: ${tags:-show}"
             go build -tags "$tags" ./...
             go vet -tags "$tags" ./...
@@ -44,3 +44,6 @@ jobs:
 
       - name: Boot layer tests (bootctl, slotctl, under busybox in Docker)
         run: python3 tools/test_boot_layer.py
+
+      - name: ThinkSmart View boot layer tests (lk2nd-ab, under busybox in Docker)
+        run: python3 tools/test_lk2nd_ab.py

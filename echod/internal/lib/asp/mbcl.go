@@ -62,6 +62,10 @@ type limiter struct {
 	attack  float64
 	relCo   float64
 
+	// hold is how many samples the gain waits after a peak before it releases, and held how many are
+	// left of that; zero on every limiter but the Echo Dot 5th gen's.
+	hold, held int
+
 	// delay holds the samples not yet let out, and want the gain each of them will need. front is the
 	// oldest of both. low holds the indices of want still in the running for the lowest, rising, so its
 	// head is the lowest of everything still to come; it is a ring of its own to keep this allocation
@@ -145,12 +149,19 @@ func dbToLinear(db float64) float64 { return math.Pow(10, db/20) }
 // newLimiter sizes the lookahead and the attack together: the gain has exactly the lookahead to reach
 // what a peak asks for, so it covers almost all of that distance in that many samples.
 func newLimiter(threshDB float64, rel time.Duration, rate int) *limiter {
-	n := max(int(lookahead.Seconds()*float64(rate)), 1)
+	return newLimiterWith(threshDB, rel, 0, lookahead, rate)
+}
+
+// newLimiterWith is newLimiter with a hold and a lookahead of its own (the Echo Dot 5th gen's, iir.go):
+// after a peak the gain stays down for hold before it starts back up.
+func newLimiterWith(threshDB float64, rel, hold, ahead time.Duration, rate int) *limiter {
+	n := max(int(ahead.Seconds()*float64(rate)), 1)
 	return &limiter{
 		ceiling: math.Pow(10, threshDB/20),
 		gain:    1,
 		attack:  1 - math.Exp(-4/float64(n)),
 		relCo:   smoothing(rel, rate),
+		hold:    int(hold.Seconds() * float64(rate)),
 		delay:   make([]float32, n),
 		want:    make([]float64, n),
 		low:     make([]int, n+1),
@@ -177,8 +188,12 @@ func (s *mbclState) reset() {
 	s.full.reset()
 }
 
+// setCeiling moves the limiter's ceiling. The gain follows by itself: down within the lookahead, or
+// back up at the release, as it would after a peak.
+func (l *limiter) setCeiling(db float64) { l.ceiling = math.Pow(10, db/20) }
+
 func (l *limiter) reset() {
-	l.gain, l.front, l.head, l.tail = 1, 0, 0, 0
+	l.gain, l.front, l.head, l.tail, l.held = 1, 0, 0, 0, 0
 	clear(l.delay)
 	clear(l.want)
 }
@@ -275,9 +290,13 @@ func (l *limiter) process(x []float32) {
 		}
 
 		target := l.want[l.low[l.head]]
-		if target < l.gain {
+		switch {
+		case target < l.gain:
 			l.gain += (target - l.gain) * l.attack
-		} else {
+			l.held = l.hold
+		case l.held > 0:
+			l.held--
+		default:
 			l.gain += (target - l.gain) * l.relCo
 		}
 

@@ -38,6 +38,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
 
@@ -58,7 +59,10 @@ func init() {
 // directory is used when the image has none, which is how a device is tried before an image carries it.
 var (
 	stateDir = filepath.Join(layout.StateDir, "tailscale")
-	sockPath = "/run/techo5-tailscaled.sock"
+	// The local API's socket, in root's own folder: tailscaled makes it so anyone may connect, and a
+	// connection there can log the device into another tailnet or out of this one. Users other than
+	// root run on the device (feature/addons).
+	sockPath = "/run/techo5/tailscaled.sock"
 	binaries = []string{"/usr/local/bin/tailscaled", filepath.Join(stateDir, "tailscaled")}
 )
 
@@ -409,6 +413,10 @@ func (f *Feature) runOnce(ctx context.Context) error {
 	// A tailscaled left running by an echod that died without stopping it holds the tunnel, and this
 	// one could never start beside it: it goes first.
 	stopLeftovers()
+	if !rootonly.MkdirAll(filepath.Dir(sockPath), 0o700) {
+		return fmt.Errorf("tailscale: %s is not root's own folder", filepath.Dir(sockPath))
+	}
+	_ = os.Chmod(filepath.Dir(sockPath), 0o700)
 	_ = os.Remove(sockPath)
 
 	// tailscaled is told to stop when the thread that started it ends - and that thread is kept for
@@ -576,7 +584,9 @@ var Fenced = func(iface string) error {
 	for _, tool := range []string{"iptables-legacy", "ip6tables-legacy"} {
 		for _, rule := range [][]string{{"INPUT", "-i", iface, "-j", "TECHO5-TS"}, {"TECHO5-TS", "-j", "DROP"}} {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			err := exec.CommandContext(ctx, tool, append([]string{"-C"}, rule...)...).Run()
+			// -w: wait for the lock another iptables holds (the add-ons' chain, AirPlay 2's door) rather
+			// than fail, and read a check that could not run as rules that are missing.
+			err := exec.CommandContext(ctx, tool, append([]string{"-w", "-C"}, rule...)...).Run()
 			cancel()
 			if err != nil {
 				return fmt.Errorf("the firewall's rules for %s are not in place (%s -C %s); see techo5-firewall in the log", iface, tool, strings.Join(rule, " "))
@@ -655,7 +665,8 @@ func (logWriter) Write(b []byte) (int, error) {
 // stopLeftovers ends any tailscaled still running on this device's socket - one that outlived the
 // echod that started it - and waits a little for it to let go of the tunnel.
 func stopLeftovers() {
-	want := []byte("--socket=" + sockPath)
+	// The socket moved into /run/techo5 in v1.6.53; one started by an older daemon names the old path.
+	wants := [][]byte{[]byte("--socket=" + sockPath), []byte("--socket=/run/techo5-tailscaled.sock")}
 	entries, _ := os.ReadDir("/proc")
 	var pids []int
 	for _, e := range entries {
@@ -664,7 +675,7 @@ func stopLeftovers() {
 			continue
 		}
 		cmdline, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
-		if err != nil || !bytes.Contains(cmdline, want) {
+		if err != nil || !(bytes.Contains(cmdline, wants[0]) || bytes.Contains(cmdline, wants[1])) {
 			continue
 		}
 		slog.Warn("tailscale: stopping a tailscaled left running", "pid", pid)

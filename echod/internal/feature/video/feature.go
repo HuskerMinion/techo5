@@ -241,7 +241,9 @@ func (f *Feature) Play(req Request) (uint64, error) {
 	}
 	f.seq++
 	id := f.seq
-	if req.Origin == FromDLNA && !c.IsAllowed(req.From, time.Now()) {
+	// A controller on the device itself (FromDevice) is not asked about, as play_video is not.
+	device := req.Origin == FromDLNA && FromDevice(req.From)
+	if req.Origin == FromDLNA && !device && !c.IsAllowed(req.From, time.Now()) {
 		if until, ok := f.notNow[req.From]; ok && time.Now().Before(until) {
 			f.mu.Unlock()
 			return 0, ErrDeclined
@@ -258,8 +260,9 @@ func (f *Feature) Play(req Request) (uint64, error) {
 		return id, nil
 	}
 	f.mu.Unlock()
-	if req.Origin == FromDLNA {
-		// Its thirty days start again.
+	if req.Origin == FromDLNA && !device {
+		// Its thirty days start again. The device's own address is never one of the allowed: it is
+		// not a phone the setup page would list.
 		if err := config.Set().Video().Allow(req.From, time.Now()); err != nil {
 			slog.Warn("video: remembering the address failed", "err", err)
 		}
@@ -307,6 +310,12 @@ func (f *Feature) sessionEnded(s *session, err error, itself bool) {
 	current := f.cur == s
 	if current {
 		f.cur, f.heldByUs = nil, false
+	}
+	// A session a seek replaced shares its id with the one in its place: its end is not that one's,
+	// whether it ran out or failed just as it was replaced.
+	replaced := !current && f.cur != nil && f.cur.id == s.id
+	if replaced {
+		err, itself = nil, false
 	}
 	if itself {
 		f.ended = s.id
@@ -405,6 +414,157 @@ func (f *Feature) StopID(id uint64) {
 	}
 }
 
+// Seek moves video id to to, if it is still the one up. Before its decoder has started (still asking
+// on the screen, still finding out what the video is) that is only where it starts; after, the decoder
+// is started again there in a new session under the same id, which knows the video already and so goes
+// straight to decoding: the page stays up, saying it is loading until the first frame from there, and
+// a video paused stays paused. A video that says no length (a live stream) cannot be moved through
+// (ErrNotSeekable).
+func (f *Feature) Seek(id uint64, to time.Duration) error {
+	to = max(to, 0)
+	f.mu.Lock()
+	if f.ask != nil && f.ask.id == id {
+		f.ask.req.Start = to
+		f.mu.Unlock()
+		return nil
+	}
+	s := f.cur
+	f.mu.Unlock()
+	if s == nil || s.id != id {
+		return ErrNotSeekable
+	}
+	s.mu.Lock()
+	if !s.decoding {
+		if s.probed && s.info.Duration <= 0 {
+			s.mu.Unlock()
+			return ErrNotSeekable
+		}
+		if s.probed {
+			to = shortOfEnd(to, s.info.Duration)
+		}
+		s.req.Start = to
+		s.mu.Unlock()
+		return nil
+	}
+	info, aspect := s.info, s.aspect
+	s.mu.Unlock()
+	if info.Duration <= 0 {
+		return ErrNotSeekable
+	}
+	return f.restart(s, shortOfEnd(to, info.Duration), aspect, "moving")
+}
+
+// restart starts the decoder of session s again from to, taking the screen the way aspect says, in a
+// new session under the same id in its place, which knows the video already and so goes straight to
+// decoding: the page stays up, saying it is loading until the first frame from there, and a video
+// paused stays paused. Only for a video whose decoder has started and that says how long it runs.
+func (f *Feature) restart(s *session, to time.Duration, aspect Aspect, why string) error {
+	s.mu.Lock()
+	info, req := s.info, s.req
+	s.mu.Unlock()
+	req.Start = to
+	paused := s.paused()
+
+	f.mu.Lock()
+	if f.cur != s {
+		// Stopped or replaced meanwhile: the seek or the change was for a video that is gone.
+		f.mu.Unlock()
+		return ErrNotSeekable
+	}
+	ns := newSession(s.id, req, s.u, f.scr, f.panelW, f.panelH)
+	ns.info, ns.rate, ns.sound, ns.probed = info, FrameRate(info.FPS), info.AudioIndex >= 0, true
+	ns.aspect = aspect
+	// Paused, it starts paused: a pause held before the sound comes is handed to its track when it
+	// does (soundSource.begin), as one from before a first start is. What covered the video still
+	// covers it, so covered and heldByUs stay as they are.
+	ns.wallPaused = paused
+	ns.ended, ns.changed = f.sessionEnded, func() { f.Changed.Emit(struct{}{}) }
+	f.cur = ns
+	insecure := config.Get().Diag.InsecureTLS
+	f.mu.Unlock()
+	slog.Info("video: "+why, "id", s.id, "to", req.Start.Round(time.Second), "aspect", aspect, "paused", paused)
+	// The old one goes first, its sound with it, before the new one can start a track of its own.
+	s.stop(true)
+	f.Changed.Emit(struct{}{})
+	f.runs.Add(1)
+	safe.Go("video", func() {
+		defer f.runs.Done()
+		ns.run(insecure)
+	})
+	return nil
+}
+
+// Refit takes video id on to the next way of taking the screen (Aspect.Next), if it is still the one
+// up, and says which way that is. The way is the decoder's to make, so a video already decoding is
+// started again where it is, as a seek there would be (restart): which is why only a video that can be
+// moved through (Seekable) can be refitted once it has started. A live stream, or a continuous
+// transcode, says no length, and starting one again would start it from wherever its server starts
+// it, not from the place on the screen (ErrNotSeekable). Before its decoder has started the way is only
+// what it starts with. A new video starts at AspectFit again: the way is the video's, not a setting.
+func (f *Feature) Refit(id uint64) (Aspect, error) {
+	f.mu.Lock()
+	s := f.cur
+	f.mu.Unlock()
+	if s == nil || s.id != id {
+		return AspectFit, ErrNotSeekable
+	}
+	s.mu.Lock()
+	next := s.aspect.Next()
+	if !s.decoding {
+		s.aspect = next
+		s.mu.Unlock()
+		slog.Info("video: refitted before it starts", "id", id, "aspect", next)
+		f.Changed.Emit(struct{}{})
+		return next, nil
+	}
+	dur := s.info.Duration
+	s.mu.Unlock()
+	if dur <= 0 {
+		return s.aspect0(), ErrNotSeekable
+	}
+	_, _, started := s.numbers()
+	if err := f.restart(s, shortOfEnd(s.position(started), dur), next, "refitted"); err != nil {
+		return s.aspect0(), err
+	}
+	return next, nil
+}
+
+// Refittable is whether video id's way of taking the screen can be changed (Refit) now, and whether
+// that is known yet: as Seekable, which is what a change once it has started needs.
+func (f *Feature) Refittable(id uint64) (ok, known bool) { return f.Seekable(id) }
+
+// endRoom is how far short of a video's end a seek to (or past) the end lands: the decoder started at
+// the very end has no frame to show, which is a video that failed, and one started past it starts the
+// video again from its beginning.
+const endRoom = time.Second
+
+// shortOfEnd is to, no nearer the end of a video dur long than endRoom.
+func shortOfEnd(to, dur time.Duration) time.Duration {
+	return max(min(to, dur-endRoom), 0)
+}
+
+// Seekable is whether video id can be moved through (Seek), and whether that is known yet: not while
+// the screen asks about it or the player is still finding out what it is. A video that is not the one
+// up is known not to be.
+func (f *Feature) Seekable(id uint64) (ok, known bool) {
+	f.mu.Lock()
+	if f.ask != nil && f.ask.id == id {
+		f.mu.Unlock()
+		return false, false
+	}
+	s := f.cur
+	f.mu.Unlock()
+	if s == nil || s.id != id {
+		return false, true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.probed {
+		return false, false
+	}
+	return s.info.Duration > 0, true
+}
+
 // Pause and Resume hold the video where it is and carry it on; Toggle does whichever it is not doing.
 func (f *Feature) Pause()  { f.setPaused(true) }
 func (f *Feature) Resume() { f.setPaused(false) }
@@ -473,11 +633,12 @@ func (f *Feature) State() State {
 		shown, dropped, started := s.numbers()
 		st.Shown, st.Dropped, st.Frames = shown, dropped, started
 		s.mu.Lock()
-		st.Dur = s.info.Duration
+		st.Dur, st.Aspect = s.info.Duration, s.aspect
 		s.mu.Unlock()
 		st.Phase = Loading
+		// Where it is, and while it is still loading (after a seek) where it is going to start.
+		st.Pos = s.position(started)
 		if started {
-			st.Pos = s.clock()
 			st.Phase = Playing
 			if s.paused() {
 				st.Phase = Paused
@@ -559,15 +720,19 @@ func ownHost(host string) bool {
 
 // The package's own calls, which the DLNA renderer and the setup page use on every device.
 
-func Play(req Request) (uint64, error) { return Get().Play(req) }
-func Stop()                            { Get().Stop() }
-func StopID(id uint64)                 { Get().StopID(id) }
-func Pause()                           { Get().Pause() }
-func Resume()                          { Get().Resume() }
-func Current() State                   { return Get().State() }
-func SetOn(on bool)                    { Get().SetOn(on) }
-func SetDLNA(on bool)                  { Get().SetDLNA(on) }
-func Listen(fn func())                 { Get().Changed.Listen(func(struct{}) { fn() }) }
+func Play(req Request) (uint64, error)       { return Get().Play(req) }
+func Stop()                                  { Get().Stop() }
+func StopID(id uint64)                       { Get().StopID(id) }
+func Pause()                                 { Get().Pause() }
+func Resume()                                { Get().Resume() }
+func Seek(id uint64, to time.Duration) error { return Get().Seek(id, to) }
+func Seekable(id uint64) (ok, known bool)    { return Get().Seekable(id) }
+func Refit(id uint64) (Aspect, error)        { return Get().Refit(id) }
+func Refittable(id uint64) (ok, known bool)  { return Get().Refittable(id) }
+func Current() State                         { return Get().State() }
+func SetOn(on bool)                          { Get().SetOn(on) }
+func SetDLNA(on bool)                        { Get().SetDLNA(on) }
+func Listen(fn func())                       { Get().Changed.Listen(func(struct{}) { fn() }) }
 
 // DLNAOn is whether the DLNA renderer takes videos now.
 func DLNAOn() bool {

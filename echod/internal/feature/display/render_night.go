@@ -38,7 +38,7 @@ var nightInk = clockInk{nightRed, nightGhost, flipTop, flipLower, flipHinge, fli
 // (unskinned).
 func (s scene) redClockFace() bool {
 	return s.redClock && s.phase == "idle" && s.call.Phase == phone.Idle && !s.setupAsking && !s.showVideoAsk &&
-		!s.showWifi && !s.bt.Pairing && !s.showCamera && !s.showAnnouncement && !s.showReminder &&
+		!s.showWifi && !s.bt.Pairing && !s.showCamera && !s.showAnnouncement && !s.showReminder && !s.showCast &&
 		!(s.showDash && s.dashAsked)
 }
 

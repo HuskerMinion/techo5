@@ -83,9 +83,29 @@ have no SFTP server, which `scp` uses by default since OpenSSH 9, so `-O` asks f
 
 ```
 DEVICE=192.168.x.y   # the device's IP address
-scp -O bin/echod-arm root@$DEVICE:/tmp/echod-test
-ssh root@$DEVICE 'mount --bind /tmp/echod-test /usr/local/bin/techo5 && killall techo5'
+scp -O bin/echod-arm root@$DEVICE:/run/echod-test
+ssh root@$DEVICE 'mount --bind /run/echod-test /usr/local/bin/techo5 && killall techo5'
 ```
+
+It goes in `/run`, which is memory, root's alone and not capped, rather than `/tmp`: `/tmp` is bounded
+at 32 MB, which is less than a daemon, and anyone on the device can write to it.
+
+The Echo Dot 5th gen (2022, `cannoli`) is in bring-up and has a build of its own, `-tags dot,cannoli`
+(the MT8519's capture off UL9 on card 0, the TLV320ADC5140's stream with the playback looped back beside
+it, the MAX98396 speaker and the IS31FL3246 ring; the buttons and the mute latch are the Dot 3's). It is
+not released yet:
+
+```
+cd echod
+go test -tags dot,cannoli ./...
+GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -tags dot,cannoli -o ../bin/echod-cannoli ./cmd/echod
+```
+
+What is read off the hardware and what is still open (which of the converter's channels is which
+microphone on the top, which of eTDM2's two slots the mono amplifier plays) is said at the top of
+`internal/hardware/mic/device_cannoli.go`, `internal/hardware/speaker/paths_cannoli.go` and
+`internal/hardware/led/led.go` (`ClassRingPrefix`). `echod tools led walk` lights the ring one channel at a
+time, which is how its order is mapped.
 
 ## 4. The root filesystem
 

@@ -76,7 +76,7 @@ func replyPlayer() string { return config.Get().Brain.ReplyPlayer }
 // Otherwise the reply is fetched whole first, as it always was: a reply that cannot be fetched here
 // fails the same way on the speaker, which reports it, rather than being handed to a player that
 // would play nothing.
-func (c *conversation) playElsewhere(ctx context.Context, url string, playing func(), early bool) bool {
+func (c *conversation) playElsewhere(ctx context.Context, id uint64, url string, playing func(), early bool) bool {
 	entity := replyPlayer()
 	if entity == "" || url == "" {
 		return false
@@ -109,9 +109,7 @@ func (c *conversation) playElsewhere(ctx context.Context, url string, playing fu
 	// well before the player has said it all when the agent writes faster than it is spoken.
 	started := time.Now()
 	failedElsewhere.Store(false)
-	if ctx.Err() == nil { // a reply already given up on is not the one the turn will report
-		c.elsewhere.Store(true)
-	}
+	c.elsewhere.Store(id) // which reply: one given up on that gets here late marks only itself
 	if early {
 		slog.Info("reply sent to another player as it is written", "player", entity)
 	} else {

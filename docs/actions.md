@@ -84,6 +84,8 @@ For a device you're giving to someone else. The device forgets the URL and token
 Assistant connects with by a new random one, and restarts. Your Home Assistant can't connect to it again, and the device no longer calls your Home
 Assistant. It also makes a new Sendspin identity and pairing token, so your Music Assistant can't pair
 with it again and the next Music Assistant it meets sees a new player; delete the old one from yours.
+(Updating to v1.6.49, dot-v1.0.76 or spot-v1.4.49 or later makes a new player too, once: see
+[Music](setup.md#5-music).)
 Alarms, radio stations, Wi-Fi and its other settings stay.
 
 A device that was given access to your Home Assistant with an administrator's token deletes its own
@@ -557,6 +559,14 @@ another 5 minutes") snoozes it, for that long or for the device's snooze length,
 minutes; a ringing timer cannot be put off, so it stops. The automations are what make Home Assistant
 answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding.
 
+"Stop the timer" is also Home Assistant's own sentence for canceling a timer, and an automation that
+catches a sentence takes it from Home Assistant. So with nothing ringing, the first automation cancels
+the soonest timer itself: one of the device's own with `timer_cancel`, leaving out silent ones, or one
+of Home Assistant's by handing "cancel the timer" to Home Assistant. A ring that ended in the last 15
+seconds, to the wake word or to the device hearing "stop", still answers "Stopped." An automation made
+from an earlier copy of this one, or of the blueprint, answered "Stopped." with nothing ringing and
+left the timer running: replace it with this, or re-import the blueprint.
+
 ```yaml
 alias: TECHO5 - stop alarm or timer by voice
 triggers:
@@ -568,10 +578,78 @@ triggers:
 conditions:
   - "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | list | count > 0 }}"
 actions:
-  - action: button.press
-    target:
-      entity_id: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
-  - set_conversation_response: "Stopped."
+  - variables:
+      node: "{{ device_attr(trigger.device_id, 'name') | slugify }}"
+      stop: "{{ device_entities(trigger.device_id) | select('search', 'stop_alarm') | first }}"
+      # The device's Sounding sensor, on for any ring, rather than its Alarm sounding or Timer sounding.
+      # Home Assistant adds _2 to an entity id already taken, so a suffix is allowed (#735).
+      sounding: >-
+        {{ device_entities(trigger.device_id) | select('match', 'binary_sensor\.')
+           | select('search', '_sounding(_\d+)?$') | reject('search', '_(alarm|timer)_sounding(_\d+)?$')
+           | first | default('') }}
+      # A Sounding sensor renamed past finding leaves the ring unknown: it is pressed and answered as
+      # every ring was before #735, rather than taken for nothing ringing and a running timer canceled.
+      unknown: "{{ sounding == '' }}"
+      ringing: "{{ sounding != '' and is_state(sounding, 'on') }}"
+      # The wake word, or the device itself on hearing "stop the timer", often ends the ring before this
+      # runs (#735): a ring that ended in the last 15 seconds is the one being stopped.
+      just_rang: >-
+        {{ sounding != '' and is_state(sounding, 'off')
+           and states[sounding].last_changed > now() - timedelta(seconds=15) }}
+      timer: "{{ 'timer' in trigger.sentence | lower }}"
+  - choose:
+      - conditions: "{{ ringing or just_rang or unknown }}"
+        sequence:
+          - if: "{{ ringing or unknown }}"
+            then:
+              - action: button.press
+                target:
+                  entity_id: "{{ stop }}"
+          - set_conversation_response: "Stopped."
+      # Nothing ringing: "stop the timer" is also Home Assistant's own sentence for canceling one, which
+      # this automation's trigger takes from it, so the cancel is done here rather than lost (#735).
+      - conditions: "{{ timer }}"
+        sequence:
+          - action: "esphome.{{ node }}_alarms_list"
+            response_variable: listed
+          - variables:
+              # A silent timer is an automation's countdown, which that automation cancels itself (#723).
+              soonest: >-
+                {{ listed.timers | default([]) | rejectattr('silent') | sort(attribute='left_seconds')
+                   | first | default(none) }}
+          - choose:
+              # A timer ringing that the Sounding sensor had not shown yet is stopped, not one still to ring
+              # canceled in its place (#736).
+              - conditions: "{{ listed.ringing | default(none) is not none }}"
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: "{{ stop }}"
+                  - set_conversation_response: "Stopped."
+              - conditions: "{{ soonest is none }}"
+                sequence:
+                  - set_conversation_response: "There's no timer to stop."
+              - conditions: "{{ soonest.local }}"
+                sequence:
+                  - action: "esphome.{{ node }}_timer_cancel"
+                    data:
+                      id: "{{ soonest.id }}"
+                  - set_conversation_response: "Timer canceled."
+            # One of Home Assistant's, set through Assist: its own intent cancels it, reached with a
+            # sentence this automation doesn't catch. It isn't told which device asked, so with several
+            # running it may ask which one: its answer is passed on rather than "Stopped."
+            default:
+              - action: conversation.process
+                data:
+                  text: "cancel the timer"
+                  agent_id: conversation.home_assistant
+                  language: en
+                response_variable: canceled
+              - set_conversation_response: >-
+                  {{ canceled.response.speech.plain.speech | default('Timer canceled.') }}
+    # "Stop the alarm" with nothing ringing has nothing to stop: saying "Stopped." would claim otherwise.
+    default:
+      - set_conversation_response: "Nothing is ringing."
 mode: queued
 ```
 
@@ -1078,7 +1156,7 @@ The answer looks like this. Times are in the device's time zone; `next` is empty
 is off or will not ring again.
 
 ```yaml
-ringing: null            # or {label: "Wake up", since: "2026-09-24T06:45:00-05:00"}
+ringing: null            # or {label: "Wake up", since: "2026-09-24T06:45:00-05:00", kind: alarm}
 alarms:
   - id: "m1x2y3"
     time: "06:45"
@@ -1100,7 +1178,13 @@ timers:
     total_seconds: 600
     running: true
     local: true          # false for a timer set by voice through Home Assistant
+    silent: false        # true for one started with timer_start_silent
 ```
+
+`ringing` is the alarm or timer ringing now, and `kind` says which: `alarm` or `timer`. A timer that
+rings has left `timers`, so `ringing` is where to find it, by its label (`Timer` for one with no
+label). Timers that run out into the same ring are one ring, named for the first. When an alarm
+and a timer ring at once, `ringing` is the alarm.
 
 ## Start a timer
 
@@ -1116,7 +1200,10 @@ with Home Assistant down. Answers with the new timer's `id`, for `timer_cancel`,
 
 How long: `10 minutes`, `1 hour and 30 minutes`, `90 seconds`, `in 20 minutes`, `1h30m`,
 `00:10:00` (what Home Assistant's duration selector gives), `1:30` (hours and minutes), or a bare
-number, which is minutes. At most 24 hours.
+number, which is minutes. A length in words is read too, as speech to text often writes what was
+said: `five minutes`, `seventy five minutes`, `a hundred seconds`, `half an hour`, `half hour`, `an
+hour and a half`, `two and a half minutes`, so an automation can pass on the length it heard. Words are read in English. At most 24
+hours.
 
 ### label (Can be empty)
 
@@ -1139,14 +1226,17 @@ In YAML, refer to this action as `esphome.<node>_timer_start_silent`.
 A timer that only shows: it counts down on the ring and the screen like `timer_start`'s, in a color
 of its own, and at zero it is gone without ringing. It is for showing a wait that Home Assistant
 keeps, such as a device joining the home: the automation waits for the device itself, cancels the
-timer with `timer_cancel` when it arrives, and says what went wrong when it does not. A silent timer
-is not kept over a restart. Answers with the new timer's `id`, as `timer_start` does.
+timer with `timer_cancel` when it arrives, and says what went wrong when it does not. Since the
+automation ends it, the device's screen, its setup page and its built-in assistant show a silent timer
+without offering to stop it, and "cancel all the timers" leaves it running; `timer_cancel` with its
+`id` (or `all`) still cancels it. A silent timer is not kept over a restart. Answers with the new
+timer's `id`, as `timer_start` does.
 
 ### duration (Required)
 
 *string*
 
-How long, written the way `timer_start` takes it.
+How long, written the way `timer_start` takes it, in digits or in words (`five minutes`).
 
 ### label (Can be empty)
 
@@ -1257,8 +1347,8 @@ A timer's `id`, from `timer_start`'s answer or `alarms_list`'s `timers`. These t
 
 *string*
 
-How much, written the way `timer_start` takes it: `5 minutes`, `1h30m`, `00:05:00` or a bare number
-of minutes.
+How much, written the way `timer_start` takes it: `5 minutes`, `five minutes`, `1h30m`, `00:05:00`
+or a bare number of minutes.
 
 ```yaml
 action: esphome.office_timer_add
@@ -2849,7 +2939,10 @@ as the screen's own folder picker. Screen devices only. Whether the photos show 
 clock (Background mode) or take over the whole screen after a wait (Screensaver mode), and options
 like shuffle, subfolders and time per photo, are set separately as entities
 (`select.<node>_slideshow`, `switch.<node>_slideshow_shuffle`, `number.<node>_slideshow_interval`,
-and so on), not by this action. Needs `home_assistant` set up first, or no photos will show.
+and so on), not by this action. Needs `home_assistant` set up first, or no photos will show. The
+screensaver is put up and taken down by two buttons, `button.<node>_show_screensaver` and
+`button.<node>_hide_screensaver`; [the slideshow setup](setup.md#2-photos) has an automation
+that runs it only when asked.
 
 ### source (Required)
 
@@ -3073,6 +3166,35 @@ data:
     ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample you@your-pc
 ```
 
+## Set the cast key
+
+In YAML, refer to this action as `esphome.<node>_cast_key`.
+
+Sets the key a phone has to know to cast to the device ([cast.md](cast.md)). **You don't need this:** the
+device makes its own random key the first time Cast is turned on, and the pairing code on its screen
+(Settings → Connections → Pairing code) carries it to the phone. Use it to choose a key yourself, or to
+throw the old one away. Either way every paired phone has to scan the pairing code again.
+
+> **Good to know**
+>
+> Unlike `ssh_keys`, this is not refused without an ESPHome encryption key, so on a link that is not
+> encrypted the key crosses the network in the clear. Give the device's ESPHome link an encryption key
+> first. The key is an action argument, not an entity state, so Home Assistant does not keep it.
+
+### key
+
+*string*
+
+The key: at least 16 characters, and it should be long and random, like the one the device makes (anyone on
+the network who guesses it can ask to cast). Left empty, the device makes a new random one instead, which is
+also what you want to rotate it. A shorter key set before this was required keeps working.
+
+```yaml
+action: esphome.office_cast_key
+data:
+  key: !secret techo5_office_cast_key
+```
+
 ## Join a tailnet
 
 In YAML, refer to this action as `esphome.<node>_tailscale_login`.
@@ -3139,8 +3261,9 @@ data:
 In YAML, refer to this action as `esphome.<node>_settings_lock_pin`.
 
 Sets the PIN the device asks for before its settings change (Show and Spot). Everything else on the
-device works without it: the clock, music, the voice assistant, calls, and the everyday settings
-(alarms and timers, the volume, the brightness; see [the settings lock](setup.md#8-settings-lock)).
+device works without it: the clock, music, the voice assistant, calls, and the settings for how it
+looks, sounds and is used (alarms and timers, the volume, the brightness, the theme and the clock;
+see [the settings lock](setup.md#8-settings-lock) for the full line).
 The **Settings lock** switch shows whether a PIN is set; turning it off removes the PIN, which is
 the way back in if it is forgotten. The PIN can also be set on the device (Settings → Privacy &
 Security → Settings lock) and on the setup page.

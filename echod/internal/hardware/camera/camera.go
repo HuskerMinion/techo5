@@ -90,6 +90,9 @@ func boardSensor() sensorSpec {
 	if layout.AthenaMainline() {
 		return athenaSensor
 	}
+	if layout.ThinkSmart() {
+		return thinkSmartSensor
+	}
 	return pickSensor(hasOV9734())
 }
 

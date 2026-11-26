@@ -37,7 +37,8 @@ func panelSize() (w, h int) {
 	case layout.Skylight():
 		// The Skylight Calendar 15: a 1920x1080 landscape panel.
 		return 1920, 1080
-	case layout.Show8():
+	case layout.Show8(), layout.ThinkSmart():
+		// The ThinkSmart View's panel is the Show 8's size.
 		return 1280, 800
 	}
 	return 960, 480

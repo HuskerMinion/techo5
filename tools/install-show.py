@@ -488,6 +488,53 @@ def store_failed(console, backup, what, o, erased, way_back, seconds=180):
     fail('%s\n   %s%s' % (what, left, '\n   ' + extra if extra else ''))
 
 
+def wait_for_rescue(console, adb, fastboot, nudged, los_boot, seconds=300):
+    """Waits for the rescue environment's console after TECHO5's boot image was flashed. Nothing has
+    been erased by then, and a timeout says so (#729): it used to end on the wait alone, which read as
+    an install that had broken the unit, when the usual cause is a console this computer could not
+    open, with LineageOS still whole on the unit."""
+
+    def rescue_up():
+        if 'RESCUE-UP' in (console.run('test -e /run/techo5/slot || echo RESCUE-UP', 4) or ''):
+            return True
+        # A leftover bootloader request can stop the boot at "hacked fastboot" once; continue it.
+        if not nudged[0] and fastboot.present():
+            # Bounded: the unit can leave fastboot between the two, and a continue to a unit that is
+            # gone waits for it forever (#257).
+            fastboot.run('continue', timeout=NUDGE_WAIT)
+            nudged[0] = True
+        return False
+
+    def rescue_hint():
+        # A console that is there but cannot be opened says so first. Otherwise where else the unit is:
+        # a unit that went to TWRP or LineageOS, or sits in fastboot, looks the same as a slow console
+        # from the console's side alone.
+        if console.blocked:
+            return console.waiting_hint()
+        where = unit_whereabouts(adb, fastboot, CONSOLE_TECHO5)
+        if where or list_consoles(CONSOLE_TECHO5):
+            return where
+        return SCREEN_HINT
+    try:
+        wait_for('the rescue console on USB', seconds, rescue_up, hint=rescue_hint)
+    except Fail as e:
+        fail('%s\n   %s' % (e, rescue_timeout_help(los_boot)))
+
+
+def rescue_timeout_help(los_boot):
+    """What a unit that never showed its rescue console has, and the two ways on from there. The cause,
+    when the console was there but could not be opened, is already in the wait's own hint
+    (Console.waiting_hint), so it is not said twice."""
+    back = (': fastboot flash boot %s' % los_boot if os.path.exists(los_boot)
+            else ', the one kept as backups/<serial>/boot-lineage.img')
+    return ("Nothing was erased: LineageOS is still on the unit's system partition, with its vendor tree.\n"
+            '   Two ways on from here:\n'
+            "   - fix this computer's access to the console, then finish by hand on it, as \"If the install\n"
+            '     stops at the slot store\" in docs/install.md says:\n'
+            '     %s\n'
+            "   - or put LineageOS's boot image back%s, and run this again." % (BY_HAND, back))
+
+
 def first_boot(console, fastboot, nudged, seconds=300, every=5):
     """Watches the first boot from slot a. True when the unit is probably up but the console is not
     there to say so (it started slot a, and then the console went away, as it does once TECHO5 runs);
@@ -850,29 +897,7 @@ def main():
     fastboot.run('continue')
     note('booting the rescue environment (no slot store yet)')
     nudged = [False]
-
-    def rescue_up():
-        if 'RESCUE-UP' in (console.run('test -e /run/techo5/slot || echo RESCUE-UP', 4) or ''):
-            return True
-        # A leftover bootloader request can stop the boot at "hacked fastboot" once; continue it.
-        if not nudged[0] and fastboot.present():
-            # Bounded: the unit can leave fastboot between the two, and a continue to a unit that is
-            # gone waits for it forever (#257).
-            fastboot.run('continue', timeout=NUDGE_WAIT)
-            nudged[0] = True
-        return False
-
-    def rescue_hint():
-        # A console that is there but cannot be opened says so first. Otherwise where else the unit is:
-        # a unit that went to TWRP or LineageOS, or sits in fastboot, looks the same as a slow console
-        # from the console's side alone.
-        if console.blocked:
-            return console.waiting_hint()
-        where = unit_whereabouts(adb, fastboot, CONSOLE_TECHO5)
-        if where or list_consoles(CONSOLE_TECHO5):
-            return where
-        return SCREEN_HINT
-    wait_for('the rescue console on USB', 300, rescue_up, hint=rescue_hint)
+    wait_for_rescue(console, adb, fastboot, nudged, los_boot)
     note('rescue console on %s' % console.port)
 
     # ------------------------------------------------------------------------------------ 6. store

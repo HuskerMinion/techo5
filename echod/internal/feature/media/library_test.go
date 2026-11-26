@@ -17,14 +17,11 @@ import (
 
 // aacStation is a station in a format the device does not decode.
 func aacStation(t *testing.T) string {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return station(t, func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "audio/aac")
 		w.Write([]byte{0xFF, 0xF1, 0x50, 0x80, 0x00, 0x1F, 0xFC, 0, 0, 0, 0, 0})
 		w.(http.Flusher).Flush() // a station sends as it goes
-		<-r.Context().Done()
-	}))
-	t.Cleanup(srv.Close)
-	return srv.URL
+	})
 }
 
 // A stream the device cannot decode is its own failure, told apart from a station that is down.
@@ -113,7 +110,7 @@ func TestTheLibraryPlaysWhatTheDeviceCannot(t *testing.T) {
 		t.Fatal(err)
 	}
 	was := libraryPlayer
-	libraryPlayer = func() (string, error) { return "aa:bb:cc:dd:ee:ff", nil }
+	libraryPlayer = func() ([]string, error) { return []string{"aa:bb:cc:dd:ee:ff"}, nil }
 	defer func() { libraryPlayer = was }()
 	// An address into a home, or one handed on after something else was asked for, is not given.
 	if err := viaLibrary("http://192.168.1.20:8000/a.aac", nil); err == nil {
@@ -228,15 +225,13 @@ func TestTheLibraryStartingAHandedOnStationDoesNotOvertakeIt(t *testing.T) {
 // since, is the room going elsewhere: the station is stopped and the hand-off is not wanted either.
 func TestARemoteStartingOverAStationPlayedSinceOvertakesTheHandOff(t *testing.T) {
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // a station: it never ends
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 	d := speaker.NewDriver(speaker.New())
 	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
+	t.Cleanup(p.stream.Stop)
 	wanted := handedOff(t, p, aacStation(t))
 	p.stream.handOff = nil
-	p.stream.Play(srv.URL)
+	p.stream.Play(radio)
 	if wanted() {
 		t.Error("a hand-off is still wanted after another station was played")
 	}

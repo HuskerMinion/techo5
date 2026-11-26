@@ -17,9 +17,11 @@ import (
 )
 
 // maxLag is how far apart the reference and a microphone may be, in samples at the capture rate.
-// The loopback is sample-aligned with the microphones by construction, so the only delay is the
+// The card's loopback is sample-aligned with the microphones by construction, so the only delay is the
 // acoustic path — a meter is 47 samples at 16 kHz, and the enclosure is far smaller than that. The
-// window is wide because being wrong about this is the thing the measurement is meant to catch.
+// software reference (lib/echoref, athena on the mainline kernel and the 1st gen Show 5) is placed by
+// clocks, Lead early. The window is wide because being wrong about this is the thing the measurement
+// is meant to catch.
 const maxLag = 800
 
 func newEchoCmd() *cobra.Command {
@@ -155,7 +157,7 @@ func report(w io.Writer, frames []byte) {
 
 	fmt.Fprintf(w, "\ncaptured %d samples, reference %.1f dBFS\n", len(ref), dbfs(ref))
 	if dbfs(ref) < -90 {
-		fmt.Fprintln(w, "the loopback is silent, so the lag and erle columns mean nothing")
+		fmt.Fprintln(w, "the reference is silent, so the lag and erle columns mean nothing")
 	}
 
 	fmt.Fprintf(w, "\n%4s %10s %8s %8s %10s %8s\n", "mic", "level", "lag", "lag ms", "residual", "erle")

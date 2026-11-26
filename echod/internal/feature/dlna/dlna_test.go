@@ -35,7 +35,8 @@ func call(t *testing.T, f *Feature, service, action, args string) (int, string) 
 }
 
 // A song set by a controller is described back to it as it was given, its name, artist and length read
-// from the description; the transport waits stopped for Play, and a seek is refused with UPnP's code.
+// from the description; the transport waits stopped for Play, and a seek before it is refused with
+// UPnP's code for that.
 func TestAControllerSetsASong(t *testing.T) {
 	f := &Feature{}
 	f.r.f = f
@@ -56,7 +57,7 @@ func TestAControllerSetsASong(t *testing.T) {
 	if !strings.Contains(body, "<CurrentTransportState>STOPPED</CurrentTransportState>") {
 		t.Errorf("GetTransportInfo: %s", body)
 	}
-	if code, body = call(t, f, "AVTransport", "Seek", `<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>0:01:00</Target>`); code != 500 || !strings.Contains(body, "<errorCode>710</errorCode>") {
+	if code, body = call(t, f, "AVTransport", "Seek", `<InstanceID>0</InstanceID><Unit>REL_TIME</Unit><Target>0:01:00</Target>`); code != 500 || !strings.Contains(body, "<errorCode>701</errorCode>") {
 		t.Errorf("Seek: %d %s", code, body)
 	}
 	if code, _ = call(t, f, "AVTransport", "SetAVTransportURI", `<InstanceID>0</InstanceID><CurrentURI>file:///etc/passwd</CurrentURI>`); code != 500 {

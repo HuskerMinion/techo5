@@ -17,9 +17,9 @@ import (
 	"rsc.io/qr"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/sendspin"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
-	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/musicassistant"
 )
 
@@ -239,13 +239,13 @@ func saveMusic(r *http.Request) string {
 // this device is connected to it as a player, which is what everything it plays here needs. answered
 // is whether the server was reached at all.
 func musicStatus(ctx context.Context, m config.MusicAssistant) (status string, answered bool) {
-	player, err := layout.FactoryMAC()
+	player, err := media.LibraryPlayerIDs()
 	if err != nil {
 		return "this device does not know its own player id", true // the server was not asked
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	st, err := musicassistant.Client{URL: m.URL, Token: m.Token}.Player(ctx, player)
+	st, err := musicassistant.Client{URL: m.URL, Token: m.Token}.Player(ctx, player...)
 	switch {
 	case err != nil && strings.Contains(err.Error(), "refused the token"):
 		return "reachable, but it refused the token: make a new one and save it here", true

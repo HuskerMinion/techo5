@@ -46,6 +46,10 @@ func (d *Display) videoSceneSpot(s *roundScene, now time.Time) {
 		drawnPage = pageKey(s.takes)
 	}
 	d.pask.drawn(drawnPage, now)
+	// How a place chosen on the bar would be sent, worked out before d.mu: it asks the player and the
+	// DLNA renderer, which have locks of their own.
+	route := videoSeekRoute(st)
+	fit := videoFittableNow(st)
 	d.mu.Lock()
 	failedRecently := st.Failed != 0 && st.Failed == d.videoTried && now.Sub(st.ErrAt) < videoFailShown
 	up := st.Active() && st.Phase != video.Asking
@@ -55,6 +59,9 @@ func (d *Display) videoSceneSpot(s *roundScene, now time.Time) {
 		d.videoTried = st.ID
 	}
 	s.videoControls = now.Before(d.videoUntil) || st.Phase == video.Paused || st.Phase == video.Loading || !st.Frames || s.showVolume
+	// The bar to seek on, for a video somebody can move through, showing the place a finger is choosing.
+	s.videoSeek = d.seekShowLocked(route, st.Pos, now)
+	s.videoFit = up && fit
 	s.videoLive = s.showVideo && up && st.Frames
 	d.videoOnScreen = s.showVideo
 	d.mu.Unlock()
@@ -93,12 +100,28 @@ func (d *Display) videoGestureSpot(g touch.Gesture) {
 		d.videoUntil = time.Now().Add(videoControls)
 		d.mu.Unlock()
 	}
+	// The bar to seek on, while the controls are up (videoBarUp): a finger on it is its, and keeps them
+	// up. With the controls away, a tap on where the bar was brings them back, as anywhere else.
+	if d.videoBarUp(video.Get().State()) && d.seekGesture(g) {
+		show()
+		return
+	}
 	switch g.Kind {
 	case touch.SwipeDown:
 		slog.Info("screen: video stopped by a swipe")
 		go video.Get().Stop()
 	case touch.SwipeUp:
 		show()
+	case touch.SwipeLeft, touch.SwipeRight:
+		// A DLNA video whose controller listens: the next or the one before, as a swipe on the music
+		// face is (stepStation). Nothing otherwise: a video has no stations to step through.
+		if st := video.Get().State(); videoSkippable(st) {
+			t := media.TransportNext
+			if g.Kind == touch.SwipeRight {
+				t = media.TransportPrevious
+			}
+			go videoSkip(t)
+		}
 	case touch.Tap:
 		d.mu.Lock()
 		shown := time.Now().Before(d.videoUntil)
@@ -120,6 +143,9 @@ func (d *Display) videoGestureSpot(g touch.Gesture) {
 			show()
 		case videoTapLouder:
 			go media.Get().Adjust(+1)
+			show()
+		case videoTapFit:
+			go videoRefit(st.ID)
 			show()
 		default:
 			d.mu.Lock()

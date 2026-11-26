@@ -42,6 +42,7 @@ show/library-queue-menu-1280x800.png
 show/nowplaying-show8.png
 show/nowplaying-modern-show8.png
 show/nowplaying-music-assistant-show8.png
+show/nowplaying-music-assistant-radio-show8.png
 show/nowplaying-lyrics-show8.png
 show/nowplaying-library-show8.png
 show/nowplaying-modern-library-show8.png
@@ -129,6 +130,7 @@ spot/clock-timer.png
 spot/clock-alert.png
 spot/nowplaying.png
 spot/nowplaying-music-assistant.png
+spot/nowplaying-music-assistant-radio.png
 spot/nowplaying-paused.png
 spot/announcement.png
 spot/announcement-voice.png
@@ -215,3 +217,17 @@ show/nowplaying-modern-seek-show8.png
 spot/record-word-take.png
 show/saver-countdown-show8.png
 spot/saver-spot-countdown.png
+show/video-seek-show8.png
+show/video-seek-drag-show8.png
+show/nowplaying-position-show8.png
+show/nowplaying-seekbar-show8.png
+show/nowplaying-modern-seekbar-show8.png
+spot/video-spot-seek.png
+spot/video-spot-seek-drag.png
+show/video-fit-show8.png
+show/video-fit-fill-show8.png
+show/video-fit-stretch-show8.png
+show/video-fit-skip.png
+spot/video-spot-fit.png
+spot/video-spot-fit-fill.png
+spot/video-spot-fit-stretch.png

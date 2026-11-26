@@ -47,6 +47,42 @@ const Features = esphome.DefaultVoiceFeatures |
 	esphome.FeatureStartConversation |
 	esphome.FeatureTimers
 
+// FeaturesFor is Features for a device whose replies play on another media player (elsewhere) or on
+// its own speaker.
+//
+// The speaker flag is what has Home Assistant stream the reply over the API, and with it Home Assistant
+// also makes the reply as 16 kHz mono WAV, whatever the device's media player asks for (#715). That is
+// the right form for this speaker, which plays voice at speaker.VoiceRate, and a poor one for a better
+// speaker in another room: a reply sent there arrives already cut to the band of a telephone. Without
+// the flag Home Assistant makes the reply in the media player's announcement format (media.FormatsFor)
+// and still says where it is at TTS_END, which is all a reply sent elsewhere has ever used: its url.
+// Nothing is lost on the way back either, as a reply the player does not take and plays here is
+// fetched from the same url and brought down to the speaker's rate on the device.
+func FeaturesFor(elsewhere bool) esphome.VoiceFeature {
+	if elsewhere {
+		return Features &^ esphome.FeatureSpeaker
+	}
+	return Features
+}
+
+// unstreamed is whether the connection being served was told the device has no speaker of its own
+// (FeaturesFor), so Home Assistant sends no reply over the API and only its url. The zero value is the
+// device's usual offer.
+var unstreamed atomic.Bool
+
+// Offer is the voice features to tell the next connection about, for where replies play now. Home
+// Assistant reads them once per connection, so they are worked out afresh for each one, and what was
+// offered is kept: until the reconnect that follows a change, a turn goes by what this connection was
+// told rather than by the setting (streamedReplies).
+func Offer() esphome.VoiceFeature {
+	f := FeaturesFor(config.Get().Brain.RepliesElsewhere())
+	unstreamed.Store(f&esphome.FeatureSpeaker == 0)
+	return f
+}
+
+// streamedReplies is whether Home Assistant is streaming replies over the API on this connection.
+func streamedReplies() bool { return !unstreamed.Load() }
+
 type Voice struct {
 	vs        *esphome.VoiceSatellite
 	turn      *conversation
@@ -317,6 +353,13 @@ func (v *Voice) open(slot int, woke bool, at time.Time) {
 // Busy reports whether a turn is running, for anything that has to leave the speaker alone while one
 // is.
 func (v *Voice) Busy() bool { return v.turn.Busy() }
+
+// Interruptible reports whether a wake word heard now takes the turn over: thinking or replying. While
+// listening, one is part of what is being said and is ignored (conversation.start).
+func (v *Voice) Interruptible() bool {
+	p := v.turn.Phase()
+	return p == phaseThinking || p == phaseReplying
+}
 
 // Cancel stops a turn that is running, for a gesture that turned out to mean something else: the
 // second tap of a double, the way a long hold already undoes the turn its hold began.

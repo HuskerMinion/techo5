@@ -34,7 +34,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -170,8 +169,8 @@ type Display struct {
 	skinSl     *esphome.Select // Screen skin
 	// callBtn is the home screen's Call button, on or off (callbutton.go).
 	callBtn *esphome.Switch
-	// saverBtn is the Show screensaver button (screensaver_show.go).
-	saverBtn *esphome.Button
+	// saverBtn and saverHideBtn are the Show and Hide screensaver buttons (screensaver_show.go).
+	saverBtn, saverHideBtn *esphome.Button
 	// styleSwipeSw is Swipe between clock styles (style_swipe.go).
 	styleSwipeSw *esphome.Switch
 	// clockTap is what a tap on the clock does (clock_tap.go).
@@ -196,6 +195,8 @@ type Display struct {
 	press     pressState
 	pageShown pageID
 	pressSeq  uint64
+	// seekF is a finger on the video's bar to seek on (seekbar.go).
+	seekF seekFinger
 
 	// The dashboard face (dashboard_spot.go): asked for, when last touched, whether the last frame
 	// drew it, whether the touch screen follows fingers for it, where it is scrolled and on which
@@ -429,7 +430,7 @@ func build() *Display {
 	d.turnStyle = turnStyleSelect(d.wake)
 	d.skinSl = skinSelect(d.wake)
 	d.callBtn = callButtonSwitch(d.wake)
-	d.saverBtn = screensaverButton(d)
+	d.saverBtn, d.saverHideBtn = screensaverButton(d), screensaverHideButton(d)
 	d.styleSwipeSw = styleSwipeSwitch()
 	d.clockTap = clockTapSelect()
 	d.volumeSwipeSw = volumeSwipeSwitch()
@@ -511,7 +512,7 @@ func (d *Display) timerStyleSel() *esphome.Select { return nil }
 func (d *Display) skinSel() *esphome.Select { return d.skinSl }
 
 func (d *Display) Entities() []esphome.Entity {
-	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.saverBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.clockTap, d.fontSel, d.textSizeSel,
+	return []esphome.Entity{d.light, d.power, d.roomSw, d.auto, d.clock, d.clockStyleSel, d.clockPos, d.camTime, d.answerTime, d.turnStyle, d.skinSl, d.callBtn, d.saverBtn, d.saverHideBtn, d.weatherFx, d.muteRing, d.camDot, d.idleRing, d.lang, d.styleSwipeSw, d.volumeSwipeSw, d.clockTap, d.fontSel, d.textSizeSel,
 		d.nightHours, d.nightStart, d.nightEnd, d.weekendStart, d.weekendEnd, d.nightMode, d.atNight, d.nightStyle, d.glowLevel, d.nightInfoSw}
 }
 
@@ -1401,12 +1402,10 @@ func (d *Display) locked(f func()) {
 	f()
 }
 
-// restartDevice reboots; the slot store and the daemon's state are on disk already.
+// restartDevice reboots; the slot store and the daemon's state are on disk already, and what waits in
+// memory is saved first (bootreason.Reboot).
 func restartDevice() {
-	bootreason.Mark(bootreason.Restart)
-	syscall.Sync()
-	if err := syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART); err != nil {
-		bootreason.Unmark()
+	if err := bootreason.Reboot(bootreason.Restart); err != nil {
 		slog.Error("restart failed", "err", err)
 	}
 }

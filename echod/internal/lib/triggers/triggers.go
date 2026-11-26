@@ -125,6 +125,24 @@ var Languages = map[string]Set{
 		GoHome: []string{"beginscherm", "startscherm", "terug naar de klok", "laat de klok zien"},
 		Camera: []string{"laat", "toon", "camera"},
 	},
+	"pl": {
+		// Matched inside what was heard, and under Match all inside every other language too, so each
+		// form with diacritics also without them, as speech to text sometimes leaves them off. "pogod"
+		// carries pogoda, pogody, pogodę and pogodzie. Not "pada" alone: it is inside "spada" and the
+		// Spanish "espada"; not a bare "temperatura", which is a room's thermostat as often as the
+		// weather.
+		Weather: []string{"pogod", "prognoz", "temperatura na zewnątrz", "temperatura na zewnatrz", "temperatura na dworze",
+			"jaka będzie temperatura", "jaka bedzie temperatura", "ile stopni na", "ile będzie stopni", "ile bedzie stopni",
+			"deszcz", "czy pada", "będzie padać", "bedzie padac", "śnieg", "snieg", "śnieżn", "burza", "burzy", "burze",
+			"ulewa", "ulewy", "opady", "opadów", "opadow", "słonecznie", "slonecznie", "pochmurno", "zachmurzenie",
+			"jak ciepło", "jak cieplo", "jak zimno", "radar"},
+		Radar: []string{"radar", "mapa opadów", "mapę opadów", "mapa opadow", "mape opadow", "mapa deszczu", "mapę deszczu",
+			"mape deszczu", "mapa pogody", "mapę pogody", "mape pogody", "mapa pogodowa", "mapę pogodową", "mape pogodowa"},
+		NotWeather: []string{"odgłos", "odglos", "dźwięk", "dzwiek", "szum", "puść deszcz", "pusc deszcz", "włącz deszcz", "wlacz deszcz"},
+		GoHome: []string{"ekran główny", "ekran glowny", "ekranu głównego", "ekranu glownego", "ekran startowy", "wróć do zegara",
+			"wroc do zegara", "powrót do zegara", "powrot do zegara", "pokaż zegar", "pokaz zegar"},
+		Camera: []string{"pokaż", "pokaz", "kamera", "kamerę", "kamere", "kamery", "kamerze", "podgląd", "podglad"},
+	},
 	"pt": {
 		// Matched inside what was heard, so "tempo" alone is left out: it is in "quanto tempo" (how long)
 		// and timers. The weather is asked for in phrases instead, and "temporal" too: alone, it is the

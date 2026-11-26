@@ -69,7 +69,9 @@ crumb "skylight init started, kernel $($BB uname -r) $($BB uname -m), store $STO
 
 $BB mkdir -p /dev/pts
 $BB mount -t devpts devpts /dev/pts
-$BB mount -t tmpfs tmpfs /run
+# 0755, not the 1777 a tmpfs gets without a mode: root's scripts and the daemon use fixed names in
+# /run, and the root filesystem runs users other than root (feature/addons).
+$BB mount -t tmpfs -o mode=0755 tmpfs /run
 $BB mount -t tmpfs tmpfs /tmp
 echo 7 4 1 7 > /proc/sys/kernel/printk
 crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes"
@@ -78,7 +80,9 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 . /lib/techo5-lib.sh
 
 # --- techo5-data: TECHO5's own directory on it, as /data.
-if [ -n "$DATA_DEV" ] && mount -t ext4 -o noatime,nosuid,nodev $DATA_DEV /userdata 2>/dev/null &&
+# commit=60 to spare the eMMC (techo5-lib.sh, t5_data_commit), and the old options if it is refused.
+if [ -n "$DATA_DEV" ] && { mount -t ext4 -o noatime,nosuid,nodev,commit=60 $DATA_DEV /userdata 2>/dev/null ||
+	mount -t ext4 -o noatime,nosuid,nodev $DATA_DEV /userdata 2>/dev/null; } &&
 	mkdir -p /userdata/techo5 && mount --bind /userdata/techo5 /data; then
 	crumb "techo5-data mounted; /data is its techo5 directory"
 else

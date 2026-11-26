@@ -27,3 +27,18 @@ func TestTheHangupWordIsListenedFor(t *testing.T) {
 		t.Error("the stop word chosen counts as a model listened for")
 	}
 }
+
+// A model chosen as the stop word counts as listened for too (#741): removed from under it, the stop
+// word would fall back to the built-in one without its owner having asked.
+func TestTheStopWordIsListenedFor(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	if listening("stopp") {
+		t.Fatal("a model nothing chose counts as listened for")
+	}
+	if err := config.Set().Stop().ID("stopp"); err != nil {
+		t.Fatal(err)
+	}
+	if !listening("stopp") {
+		t.Error("the stop word's model can be removed from the page")
+	}
+}

@@ -75,6 +75,18 @@ param(
     # install-skylight.py takes its images from the latest release, so a stable Show release without
     # them leaves new Skylights with nothing to install: it takes this switch to make one on purpose.
     [switch]$NoSkylight,
+    # The Lenovo ThinkSmart View rootfs tarball: deploy-rootfs.sh --out with
+    # DEVICE_OVERLAY=tools/linux/thinksmart/overlay KERNEL_IMAGE=<-ThinkSmartBoot>. The Show's binary on a
+    # rootfs of its own, keyed arm-thinksmart in the manifest and published as
+    # techo5-rootfs-thinksmart-<version>.tar.gz. Optional: a release without it leaves ThinkSmart Views
+    # where they are.
+    [string]$ThinkSmartRootfs = '',
+    # The kernel that rootfs carries (tools/linux/thinksmart/kernel/build.sh's boot-thinksmart.img),
+    # published as techo5-boot-thinksmart-<version>.img, and its source for the GPL (build.sh's
+    # linux-<kver>-techo5-thinksmart-source.tar.xz, published as
+    # linux-<kver>-techo5-thinksmart-<version>-source.tar.xz). Both go with -ThinkSmartRootfs.
+    [string]$ThinkSmartBoot = '',
+    [string]$ThinkSmartKernelSource = '',
     # The release signing key (ed25519 seed, base64). Devices take a manifest only with its signature, so
     # a release cannot be published without it. Keep it off every repository and backed up: $env:TECHO5_SIGN_KEY.
     [string]$SignKey = $env:TECHO5_SIGN_KEY,
@@ -112,7 +124,13 @@ param(
     # The sources of the programs the images carry built from others' sources (FFmpeg, Shairport Sync,
     # nqptp, librespot; NOTICE), from tools/linux/third-party-sources.sh: their licenses want the source
     # beside the binaries, so every release attaches it, as techo5-third-party-sources-<version>.tar.gz.
-    [string]$ThirdPartySources = ''
+    [string]$ThirdPartySources = '',
+    # The techo5-addons checkout the add-on catalog is signed from (tools/sign-catalog.ps1 -Catalog).
+    # Empty is $env:TECHO5_ADDONS, then techo5-addons beside this checkout, then E:\projects\techo5-addons.
+    [string]$AddonCatalog = '',
+    # Passed on to sign-catalog.ps1 as -FirstFormat2: the one release whose catalog signing first
+    # publishes catalog-v2.json beside catalog.json. Refused there once catalog-v2.json is published.
+    [switch]$FirstFormat2Catalog
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ThirdPartySources -or -not (Test-Path $ThirdPartySources)) {
@@ -131,7 +149,7 @@ if (($AthenaImage -and -not $AthenaBoot) -or ($AthenaBoot -and -not $AthenaImage
 }
 # A root filesystem must not carry LineageOS's vendor tree: it is Amazon's and the chip makers', not ours to
 # publish. Each unit mounts its own (tools/linux/rootfs/etc/techo5/boot.sh).
-foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     if (& tar -tzf $t | Where-Object { $_ -match '^(\./)?vendor/.' } | Select-Object -First 1) { throw "$t carries a vendor tree; build it without VENDOR_TGZ" }
     # Nor a development kernel's modules and firmware (mkrootfs.sh's inputs/kernel.tar.gz): a released
     # rootfs has no lib/modules, and lib/firmware holds only wireless-regdb's regulatory database, which
@@ -143,23 +161,24 @@ foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ })
 # kernel update (usr/share/techo5/kernel/), would be offered to all of them.
 if ($Rootfs) {
     $board = @(& tar -xzOf $Rootfs ./etc/techo5/device.conf 2>$null) -match '^T5_BOARD=' | Select-Object -Last 1
-    if ($board) { throw "$Rootfs is a board's own rootfs (device.conf: '$board'), not the Shows': pass it as -AthenaRootfs or -SkylightRootfs" }
+    if ($board) { throw "$Rootfs is a board's own rootfs (device.conf: '$board'), not the Shows': pass it as -AthenaRootfs, -SkylightRootfs or -ThinkSmartRootfs" }
     if (& tar -tzf $Rootfs | Where-Object { $_ -match '^(\./)?usr/share/techo5/kernel/.' } | Select-Object -First 1) {
         throw "$Rootfs carries a kernel (usr/share/techo5/kernel/), which the Shows' rootfs never does: build it without KERNEL_IMAGE"
     }
 }
-# The Skylight runs the Shows' binary: its rootfs must carry the same one as the Shows' in this release.
-if ($Rootfs -and $SkylightRootfs) {
+# The Skylight and the ThinkSmart View run the Shows' binary: their rootfs must carry the same one as the
+# Shows' in this release.
+foreach ($own in @($SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ -and $Rootfs }) {
     $cmp = Join-Path ([System.IO.Path]::GetTempPath()) "techo5-release-$PID"
     try {
-        $sums = foreach ($t in @($Rootfs, $SkylightRootfs)) {
+        $sums = foreach ($t in @($Rootfs, $own)) {
             $d = Join-Path $cmp ([guid]::NewGuid().ToString('n'))
             New-Item -ItemType Directory -Force $d | Out-Null
             & tar -xzf $t -C $d ./usr/local/bin/techo5
             if ($LASTEXITCODE -ne 0) { throw "$t has no usr/local/bin/techo5" }
             (Get-FileHash -Algorithm SHA256 (Join-Path $d 'usr/local/bin/techo5')).Hash
         }
-        if ($sums[0] -ne $sums[1]) { throw "$Rootfs and $SkylightRootfs carry different usr/local/bin/techo5: build both from the same tree" }
+        if ($sums[0] -ne $sums[1]) { throw "$Rootfs and $own carry different usr/local/bin/techo5: build both from the same tree" }
     } finally { Remove-Item -Recurse -Force $cmp -ErrorAction SilentlyContinue }
 }
 # The video decoder. Every rootfs carries the same 32-bit ffmpeg as usr/local/bin/techo5-ffmpeg
@@ -171,6 +190,7 @@ $ffWants = @()
 if ($Rootfs) { $ffWants += , @($Rootfs, $false) }
 if ($AthenaRootfs) { $ffWants += , @($AthenaRootfs, $true) }
 if ($SkylightRootfs) { $ffWants += , @($SkylightRootfs, $true) }
+if ($ThinkSmartRootfs) { $ffWants += , @($ThinkSmartRootfs, $true) }
 if ($ffWants.Count) {
     $ffDir = Join-Path ([System.IO.Path]::GetTempPath()) "techo5-ffmpeg-$PID"
     try {
@@ -186,7 +206,7 @@ if ($ffWants.Count) {
             $ff32[$t] = (Get-FileHash -Algorithm SHA256 (Join-Path $d 'usr/local/bin/techo5-ffmpeg')).Hash
             $has64 = $names -contains 'usr/local/bin/techo5-ffmpeg64'
             if ($want64 -and -not $has64) { throw "$t has no usr/local/bin/techo5-ffmpeg64: build bin/techo5-ffmpeg-arm64 (tools/linux/build-ffmpeg-arm64.sh) before deploy-rootfs.sh" }
-            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only athena's and the Skylight's rootfs do" }
+            if (-not $want64 -and $has64) { throw "$t carries usr/local/bin/techo5-ffmpeg64, which only the rootfs of athena, the Skylight and the ThinkSmart View do" }
             if (-not $want64) { continue }
             & tar -xzf $t -C $d ./usr/local/bin/techo5-ffmpeg64
             if ($LASTEXITCODE -ne 0) { throw "${t}: usr/local/bin/techo5-ffmpeg64 could not be read" }
@@ -209,7 +229,7 @@ if ($ffWants.Count) {
             $ff64[$t] = (Get-FileHash -Algorithm SHA256 $f).Hash
         }
         if (@($ff32.Values | Sort-Object -Unique).Count -gt 1) { throw "the rootfs tarballs carry different usr/local/bin/techo5-ffmpeg: build them all with the same bin/techo5-ffmpeg-arm" }
-        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$AthenaRootfs and $SkylightRootfs carry different usr/local/bin/techo5-ffmpeg64: build both with the same bin/techo5-ffmpeg-arm64" }
+        if (@($ff64.Values | Sort-Object -Unique).Count -gt 1) { throw "$(@($ff64.Keys) -join ', ') carry different usr/local/bin/techo5-ffmpeg64: build them all with the same bin/techo5-ffmpeg-arm64" }
         foreach ($t in $ff64.Keys) { Write-Host "== ${t}: ffmpeg64 sha256 $($ff64[$t].ToLower())" }
     } finally { Remove-Item -Recurse -Force $ffDir -ErrorAction SilentlyContinue }
 }
@@ -251,7 +271,7 @@ if ($AthenaRootfs) {
         throw "$AthenaRootfs carries the JPEG decoder without libjpeg-turbo's licenses (usr/share/licenses/libjpeg-turbo)"
     }
 }
-foreach ($t in @($Rootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
     if ($names -contains 'usr/local/bin/techo5-gpu') { throw "$t carries the GPU helper, which only athena's rootfs does" }
     if ($names -contains 'usr/local/bin/techo5-jpeg') { throw "$t carries the JPEG decoder, which only athena's rootfs does" }
@@ -315,7 +335,7 @@ if ($AthenaRootfs) { Test-Image $AthenaRootfs }
 # Every Show rootfs carries the echo canceller and Spotify Connect: deploy-rootfs.sh copies them only when
 # bin/ has them, so a worktree without the prebuilts copied in would ship without either. And Tailscale,
 # which deploy-rootfs.sh requires, checked here too with its license; and AirPlay 2 (its receiver and nqptp).
-foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
     $names = @(& tar -tzf $t) -replace '^\./', ''
     foreach ($b in 'techo5-aec', 'techo5-librespot', 'techo5-shairport-sync', 'techo5-nqptp') {
         if ($names -notcontains "usr/local/bin/$b") { throw "$t has no usr/local/bin/${b}: copy bin/$b-arm into bin/ before building" }
@@ -326,7 +346,7 @@ foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ })
 }
 # And the same build of each of these in every image, as with ffmpeg64.
 foreach ($b in 'tailscaled', 'techo5-shairport-sync', 'techo5-nqptp') {
-    $sums = @(foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs) | Where-Object { $_ }) {
+    $sums = @(foreach ($t in @($Rootfs, $AthenaRootfs, $SkylightRootfs, $ThinkSmartRootfs) | Where-Object { $_ }) {
         $d = Join-Path ([System.IO.Path]::GetTempPath()) ("techo5-bin-" + [guid]::NewGuid())
         New-Item -ItemType Directory $d | Out-Null
         try {
@@ -397,9 +417,45 @@ if ($skylightGiven) {
     if ($LASTEXITCODE -ne 0) { throw "$SkylightStore does not hold this release: build it (mkstore.sh -k none) from the Skylight rootfs made for $Version with KERNEL_IMAGE=$SkylightBoot" }
     Test-Image $SkylightStore -NoFile $unitFirmware
 }
+# The ThinkSmart View: its rootfs, the kernel it carries and that kernel's source go together. Every
+# slot starts with its own kernel (tools/linux/thinksmart/lk2nd-ab), so a rootfs without one is refused.
+$thinkSmartSourceName = $null
+$thinkSmartSet = @($ThinkSmartRootfs, $ThinkSmartBoot, $ThinkSmartKernelSource)
+$thinkSmartGiven = @($thinkSmartSet | Where-Object { $_ }).Count
+if ($thinkSmartGiven -and $thinkSmartGiven -ne $thinkSmartSet.Count) {
+    throw "ThinkSmartRootfs, ThinkSmartBoot and ThinkSmartKernelSource go together: each slot starts with the kernel its rootfs carries, and the GPL wants that kernel's source"
+}
+if ($ThinkSmartRootfs) {
+    $board = (& tar -xzOf $ThinkSmartRootfs ./etc/techo5/device.conf) -match '^T5_BOARD=' | Select-Object -Last 1
+    if ($board -ne 'T5_BOARD=thinksmart') { throw "$ThinkSmartRootfs is not a ThinkSmart View rootfs (device.conf: '$board'); build it with DEVICE_OVERLAY=tools/linux/thinksmart/overlay" }
+    $kdir = Join-Path $PSScriptRoot 'linux/thinksmart/kernel'
+    python -I (Join-Path $kdir 'pack.py') check $ThinkSmartBoot
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartBoot is not a ThinkSmart View boot image lk2nd can start (pack.py check)" }
+    $kernelSum = & tar -xzOf $ThinkSmartRootfs ./usr/share/techo5/kernel/boot-thinksmart.img.sha256 2>$null
+    if (-not $kernelSum) { throw "$ThinkSmartRootfs carries no kernel: build it with KERNEL_IMAGE=$ThinkSmartBoot (deploy-rootfs.sh)" }
+    $want = (Get-FileHash -Algorithm SHA256 $ThinkSmartBoot).Hash.ToLower()
+    $got = ($kernelSum -split '\s+')[0].ToLower()
+    if ($got -ne $want) { throw "$ThinkSmartRootfs carries kernel $got, but -ThinkSmartBoot is ${want}: build the rootfs with KERNEL_IMAGE=$ThinkSmartBoot" }
+    # The source must be what built the kernel: check-source.py ties it to the boot image's own
+    # configuration, and to build.sh's kernel.config beside the image when it is there.
+    $chk = @((Join-Path $kdir 'check-source.py'))
+    $cfg = Join-Path (Split-Path -Parent (Resolve-Path $ThinkSmartBoot)) 'kernel.config'
+    if (Test-Path -LiteralPath $cfg -PathType Leaf) { $chk += @('--config', $cfg) }
+    $out = @(python -I @chk $ThinkSmartKernelSource $ThinkSmartBoot)
+    $out | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) { throw "$ThinkSmartKernelSource is not the source of $ThinkSmartBoot (check-source.py)" }
+    $kver = ($out | Where-Object { $_ -match '^kver (\d+\.\d+\.\d+)$' } | Select-Object -Last 1) -replace '^kver ', ''
+    if (-not $kver) { throw "check-source.py named no kernel version" }
+    $thinkSmartSourceName = "linux-$kver-techo5-thinksmart-$Version-source.tar.xz"
+    Test-Image $ThinkSmartRootfs -EmptyKeys
+}
 if (-not $SignKey -or -not (Test-Path $SignKey)) { throw "no release signing key: set TECHO5_SIGN_KEY or pass -SignKey" }
 $repo = 'HuskerMinion/techo5'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
+# The add-on catalog is signed and published at the end, once the release is up (below). Its checks run
+# here first as a dry run, so a techo5-addons checkout that is missing or not at its origin/main, or a
+# catalog mkcatalog refuses, stops the release before anything is published rather than after.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Catalog $AddonCatalog -FirstFormat2:$FirstFormat2Catalog -WhatIf
 $bin = Join-Path $root 'bin'
 New-Item -ItemType Directory -Force $bin | Out-Null
 
@@ -551,6 +607,14 @@ try {
         $skylightRootfsNamed = Join-Path $bin "techo5-rootfs-skylight-$Version.tar.gz"
         Copy-Item $SkylightRootfs $skylightRootfsNamed -Force
     }
+    $thinkSmartRootfsNamed = $null
+    if ($ThinkSmartRootfs) {
+        $thinkSmartRootfsNamed = Join-Path $bin "techo5-rootfs-thinksmart-$Version.tar.gz"
+        Copy-Item $ThinkSmartRootfs $thinkSmartRootfsNamed -Force
+        $named = Join-Path $bin "techo5-boot-thinksmart-$Version.img"
+        Copy-Item $ThinkSmartBoot $named -Force
+        $bootAssets += $named
+    }
     $athenaRootfsNamed = $null
     if ($AthenaRootfs) {
         $athenaRootfsNamed = Join-Path $bin "techo5-rootfs-athena-$Version.tar.gz"
@@ -607,6 +671,7 @@ try {
     if ($DotRootfs) { $mk += @('-rootfs-arm-dot', $DotRootfs) }
     if ($athenaRootfsNamed) { $mk += @('-rootfs-arm-athena', $athenaRootfsNamed) }
     if ($skylightRootfsNamed) { $mk += @('-rootfs-arm-skylight', $skylightRootfsNamed) }
+    if ($thinkSmartRootfsNamed) { $mk += @('-rootfs', "arm-thinksmart=$thinkSmartRootfsNamed") }
     # Under the signature, not just in SHA256SUMS: install-show.py writes a boot image to a unit, and
     # nothing signs SHA256SUMS, so whatever could serve a substituted list could serve the image too.
     foreach ($a in $bootAssets + $agentAssets) { $mk += @('-asset', $a) }
@@ -622,6 +687,7 @@ if ($Rootfs) { $args += $Rootfs }
 if ($DotRootfs) { $args += $DotRootfs }
 if ($athenaRootfsNamed) { $args += $athenaRootfsNamed }
 if ($skylightRootfsNamed) { $args += $skylightRootfsNamed }
+if ($thinkSmartRootfsNamed) { $args += $thinkSmartRootfsNamed }
 $args += $bootAssets
 $args += $agentAssets
 $named = Join-Path $bin "techo5-third-party-sources-$Version.tar.gz"
@@ -637,6 +703,11 @@ if ($ubootSourceNamed) { $args += $ubootSourceNamed }
 if ($skylightSourceName) {
     $named = Join-Path $bin $skylightSourceName
     Copy-Item $SkylightKernelSource $named -Force
+    $args += $named
+}
+if ($thinkSmartSourceName) {
+    $named = Join-Path $bin $thinkSmartSourceName
+    Copy-Item $ThinkSmartKernelSource $named -Force
     $args += $named
 }
 # SHA256SUMS: for checking a download by hand. No installer reads it — the signed manifest covers
@@ -696,4 +767,11 @@ $missing = @($published | Where-Object { $_ -ne 'SHA256SUMS' -and $listed -notco
 if ($missing) {
     throw "published, but these assets have no checksum in SHA256SUMS: $($missing -join ', ')"
 }
+
+# The add-on catalog goes out with every release (tools/sign-catalog.ps1): signed from the techo5-addons
+# checkout and published on its own "addons" release, which moves its expiry on even when it has not
+# changed, and attached here as well, all four files (catalog-v2.json, catalog.json and their .sig
+# files: format 2, and format 1 for devices that read only that). After the checks above, which are
+# about the firmware's own files: the catalog carries its own signatures and is not in SHA256SUMS.
+& (Join-Path $PSScriptRoot 'sign-catalog.ps1') -SignKey $SignKey -Go $Go -Repo $repo -Release $Version -Catalog $AddonCatalog -FirstFormat2:$FirstFormat2Catalog
 Write-Host "published: https://github.com/$repo/releases/tag/$Version"

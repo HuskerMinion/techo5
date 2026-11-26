@@ -1,8 +1,6 @@
 package media
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -69,15 +67,13 @@ func TestTheRoomIsCarriedOnlyWhenTheRemoteIsWhatIsHeard(t *testing.T) {
 // stopped, so whichever of the two was stopped the other resurfaced, and in the room that looked like a
 // speaker that could not be turned off.
 func TestARemoteStartingEndsThisPlayersTrack(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // a station: it never ends
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 
 	d := speaker.NewDriver(speaker.New())
 	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
+	t.Cleanup(p.stream.Stop)
 
-	p.stream.Play(srv.URL)
+	p.stream.Play(radio)
 	if playing, _ := p.Playing(); !playing {
 		t.Fatal("the station is not playing to begin with")
 	}

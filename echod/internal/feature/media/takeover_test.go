@@ -1,8 +1,6 @@
 package media
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	esphome "github.com/ygelfand/go-esphome-device"
@@ -16,24 +14,22 @@ import (
 // something the protocol says either, so it says what happened and whoever knows how does it. Like
 // OnResumeRemote, for the same kind of reason.
 func TestStartingThisPlayersOwnTrackSaysTheRoomWasTakenOver(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // a station: it never ends
-	}))
-	defer srv.Close()
+	radio := station(t, nil)
 
 	d := speaker.NewDriver(speaker.New())
 	p := &Player{stream: NewStream(d, speaker.New(), func() {}, func(string) {}), mp: &esphome.MediaPlayer{}}
+	t.Cleanup(p.stream.Stop)
 	took := 0
 	p.OnTakeOver.Listen(func(struct{}) { took++ })
 
-	p.PlayURL(srv.URL)
+	p.PlayURL(radio)
 	if took != 0 {
 		t.Errorf("a room on its own reported a takeover %d times, want none", took)
 	}
 	p.stream.Stop()
 
 	p.remote.take() // Music Assistant holds the speaker
-	p.PlayURL(srv.URL)
+	p.PlayURL(radio)
 	if took != 1 {
 		t.Errorf("a remote holding the speaker took the news %d times, want once", took)
 	}

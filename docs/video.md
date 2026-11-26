@@ -77,19 +77,49 @@ The first video from each address asks on the screen: **Show a video from 192.16
 again for ten minutes. Nobody answering in 30 seconds is Not now. While the question is up, a video
 from another address is turned away rather than put in its place. Home Assistant's `play_video`
 never asks, but Home Assistant's DLNA media player is a DLNA controller like any other: the first
-video it sends asks once too.
+video it sends asks once too. A program on the Show itself that sends to the renderer at `127.0.0.1` doesn't ask either,
+when it runs as root (one started from `rc.local`: whoever put it there already had a root shell on
+it) or is an add-on installed from the setup page's Add-ons card, which you agreed to and whose
+warning says it can drive the device. A program on the device running as any other user is asked
+about, named as "a program on this device (user N)". Such a program speaks for whatever it acts on: one that passes on what
+other devices on the network ask of it has to decide for itself which of them may put a video on the
+screen, since the question will not be asked for them.
 
 An allowed address is remembered for 30 days after it last sent a video: one that hasn't sent any
 for that long asks again (a phone's address on your network can go to another device). The Video
 section on the setup page lists them with the day each was last used. To make every address ask
 again, tick **Forget the … addresses** and **Save**.
 
-Play, pause, stop and the volume work from the app. Seeking doesn't, yet.
+Play, pause, stop and the volume work from the app, and so does moving through the video (the app's
+slider, DLNA's Seek): the player starts the video again from the new place, saying it's loading
+until the first picture from there, and a paused video stays paused. When you drag a slider, only
+where you let go is played, about a third of a second after the last move. That needs a video that
+says how long it is (a file, or an HLS playlist of a whole film, as Plex, Jellyfin and Emby send).
+A live stream can't be moved through: the app is told so, and it plays on.
 
 ## On the screen
 
 - **Tap** shows the controls for a few seconds: play or pause, stop, quieter and louder, with the
   title and the time. On the Spot they're across the bottom of the circle.
+- **Back and forward** are there too for a DLNA video whose app says it acts on them (it subscribes
+  to the renderer's events and says so, as a Plex add-on does; most apps don't): the app is told and
+  plays the one before or after ([how it is told](setup.md#dlna-next-and-previous)). On the Spot, swipe left for the next and
+  right for the one before.
+- **A bar** runs above the controls for a video that can be moved through: one from Home Assistant
+  that says how long it is, or a DLNA video the renderer can move through, or whose app says it acts on
+  seeks (the app is then asked to, [the same way](setup.md#dlna-next-and-previous)). Tap it to go to that place,
+  or slide a finger along it: the time shows where you are, and the video moves there when you let
+  go. A live stream has no bar.
+- **The picture button**, next to quieter (between stop and quieter on the Spot), changes how the
+  picture fills the screen, for a badly framed or oddly shaped video. Each tap moves on to the next of
+  three: **fit** shows the whole picture with black bars (the usual), **fill** fills the screen and
+  cuts off what doesn't fit, top and bottom or the sides, and **stretch** pulls the whole picture to
+  the screen's shape. Its icon shows which one is on: a screen with the picture fitted in it, a crop
+  mark, or a picture pulled out to the edges. The picture starts again where it was, after a moment
+  of loading. It's for the video that's playing only, and isn't a setting: the next video starts
+  with fit again. It's there for a video the Show can move through itself, one that says how long it
+  is. A live stream, or a Plex transcode that only its app can move through, doesn't have it, since
+  starting one again would start it wherever its server does.
 - **Swipe down**, or **Stop**, ends the video. The screen goes back to where it was.
 - A call, an alarm or a timer ringing, the settings, a camera or a voice turn goes on top. The video
   pauses under it and goes on once it's gone.

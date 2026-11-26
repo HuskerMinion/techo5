@@ -10,7 +10,8 @@ package detect
 //
 // Only clips kept after the target was set are sent (config.WakeSend.Since): what was kept before
 // anybody said where clips may go stays on the device. Pruning is unchanged, so an unsent clip that is
-// pruned is gone, and the disk used is what it always was.
+// pruned is gone, and the disk used is what it always was. On Linux a clip of a kind that is sent waits
+// in RAM rather than on eMMC, and goes once it is sent (clipsram.go).
 //
 // Clips go only to an address on the home network. The address is checked when it is saved and again
 // before each send, and the connection itself is made only to an address that passes (sendDialer), so a
@@ -46,6 +47,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 )
 
 const (
@@ -379,6 +381,13 @@ func (s *sender) wake() {
 func (s *sender) run(ctx context.Context) {
 	poll := time.NewTicker(sendPoll)
 	defer poll.Stop()
+	// As the daemon stops, what still waits in RAM goes to eMMC, so a reboot does not lose it; not for a
+	// reset, whose next start deletes the clips with the rest.
+	defer func() {
+		if !bootreason.IsReset() {
+			s.c.spill(func(string, time.Time) bool { return true })
+		}
+	}()
 	for {
 		s.drain(ctx)
 		select {
@@ -417,6 +426,7 @@ func (s *sender) drain(ctx context.Context) {
 		if fp := fingerprint(cfg); fp != last {
 			last, backoff, failures = fp, 0, 0
 		}
+		s.spillWaiting(cfg)
 		if !cfg.On() {
 			s.report(0, "")
 			return
@@ -449,7 +459,19 @@ func (s *sender) drain(ctx context.Context) {
 		switch out {
 		case outSent:
 			backoff, failures = 0, 0
-			s.settle(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) }, n-1)
+			if s.c.inRAM(item.wav) {
+				// Only waiting in RAM until the trainer had it (clipsram.go): nothing is marked, it goes.
+				if !s.c.dropSent(item.wav, item.meta.Kind) {
+					// Still in the queue: not sent again this run, as a clip whose sidecar could not be
+					// marked is not (settle).
+					s.mu.Lock()
+					s.done[item.wav] = true
+					s.mu.Unlock()
+				}
+				s.report(n-1, "")
+			} else {
+				s.settle(item, func(m *clipMeta) { m.SentAt = s.now().UTC().Format(time.RFC3339) }, n-1)
+			}
 			if item.meta.Kind == takeKind {
 				s.c.dropTake(item.wav) // kept only until it was sent
 			}
@@ -498,6 +520,22 @@ func (s *sender) drain(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// spillWaiting moves to eMMC the clips in RAM that are not to wait there any longer: every one when
+// the folder is full, those of a kind no longer sent (or all, with sending off), and any that has
+// waited ramWait (clipsram.go).
+func (s *sender) spillWaiting(cfg config.WakeSend) {
+	if s.c.ram == "" {
+		return
+	}
+	now := s.now()
+	s.c.disk.Lock()
+	full := s.c.ramUsed()+clipBytes > s.c.ramCap
+	s.c.disk.Unlock()
+	s.c.spill(func(kind string, at time.Time) bool {
+		return full || !cfg.On() || !cfg.Sends(kind) || now.Sub(at) >= ramWait
+	})
 }
 
 // settle records what became of a clip in its sidecar. When that cannot be written, the clip is not sent
@@ -581,8 +619,7 @@ func (s *sender) queue(cfg config.WakeSend) []*sendItem {
 		if !cfg.Sends(kind) || !s.c.sendable(kind) {
 			continue
 		}
-		files, _ := filepath.Glob(filepath.Join(s.c.dir, kind, "*.json"))
-		for _, f := range files {
+		for _, f := range s.c.glob(kind, "*.json") {
 			blob, err := os.ReadFile(f)
 			if err != nil {
 				continue

@@ -9,16 +9,24 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/lib/rootonly"
 )
 
 // The DHCP client. A boot with no network starts none (techo5-net stops at "no network configured"),
 // so a network joined later, by the setup page, the hotspot or Improv, got no IPv4 address: renewLease
 // starts one when there is none running, with the arguments the boot uses.
+//
+// The client runs the script it is given as root, and the pid file says whether one is running, so both
+// are taken only as root left them (rootonly): an older initramfs mounted /run so that anyone could
+// write to it, and a script another user put at the name would run as root. The Dot's techo5-net puts
+// its script in /run/techo5, root's alone; /run/udhcpc.sh is where an older Dot image left it.
 var (
 	dhcpPid     = "/run/udhcpc.pid"
-	dhcpScripts = []string{"/etc/techo5/udhcpc.sh", "/run/udhcpc.sh"}
-	// dhcpOwn is where the script goes when no boot left one (a Dot that started with no network).
-	dhcpOwn  = "/run/udhcpc.sh"
+	dhcpScripts = []string{"/etc/techo5/udhcpc.sh", "/run/techo5/udhcpc.sh", "/run/udhcpc.sh"}
+	// dhcpOwn is where the script goes when no boot left one (a Dot that started with no network), in
+	// root's own folder.
+	dhcpOwn  = "/run/techo5/udhcpc.sh"
 	startDHC = func(args ...string) error {
 		cmd := exec.Command("udhcpc", args...)
 		if err := cmd.Start(); err != nil {
@@ -50,6 +58,9 @@ esac
 
 // dhcpRunning is whether the client the pid file names is alive.
 func dhcpRunning() bool {
+	if !rootonly.File(dhcpPid) {
+		return false
+	}
 	b, err := os.ReadFile(dhcpPid)
 	if err != nil {
 		return false
@@ -70,13 +81,25 @@ func startDHCP() bool {
 	}
 	script := ""
 	for _, s := range dhcpScripts {
-		if fi, err := os.Stat(s); err == nil && !fi.IsDir() {
+		if rootonly.File(s) {
 			script = s
 			break
 		}
 	}
 	if script == "" {
-		if err := os.WriteFile(dhcpOwn, []byte(dhcpScript), 0o755); err != nil {
+		// Written beside itself and renamed, so whatever was at the name is replaced, never written
+		// through, and the file is root's whoever made the old one.
+		if !rootonly.MkdirAll(filepath.Dir(dhcpOwn), 0o700) {
+			slog.Warn("wifi: no folder of root's for a DHCP script", "dir", filepath.Dir(dhcpOwn))
+			return false
+		}
+		tmp := dhcpOwn + ".new"
+		_ = os.Remove(tmp)
+		err := os.WriteFile(tmp, []byte(dhcpScript), 0o755)
+		if err == nil {
+			err = os.Rename(tmp, dhcpOwn)
+		}
+		if err != nil {
 			slog.Warn("wifi: writing a DHCP script failed", "err", err)
 			return false
 		}

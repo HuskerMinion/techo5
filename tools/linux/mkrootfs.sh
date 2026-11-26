@@ -175,7 +175,7 @@ install -m 644 "$IN/tools/techo5-lib.sh" "$R/lib/techo5-lib.sh"
 # Overlay from the repo (tools/linux/rootfs), CRLF-safe.
 say "overlay"
 (cd "$IN/overlay" && tar -cf - .) | tar -xf - -C "$R"
-find "$R/etc/techo5" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab" "$R/etc/profile.d/techo5.sh" "$R/etc/hostname" "$R/etc/motd" \
+find "$R/etc/techo5" "$R/etc/dbus-1/system.d/techo5-addons.conf" "$R/usr/local/sbin" "$R/lib/techo5-lib.sh" "$R/etc/inittab" "$R/etc/profile.d/techo5.sh" "$R/etc/hostname" "$R/etc/motd" \
 	-type f -exec sed -i 's/\r$//' {} +
 chmod 755 "$R"/etc/techo5/*.sh "$R"/usr/local/sbin/*
 # License texts are read, never run: a checkout on Windows hands every file over as executable.

@@ -115,6 +115,9 @@ func (a *API) serverFor(k *esphome.PSK) *esphome.Server {
 	// Home Assistant adding the device after that finds the device in it.
 	info := a.info
 	info.SuggestedArea = config.Get().Home.Area
+	// What the voice satellite can do likewise: a reply player chosen on the setup page takes the
+	// speaker out of it (voice.FeaturesFor), and the page reconnects for the change.
+	info.VoiceFeatures = voiceFeatures()
 	return &esphome.Server{
 		Addr:         a.addr,
 		WriteTimeout: writeTimeout,
@@ -230,7 +233,6 @@ func (a *API) Start(ctx context.Context) error {
 		ProjectName:       layout.Manufacturer + "." + layout.Model,
 		Version:           layout.Version,
 		ESPHomeVersion:    ESPHomeCompat,
-		VoiceFeatures:     voiceFeatures(),
 		BluetoothFeatures: bluetooth.Get().Features(),
 		// Home Assistant links the device's page to its web port (techo5-dot#24): the setup page and
 		// the rest, each served only while its switch is on.

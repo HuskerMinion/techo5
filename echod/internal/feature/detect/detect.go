@@ -24,6 +24,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -68,6 +69,11 @@ type Detect struct {
 	// again on every configuration request: each load lights the ring and moves the command and hang-up
 	// words, and a model the engine refuses refuses again.
 	refused *refusal
+
+	// stopWord is the stop word's select, and stopMu keeps one load of the stop slot at a time: see
+	// stopword.go and loadStop.
+	stopWord *stopWord
+	stopMu   sync.Mutex
 
 	// hangup is the hang-up word's select and threshold, and its loading with the call: see hangup.go.
 	hangup *hangup
@@ -324,6 +330,7 @@ func newDetect() *Detect {
 	d.ducker = newDucker()
 	d.ducker.watch(e)
 	d.stop = newStopEntity(d)
+	d.stopWord = newStopWord(d)
 	d.hangup = newHangup(d)
 	// What the words scored during each call, said as it ends (#484). Read as it runs, as the hang-up
 	// word's loading is: two changes close together may run out of order.
@@ -360,6 +367,15 @@ func newDetect() *Detect {
 	d.sender.publish = d.publishSend
 	d.clips.changed = d.sender.wake
 	d.clips.abortSend = d.sender.abortSend
+	// A reboot the daemon makes itself (settings, an update into a slot) ends the process without its
+	// stop, so the clips waiting in RAM, which the sender moves to the storage as it stops, would be lost:
+	// they are moved first. Not for a reset, which deletes them with the rest.
+	clips := d.clips
+	bootreason.BeforeReboot(func() {
+		if !bootreason.IsReset() {
+			clips.spill(func(string, time.Time) bool { return true })
+		}
+	})
 
 	// A cut microphone hands on silence, and running the models over it is work that cannot find
 	// anything. The engines go down with the microphones and come back with them. Not for a panel's
@@ -395,7 +411,9 @@ func newDetect() *Detect {
 		// what every later start loads too (#657).
 		turn := voice.Get()
 		turn.SetActiveWakeWords(d.load(voice.SavedWakeWords(d.library().Ours())))
-		d.loadStop()
+		// The load above has usually put the stop word in already (loadFrom); quiet, so a start says
+		// "stop word listening" once.
+		d.followStop()
 		// A call already up when the engine starts has its hang-up word, as one that starts later does.
 		d.hangup.follow(hangupListens(phone.Get().State()))
 		// Back in if music is playing: the start emptied their slots.
@@ -431,6 +449,17 @@ func (d *Detect) selected() {
 	diag.Get().Measure()
 	for _, c := range d.commands {
 		c.follow()
+	}
+	// The stop and hang-up words keep away from the wake words saved, as the command words do, and
+	// loadFrom looked at them before this selection was saved: a word of one's own just chosen as a wake
+	// word would otherwise go on listening as the stop word too until a restart (#741).
+	if d.hangup != nil {
+		d.hangup.refreshOptions()
+		d.hangup.follow(hangupListens(phone.Get().State()))
+	}
+	if d.stopWord != nil {
+		d.stopWord.refreshOptions()
+		d.followStop()
 	}
 }
 
@@ -620,6 +649,11 @@ func (d *Detect) loadFrom(ids []string, resolve func([]string) []wake.Model) []s
 	if d.hangup != nil {
 		d.hangup.refreshOptions()
 		d.hangup.follow(hangupListens(phone.Get().State()))
+	}
+	// And so does the stop word's: one chosen as a wake word now has the built-in word listen in its place.
+	if d.stopWord != nil {
+		d.stopWord.refreshOptions()
+		d.followStop()
 	}
 
 	// Only the slots that took a wake word are waited on. A selection that loaded nothing has nothing to

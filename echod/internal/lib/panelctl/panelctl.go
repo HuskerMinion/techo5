@@ -4,7 +4,8 @@
 //
 // The app serves the abstract socket "techo5.ctl". This side keeps one connection, dialing again
 // whenever it drops, and sends each kind of message's latest value again on every new connection, so
-// an app that restarted is told where things stand.
+// an app that restarted is told where things stand. Only the daemon dials (Ready, from its main): an
+// echod subcommand, which never calls Ready, does not take the app's one connection.
 package panelctl
 
 import (
@@ -26,24 +27,23 @@ var (
 	conn     net.Conn
 	latest   = map[string]string{} // first word -> the whole line, sent again on connect
 	handlers = map[string]func(args []string){}
-	start    sync.Once
 
-	// ready closes once the daemon's main has begun (Ready), by when every package has registered its
-	// handlers. Handle starts the line from a package's init, so the app's first lines can arrive while
-	// other packages are still initializing; read then, a line whose handler is not registered yet was
-	// dropped for good. On the panel, "android settings can" always lost that race and the Android
+	// start dials the app, once, from Ready: the daemon's main has begun, by when every package has
+	// registered its handlers. Dialing from a package's init (Handle) let the app's first lines arrive
+	// while other packages were still initializing, and a line whose handler was not registered yet
+	// was dropped for good. On the panel, "android settings can" always lost that race and the Android
 	// settings row never showed, and "apps begin" lost it on a slow start (techo5-panel#10).
-	ready     = make(chan struct{})
-	readyOnce sync.Once
+	start sync.Once
+	// dial is the app's socket (a test's pipe), read and set under mu.
+	dial = func() (net.Conn, error) { return panelsock.Dial(socket) }
 )
 
-// Ready says the daemon has started: every handler is registered, and lines from the app are handled
-// from here on. Lines that came before wait for it rather than being dropped.
-func Ready() { readyOnce.Do(func() { close(ready) }) }
+// Ready says the daemon has started: every handler is registered, and the line to the app is dialed.
+// What was Sent before goes when it connects.
+func Ready() { start.Do(run) }
 
 // Send sends a line now if the app is there, and keeps it as the latest of its kind either way.
 func Send(line string) {
-	start.Do(run)
 	kind, _, _ := strings.Cut(line, " ")
 	mu.Lock()
 	latest[kind] = line
@@ -57,7 +57,6 @@ func Send(line string) {
 // Tell sends a line now if the app is there, and keeps nothing: for a request worth making once, such
 // as "update check", rather than a state a restarted app should be brought up to date with.
 func Tell(line string) {
-	start.Do(run)
 	mu.Lock()
 	c := conn
 	mu.Unlock()
@@ -68,7 +67,6 @@ func Tell(line string) {
 
 // Handle calls f with the rest of the words of every line from the app that starts with kind.
 func Handle(kind string, f func(args []string)) {
-	start.Do(run)
 	mu.Lock()
 	handlers[kind] = f
 	mu.Unlock()
@@ -80,7 +78,10 @@ func run() {
 		// so one held by another app is said once rather than every second.
 		refused := false
 		for {
-			c, err := panelsock.Dial(socket)
+			mu.Lock()
+			d := dial
+			mu.Unlock()
+			c, err := d()
 			if err != nil {
 				if errors.Is(err, panelsock.ErrNotTheApp) && !refused {
 					slog.Error("panel control line refused", "err", err)
@@ -96,7 +97,6 @@ func run() {
 				_, _ = c.Write([]byte(line + "\n"))
 			}
 			mu.Unlock()
-			<-ready
 			slog.Info("panel control line connected")
 			serve(c)
 			mu.Lock()

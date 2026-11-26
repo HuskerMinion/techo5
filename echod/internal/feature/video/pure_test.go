@@ -1,6 +1,7 @@
 package video
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -360,6 +361,94 @@ func TestThePictureKeepsItsShape(t *testing.T) {
 	}
 }
 
+// Each way of taking the screen (#733): Fit is FitIn with all of the picture; Fill covers the screen
+// with the picture's shape kept, its overhang cut about the middle; Stretch covers it with all of it.
+func TestEachWayOfTakingTheScreen(t *testing.T) {
+	show := Screen{W: 960, H: 480, Rotated: true}
+	whole := Fit{W: 960, H: 480}
+	near := func(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
+	for _, tc := range []struct {
+		name   string
+		info   Info
+		scr    Screen
+		aspect Aspect
+		fit    Fit
+		cut    Cut
+	}{
+		{"16:9 fit", Info{Width: 1280, Height: 720}, show, AspectFit, Fit{W: 852, H: 480, X: 54}, Cut{1, 1}},
+		// 16:9 is taller than the Show 5's 2:1: its top and foot go, (16/9)/2 of its height kept.
+		{"16:9 fill", Info{Width: 1280, Height: 720}, show, AspectFill, whole, Cut{1, (16.0 / 9) / 2}},
+		{"16:9 stretch", Info{Width: 1280, Height: 720}, show, AspectStretch, whole, Cut{1, 1}},
+		// A scope film is wider: its sides go.
+		{"scope fill", Info{Width: 1920, Height: 800}, show, AspectFill, whole, Cut{2 / 2.4, 1}},
+		{"4:3 fill", Info{Width: 640, Height: 480}, show, AspectFill, whole, Cut{1, (4.0 / 3) / 2}},
+		// An upright phone video keeps a sliver of its height; its shape is the turned one.
+		{"upright phone fill", Info{Width: 1920, Height: 1080, Rotation: 90}, show, AspectFill, whole, Cut{1, (9.0 / 16) / 2}},
+		// The DVD's pixels are wide: it is cut as the 16:9 it is seen as, not the 3:2 it is stored as.
+		{"anamorphic fill", Info{Width: 720, Height: 480, SARNum: 32, SARDen: 27}, show, AspectFill, whole, Cut{1, (720 * 32.0 / 27 / 480) / 2}},
+		// A picture already the screen's shape, or within a hair of it, is not cut.
+		{"2:1 fill", Info{Width: 1920, Height: 960}, show, AspectFill, whole, Cut{1, 1}},
+		{"854x427 fill", Info{Width: 854, Height: 428}, show, AspectFill, whole, Cut{1, 1}},
+		// The Spot's square and the Show 8.
+		{"spot fill", Info{Width: 1280, Height: 720}, Screen{W: 480, H: 480}, AspectFill, Fit{W: 480, H: 480}, Cut{9.0 / 16, 1}},
+		{"spot stretch", Info{Width: 1280, Height: 720}, Screen{W: 480, H: 480}, AspectStretch, Fit{W: 480, H: 480}, Cut{1, 1}},
+		{"show 8 fill", Info{Width: 1280, Height: 720}, Screen{W: 1280, H: 800}, AspectFill, Fit{W: 1280, H: 800}, Cut{(1280.0 / 800) / (16.0 / 9), 1}},
+		// Nothing known of the picture: the screen, whole.
+		{"unknown fill", Info{}, show, AspectFill, whole, Cut{1, 1}},
+		// A way that is none of them is the default.
+		{"out of range", Info{Width: 1280, Height: 720}, show, Aspect(7), Fit{W: 852, H: 480, X: 54}, Cut{1, 1}},
+	} {
+		fit, cut := PlaceIn(tc.info, tc.scr, tc.aspect)
+		if fit != tc.fit || !near(cut.W, tc.cut.W) || !near(cut.H, tc.cut.H) {
+			t.Errorf("%s: %+v %+v, want %+v %+v", tc.name, fit, cut, tc.fit, tc.cut)
+		}
+		if tc.aspect == AspectFit && fit != FitIn(tc.info, tc.scr) {
+			t.Errorf("%s: fit is not FitIn", tc.name)
+		}
+	}
+}
+
+// The filters each way: Fit as it always was, Fill cut before it is scaled to the whole screen, Stretch
+// scaled to the whole screen with nothing cut, and no bars for either.
+func TestTheFiltersEachWay(t *testing.T) {
+	info := Info{Width: 1280, Height: 720, FPS: 24}
+	scr := Screen{W: 960, H: 480, Rotated: true, PixFmt: "bgra"}
+	for a, want := range map[Aspect]string{
+		AspectFit:     "fps=fps=24/1:start_time=0,scale=852:480:flags=fast_bilinear,format=yuv420p,pad=960:480:54:0:black,transpose=1,scale,format=bgra",
+		AspectFill:    "fps=fps=24/1:start_time=0,crop=iw:trunc(ih*0.888889/2)*2,scale=960:480:flags=fast_bilinear,format=yuv420p,transpose=1,scale,format=bgra",
+		AspectStretch: "fps=fps=24/1:start_time=0,scale=960:480:flags=fast_bilinear,format=yuv420p,transpose=1,scale,format=bgra",
+	} {
+		if got := Filter(info, scr, a); got != want {
+			t.Errorf("%v: %s, want %s", a, got, want)
+		}
+	}
+	// A scope film filled: its sides cut.
+	if got := Filter(Info{Width: 1920, Height: 800, FPS: 24}, scr, AspectFill); !strings.Contains(got, ",crop=trunc(iw*0.833333/2)*2:ih,scale=960:480:") {
+		t.Errorf("scope fill: %s", got)
+	}
+	// The decoder's command line carries the way.
+	a := DecodeArgs(Decoding{URL: "https://media.example.com/bbb.mp4", Info: info, Screen: scr, Aspect: AspectStretch})
+	if i := slices.Index(a, "-vf"); i < 0 || a[i+1] != Filter(info, scr, AspectStretch) {
+		t.Errorf("stretch: %q", a)
+	}
+}
+
+// The button goes round the three ways and back to Fit.
+func TestTheWaysGoRound(t *testing.T) {
+	a := AspectFit
+	var seen []string
+	for range 4 {
+		a = a.Next()
+		seen = append(seen, a.String())
+	}
+	if got := strings.Join(seen, " "); got != "fill stretch fit fill" {
+		t.Errorf("round: %s", got)
+	}
+	if Aspect(-1).Next() != AspectFit || Aspect(9).Next() != AspectFit {
+		t.Error("a way out of range does not go back to fit")
+	}
+}
+
 func TestFrameRates(t *testing.T) {
 	for fps, want := range map[float64]Rate{
 		24: {24, 1}, 25: {25, 1}, 30: {30, 1}, 23.976: {24000, 1001}, 29.97: {30000, 1001},
@@ -426,7 +515,7 @@ func TestTheDecoderArguments(t *testing.T) {
 		t.Errorf("insecure: %q", a)
 	}
 	// Unturned (a panel drawn as it is): no transpose, and a filled screen needs no bars.
-	if f := Filter(Info{Width: 1920, Height: 960}, Screen{W: 960, H: 480, PixFmt: "rgba"}); f != "fps=fps=30/1:start_time=0,scale=960:480:flags=fast_bilinear,format=yuv420p,scale,format=rgba" {
+	if f := Filter(Info{Width: 1920, Height: 960}, Screen{W: 960, H: 480, PixFmt: "rgba"}, AspectFit); f != "fps=fps=30/1:start_time=0,scale=960:480:flags=fast_bilinear,format=yuv420p,scale,format=rgba" {
 		t.Errorf("filter: %s", f)
 	}
 

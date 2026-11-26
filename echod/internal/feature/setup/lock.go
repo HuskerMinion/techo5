@@ -25,7 +25,8 @@ func lockSection(w http.ResponseWriter, token string) {
 	// a PIN typed on a phone. It is not secretField's "leave it empty to keep it": an empty PIN is
 	// refused, and the state above already says whether one is set.
 	fmt.Fprintf(w, `<p class="note" style="margin-top:0">%s Everything else on the device (the clock, music, the voice
-	  assistant, calls) works without it, and so do alarms and timers, the volume and the brightness.</p>
+	  assistant, calls) works without it, and so do the settings for how it looks, sounds and is used: alarms and
+	  timers, the volume, the brightness, the theme and the clock.</p>
 	 %s
 	 <p><button type="submit" name="do" value="set">Set the PIN</button></p></form>`, state,
 		onceField("lockpin", "New PIN, 4 to 8 digits", "pin", `inputmode="numeric" pattern="[0-9]{4,8}" required`))

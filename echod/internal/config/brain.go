@@ -52,6 +52,10 @@ type Brain struct {
 	ReplyPlayer string `json:"reply_player,omitempty"`
 }
 
+// RepliesElsewhere is whether the assistant's replies are to play on another media player rather than
+// this device's speaker.
+func (b Brain) RepliesElsewhere() bool { return b.ReplyPlayer != "" }
+
 // ValidReplyPlayer cleans up an entity id typed for Brain.ReplyPlayer and says whether it is one: empty
 // (this device's speaker) or media_player. followed by lowercase letters, digits and underscores.
 func ValidReplyPlayer(s string) (string, bool) {

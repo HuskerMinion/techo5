@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -176,36 +177,46 @@ func (l *Live) CallService(ctx context.Context, domain, service string, data map
 	return err
 }
 
+// firstStatesWait is how long a subscription's first event, the one with every state, is waited for
+// after its result, before the states are read another way. Home Assistant sends it straight after
+// the result; a session whose first event never came drew every entity as unknown for as long as it
+// lasted, and healed only for those whose state changed (#740).
+var firstStatesWait = 5 * time.Second
+
 // FollowEntities follows entities as they change. changed is called with each one as it arrives
-// and whenever it changes, whole, and removed with any that go away; both on the connection's
-// reader, so they must not block. Home Assistant sends the full state once and after that only
-// what differs, which is put together here.
+// and whenever it changes, whole, and removed with any that go away; on the connection's reader, or
+// for states read after a first event that never came, on another goroutine: they must not block,
+// and changed must be safe to call from both. Home Assistant sends the full state once and after that
+// only what differs, which is put together here.
 func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(LiveEntity), removed func(string)) error {
 	var mu sync.Mutex
 	have := map[string]*LiveEntity{}
+	first := make(chan struct{})
+	var firstOnce sync.Once
 	handle := func(raw json.RawMessage) {
+		// Each entity is read on its own: one entity with something in it that can't be read here
+		// dropped the whole event, and with it, for the first event, every other entity's state.
 		var ev struct {
-			Added map[string]struct {
-				S string         `json:"s"`
-				A map[string]any `json:"a"`
-			} `json:"a"`
-			Changed map[string]struct {
-				Plus *struct {
-					S *string        `json:"s"`
-					A map[string]any `json:"a"`
-				} `json:"+"`
-				Minus *struct {
-					A []string `json:"a"`
-				} `json:"-"`
-			} `json:"c"`
-			Removed []string `json:"r"`
+			Added   map[string]json.RawMessage `json:"a"`
+			Changed map[string]json.RawMessage `json:"c"`
+			Removed []string                   `json:"r"`
 		}
-		if json.Unmarshal(raw, &ev) != nil {
+		if err := json.Unmarshal(raw, &ev); err != nil {
+			slog.Warn("hass: an entity event could not be read", "err", err, "bytes", len(raw))
 			return
 		}
 		var out []LiveEntity
+		var bad []string
 		mu.Lock()
-		for id, a := range ev.Added {
+		for id, r := range ev.Added {
+			var a struct {
+				S string         `json:"s"`
+				A map[string]any `json:"a"`
+			}
+			if err := json.Unmarshal(r, &a); err != nil {
+				bad = append(bad, id)
+				continue
+			}
 			e := &LiveEntity{ID: id, State: a.S, Attrs: a.A}
 			if e.Attrs == nil {
 				e.Attrs = map[string]any{}
@@ -213,7 +224,20 @@ func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(Li
 			have[id] = e
 			out = append(out, copyEntity(e))
 		}
-		for id, c := range ev.Changed {
+		for id, r := range ev.Changed {
+			var c struct {
+				Plus *struct {
+					S *string        `json:"s"`
+					A map[string]any `json:"a"`
+				} `json:"+"`
+				Minus *struct {
+					A []string `json:"a"`
+				} `json:"-"`
+			}
+			if err := json.Unmarshal(r, &c); err != nil {
+				bad = append(bad, id)
+				continue
+			}
 			e := have[id]
 			if e == nil {
 				e = &LiveEntity{ID: id, Attrs: map[string]any{}}
@@ -238,6 +262,13 @@ func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(Li
 			delete(have, id)
 		}
 		mu.Unlock()
+		if len(bad) > 0 {
+			slog.Warn("hass: entities in an event could not be read", "entities", bad)
+		}
+		firstOnce.Do(func() {
+			slog.Info("hass: first states of followed entities", "asked", len(ids), "got", len(ev.Added))
+			close(first)
+		})
 		for _, e := range out {
 			changed(e)
 		}
@@ -253,12 +284,78 @@ func (l *Live) FollowEntities(ctx context.Context, ids []string, changed func(Li
 	}
 	select {
 	case r := <-ch:
-		return r.err
+		if r.err != nil {
+			return r.err
+		}
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-l.done:
 		return errors.New("hass: the connection ended")
 	}
+	go l.firstStatesOrRead(ctx, first, firstStatesWait, ids, func(list []LiveEntity) {
+		// Only what no event has brought in the meantime, since what an event brought is newer. changed
+		// is called with mu held, so a change taken after this is passed on after it.
+		mu.Lock()
+		defer mu.Unlock()
+		for _, e := range list {
+			if have[e.ID] != nil {
+				continue
+			}
+			have[e.ID] = &e
+			changed(copyEntity(&e))
+		}
+	})
+	return nil
+}
+
+// firstStatesOrRead waits for a subscription's first event, and if it has not come after
+// wait, reads the states of ids once and gives them to fill. ctx is the one FollowEntities was given:
+// a follower that gave up in the meantime (a page closed as it opened) has nobody left to fill, and
+// reading every state in the house for it would be work for nothing, with fill run after it has gone.
+func (l *Live) firstStatesOrRead(ctx context.Context, first <-chan struct{}, wait time.Duration, ids []string, fill func([]LiveEntity)) {
+	select {
+	case <-first:
+		return
+	case <-l.done:
+		return
+	case <-ctx.Done():
+		return
+	case <-time.After(wait):
+	}
+	slog.Warn("hass: no first states came for the followed entities; reading them", "entities", len(ids))
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	raw, err := l.Call(ctx, map[string]any{"type": "get_states"})
+	if err != nil {
+		slog.Warn("hass: reading the followed entities' states", "err", err)
+		return
+	}
+	var all []json.RawMessage
+	if err := json.Unmarshal(raw, &all); err != nil {
+		slog.Warn("hass: reading the followed entities' states", "err", err)
+		return
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	var list []LiveEntity
+	for _, r := range all {
+		var st struct {
+			ID    string         `json:"entity_id"`
+			State string         `json:"state"`
+			Attrs map[string]any `json:"attributes"`
+		}
+		if json.Unmarshal(r, &st) != nil || !want[st.ID] {
+			continue
+		}
+		if st.Attrs == nil {
+			st.Attrs = map[string]any{}
+		}
+		list = append(list, LiveEntity{ID: st.ID, State: st.State, Attrs: st.Attrs})
+	}
+	slog.Info("hass: read the followed entities' states", "asked", len(ids), "got", len(list))
+	fill(list)
 }
 
 func copyEntity(e *LiveEntity) LiveEntity {

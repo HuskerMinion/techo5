@@ -67,7 +67,7 @@ func withLibrary(t *testing.T, f *fakeLibrary) {
 		t.Fatal(err)
 	}
 	wasID, wasWait, wasPoll, wasReady := playerID, maStartWait, maPoll, libraryReady
-	playerID = func() (string, error) { return "aa:bb:cc:dd:ee:ff", nil }
+	playerID = func() ([]string, error) { return []string{"aa:bb:cc:dd:ee:ff"}, nil }
 	maStartWait, maPoll = 300*time.Millisecond, 10*time.Millisecond
 	libraryReady = func() bool { return f.available }
 	t.Cleanup(func() { playerID, maStartWait, maPoll, libraryReady = wasID, wasWait, wasPoll, wasReady })

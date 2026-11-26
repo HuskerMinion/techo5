@@ -47,6 +47,7 @@ type Config struct {
 	Timers         Timers         `json:"timers"`
 	Dashboard      Dashboard      `json:"dashboard"`
 	Calendar       Calendar       `json:"calendar"`
+	Cast           Cast           `json:"cast"`
 	Todo           Todo           `json:"todo,omitempty"`
 	Brain          Brain          `json:"brain"`
 	Deck           Deck           `json:"deck,omitempty"`
@@ -119,6 +120,7 @@ func (w Writer) MusicAssistant() MusicAssistantWriter { return MusicAssistantWri
 func (w Writer) Home() HomeWriter                     { return HomeWriter(w) }
 func (w Writer) Dashboard() DashboardWriter           { return DashboardWriter(w) }
 func (w Writer) Calendar() CalendarWriter             { return CalendarWriter(w) }
+func (w Writer) Cast() CastWriter                     { return CastWriter(w) }
 func (w Writer) Todo() TodoWriter                     { return TodoWriter(w) }
 func (w Writer) Brain() BrainWriter                   { return BrainWriter(w) }
 func (w Writer) TalkBack() TalkBackWriter             { return TalkBackWriter(w) }

@@ -293,6 +293,7 @@ func ClearSecrets(c *Config) {
 	c.Security.ScreenKey = ""
 	c.Deck.OBS.Password = ""
 	c.Remote.Secret = ""
+	c.Cast.Key = ""
 	c.CamStream.Pass = ""
 	c.Realtime.Key = ""
 	c.Realtime.MCPToken = ""
@@ -349,6 +350,8 @@ func KeepSecrets(c *Config, from Config) (reenter []string) {
 	c.Security.BabyKey = from.Security.BabyKey
 	c.Security.ScreenKey = from.Security.ScreenKey
 	c.Remote.Secret = from.Remote.Secret
+	// The cast key is the pairing with the phones that have scanned it.
+	c.Cast.Key = from.Cast.Key
 	c.CamStream.Pass = from.CamStream.Pass
 	c.TalkBack = from.TalkBack
 	c.TalkBack.Cameras = maps.Clone(from.TalkBack.Cameras)
@@ -389,12 +392,18 @@ func KeepOwn(c *Config, from Config) {
 	// And what may place one: a contact called by voice.
 	c.Home.CallByVoiceOff = from.Home.CallByVoiceOff
 	c.Wake.Hangup = from.Wake.Hangup
+	// Which word stops a ring is the device's own too, as the hang-up word is: it names a model sent to
+	// this device, and it is what the microphones are listening for. The threshold still comes with a
+	// file, as before.
+	c.Wake.Stop.ID = from.Wake.Stop.ID
 	c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm = from.Wake.OnHA.Stream, from.Wake.OnHA.Confirm
 	c.Wake.KeepClips = from.Wake.KeepClips
 	// Where kept clips are uploaded to, and with what token: the device's own, never a file's.
 	c.Wake.Send = from.Wake.Send
 	c.Presence.On, c.Presence.Gestures = from.Presence.On, from.Presence.Gestures
 	c.Presence.Person = from.Presence.Person
+	// How readily motion turns the presence sensor on, which the remote API may not change either.
+	c.Presence.Sensitivity = from.Presence.Sensitivity
 	// AirPlay sets the volume moves no door: only the rest of streaming, which is what listens on the network,
 	// is the device's own.
 	setsVolume := c.Streaming.AirPlaySetsVolume

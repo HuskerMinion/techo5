@@ -11,6 +11,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/security"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/setup"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
 )
 
 // The PIN pad: what a setting behind the settings lock (security/lock.go) shows first while the lock is
@@ -86,22 +87,54 @@ func pinNow(now time.Time) pinView {
 func pinIsOpen() bool { return pinNow(time.Now()).open }
 
 // everyday is whether the settings row id is part of using the device rather than setting it up, and
-// so open to everyone while the lock is on: the alarms and timers, the alarm editor, the volume, the
-// tone, the headphones, the microphone, the wake sound, the sleep timer, and the brightness. Everything
-// else is behind the PIN, including rows added later: a row is open only by being named here.
+// so open to everyone while the lock is on. The line: how the device looks, sounds and is used here is
+// open (the alarms and timers, the volume and tone, the speaking voice, quiet hours and do not disturb,
+// the brightness and the night, the skin, theme, colors, font and clock, what the clock, the calendar
+// and the photos look like); what the device connects to, shares, or takes from other systems is
+// behind the PIN (Wi-Fi, Bluetooth, streaming, Music Assistant, SSH, cameras and the screen on the
+// network, which calendars and photo folders it reads, the weather's place, the time zone, updates),
+// and so is what reaches past this device: another player's controls (Now playing follows), a
+// camera's sound, the call button's contacts, the room's light as Home Assistant sees it, the wake
+// word's threshold, and the presence camera. The wake word is open only while one is set: choosing a
+// different word is how the device is used, but where the owner chose none, choosing one would turn
+// listening back on. The voice assistant itself is chosen in Home Assistant, not here. Everything not
+// named is behind the PIN, including rows added later: a row is open only by being named here.
 func everyday(id string) bool {
-	for _, prefix := range []string{"alarm:", "timer:", "e."} {
+	for _, prefix := range []string{"alarm:", "timer:", "e.", "role:"} {
 		if strings.HasPrefix(id, prefix) {
 			return true
 		}
 	}
 	switch id {
+	case "wakeword":
+		return wakeWordSet()
 	case "snoozed", "snooze", "ringvol", "alarmsound", "alarmwords", "alarmrise", "sunrise", "sunface", "allalarms", "newtimer", // Alarms & Timers
-		"volume", "voicevol", "callvol", "bass", "treble", "output", "mic", "waketone", "sleep", // Sound
-		"brightness", "auto", "dimmest": // Display
+		"volume", "voicevol", "callvol", "bass", "treble", "output", "mic", "sleep", // Sound
+		"waketone", "ttsvoice", "hasounds", "louder", "quiet", "dnd",
+		"brightness", "auto", "dimmest", "idledim", "awayoff", // Display
+		"night", "atnight", "nightstyle", "nightglow", "nightinfo", "nightalarm", "nighttap",
+		"skin", "theme", "colors", "colorsdone", "font", "textsize",
+		"clock", "clockstyle", "clockpos", "weatherpos", "datecolor", "glancesize", "glancemusic", "clocktap",
+		"musicstrip", "musiclayout", "lyrics", "callscreen", "answertime", "timerstyle", "turnstyle",
+		"weatherfx", "alerts", "radarsrc", "camtime", "camfit", "cambands", "camshade",
+		"slideshow", "weatherart", "photoevery", "shuffle", "wholephoto", "photopairs", "photocaption", "photocountdown", // Photos
+		"calpop", "calpopwhen", "calpopsound", "calpopallday", // Calendar
+		// The calendar's look rows, each by name: lookRowPrefix and the ids in lookSwitches
+		// (calendar_look.go, not in the Spot's build). A look row added there stays behind the PIN
+		// until it is named here.
+		"cal_opens_on", "cal_day_timeline", "cal_coming_up_refined", "cal_month_details", "cal_event_icons",
+		"cal_countdowns", "cal_week_view", "cal_week_starts_monday", "cal_chip_size", "cal_next_up",
+		"cal_dashboard_events", "cal_next_up_within", "cal_weather":
 		return true
 	}
 	return false
+}
+
+// wakeWordSet is whether the first slot is listening for a word, which keeps the wake word row open;
+// a variable for the tests.
+var wakeWordSet = func() bool {
+	active := voice.Get().ActiveWakeWords()
+	return len(active) > 0 && active[0] != ""
 }
 
 // rowLocked is whether a tap on the row id asks for the PIN first.

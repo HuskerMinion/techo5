@@ -17,12 +17,13 @@ var snoozeWords = map[string]bool{
 	"more": true, "please": true, "ok": true, "okay": true, "just": true, "me": true, "give": true,
 }
 
-// numberWords are the numbers a length is said with. Tens and ones are added, so "twenty five" is 25.
+// numberWords are the numbers a length is said with. Tens and ones are added, so "twenty five" is 25,
+// and "a hundred" or "one hundred" is read in readNumber, as the hundred is said after the number.
 var numberWords = map[string]int{
 	"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
 	"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
 	"fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
-	"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+	"thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
 }
 
 // minuteWords are the units a length is said in.
@@ -49,6 +50,13 @@ func SnoozeAsked(text string) (minutes int, ok bool) {
 			}
 			minutes, said = 30, true
 			i += 2
+		// "Snooze for half hour", as it is said too, without the "an" (#734).
+		case w == "half" && i+1 < len(words) && words[i+1] == "hour":
+			if said {
+				return 0, false
+			}
+			minutes, said = 30, true
+			i++
 		case isNumber(w):
 			// A number is a length only with its unit after it: "snooze for ten" is not one. "Ten more
 			// minutes" is the same length.
@@ -84,17 +92,49 @@ func isNumber(w string) bool {
 	return ok
 }
 
+// NumberAt reads the number starting at words[i], lowercased words: digits, or number words as a
+// snooze takes them ("ten", "twenty five", "a"). It returns the number and the index of the word after
+// it, and false when words[i] starts no number. The timers read a length in words with it (#734), so
+// what a snooze understands and what a timer does are the same numbers.
+func NumberAt(words []string, i int) (n, next int, ok bool) {
+	if i >= len(words) || !isNumber(words[i]) {
+		return 0, i, false
+	}
+	n, next = readNumber(words, i)
+	return n, next, true
+}
+
 // readNumber reads the number starting at words[i], a tens word and a ones word added together, and
-// returns it with the index of the word after it.
+// returns it with the index of the word after it. "A hundred" and "one hundred" up to "nine hundred"
+// are read too, with what follows them added ("a hundred twenty"): a timer is at most a day, which is
+// fourteen hundred and forty minutes, and nobody says that, so hundreds of minutes or seconds are where
+// it ends.
 func readNumber(words []string, i int) (n, next int) {
 	if v, err := strconv.Atoi(words[i]); err == nil {
 		return v, i + 1
 	}
-	n = numberWords[words[i]]
-	if n >= 20 && n%10 == 0 && i+1 < len(words) {
-		if ones, ok := numberWords[words[i+1]]; ok && ones < 10 && words[i+1] != "a" && words[i+1] != "an" {
-			return n + ones, i + 2
+	n, next = numberWords[words[i]], i+1
+	if n < 10 && next < len(words) && words[next] == "hundred" {
+		n, next = n*100, next+1
+		// "A hundred and twenty" as well as "a hundred twenty". What follows is added only when it is
+		// a number of its own: "a" or "an" there starts the next length, and a second hundred is not
+		// one number with the first.
+		j := next
+		if j < len(words) && words[j] == "and" {
+			j++
+		}
+		if j < len(words) && words[j] != "a" && words[j] != "an" && (j+1 >= len(words) || words[j+1] != "hundred") {
+			if _, ok := numberWords[words[j]]; ok {
+				more, after := readNumber(words, j)
+				return n + more, after
+			}
+		}
+		return n, next
+	}
+	if n >= 20 && n%10 == 0 && next < len(words) {
+		if ones, ok := numberWords[words[next]]; ok && ones < 10 && words[next] != "a" && words[next] != "an" {
+			return n + ones, next + 1
 		}
 	}
-	return n, i + 1
+	return n, next
 }

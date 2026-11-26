@@ -5,6 +5,27 @@
 
 type log >/dev/null 2>&1 || log() { echo "<14>techo5: $*" > /dev/kmsg; }
 
+# t5_tmp: the folder root's scripts keep their scratch files in, made if it is not there, and printed:
+# /run/techo5, root's alone (0700). Not /tmp, which anyone can write to: a fixed name there could be a
+# link another user (an add-on, feature/addons) left to a file of root's, which a redirect as root then
+# writes over. boot.sh turns the kernel's protection against that on as well (protected_symlinks); this
+# does not lean on it, since the initramfs and older kernels run these functions too.
+t5_tmp() {
+	[ -d /run/techo5 ] || mkdir -p -m 0700 /run/techo5 2>/dev/null
+	echo /run/techo5
+}
+
+# t5_private_logs dir name...: the named logs in dir, made root's alone (0600) before anything is
+# written to them. Bluetooth's and the bus's logs name devices and addresses, and /var/log is readable
+# by the users other than root that run here (feature/addons).
+t5_private_logs() {
+	d=$1; shift
+	for n in "$@"; do
+		[ -e "$d/$n" ] || (umask 077; : > "$d/$n")
+		chmod 600 "$d/$n" 2>/dev/null
+	done
+}
+
 # t5_board: which Echo this is, from the panel the bootloader names in the kernel command
 # line. The daemon reads the same thing (internal/layout); this side needs it because one
 # root filesystem serves all three boards, so the defaults below cannot be baked in per
@@ -265,7 +286,7 @@ t5_wifi_watch() {
 				# The lease client started with no network is still asking; one that gave up is
 				# started again.
 				pidof udhcpc >/dev/null || udhcpc -i wlan0 -b -R -p /run/udhcpc.pid \
-					-s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+					-s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > $(t5_tmp)/udhcpc.log 2>&1
 			else
 				log "wifi: reconfigure after a change to $conf failed"
 			fi
@@ -323,9 +344,9 @@ t5_wifi_mac() {
 	# A running supplicant holds the link: changing it under one would drop the network.
 	pidof wpa_supplicant >/dev/null && return 0
 	ip link set "$1" down 2>/dev/null
-	if ! ip link set "$1" address "$(echo "$mac" | sed 's/../&:/g; s/:$//')" 2>/tmp/ifmac.err; then
-		grep -qi busy /tmp/ifmac.err && return 1
-		log "wifi: factory address refused: $(cat /tmp/ifmac.err)"
+	if ! ip link set "$1" address "$(echo "$mac" | sed 's/../&:/g; s/:$//')" 2>$(t5_tmp)/ifmac.err; then
+		grep -qi busy $(t5_tmp)/ifmac.err && return 1
+		log "wifi: factory address refused: $(cat $(t5_tmp)/ifmac.err)"
 		return 0
 	fi
 	log "wifi: factory address set"
@@ -361,15 +382,15 @@ t5_wifi_up() {
 	mkdir -p /run/wpa
 	t5_ipv6_private wlan0
 	n=0; until t5_wifi_mac wlan0; do
-		n=$((n+1)); [ $n -ge 15 ] && { log "wifi: factory address not set: $(cat /tmp/ifmac.err)"; break; }
+		n=$((n+1)); [ $n -ge 15 ] && { log "wifi: factory address not set: $(cat $(t5_tmp)/ifmac.err)"; break; }
 		sleep 1
 	done
 	# The Echo Spot's bcmdhd is a USB device that downloads its firmware at insmod, drops off the bus
 	# and comes back: wlan0 exists before it can be opened, and bringing it up then fails with EBUSY,
 	# which leaves wpa_supplicant unable to start. Wait for the open to succeed. The Show's mt76x8 is
 	# up on the first try.
-	n=0; until ip link set wlan0 up 2>/tmp/ifup.err; do
-		n=$((n+1)); [ $n -ge 30 ] && { log "wifi: wlan0 would not come up: $(cat /tmp/ifup.err)"; return 1; }
+	n=0; until ip link set wlan0 up 2>$(t5_tmp)/ifup.err; do
+		n=$((n+1)); [ $n -ge 30 ] && { log "wifi: wlan0 would not come up: $(cat $(t5_tmp)/ifup.err)"; return 1; }
 		sleep 1
 	done
 	[ $n -gt 0 ] && log "wifi: wlan0 up after ${n}s"
@@ -380,14 +401,14 @@ t5_wifi_up() {
 		ps_err=$(iw dev wlan0 set power_save off 2>&1) || log "wifi: power save not turned off: $ps_err"
 	fi
 	if ! pidof wpa_supplicant >/dev/null; then
-		wpa_supplicant -B -i wlan0 -c "$conf" -P /run/wpa.pid > /tmp/wpa.log 2>&1
+		wpa_supplicant -B -i wlan0 -c "$conf" -P /run/wpa.pid > $(t5_tmp)/wpa.log 2>&1
 	fi
 	# No network to wait for: the supplicant is up for the screen to add one, and waiting out
 	# WIFI_WAIT would only hold the rest of the boot back.
 	# The lease client is started too, in the background: a network joined from the screen asks it for
 	# an address (lib/wifi renews it), and it keeps trying until there is one.
 	if ! grep -q '^network={' "$conf"; then
-		pidof udhcpc >/dev/null || udhcpc -i wlan0 -b -R -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+		pidof udhcpc >/dev/null || udhcpc -i wlan0 -b -R -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > $(t5_tmp)/udhcpc.log 2>&1
 		log "wifi: no network saved yet"
 		return 1
 	fi
@@ -408,7 +429,7 @@ t5_wifi_up() {
 	if [ -x /usr/local/sbin/techo5-net ]; then
 		/usr/local/sbin/techo5-net up
 	elif ! pidof udhcpc >/dev/null; then
-		udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > /tmp/udhcpc.log 2>&1
+		udhcpc -i wlan0 -b -R -t 10 -p /run/udhcpc.pid -s "${UDHCPC_SCRIPT:-/usr/share/udhcpc/default.script}" > $(t5_tmp)/udhcpc.log 2>&1
 	fi
 	n=0; while [ $n -lt 30 ]; do
 		IP=$(ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1)
@@ -421,7 +442,7 @@ t5_wifi_up() {
 
 # t5_wifi_load <module.ko>: load the Wi-Fi driver and wait for its wlan0.
 t5_wifi_load() {
-	insmod "$1" 2>/tmp/insmod.err || { log "wifi: insmod failed: $(cat /tmp/insmod.err)"; return 1; }
+	insmod "$1" 2>$(t5_tmp)/insmod.err || { log "wifi: insmod failed: $(cat $(t5_tmp)/insmod.err)"; return 1; }
 	n=0; while [ $n -lt 10 ] && ! ip link show wlan0 >/dev/null 2>&1; do sleep 1; n=$((n+1)); done
 	ip link show wlan0 >/dev/null 2>&1 || { log "wifi: driver loaded but no wlan0"; return 1; }
 }
@@ -622,7 +643,7 @@ t5_ntp_peers() {
 # must not hold the boot. The RTC keeps UTC: the kernel reads it as UTC at boot,
 # so local time written there started a warm reboot hours off.
 t5_ntp() {
-	timeout -s KILL ${NTP_WAIT:-40} ntpd -n -q $(t5_ntp_peers) > /tmp/ntpd.log 2>&1 || { log "clock: ntp failed"; return 1; }
+	timeout -s KILL ${NTP_WAIT:-40} ntpd -n -q $(t5_ntp_peers) > $(t5_tmp)/ntpd.log 2>&1 || { log "clock: ntp failed"; return 1; }
 	hwclock -w -u 2>/dev/null
 	# Tells echod NTP has set the clock, so Home Assistant's time leaves it alone (feature/timezone).
 	: > /run/techo5/ntp-set 2>/dev/null
@@ -641,7 +662,7 @@ t5_dropbear() {
 		[ -L /etc/dropbear ] || ln -sf "$keydir/dropbear_${t}_host_key" /etc/dropbear/dropbear_${t}_host_key
 	done
 	pidof dropbear >/dev/null && return 0
-	dropbear -R -p 22 "$@" > /tmp/dropbear.log 2>&1 && log "ssh: dropbear listening on :22" || { log "ssh: dropbear failed to start"; return 1; }
+	dropbear -R -p 22 "$@" > $(t5_tmp)/dropbear.log 2>&1 && log "ssh: dropbear listening on :22" || { log "ssh: dropbear failed to start"; return 1; }
 }
 
 # The factory Bluetooth address from idme, as 12 hex digits, or nothing. Amazon's kernels serve idme
@@ -735,7 +756,7 @@ t5_bt_native() {
 # /dev/vhci this quietly does nothing, so an older boot image keeps working.
 # With BT_MODULE=builtin hci0 comes from the kernel's own driver instead (t5_bt_native).
 t5_bt_up() {
-	mod=$1; logdir=${2:-/tmp}
+	mod=$1; logdir=${2:-$(t5_tmp)}
 	# builtin, or a kernel whose own driver already made hci0 (btmtksdio on the cronos mainline build).
 	if [ "$mod" = builtin ] || [ -d /sys/class/bluetooth/hci0 ]; then
 		t5_bt_native || return 1
@@ -747,7 +768,8 @@ t5_bt_up() {
 
 # hci0 from the vendor driver through btbridge and vhci (t5_bt_up).
 t5_bt_bridge() {
-	mod=$1; logdir=${2:-/tmp}
+	mod=$1; logdir=${2:-$(t5_tmp)}
+	t5_private_logs "$logdir" btbridge.log
 	[ -e /dev/vhci ] || { log "bt: no /dev/vhci (kernel without Bluetooth); skipping"; return 1; }
 	# BT_UART (device.conf): a Broadcom controller on a tty, which btbridge patches and brings up itself
 	# (the Echo Spot); otherwise the MediaTek driver module and its /dev/stpbt.
@@ -755,7 +777,7 @@ t5_bt_bridge() {
 		[ -e "$BT_UART" ] || { log "bt: no $BT_UART"; return 1; }
 	elif [ ! -e /dev/stpbt ]; then
 		[ -e "$mod" ] || { log "bt: driver not found at $mod"; return 1; }
-		insmod "$mod" 2>/tmp/insmod-bt.err || { log "bt: insmod failed: $(cat /tmp/insmod-bt.err)"; return 1; }
+		insmod "$mod" 2>$(t5_tmp)/insmod-bt.err || { log "bt: insmod failed: $(cat $(t5_tmp)/insmod-bt.err)"; return 1; }
 		n=0; while [ $n -lt 10 ] && [ ! -e /dev/stpbt ]; do sleep 1; n=$((n+1)); done
 		[ -e /dev/stpbt ] || { log "bt: driver loaded but no /dev/stpbt"; return 1; }
 	fi
@@ -785,7 +807,8 @@ t5_bt_bridge() {
 
 # BlueZ and bluez-alsa on hci0, however it came up (t5_bt_up).
 t5_bt_stack() {
-	logdir=${1:-/tmp}
+	logdir=${1:-$(t5_tmp)}
+	t5_private_logs "$logdir" dbus.log bluetoothd.log bluealsa.log
 	# Pairings and bluez-alsa's state must survive reboots and slot changes: keep
 	# them on userdata (the root is read-only).
 	mkdir -p /run/dbus /data/misc/techo5/bluetooth /data/misc/techo5/bluealsa
@@ -794,6 +817,7 @@ t5_bt_stack() {
 	for d in /var/lib/bluealsa /usr/var/lib/bluealsa; do
 		[ -d "$d" ] && { mountpoint -q "$d" || mount --bind /data/misc/techo5/bluealsa "$d"; }
 	done
+	t5_bt_cache
 	# The daemon starts the bus too, for AirPlay and Spotify Connect (feature/streaming): whichever
 	# holds /run/techo5-dbus-starting starts it, and the other waits for it.
 	if ! pidof dbus-daemon >/dev/null; then
@@ -836,7 +860,8 @@ t5_bt_stack() {
 	# Tried until it takes: written once, it could meet the kernel still adding bluez-alsa's services
 	# (Busy), and a phone that paired then remembers the device as having no type (#105). In the
 	# background, since five tries that time out are half a minute the boot would otherwise wait.
-	(n=1
+	(t5_bt_cache
+	n=1
 	while ! t5_bt_class; do
 		[ $n -lt 5 ] || { log "bt: the loudspeaker class did not take"; break; }
 		sleep 1; n=$((n+1))
@@ -860,6 +885,7 @@ t5_bt_again() {
 	# Busy while this runs: the daemon leaves the controller alone until it is gone (btaudio
 	# secureconn.go), since a power cycle for Secure Connections in the middle would undo it.
 	echo $g > /run/techo5-bt-again.busy
+	t5_bt_cache
 	t5_bt_again_pass $g
 	# A newer pass has written its own number in it: that one removes it.
 	[ "$(cat /run/techo5-bt-again.busy 2>/dev/null)" = "$g" ] && rm -f /run/techo5-bt-again.busy
@@ -883,6 +909,48 @@ t5_bt_again_pass() {
 	[ "$(cat /run/techo5-bt-again 2>/dev/null)" = "$g" ] || return 0
 	t5_bt_class
 	t5_btmgmt 5 discov off >/dev/null 2>&1
+}
+
+# Userdata is mounted with commit=60: ext4 commits its journal every 60 s rather than every 5 s. eMMC
+# wears with what is written to it, and each commit writes journal blocks however little changed: a
+# Show 8 measured about 770 MB a day written to userdata, much of it small writes a commit multiplies.
+# What syncs itself is unaffected (state.json and the alive marker fsync as they are written, and the
+# daemon's log is flushed after every warning or error, feature/maintenance). A power cut can lose up to
+# 60 s of writes nothing synced, such as routine log lines. No lazytime: the Dot 2's 3.18 kernel does
+# not know it, and every board mounts userdata the same way. Each initramfs mounts it so; t5_data_commit
+# puts it right on a userdata an older initramfs mounted without it.
+t5_data_commit() {
+	o=$(awk '$2 == "/data" && $3 == "ext4" { o = $4 } END { print o }' "${T5_MOUNTS:-/proc/mounts}" 2>/dev/null)
+	[ -n "$o" ] || return 0
+	case ,$o, in *,commit=60,*) return 0 ;; esac
+	# The mount's own flags are given again, so remounting cannot drop noatime, nosuid or nodev.
+	f=$(echo "$o" | tr , '\n' | grep -xE 'rw|ro|noatime|nodiratime|relatime|nosuid|nodev|noexec' | tr '\n' ,)
+	mount -o "remount,${f}commit=60" /data 2>/dev/null || log "data: commit=60 refused; ext4 commits every 5 s"
+}
+
+# t5_bt_cache: bluetoothd's cache of the devices it has heard (/var/lib/bluetooth/<adapter>/cache) in
+# RAM. The BLE proxy scans through BlueZ, and bluetoothd rewrites a device's cache file (a new file,
+# fsynced and renamed over the old one) each time a device nearby advertises another name: a Show 8
+# measured about 4,800 rewrites a day, some 650 MB of flash and most of what it wrote to userdata.
+# eMMC wears with what is written to it. The cache is only names and services bluetoothd learns again
+# when it next hears a device, so it starts empty at each boot and nothing is copied back; pairings
+# (<adapter>/<device>/info) and the adapter's settings stay on userdata. The adapter's directory is
+# named for its address, which is only certain once hci0 is up, so this runs before bluetoothd starts,
+# again once it has powered the controller (in case the address changed under it), and after each
+# restart of the bridge. 4 MB holds about a thousand devices; past that bluetoothd only fails to cache
+# a name. What the cache held on userdata from before is stale and would lie hidden under the tmpfs,
+# so it is removed the first time.
+t5_bt_cache() {
+	a=$(t5_btmgmt 3 -i hci0 info 2>/dev/null | awk '$1 == "addr" { print $2; exit }')
+	x=[0-9A-F][0-9A-F]
+	case $a in $x:$x:$x:$x:$x:$x) ;; *) return 0 ;; esac
+	[ "$a" = 00:00:00:00:00:00 ] && return 0
+	d=/var/lib/bluetooth/$a/cache
+	mountpoint -q "$d" && return 0
+	# The adapter's folder is 0700, as bluetoothd makes it, when it is made here first.
+	[ -d "${d%/cache}" ] || mkdir -p -m 0700 "${d%/cache}"
+	mkdir -p "$d" && rm -rf "$d"/*
+	mount -t tmpfs -o size=4m,mode=0700 tmpfs "$d" || log "bt: the cache for $a stays on userdata"
 }
 
 # t5_btmgmt <seconds> <command...>: btmgmt under a timeout, with a stdin that stays open while it
