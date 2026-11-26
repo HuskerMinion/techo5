@@ -542,7 +542,7 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 		Dir:  state,
 		// TECHO5_ADDON_BIN is where its program and its extra files are, so it finds them by name
 		// whatever the folder add-ons live in.
-		Env: []string{"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + state, "TECHO5_ADDON=" + rec.ID,
+		Env: []string{addonPath(c == nil), "HOME=" + state, "TECHO5_ADDON=" + rec.ID,
 			"TECHO5_ADDON_STATE=" + state, "TECHO5_ADDON_BIN=" + filepath.Join(dir, "bin")},
 		Cred: c,
 		Out:  lf,
@@ -1498,4 +1498,14 @@ func (m *Manager) Tail(id string, n int) []string {
 		return nil
 	}
 	return tailLog(filepath.Join(m.dir(id), "log"), n)
+}
+
+// addonPath is the PATH an add-on starts with. A root add-on is trusted with the tools only root
+// uses, such as iptables and ip, so it is given the sbin folders too; one that runs as its own user
+// has no use for them.
+func addonPath(root bool) string {
+	if root {
+		return "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	}
+	return "PATH=/usr/local/bin:/usr/bin:/bin"
 }
