@@ -110,6 +110,9 @@ func prepareDumpDir(want int64) (string, int64, error) {
 	return best, bestRoom, nil
 }
 
+// sweptSpots are the folders whose stale .part files this process has removed.
+var sweptSpots sync.Map
+
 // prepareSpot makes s's folder root's alone, refusing one that is a link or someone else's, clears
 // what an unfinished dump left, and says how many bytes a dump may write there.
 func prepareSpot(s dumpSpot) (int64, error) {
@@ -132,9 +135,13 @@ func prepareSpot(s dumpSpot) (int64, error) {
 			return 0, err
 		}
 	}
-	parts, _ := filepath.Glob(filepath.Join(dir, "*.part"))
-	for _, p := range parts {
-		_ = os.Remove(p)
+	// Only a daemon before this one can have left a .part: the sweep is once a folder, so it never
+	// takes the file of a dump that is running beside this one.
+	if _, swept := sweptSpots.LoadOrStore(dir, true); !swept {
+		parts, _ := filepath.Glob(filepath.Join(dir, "*.part"))
+		for _, p := range parts {
+			_ = os.Remove(p)
+		}
 	}
 	var fs syscall.Statfs_t
 	if err := syscall.Statfs(dir, &fs); err != nil {

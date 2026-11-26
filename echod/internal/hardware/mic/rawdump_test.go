@@ -43,6 +43,17 @@ func TestDumpFolderIsPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A dump running beside the next one keeps its .part.
+	running := filepath.Join(dir, "rawnative-1.s32.part")
+	if err := os.WriteFile(running, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := prepareDumpDir(0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(running); err != nil {
+		t.Errorf("a second dump took the running one's .part: %v", err)
+	}
 	if got != dir {
 		t.Fatalf("folder %s, want %s", got, dir)
 	}
