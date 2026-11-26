@@ -117,6 +117,8 @@ type Server struct {
 	// PeerUID is who is at the other end of a connection (SO_PEERCRED); a variable for tests.
 	PeerUID func(net.Conn) (uint32, error)
 	Now     func() time.Time
+	// Trace, when set, is told every request and how it ended: the fake daemon's log of them.
+	Trace func(id string, req addonapi.Request, err error)
 
 	mu     sync.Mutex
 	addons map[string]*addon
@@ -478,6 +480,9 @@ func (c *conn) worker() {
 			return
 		case req := <-c.work:
 			result, err := c.s.handle(c, req)
+			if c.s.Trace != nil {
+				c.s.Trace(c.a.grant.ID, req, err)
+			}
 			if err != nil {
 				var e *addonapi.Error
 				if !errors.As(err, &e) {
