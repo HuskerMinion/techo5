@@ -142,6 +142,7 @@ func TestSettingsNeedTheCapability(t *testing.T) {
 }
 
 func TestEntitiesAreTheAddonsOwn(t *testing.T) {
+	skipWithoutAddons(t)
 	r := newHostRig(t)
 	var ids []string
 	for _, e := range r.h.Entities() {
@@ -201,6 +202,7 @@ func TestResample(t *testing.T) {
 // the device's own, its hold keeps the screen in use until its connection drops, its entity's state
 // reaches Home Assistant's entity, its settings reach it when saved, and its removal takes its timers.
 func TestEndToEnd(t *testing.T) {
+	skipWithoutAddons(t)
 	r := newHostRig(t)
 	if _, err := r.h.SaveSettings("meals", form(map[string]string{"set_address": "http://mealie.local", "secret_token": "s3cret"})); err != nil {
 		t.Fatal(err)
@@ -369,5 +371,15 @@ func TestAddonSoundsAreCapped(t *testing.T) {
 	quiet := []int16{100, -200}
 	if got := capPeak(quiet, maxPeak); got[1] != -200 {
 		t.Error("a quiet sound was changed")
+	}
+}
+
+// skipWithoutAddons skips a test of what only a device that runs add-ons offers: the Panel build has no
+// add-ons (Android does not let an app run a program it downloaded), so the API there makes no entities
+// and no addon_command action, and has nothing to serve.
+func skipWithoutAddons(t *testing.T) {
+	t.Helper()
+	if !addons.Supported() {
+		t.Skip("this build runs no add-ons")
 	}
 }
