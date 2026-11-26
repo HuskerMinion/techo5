@@ -105,7 +105,7 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		if utf8.RuneCountInString(r.Text) > addonapi.MaxTestAnswer {
 			return nil, addonapi.Errorf(addonapi.CodeTooLarge, "a test's answer is at most %d characters", addonapi.MaxTestAnswer)
 		}
-		if !s.answer(c.a, r.Call, true, addonapi.CommandReply{Call: r.Call, OK: r.OK, Text: r.Text}) {
+		if !s.answer(c.a, r.Call, true, addonapi.CommandReply(r)) {
 			return nil, bad("no test is waiting for call %d", r.Call)
 		}
 		return nil, nil
