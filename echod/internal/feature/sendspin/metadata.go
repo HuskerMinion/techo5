@@ -22,12 +22,19 @@ type metadata struct {
 }
 
 // merge applies one metadata message and reports whether the track changed. Fields the message does
-// not mention are left as they were.
+// not mention are left as they were, except when the title changes: a server such as Music Assistant
+// omits None fields instead of sending JSON nulls, so switching to a track or radio station without
+// an artist or album would otherwise leave the previous track's artist and album behind.
 func (m *metadata) merge(next *protocol.MetadataState) bool {
 	before := *m
 
 	if next.HasField("title") {
-		m.title = cleanTitle(asText(next.Title))
+		nextTitle := cleanTitle(asText(next.Title))
+		if nextTitle != m.title {
+			m.artist = ""
+			m.album = ""
+		}
+		m.title = nextTitle
 	}
 	if next.HasField("artist") {
 		m.artist = asText(next.Artist)

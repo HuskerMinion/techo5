@@ -63,6 +63,40 @@ func TestANullClearsAndAnOmissionDoesNot(t *testing.T) {
 	}
 }
 
+// Switching to a new title clears stale artist and album when the server omits them (for example
+// Music Assistant's aiosendspin omits None fields when switching to a radio station or jingle with
+// no artist/album), while keeping fields that the new message provides.
+func TestNewTitleClearsOmittedArtistAndAlbum(t *testing.T) {
+	var m metadata
+	m.merge(metadataMessage(t, `{"title":"Song A","artist":"Singer A","album":"CAPITAL 958"}`))
+
+	// Same station switches to a jingle with no artist (omitted on the wire).
+	if !m.merge(metadataMessage(t, `{"title":"Station Jingle","album":"CAPITAL 958"}`)) {
+		t.Fatal("switching to jingle did not count as a change")
+	}
+	if m.title != "Station Jingle" || m.artist != "" || m.album != "CAPITAL 958" {
+		t.Fatalf("after jingle = %+v, want title=Station Jingle artist=\"\" album=CAPITAL 958", m)
+	}
+
+	// Switch back to a track with artist, then to a radio station that sends only title.
+	m.merge(metadataMessage(t, `{"title":"Song B","artist":"Singer B","album":"CAPITAL 958"}`))
+	if !m.merge(metadataMessage(t, `{"title":"CRI 环球资讯广播"}`)) {
+		t.Fatal("switching to station with title only did not count as a change")
+	}
+	if m.title != "CRI 环球资讯广播" || m.artist != "" || m.album != "" {
+		t.Fatalf("after station switch = %+v, want title=CRI 环球资讯广播 artist=\"\" album=\"\"", m)
+	}
+
+	// Repeating the same title without artist/album does not clear them.
+	m.merge(metadataMessage(t, `{"title":"Song C","artist":"Singer C","album":"Album C"}`))
+	if m.merge(metadataMessage(t, `{"title":"Song C"}`)) {
+		t.Error("repeating the same title counted as a change")
+	}
+	if m.artist != "Singer C" || m.album != "Album C" {
+		t.Errorf("repeating the same title cleared fields: %+v", m)
+	}
+}
+
 // A station's tagged title shows as its song; any other title as it came.
 func TestCleanTitle(t *testing.T) {
 	iheart := `text="Static" song_spot="M" MediaBaseId="3097657" itunesTrackId="0" amgTrackId="-1" amgArtistId="0" TAID="0" TPID="312041972" cartcutId="0442511001" amgArtworkURL="https:///v3/catalog/track/312041972?ops=fit(200,200),format(%22jpeg%22)" length="00:03:25" unsID="-1" spotInstanceId="-1"`
