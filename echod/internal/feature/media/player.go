@@ -1870,12 +1870,13 @@ func (p *Player) PlayReceived(name string, src PCMSource, rate, channels int) {
 // Assistant to say words here can tell they have been said.
 func (p *Player) Speaking() bool { return p.speaking.Load() }
 
-// PlayNamed starts url as a track named title, for something that may later act on its own track and
-// no other (an add-on's audio, feature/addonapi): Loaded is title, the same pointer, for as long as that
-// track is the one loaded. It plays once and ends, and is never handed to the music library.
+// PlayNamed starts url as a track named title, for a program on the device that may later act on its
+// own track and no other (an add-on's audio, feature/addonhost): Loaded is title, the same pointer, for
+// as long as that track is the one loaded. It plays once and ends, is never handed to the music
+// library, and is fetched guarded (Stream.PlayGuarded): never from the device itself.
 func (p *Player) PlayNamed(url string, title *Title) {
 	p.ours()
-	p.stream.PlayTitled(url, title)
+	p.stream.PlayGuarded(url, title)
 }
 
 // Loaded is the title the loaded track was started with, nil when it was given none or nothing is

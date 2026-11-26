@@ -3,6 +3,7 @@
 package video
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -295,7 +296,13 @@ func (f *Feature) begin(id uint64, req Request) {
 	if old != nil {
 		old.stop(true)
 	}
-	slog.Info("video: starting", "id", id, "url", Redacted(uu), "origin", req.Origin, "from", req.From)
+	// An add-on's is said at Debug: it may start videos as often as its limit lets it, and the log is on
+	// the flash.
+	level := slog.LevelInfo
+	if req.Origin == FromAddon {
+		level = slog.LevelDebug
+	}
+	slog.Log(context.TODO(), level, "video: starting", "id", id, "url", Redacted(uu), "origin", req.Origin, "from", req.From)
 	f.Changed.Emit(struct{}{})
 	f.runs.Add(1)
 	safe.Go("video", func() {

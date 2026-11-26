@@ -138,6 +138,9 @@ type track struct {
 	// heardOnce closes heard: a resumed live stream (resume.go) fetches again, and arrives again.
 	heardOnce sync.Once
 
+	// guarded is a track a program on the device chose (PlayGuarded): fetched by guardedClient.
+	guarded bool
+
 	// handOff is a track Play started, whose url goes to the stream's handOff if it cannot be decoded.
 	// PlayChecked's caller is waiting for the answer, and hands it on itself.
 	handOff bool
@@ -244,15 +247,21 @@ func dbGain(db int) float32 {
 //
 // It does not take the speaker from a reply or an announcement that is sounding. Those are seconds
 // long and end on their own, and the track waits behind them rather than talking over them.
-func (m *Stream) Play(url string) { m.play(url, true, nil) }
+func (m *Stream) Play(url string) { m.play(url, true, nil, false) }
 
 // PlayOnly is Play for a url the device must play itself or not at all: never handed to the music
 // library when it cannot be decoded.
-func (m *Stream) PlayOnly(url string) { m.play(url, false, nil) }
+func (m *Stream) PlayOnly(url string) { m.play(url, false, nil, false) }
 
 // PlayTitled is PlayOnly for a url Home Assistant named first (media_title): title goes with the track,
 // for the screen and the sensors, for as long as it is loaded. A nil title is PlayOnly.
-func (m *Stream) PlayTitled(url string, title *Title) { m.play(url, false, title) }
+func (m *Stream) PlayTitled(url string, title *Title) { m.play(url, false, title, false) }
+
+// PlayGuarded is PlayTitled for an address a program on the device chose (an add-on's media.play,
+// feature/addonhost): fetched with a dialer that refuses the device itself, loopback and link-local
+// whatever the name resolves to and wherever a redirect leads (guardedClient), and not logged by its
+// address, as the program may play as often as its limit lets it.
+func (m *Stream) PlayGuarded(url string, title *Title) { m.play(url, false, title, true) }
 
 // Title is what the loaded track was named, playing or paused; nil when it was not named or nothing is
 // loaded.
@@ -280,7 +289,7 @@ func (m *Stream) PlayChecked(url string, within time.Duration) error {
 // PlayTitledChecked is PlayChecked for a url named by the device itself, like a news update: title goes
 // with the track, as PlayTitled's does.
 func (m *Stream) PlayTitledChecked(url string, title *Title, within time.Duration) error {
-	t := m.play(url, false, title)
+	t := m.play(url, false, title, false)
 	if t == nil {
 		return errors.New("this device has no speaker")
 	}
@@ -312,17 +321,23 @@ func (m *Stream) drop(t *track) {
 	t.stop()
 }
 
-func (m *Stream) play(url string, handOff bool, title *Title) *track {
+func (m *Stream) play(url string, handOff bool, title *Title, guarded bool) *track {
 	if m == nil {
-		slog.Warn("asked to play media with no speaker", "url", url)
+		if !guarded {
+			slog.Warn("asked to play media with no speaker", "url", url)
+		}
 		return nil
 	}
 
 	live := liveURL(url)
-	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff, title: title}
+	t := &track{item: url, heard: make(chan struct{}), done: make(chan struct{}), handOff: handOff, title: title, guarded: guarded}
 	t.live.Store(live)
 	t, ctx := m.start(t)
-	slog.Info("playing media", "url", url, "live", live)
+	if guarded {
+		slog.Debug("playing media for a program on the device", "live", live)
+	} else {
+		slog.Info("playing media", "url", url, "live", live)
+	}
 
 	safe.Go("media", func() {
 		itself := false
@@ -745,7 +760,11 @@ func (m *Stream) run(ctx context.Context, t *track, url string) error {
 		return err
 	}
 
-	resp, err := streamClient.Do(req)
+	client := streamClient
+	if t.guarded {
+		client = guardedClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
