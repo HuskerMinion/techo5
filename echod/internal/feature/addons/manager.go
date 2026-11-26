@@ -20,6 +20,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
 // Root is where add-ons live: one folder each, on userdata, so they outlive updates and nothing of
@@ -120,6 +121,74 @@ type addon struct {
 	exits  chan struct{} // a token each time it exits, for an update's trial
 }
 
+// API is the add-on API's server as the supervisor uses it. Open makes an add-on's socket before its
+// program starts and answers the path for TECHO5_ADDON_API; Close takes it away when the add-on stops;
+// Removed is told once an add-on has been removed, for what it set on the device to go with it.
+type API interface {
+	Open(g APIGrant) (string, error)
+	Close(id string)
+	Removed(id string)
+}
+
+// APIGrant is an add-on as the API serves it: who it runs as, its manifest, and what the owner agreed
+// to, of which it is granted the capabilities that are in both.
+type APIGrant struct {
+	ID     string
+	UID    uint32
+	Man    catalog.Manifest
+	Agreed catalog.Asks
+	BinDir string
+}
+
+// Capabilities is what the add-on is granted: what its manifest uses and the owner agreed to. The two
+// are the same for an add-on installed or updated from the catalog, which pins them; the overlap is
+// what is granted all the same, so nothing the box did not cover is.
+func (g APIGrant) Capabilities() []string {
+	var out []string
+	for _, c := range g.Man.Capabilities {
+		if slices.Contains(g.Agreed.Capabilities, c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// SetAPI gives the supervisor the add-on API's server.
+func (m *Manager) SetAPI(api API) {
+	m.mu.Lock()
+	m.api = api
+	m.mu.Unlock()
+}
+
+// APIGrantOf is an installed add-on's grant, when it speaks the API.
+func (m *Manager) APIGrantOf(id string) (APIGrant, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	a, ok := m.addons[id]
+	if !ok || a.man.API == 0 {
+		return APIGrant{}, false
+	}
+	return APIGrant{ID: id, UID: a.rec.UID, Man: a.man, Agreed: a.rec.Agreed, BinDir: filepath.Join(m.dir(id), "bin")}, true
+}
+
+// APIGrants is every installed add-on's that speaks the API, by id.
+func (m *Manager) APIGrants() []APIGrant {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.addons))
+	for id := range m.addons {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
+	slices.Sort(ids)
+	var out []APIGrant
+	for _, id := range ids {
+		if g, ok := m.APIGrantOf(id); ok {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
 // job is the install, update or removal running now.
 type job struct {
 	ID, Version, What string
@@ -138,6 +207,10 @@ type Manager struct {
 	// changed is told when what Home Assistant shows may have changed: an add-on installed or removed
 	// (its entity comes or goes), or its version or the catalog's.
 	changed func(entitiesChanged bool)
+
+	// api serves the add-on API to an add-on whose manifest speaks it (feature/addonapi), nil where
+	// nothing does.
+	api API
 
 	op sync.Mutex // held for the whole of an install, update or removal
 
@@ -552,6 +625,25 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 	}
 	if c != nil {
 		sp.NProc, sp.AddressMB = nprocLimit, addressMB(man.MemoryMB, rec.Arch)
+	}
+	// Its socket is made once, before the first start, and stays through its restarts: an add-on that
+	// crashes finds it where it was. It goes when the add-on stops. An add-on running as root is never
+	// given one (the API refuses root, so a root shell cannot pose as an add-on); the catalog refuses
+	// a listing asking for both, and this is a device that cannot drop root for it.
+	m.mu.Lock()
+	api := m.api
+	m.mu.Unlock()
+	if man.API > 0 && api != nil {
+		if c == nil {
+			lf.Note("the add-on API is not served to an add-on running as root")
+		} else if path, err := api.Open(APIGrant{ID: rec.ID, UID: rec.UID, Man: man, Agreed: rec.Agreed,
+			BinDir: filepath.Join(dir, "bin")}); err != nil {
+			lf.Note("the add-on API could not be served: " + err.Error())
+			slog.Warn("addons: the add-on API could not be served", "id", rec.ID, "err", err)
+		} else {
+			sp.Env = append(sp.Env, addonapi.EnvSocket+"="+path)
+			defer api.Close(rec.ID)
+		}
 	}
 
 	wait, quick := restartFirst, 0
@@ -1329,10 +1421,18 @@ func (m *Manager) Remove(id string, keepState bool) (err error) {
 		cleanUp(credFor(rec.UID), id)
 	}
 	dir := m.dir(id)
+	m.mu.Lock()
+	api := m.api
+	m.mu.Unlock()
+	if api != nil {
+		// What it set on the device goes with it: its timers, and its entities with the reconnect below.
+		api.Removed(id)
+	}
 	if keepState {
+		// Its settings are its own, kept with its state for installing it again (feature/addonapi).
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
-			if e.Name() != "state" && e.Name() != "uid" {
+			if e.Name() != "state" && e.Name() != "uid" && e.Name() != "settings.json" {
 				if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
 					return err
 				}
