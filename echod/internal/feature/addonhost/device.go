@@ -135,11 +135,19 @@ func resample(in []int16, from, to int) []int16 {
 }
 
 func (d *device) StartTimer(id, name string, dur time.Duration) (string, error) {
-	t := timer.Get().StartOwned(id, name, dur)
+	t := timer.Get().StartOwned(id, d.label(id), name, dur)
 	if t == "" {
 		return "", addonapi.Errorf(addonapi.CodeBadRequest, "the timer did not start")
 	}
 	return t, nil
+}
+
+// label is the add-on's name, as its timers are shown under.
+func (d *device) label(id string) string {
+	if n, ok := d.host.names()[id]; ok && n != "" {
+		return n
+	}
+	return id
 }
 
 func (d *device) CancelTimer(id, t string) bool { return timer.Get().CancelOwned(id, t) }
@@ -147,7 +155,7 @@ func (d *device) CancelTimer(id, t string) bool { return timer.Get().CancelOwned
 func (d *device) Timers(id string) []addonapi.Timer {
 	var out []addonapi.Timer
 	for _, c := range timer.Get().OwnedBy(id, time.Now()) {
-		out = append(out, addonapi.Timer{ID: c.ID, Name: c.Name, Left: c.Left.Seconds(), Total: c.Total.Seconds(), Running: c.Active})
+		out = append(out, addonapi.Timer{ID: c.ID, Name: c.OwnName, Left: c.Left.Seconds(), Total: c.Total.Seconds(), Running: c.Active})
 	}
 	return out
 }

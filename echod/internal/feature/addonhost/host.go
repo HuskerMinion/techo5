@@ -107,7 +107,7 @@ func (h *Host) Removed(id string) {
 
 // timerEvent tells an add-on what became of its timer.
 func (h *Host) timerEvent(e timer.OwnedEvent) {
-	h.srv.Emit(e.Owner, addonapi.EventTimer, addonapi.TimerEvent{ID: e.ID, Name: e.Name, State: e.State})
+	h.srv.Emit(e.Owner, addonapi.EventTimer, addonapi.TimerEvent{ID: e.ID, Name: e.Name, State: e.State, Quiet: e.Quiet})
 }
 
 // Banned is until when an add-on is disconnected for going past its limits, for its card.

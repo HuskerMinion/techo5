@@ -108,8 +108,11 @@ type Timers struct {
 }
 
 // OwnedEvent is what became of a timer an add-on owns: State is "ringing", "stopped" or "canceled".
+// Name is the add-on's own name for it. Quiet is a timer that ran out in quiet hours: it made no sound,
+// and no ring follows to be stopped.
 type OwnedEvent struct {
 	Owner, ID, Name, State string
+	Quiet                  bool
 }
 
 // Countdown is a timer as the screen shows it. Local is one of the device's own, which the screen
@@ -124,8 +127,10 @@ type Countdown struct {
 	Active bool
 	Local  bool
 	Silent bool
-	// Owner is the add-on that set it, if one did; it is the device's own timer all the same.
-	Owner string
+	// Owner is the add-on that set it, if one did; it is the device's own timer all the same. Name then
+	// says whose it is ("Meals: rice"), and OwnName is the add-on's own name for it ("rice").
+	Owner   string
+	OwnName string
 }
 
 // List is every timer, soonest running first and paused ones after.
@@ -134,7 +139,7 @@ func (t *Timers) List(now time.Time) []Countdown {
 	out := make([]Countdown, 0, len(t.held))
 	for id, c := range t.held {
 		out = append(out, Countdown{ID: id, Name: c.name, Left: c.remaining(now), Total: c.total, Active: c.active,
-			Local: c.local, Silent: c.silent, Owner: c.owner})
+			Local: c.local, Silent: c.silent, Owner: c.owner, OwnName: c.ownName})
 	}
 	t.mu.Unlock()
 	slices.SortFunc(out, func(a, b Countdown) int {
@@ -189,8 +194,9 @@ type timer struct {
 	silent bool
 	color  led.Color
 
-	// owner is the add-on that set it (StartOwned), which alone lists and cancels it through the API.
-	owner string
+	// owner is the add-on that set it (StartOwned), which alone lists and cancels it through the API,
+	// and ownName its name for it; name carries the add-on's name before it, for whoever sees it.
+	owner, ownName string
 }
 
 // due is when this timer runs out, as well as the device can tell: from when it was started and how long
@@ -374,10 +380,13 @@ const localPrefix = "local:"
 func localList(held map[string]*timer, now time.Time) []config.LocalTimer {
 	var out []config.LocalTimer
 	for id, c := range held {
-		if !c.local || c.silent {
+		// An add-on's timer is not written down: it belongs to a program that is running, and setting
+		// one must cost the flash nothing, however often an add-on does it. One that outlives a restart
+		// of the daemon is set again by the add-on, which is told nothing is left (timer.list).
+		if !c.local || c.silent || c.owner != "" {
 			continue
 		}
-		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total, Owner: c.owner}
+		saved := config.LocalTimer{ID: id, Name: c.name, Total: c.total}
 		if c.active {
 			saved.Finish = now.Add(c.remaining(now))
 		} else {
@@ -460,9 +469,9 @@ func (t *Timers) restore(list []config.LocalTimer, now time.Time) {
 			}
 			continue
 		case !s.Finish.IsZero():
-			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true, owner: s.Owner}
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Finish.Sub(now), at: now, active: true, local: true}
 		default:
-			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Left, at: now, local: true, owner: s.Owner}
+			t.held[s.ID] = &timer{name: s.Name, total: s.Total, left: s.Left, at: now, local: true}
 		}
 		live = append(live, s)
 	}
@@ -499,9 +508,15 @@ func (t *Timers) StartSilent(name string, d time.Duration, c led.Color) string {
 }
 
 // StartOwned is Start for an add-on (feature/addonapi): the same timer, which the add-on alone lists and
-// cancels through the API, and which goes when the add-on is removed.
-func (t *Timers) StartOwned(owner, name string, d time.Duration) string {
-	return t.start(&timer{name: name, total: d, owner: owner}, d)
+// cancels through the API, and which goes when the add-on is removed. It is shown as the add-on's,
+// "label: name" (label alone for one with no name), so nobody takes it for a timer they set. It is
+// not saved, and rings silently in quiet hours (end).
+func (t *Timers) StartOwned(owner, label, name string, d time.Duration) string {
+	shown := label
+	if name != "" {
+		shown = label + ": " + name
+	}
+	return t.start(&timer{name: shown, ownName: name, total: d, owner: owner}, d)
 }
 
 // OwnedBy is the timers an add-on owns, soonest first.
@@ -564,10 +579,16 @@ func (t *Timers) start(c *timer, d time.Duration) string {
 	saved := t.saved(now)
 	t.mu.Unlock()
 
-	if !c.silent {
+	if !c.silent && c.owner == "" {
 		saveLocal(saved)
 	}
-	slog.Info("timer set here", "name", c.name, "for", d, "silent", c.silent)
+	// An add-on's are not logged at Info: it may set them as often as its limit lets it, and the log is
+	// on the flash.
+	if c.owner != "" {
+		slog.Debug("timer set by an add-on", "owner", c.owner, "for", d)
+	} else {
+		slog.Info("timer set here", "name", c.name, "for", d, "silent", c.silent)
+	}
 
 	select {
 	case t.woke <- struct{}{}:
@@ -597,9 +618,11 @@ func (t *Timers) cancel(id string, tell bool) bool {
 		return false
 	}
 	if tell && c.owner != "" {
-		t.Owned.Emit(OwnedEvent{Owner: c.owner, ID: id, Name: c.name, State: "canceled"})
+		t.Owned.Emit(OwnedEvent{Owner: c.owner, ID: id, Name: c.ownName, State: "canceled"})
 	}
-	saveLocal(saved)
+	if c.owner == "" {
+		saveLocal(saved)
+	}
 	t.show()
 	t.publish()
 	t.Changed.Emit(struct{}{})
@@ -649,7 +672,7 @@ func (t *Timers) end(ids []string, now time.Time) {
 			t.mu.Unlock()
 			continue
 		}
-		name, due, local, silent, owner := c.name, c.due(), c.local, c.silent, c.owner
+		name, due, local, silent, owner, ownName := c.name, c.due(), c.local, c.silent, c.owner, c.ownName
 		dropped := !local && (!c.active || now.Before(due))
 		delete(t.held, id)
 		t.pruneEnded(now)
@@ -665,16 +688,22 @@ func (t *Timers) end(ids []string, now time.Time) {
 		switch {
 		case silent:
 			slog.Info("a silent timer ran out", "name", name)
+		case local && owner != "" && quiet():
+			// An add-on's timer in quiet hours makes no sound: nobody asked for it at this hour the way
+			// they set an alarm, and an add-on is not let make noise then by any other way. It is told.
+			slog.Debug("an add-on's timer ran out in quiet hours, silently", "owner", owner)
+			t.Owned.Emit(OwnedEvent{Owner: owner, ID: id, Name: ownName, State: "ringing", Quiet: true})
+		case local && owner != "":
+			slog.Debug("an add-on's timer finished", "owner", owner)
+			e := OwnedEvent{Owner: owner, ID: id, Name: ownName, State: "ringing"}
+			t.mu.Lock()
+			t.ringingOwned = append(t.ringingOwned, e)
+			t.mu.Unlock()
+			t.Owned.Emit(e)
+			t.startRinging(cmp.Or(name, "Timer"))
 		case local:
 			saveLocal(saved)
-			slog.Info("timer finished here", "name", name, "owner", owner)
-			if owner != "" {
-				e := OwnedEvent{Owner: owner, ID: id, Name: name, State: "ringing"}
-				t.mu.Lock()
-				t.ringingOwned = append(t.ringingOwned, e)
-				t.mu.Unlock()
-				t.Owned.Emit(e)
-			}
+			slog.Info("timer finished here", "name", name)
 			t.startRinging(cmp.Or(name, "Timer"))
 		case dropped:
 			slog.Info("a timer dropped as Home Assistant stopped listening", "name", name)
@@ -755,6 +784,9 @@ func (t *Timers) describe(now time.Time) string {
 	}
 	return strings.Join(said, ", ")
 }
+
+// quiet is whether it is quiet hours; a variable for the tests.
+var quiet = config.Quiet
 
 // clockText is a time of day as this device writes one, following the screen's twelve or twenty-four hour
 // setting, so that a timer read in Home Assistant is written the way the panel would write it.

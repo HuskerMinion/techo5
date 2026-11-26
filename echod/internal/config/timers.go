@@ -26,10 +26,6 @@ type LocalTimer struct {
 	// Finish is when it goes off. Zero for a timer that is paused, where Left is what it has to run.
 	Finish time.Time     `json:"finish,omitempty"`
 	Left   time.Duration `json:"left,omitempty"`
-
-	// Owner is the add-on that set it (feature/addonapi), or empty for one set on the device or by Home
-	// Assistant: it lists and cancels its own and no other, and its timers go when it is removed.
-	Owner string `json:"owner,omitempty"`
 }
 
 type TimersWriter struct{ st *Store }

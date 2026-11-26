@@ -181,10 +181,12 @@ const (
 )
 
 // TimerEvent is one of the add-on's timers ringing, its ring stopped, or it canceled on the device.
+// Quiet is a timer that ran out in quiet hours: it made no sound, and no "stopped" follows.
 type TimerEvent struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	State string `json:"state"`
+	Quiet bool   `json:"quiet,omitempty"`
 }
 
 // SettingsTest asks whether these values, the form's, work; answered with a SettingsReply.
