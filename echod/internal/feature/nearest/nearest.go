@@ -116,6 +116,9 @@ type pending struct {
 	at     time.Time // when the word was heard
 	window time.Duration
 
+	// peers is how many devices were told of it, for the log.
+	peers int
+
 	// clarity is how clearly this device heard it, before the offset and a call's lead: what Confirm
 	// below nearest-device score is measured against (#503), so an offset set to lean the decision
 	// doesn't make every wake faint, or none.
@@ -158,15 +161,23 @@ type Nearest struct {
 	// thinking or replying, not listening, when it is part of what is being said.
 	interrupting func() bool
 	peers        func() []announce.Peer
-	fanout       func(peers []announce.Peer, mine *pending)
-	tell         func(peers []announce.Peer, c claim) // an unsure claim, or its withdrawal: nothing comes back
-	now          func() time.Time
-	after        func(d time.Duration, f func())
+	// peersHeard is when any other device was last heard on the network (announce.LastHeard), for the
+	// line a wake word with nobody to ask writes.
+	peersHeard func() time.Time
+	fanout     func(peers []announce.Peer, mine *pending)
+	tell       func(peers []announce.Peer, c claim) // an unsure claim, or its withdrawal: nothing comes back
+	now        func() time.Time
+	after      func(d time.Duration, f func())
 
 	mu      sync.Mutex
 	enabled bool
 	others  []arrived
 	mine    *pending
+
+	// skipped is why the last wake word went to its turn at once, without a decision, and "" once one
+	// has taken part since. Each of those ways was silent, so a device that answered over the one
+	// somebody spoke to said nothing of why (#751); it is written when it changes, not at every wake.
+	skipped string
 }
 
 var (
@@ -215,6 +226,7 @@ func build() *Nearest {
 		onCall:       func() bool { return phone.Get().Busy() && phone.Get().WakeAllowed() },
 		interrupting: func() bool { return voice.Get().Interruptible() },
 		peers:        announce.Peers,
+		peersHeard:   announce.LastHeard,
 		now:          time.Now,
 		after: func(d time.Duration, f func()) {
 			time.AfterFunc(d, func() { safe.Go("nearest device decision", f) })
@@ -298,12 +310,7 @@ func (n *Nearest) set(on bool) {
 
 // open is whether claims are taken: only while this device takes part, can hear a wake word at all
 // (not a Skylight), and the house has a word to sign them with.
-func (n *Nearest) open() bool {
-	n.mu.Lock()
-	on := n.enabled
-	n.mu.Unlock()
-	return on && n.hears() && config.Get().Home.HouseWord != ""
-}
+func (n *Nearest) open() bool { return n.closed() == "" }
 
 // hearing is the others that could claim a wake word: a device without microphones (a Skylight) never
 // does, and waiting on it would only cost the window. A device on an older release says nothing either
@@ -449,11 +456,70 @@ func (n *Nearest) Answer(word string, can func() bool, act func()) {
 // claimed over, but for a wake word that takes it over (claimsOver). lost, if not nil, runs when another
 // device has the word instead.
 func (n *Nearest) contend(word string, at time.Time, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
-	if !n.open() || n.busy() && !n.claimsOver(wake) || !can() {
+	if n.passes(wake, can) {
 		now()
 		return
 	}
 	n.contendHeard(word, at, n.score(), wake, can, open, now, lost)
+}
+
+// passes is whether a word goes to its turn at once, without a claim: this device does not take part,
+// a turn of its own is running that the word does not take over, or it could not answer. The order is
+// the one the checks always had, so can, which may ask the voice feature, is asked last.
+func (n *Nearest) passes(wake bool, can func() bool) bool {
+	if why := n.closed(); why != "" {
+		n.skip(wake, why)
+		return true
+	}
+	if n.busy() && !n.claimsOver(wake) {
+		n.skip(wake, "a turn is running here")
+		return true
+	}
+	if !can() {
+		n.skip(wake, "this device could not answer it")
+		return true
+	}
+	return false
+}
+
+// closed is why claims are not made here, "" when they are (open).
+func (n *Nearest) closed() string {
+	n.mu.Lock()
+	on := n.enabled
+	n.mu.Unlock()
+	switch {
+	case !on:
+		return "nearest device answers is off"
+	case !n.hears():
+		return "this device has no microphones"
+	case config.Get().Home.HouseWord == "":
+		return "no house word"
+	}
+	return ""
+}
+
+// skip writes why a wake word went to its turn without a decision, when that is not why the last one
+// did (skipped). Only for wake words: another word (Answer) is acted on at once just as quietly as it
+// always was.
+func (n *Nearest) skip(wake bool, why string, args ...any) {
+	if !wake {
+		return
+	}
+	n.mu.Lock()
+	same := n.skipped == why
+	n.skipped = why
+	n.mu.Unlock()
+	if !same {
+		slog.Info("nearest device: answering at once, "+why, args...)
+	}
+}
+
+// lastPeerHeard is peersHeard's answer, zero without one.
+func (n *Nearest) lastPeerHeard() time.Time {
+	if n.peersHeard == nil {
+		return time.Time{}
+	}
+	return n.peersHeard()
 }
 
 // claimsOver is whether a word heard during a turn of this device's own is claimed all the same: a
@@ -470,12 +536,20 @@ func (n *Nearest) claimsOver(wake bool) bool {
 // contendHeard is contend with how clearly this device heard the word already measured, and lost, if
 // not nil, run when another device has it instead.
 func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
-	if !n.open() || n.busy() && !n.claimsOver(wake) || !can() {
+	if n.passes(wake, can) {
 		now()
 		return
 	}
-	peers := hearing(n.peers())
+	all := n.peers()
+	peers := hearing(all)
 	if len(peers) == 0 {
+		// The others are found over mDNS (announce): a device whose looks stop hearing them forgets
+		// them all, and from then on answers every wake word at once, over the one somebody spoke to.
+		last := "never"
+		if t := n.lastPeerHeard(); !t.IsZero() {
+			last = n.now().Sub(t).Round(time.Second).String()
+		}
+		n.skip(wake, "no other devices known", "devices", len(all), "last_heard_ago", last)
 		now()
 		return
 	}
@@ -488,10 +562,12 @@ func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, wake 
 		at:      at,
 		window:  window,
 		clarity: clarity,
+		peers:   len(peers),
 		lost:    lost,
 	}
 	n.mu.Lock()
 	n.mine = mine
+	n.skipped = ""
 	n.mu.Unlock()
 
 	n.fanout(peers, mine)
@@ -574,7 +650,7 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 		open(mine.at, mine.clarity)
 	default:
 		slog.Info("nearest device: answering", "word", word, "score", round(mine.Score), "clarity", round(mine.clarity),
-			"waited", now.Sub(mine.at).Round(time.Millisecond), "held", !mine.held.IsZero())
+			"waited", now.Sub(mine.at).Round(time.Millisecond), "held", !mine.held.IsZero(), "peers", mine.peers)
 		open(mine.at, mine.clarity)
 	}
 }

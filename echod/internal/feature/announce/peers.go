@@ -65,6 +65,9 @@ var peers struct {
 	sync.Mutex
 	// by lowercase name, so a device that answers twice in one look is still one device.
 	by map[string]known
+	// last is when a look last heard any other device at all, kept after they are forgotten: how long
+	// a device that thinks it is alone has been deaf to the house (#751).
+	last time.Time
 }
 
 // Peers is the other devices in the house.
@@ -79,6 +82,14 @@ func Peers() []Peer {
 	// A stable order, so the log and the screen do not reshuffle the house every couple of minutes.
 	slices.SortFunc(out, func(a, b Peer) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+// LastHeard is when a look last heard any other device, zero if none ever has since the start: kept
+// after they are all forgotten, so a device that finds itself alone can say since when (#751).
+func LastHeard() time.Time {
+	peers.Lock()
+	defer peers.Unlock()
+	return peers.last
 }
 
 // Run advertises this device and keeps the list of the others.
@@ -196,6 +207,9 @@ func (f *Feature) browse(ctx context.Context) {
 	}
 	for _, p := range heard {
 		peers.by[strings.ToLower(p.Name)] = known{Peer: p, at: now}
+	}
+	if len(heard) > 0 {
+		peers.last = now
 	}
 	// A device is forgotten only after it has missed several looks in a row, not after one. A look
 	// lasts three seconds and a device that is busy, or whose answer is lost the way multicast loses
