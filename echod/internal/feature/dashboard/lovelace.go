@@ -611,7 +611,8 @@ type textNode struct {
 }
 
 func (t textNode) blocks(l look) []Block {
-	b := Block{Title: t.title.get(l.rendered), Text: plainText(t.body.get(l.rendered)), Color: t.color}
+	body := t.body.get(l.rendered)
+	b := Block{Title: t.title.get(l.rendered), Text: plainText(body), Marked: MarkText(body), Color: t.color}
 	if b.Title == "" && len(b.Text) == 0 {
 		return nil
 	}
@@ -1082,26 +1083,131 @@ func (c *compiler) badges(v any) node {
 }
 
 var (
-	mdLink   = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
-	mdMarks  = regexp.MustCompile(`(\*\*|__|\*|_|~~|` + "`" + `)`)
-	mdTags   = regexp.MustCompile(`<[^>]+>`)
-	mdPrefix = regexp.MustCompile(`^\s*(#{1,6}\s+|[-*+]\s+|>\s*)`)
+	mdLink    = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	mdTags    = regexp.MustCompile(`<[^>]+>`)
+	mdHeading = regexp.MustCompile(`^\s*(#{1,6})\s+(.*?)(?:\s+#+)?\s*$`)
+	mdBullet  = regexp.MustCompile(`^\s*[-*+]\s+(.*)$`)
+	mdQuote   = regexp.MustCompile(`^\s*>\s?`)
+	mdRule    = regexp.MustCompile(`^\s*([-*_])(\s*[-*_]){2,}\s*$`)
+	// Bold is a pair of ** or __ around words that start and end with something other than a space.
+	mdBold = regexp.MustCompile(`\*\*(\S(?:.*?\S)?)\*\*|__(\S(?:.*?\S)?)__`)
+	// Italic, struck and code are drawn plain: only their marks go, and only in pairs, so a lone * in
+	// "2 * 3" stays, and an _ inside a word, snake_case's, is not a mark at all.
+	mdStar   = regexp.MustCompile(`\*(\S(?:[^*]*?\S)?)\*`)
+	mdUnder  = regexp.MustCompile(`(^|[^\pL\pN_])_(\S(?:[^_]*?\S)?)_([^\pL\pN_]|$)`)
+	mdStrike = regexp.MustCompile(`~~(\S(?:.*?\S)?)~~`)
+	mdCode   = regexp.MustCompile("`([^`]*)`")
 )
 
 // plainText is markdown as plain paragraphs: headings, emphasis, links and tags reduced to their
-// words, since the page draws text, not HTML.
+// words, since the page draws text, not HTML. A card filling the screen alone (drawn_lone) draws these.
 func plainText(md string) []string {
 	var out []string
+	for _, l := range MarkText(md) {
+		if l.Kind != "gap" {
+			out = append(out, l.Plain())
+		}
+	}
+	return out
+}
+
+// MarkText is markdown as the lines a card draws, with the little structure a short card has kept
+// (#757): headings, bullets, bold words, and a gap where a blank line was. Each line of the source is a
+// line of its own, as Home Assistant's markdown card breaks them. Links are their words, tags go, and
+// anything more (tables, pictures) is its words as written.
+func MarkText(md string) []TextLine {
+	var out []TextLine
 	for _, line := range strings.Split(md, "\n") {
-		line = html.UnescapeString(line)
-		line = mdPrefix.ReplaceAllString(line, "")
+		line = html.UnescapeString(strings.TrimRight(line, " \t\r"))
+		var l TextLine
+		switch {
+		case strings.TrimSpace(line) == "" || mdRule.MatchString(line):
+			// One gap for any number of blank lines, and none at either end of the card.
+			if n := len(out); n > 0 && out[n-1].Kind != "gap" {
+				out = append(out, TextLine{Kind: "gap"})
+			}
+			continue
+		case mdHeading.MatchString(line):
+			m := mdHeading.FindStringSubmatch(line)
+			l = TextLine{Kind: "heading", Level: len(m[1])}
+			line = m[2]
+		case mdBullet.MatchString(line):
+			l = TextLine{Kind: "bullet"}
+			line = mdBullet.FindStringSubmatch(line)[1]
+		default:
+			l = TextLine{Kind: "para"}
+			line = mdQuote.ReplaceAllString(line, "")
+		}
 		line = mdLink.ReplaceAllString(line, "$1")
 		line = mdTags.ReplaceAllString(line, "")
-		line = mdMarks.ReplaceAllString(line, "")
-		line = strings.Join(strings.Fields(line), " ")
-		if line != "" {
-			out = append(out, line)
+		l.Runs = inlineRuns(line)
+		if len(l.Runs) == 0 {
+			if n := len(out); n > 0 && out[n-1].Kind != "gap" {
+				out = append(out, TextLine{Kind: "gap"}) // a line of nothing but a tag
+			}
+			continue
 		}
+		out = append(out, l)
+	}
+	if n := len(out); n > 0 && out[n-1].Kind == "gap" {
+		out = out[:n-1]
+	}
+	return out
+}
+
+// inlineRuns is a line's words in runs of plain and bold, with every other mark taken off in pairs.
+// Runs of nothing are dropped, and the spaces in a line closed up, as a browser shows them.
+func inlineRuns(line string) []TextRun {
+	var runs []TextRun
+	add := func(text string, bold bool) {
+		text = mdCode.ReplaceAllString(text, "$1")
+		text = mdStrike.ReplaceAllString(text, "$1")
+		text = mdStar.ReplaceAllString(text, "$1")
+		for mdUnder.MatchString(text) {
+			text = mdUnder.ReplaceAllString(text, "$1$2$3")
+		}
+		if text == "" {
+			return
+		}
+		if n := len(runs); n > 0 && runs[n-1].Bold == bold {
+			runs[n-1].Text += text
+			return
+		}
+		runs = append(runs, TextRun{Text: text, Bold: bold})
+	}
+	at := 0
+	for _, m := range mdBold.FindAllStringSubmatchIndex(line, -1) {
+		add(line[at:m[0]], false)
+		inner := line[m[2]:m[3]]
+		if m[2] < 0 {
+			inner = line[m[4]:m[5]]
+		}
+		add(inner, true)
+		at = m[1]
+	}
+	add(line[at:], false)
+	// Spaces closed up across the runs, kept between them where the source had any.
+	var out []TextRun
+	for i, r := range runs {
+		lead := strings.TrimLeft(r.Text, " \t") != r.Text
+		trail := strings.TrimRight(r.Text, " \t") != r.Text
+		text := strings.Join(strings.Fields(r.Text), " ")
+		if text == "" {
+			if len(out) > 0 && !strings.HasSuffix(out[len(out)-1].Text, " ") {
+				out[len(out)-1].Text += " "
+			}
+			continue
+		}
+		if lead && len(out) > 0 && !strings.HasSuffix(out[len(out)-1].Text, " ") {
+			text = " " + text
+		}
+		if trail && i < len(runs)-1 {
+			text += " "
+		}
+		out = append(out, TextRun{Text: text, Bold: r.Bold})
+	}
+	if n := len(out); n > 0 {
+		out[n-1].Text = strings.TrimRight(out[n-1].Text, " ")
 	}
 	return out
 }

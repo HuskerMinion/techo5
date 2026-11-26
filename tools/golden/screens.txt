@@ -96,6 +96,7 @@ show/dash-tiles-fill-show8.png
 show/dash-picture-elements-show8.png
 show/dash-connect-show8.png
 show/dash-layout-normal-side.png
+show/dash-markdown-show8.png
 show/fx-rain-page-1280x800-1.png
 show/fx-storm-page-1280x800-2.png
 show/weather-show8.png

@@ -94,6 +94,10 @@ type Block struct {
 	Rows    []Tile // an entities card: one thing a line
 	Title   string
 	Text    []string // paragraphs
+	// Marked is a markdown card's text with what structure it had kept: its headings, bullets, bold
+	// words and the gaps where blank lines were (#757). Text has the same words as plain paragraphs,
+	// for a card that fills the screen alone, whose words are drawn as large as they go.
+	Marked  []TextLine
 	Graph   *Graph
 	Gauge   *Gauge
 	Picture *Picture
@@ -103,6 +107,29 @@ type Block struct {
 	Columns  int
 	// Color is a heading's or markdown card's color, used when it is alone on the page. Zero for none.
 	Color color.RGBA
+}
+
+// TextLine is one line of a markdown card: a heading, a bullet, a paragraph, or a gap where a blank
+// line was.
+type TextLine struct {
+	Kind  string // heading, bullet, para, gap
+	Level int    // a heading's: 1 for #, to 6
+	Runs  []TextRun
+}
+
+// TextRun is words of a line in one weight.
+type TextRun struct {
+	Text string
+	Bold bool
+}
+
+// Plain is the line's words without their weights.
+func (t TextLine) Plain() string {
+	var b strings.Builder
+	for _, r := range t.Runs {
+		b.WriteString(r.Text)
+	}
+	return b.String()
 }
 
 // Section is blocks that stay together, one column wide: a room, a section of a sections view, a card

@@ -277,6 +277,9 @@ func (r *paint) block(b dashboard.Block, x, y, w int, pal dashPal, adj dashAdjus
 		}
 		return h
 
+	case len(b.Marked) > 0:
+		return r.markedCard(b, x, y, w, pal)
+
 	case len(b.Text) > 0:
 		pad := r.s(cardPad) + r.s(4)
 		var lines []string
