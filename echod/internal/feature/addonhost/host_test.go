@@ -345,3 +345,29 @@ func eventuallyTrue(t *testing.T, what string, ok func() bool) {
 	}
 	t.Fatalf("waited too long for %s", what)
 }
+
+// An add-on's audio is not fetched from the device: an address naming it by number is refused before
+// anything is fetched.
+func TestAddonAudioIsNotFromTheDevice(t *testing.T) {
+	d := &device{host: newHostRig(t).h}
+	for _, u := range []string{"http://127.0.0.1:8181/x.mp3", "http://[::1]/x.mp3", "http://169.254.1.1/x", "http://a b/x"} {
+		if err := d.Media("meals", addonapi.OpMediaPlay, addonapi.MediaPlay{URL: u, Kind: addonapi.MediaAudio}); addonapi.CodeOf(err) != addonapi.CodeBadRequest {
+			t.Errorf("%s: %v", u, err)
+		}
+	}
+}
+
+// An add-on's own sound is never louder than -6 dBFS before the device's volume.
+func TestAddonSoundsAreCapped(t *testing.T) {
+	loud := []int16{32767, -32768, 100}
+	got := capPeak(loud, maxPeak)
+	for _, s := range got {
+		if s > 16384 || s < -16384 {
+			t.Errorf("a sample at %d", s)
+		}
+	}
+	quiet := []int16{100, -200}
+	if got := capPeak(quiet, maxPeak); got[1] != -200 {
+		t.Error("a quiet sound was changed")
+	}
+}

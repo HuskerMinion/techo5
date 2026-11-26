@@ -2,6 +2,8 @@ package addonhost
 
 import (
 	"context"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
@@ -102,7 +105,9 @@ var sounds = map[string][]speaker.Note{
 // PlaySound plays a sound over whatever is playing, as the device's own chimes do.
 func (d *device) PlaySound(id, name string, w *addonapi.WAV) error {
 	if w != nil {
-		speaker.Sound().Chime([]speaker.Note{speaker.Synth(resample(w.Samples, w.Rate, speaker.Rate))})
+		// Never louder than the device's own cues: held to half of full scale (-6 dBFS) here, and
+		// Synth brings it to the chimes' level, which the device's volume then sets as it does theirs.
+		speaker.Sound().Chime([]speaker.Note{speaker.Synth(capPeak(resample(w.Samples, w.Rate, speaker.Rate), maxPeak))})
 		return nil
 	}
 	notes, ok := sounds[name]
@@ -111,6 +116,34 @@ func (d *device) PlaySound(id, name string, w *addonapi.WAV) error {
 	}
 	speaker.Sound().Chime(notes)
 	return nil
+}
+
+// maxPeak is the loudest an add-on's own sound may be, as a share of full scale: -6 dBFS.
+const maxPeak = 0.5
+
+// capPeak scales samples down so none is past most of full scale; quieter ones are left as they are.
+func capPeak(in []int16, most float64) []int16 {
+	peak := 0
+	for _, s := range in {
+		peak = max(peak, abs(int(s)))
+	}
+	limit := most * 32767
+	if float64(peak) <= limit {
+		return in
+	}
+	g := limit / float64(peak)
+	out := make([]int16, len(in))
+	for i, s := range in {
+		out[i] = int16(float64(s) * g)
+	}
+	return out
+}
+
+func abs(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 // resample takes mono samples from one rate to another, by straight lines between them: enough for a
@@ -205,6 +238,16 @@ func (d *device) Media(id, op string, p addonapi.MediaPlay) error {
 			}
 			d.video[id] = vid
 		default:
+			// The address is held to what a video's is (no control characters, http or https, a host),
+			// and one that names the device or loopback by number is refused here; a name is refused as it
+			// is dialed (media.PlayNamed, guarded).
+			u, err := video.CheckURL(p.URL)
+			if err != nil {
+				return addonapi.Errorf(addonapi.CodeBadRequest, "%v", err)
+			}
+			if ip := net.ParseIP(strings.Trim(u.Hostname(), "[]")); ip != nil && netguard.Refused(ip) {
+				return addonapi.Errorf(addonapi.CodeBadRequest, "media is not played from the device itself")
+			}
 			t := &media.Title{Title: p.Title, Source: name}
 			media.Get().PlayNamed(p.URL, t)
 			d.audio[id] = t

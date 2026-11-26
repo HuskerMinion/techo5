@@ -72,8 +72,8 @@ Each is one line on the consent screen, word for word:
 | `events` | Sends events of its own to Home Assistant. | `event.fire` |
 | `speak` | Says words on this device. | `speak`, `speak.cancel` |
 | `sound` | Plays short sounds on this device. | `sound.play` |
-| `timers` | Sets timers that ring on this device. | `timer.start`, `timer.cancel`, `timer.list` |
-| `keepawake` | Keeps the screen on while it is in use. | `awake.hold`, `awake.renew`, `awake.release` |
+| `timers` | Sets timers that ring on this device (silent in quiet hours). | `timer.start`, `timer.cancel`, `timer.list` |
+| `keepawake` | Keeps the screen on while you use it. | `awake.hold`, `awake.renew`, `awake.release` |
 | `settings` | Has settings of its own on this page. | `settings.get`, `settings.reply` |
 | `entities` | Adds entities to Home Assistant: *sensor.step*. | `entity.set` |
 | `media` | Plays video and audio from the network on this device. | `media.play`, `media.pause`, `media.resume`, `media.stop` |
