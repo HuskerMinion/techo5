@@ -125,6 +125,25 @@ func capabilityLine(c string, v catalog.Version) string {
 	return line
 }
 
+// moreWords is what an update asks for beyond the version installed, as the card says it: a new
+// capability of the add-on API as its consent line says it (the commands and entities it adds are
+// named on their own), anything else as catalog.Asks.More words it.
+func moreWords(more []string) []string {
+	out := make([]string, 0, len(more))
+	for _, m := range more {
+		c, ok := strings.CutPrefix(m, "the ")
+		c, isCap := strings.CutSuffix(c, " capability")
+		line, known := capabilityLines[c]
+		if !ok || !isCap || !known {
+			out = append(out, m)
+			continue
+		}
+		line, _, _ = strings.Cut(line, ":")
+		out = append(out, strings.TrimSuffix(line, "."))
+	}
+	return out
+}
+
 // addonsCapabilities is a line for each capability of the add-on API the version uses, in the order
 // pkg/addonapi lists them.
 func addonsCapabilities(w http.ResponseWriter, v catalog.Version) {
@@ -268,7 +287,7 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 			case u.Problem != "":
 				fmt.Fprintf(w, ` It cannot be installed here: %s.</p></form>`, html.EscapeString(u.Problem))
 			case len(u.More) > 0:
-				fmt.Fprintf(w, ` It asks for more than the version installed: %s.</p>`, html.EscapeString(strings.Join(u.More, ", ")))
+				fmt.Fprintf(w, ` It asks for more than the version installed: %s.</p>`, html.EscapeString(strings.Join(moreWords(u.More), "; ")))
 				fmt.Fprint(w, `<div class="banner bad">`+addonWarning+addonsBox(s.Name, s.Author)+`</div>`)
 				fmt.Fprint(w, `<p><button type="submit">Update</button></p></form>`)
 			default:

@@ -93,3 +93,12 @@ func TestAnAddonsSettingsFormNeverShowsASecret(t *testing.T) {
 		}
 	}
 }
+
+// An update asking for a new capability says it as its consent line does.
+func TestAnUpdateSaysANewCapabilityAsItsLine(t *testing.T) {
+	got := moreWords([]string{"the speak capability", "the commands capability", "the command back", "port 4000/tcp"})
+	want := []string{"Says words on this device", "Adds commands Home Assistant and voice can call", "the command back", "port 4000/tcp"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("said %q", got)
+	}
+}

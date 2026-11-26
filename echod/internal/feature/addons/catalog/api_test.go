@@ -31,7 +31,7 @@ func mealsVersion(v string) Version {
 }
 
 func meals() Addon {
-	return Addon{ID: "meals", Name: "Meals", Author: "nachtschatt3n", Summary: "Cooks along with Mealie.",
+	return Addon{ID: "meals", Name: "Meals", Author: "An Author", Summary: "Cooks along with Mealie.",
 		Repo: "https://github.com/example/meals", Versions: []Version{mealsVersion("0.1.0")}}
 }
 
