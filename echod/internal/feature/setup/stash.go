@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 )
 
 // A save the device refuses used to come back with the form as it was saved before, and everything
@@ -57,7 +59,8 @@ func (s *rejectedForms) keep(token, what string, form url.Values) {
 	}
 	fields := url.Values{}
 	for name, values := range form {
-		if stashSecret[name] || stashSecretIn[what][name] || hasLogin(values) {
+		// An add-on's secret setting (addonhost.SecretPrefix) is a secret whatever it is called.
+		if stashSecret[name] || stashSecretIn[what][name] || hasLogin(values) || strings.HasPrefix(name, addonhost.SecretPrefix) {
 			continue
 		}
 		fields[name] = append([]string(nil), values...)

@@ -10,13 +10,17 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/diag"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
 // The Add-ons card: what the catalog offers this device, what is installed, and what was put on it by
@@ -36,6 +40,7 @@ func init() {
 	saves["addon-stop"] = saveAddonStop
 	saves["addon-remove"] = saveAddonRemove
 	saves["addon-check"] = saveAddonCheck
+	saves["addon-settings"] = saveAddonSettings
 }
 
 // addonWarning is the warning every install shows, word for word as it was agreed
@@ -81,7 +86,54 @@ func addonsAsk(w http.ResponseWriter, v catalog.Version, files []catalog.File, a
 		}
 		fmt.Fprintf(w, `<li>Downloads beside its program, checked as the program is: %s.</li>`, strings.Join(fs, ", "))
 	}
+	addonsCapabilities(w, v)
 	fmt.Fprintf(w, `<li>Uses about %d MB of memory and %d MB of storage.</li></ul>`, v.MemoryMB, v.DiskMB)
+}
+
+// capabilityLines are what each capability of the add-on API says on the consent screen, word for
+// word: what the daemon lets an add-on with it do, and nothing it does not. The %s in two is the list
+// of what the add-on declares, as its catalog entry pins it. Each capability has a line; a test holds
+// every one of pkg/addonapi's to having one.
+var capabilityLines = map[string]string{
+	addonapi.CapCommands:  "Adds commands Home Assistant and voice can call: %s.",
+	addonapi.CapEvents:    "Sends events of its own to Home Assistant.",
+	addonapi.CapSpeak:     "Says words on this device.",
+	addonapi.CapSound:     "Plays short sounds on this device.",
+	addonapi.CapTimers:    "Sets timers that ring on this device.",
+	addonapi.CapKeepAwake: "Keeps the screen on while it is in use.",
+	addonapi.CapSettings:  "Has settings of its own on this page.",
+	addonapi.CapEntities:  "Adds entities to Home Assistant: %s.",
+	addonapi.CapMedia:     "Plays video and audio from the network on this device.",
+}
+
+// capabilityLine is a capability's line, for a version that lists commands and entities as given.
+func capabilityLine(c string, v catalog.Version) string {
+	line, ok := capabilityLines[c]
+	if !ok {
+		return ""
+	}
+	switch c {
+	case addonapi.CapCommands:
+		var words []string
+		for _, n := range v.Commands {
+			words = append(words, strings.ReplaceAll(n, "_", " "))
+		}
+		return fmt.Sprintf(line, strings.Join(words, ", "))
+	case addonapi.CapEntities:
+		return fmt.Sprintf(line, strings.Join(v.Entities, ", "))
+	}
+	return line
+}
+
+// addonsCapabilities is a line for each capability of the add-on API the version uses, in the order
+// pkg/addonapi lists them.
+func addonsCapabilities(w http.ResponseWriter, v catalog.Version) {
+	for _, c := range addonapi.Capabilities {
+		if !slices.Contains(v.Capabilities, c) {
+			continue
+		}
+		fmt.Fprintf(w, `<li>%s</li>`, html.EscapeString(capabilityLine(c, v)))
+	}
 }
 
 // fileSize is a download's size as the card says it: in MB from one up, in kB below.
@@ -182,6 +234,10 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 		if s.Firewall != "" {
 			fmt.Fprintf(w, `<p class="note bad">Its ports may not be reachable from the network: %s</p>`, html.EscapeString(s.Firewall))
 		}
+		if until, banned := addonhost.Get().Banned(s.ID); banned {
+			fmt.Fprintf(w, `<p class="note bad">It kept going past the add-on API's limits, so it is disconnected from it until %s.</p>`,
+				html.EscapeString(until.Local().Format("15:04:05")))
+		}
 		if s.Withdrawn != "" {
 			fmt.Fprintf(w, `<div class="banner bad">No longer listed in TECHO5's catalog: %s. Removing it is suggested; it
 			 is not removed by itself.</div>`, html.EscapeString(s.Withdrawn))
@@ -219,6 +275,8 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 				fmt.Fprint(w, ` It asks for nothing more than the version installed.</p><p><button type="submit">Update</button></p></form>`)
 			}
 		}
+
+		addonSettings(w, token, s)
 
 		if lines := f.Tail(s.ID, 20); len(lines) > 0 {
 			r := diag.Redactor()
@@ -476,4 +534,124 @@ func plainErr(err error) string {
 		return ""
 	}
 	return strings.TrimPrefix(err.Error(), "addons: ")
+}
+
+// addonSettings is an add-on's own settings, drawn from the schema its addon.json declares, with Save
+// and, when it declares one, Test. A secret is never put back in the page: its field is empty, says
+// whether one is set, and is kept as it is when left empty; Clear takes it away.
+func addonSettings(w http.ResponseWriter, token string, s addons.Status) {
+	schema, values, ok := addonhost.Get().Settings(s.ID)
+	if ok {
+		addonSettingsForm(w, token, s.ID, schema, values)
+	}
+}
+
+// addonSettingsForm is the form for an add-on's settings as saved.
+func addonSettingsForm(w http.ResponseWriter, token, id string, schema *addonapi.Settings, values map[string]any) {
+	fmt.Fprint(w, `<details><summary>Its settings</summary><form method="post" action="/setup/save">`)
+	hidden(w, token, "addon-settings")
+	fmt.Fprintf(w, `<input type="hidden" name="id" value="%s">`, html.EscapeString(id))
+	for _, f := range schema.Fields {
+		label := html.EscapeString(f.Label)
+		name := html.EscapeString(addonhost.FieldPrefix + f.Key)
+		switch f.Type {
+		case addonapi.TypeBool:
+			checked := ""
+			if values[f.Key] == true {
+				checked = " checked"
+			}
+			fmt.Fprintf(w, `<p><label><input type="checkbox" name="%s" value="yes"%s> %s</label></p>`, name, checked, label)
+		case addonapi.TypeSecret:
+			set, _ := values[f.Key].(string)
+			placeholder := "not set"
+			if set != "" {
+				placeholder = "set; leave empty to keep it"
+			}
+			fmt.Fprintf(w, `<p><label>%s <input type="password" name="%s" value="" autocomplete="off" placeholder="%s"%s></label>`,
+				label, html.EscapeString(addonhost.SecretPrefix+f.Key), placeholder, maxLength(f))
+			if set != "" {
+				fmt.Fprintf(w, ` <label><input type="checkbox" name="%s" value="yes"> Clear</label>`, html.EscapeString(addonhost.ClearPrefix+f.Key))
+			}
+			fmt.Fprint(w, `</p>`)
+		case addonapi.TypeNumber:
+			v := ""
+			if n, ok := values[f.Key].(float64); ok {
+				v = strconv.FormatFloat(n, 'f', -1, 64)
+			}
+			step := "any"
+			if f.Step > 0 {
+				step = strconv.FormatFloat(f.Step, 'f', -1, 64)
+			}
+			fmt.Fprintf(w, `<p><label>%s <input type="number" name="%s" value="%s" min="%g" max="%g" step="%s"></label></p>`,
+				label, name, html.EscapeString(v), f.Min, f.Max, step)
+		case addonapi.TypeSelect:
+			cur, _ := values[f.Key].(string)
+			fmt.Fprintf(w, `<p><label>%s <select name="%s"><option value=""></option>`, label, name)
+			for _, o := range f.Options {
+				sel := ""
+				if o == cur {
+					sel = " selected"
+				}
+				fmt.Fprintf(w, `<option value="%s"%s>%s</option>`, html.EscapeString(o), sel, html.EscapeString(o))
+			}
+			fmt.Fprint(w, `</select></label></p>`)
+		default: // string, entity
+			cur, _ := values[f.Key].(string)
+			hint := ""
+			if f.Type == addonapi.TypeEntity {
+				hint = ` placeholder="` + html.EscapeString(f.Domains[0]) + `.…"`
+			}
+			fmt.Fprintf(w, `<p><label>%s <input type="text" name="%s" value="%s"%s%s></label></p>`,
+				label, name, html.EscapeString(cur), maxLength(f), hint)
+		}
+	}
+	fmt.Fprint(w, `<p><button type="submit">Save</button>`)
+	if schema.Test {
+		fmt.Fprint(w, ` <button type="submit" name="test" value="yes" class="quiet">Test</button>`)
+	}
+	fmt.Fprint(w, `</p><p class="note">These are the add-on's, kept beside it: not in this device's settings, not in Home
+	 Assistant, and not in a backup. A secret is never shown again once saved.</p></form></details>`)
+}
+
+func maxLength(f addonapi.Setting) string {
+	if f.Max > 0 {
+		return fmt.Sprintf(` maxlength="%d"`, int(f.Max))
+	}
+	return ""
+}
+
+// saveAddonSettings saves an add-on's settings, or with Test asks the add-on whether the ones in the
+// form work and saves nothing.
+func saveAddonSettings(r *http.Request) string {
+	id, problem := addonID(r)
+	if problem != "" {
+		return problem
+	}
+	host := addonhost.Get()
+	if r.PostFormValue("test") != "" {
+		ok, why, err := host.TestSettings(r.Context(), id, r.PostFormValue)
+		switch {
+		case err != nil:
+			return "the test did not reach the add-on: " + addonapi.CodeOf(err) + ", " + plainAPIErr(err)
+		case !ok:
+			if why == "" {
+				why = "it gave no reason"
+			}
+			return "the add-on says these settings do not work: " + why
+		}
+		return ""
+	}
+	if _, err := host.SaveSettings(id, r.PostFormValue); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+// plainAPIErr is an error from the add-on API as the page says it: its words, without the code.
+func plainAPIErr(err error) string {
+	var e *addonapi.Error
+	if errors.As(err, &e) {
+		return e.Message
+	}
+	return err.Error()
 }
