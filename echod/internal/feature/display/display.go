@@ -34,6 +34,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
@@ -67,6 +68,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -638,6 +640,7 @@ func build() *Display {
 	touch.Get().Landed.Listen(d.fingerLanded)
 	touch.Get().Down.Listen(d.fingerDown)
 	d.listenPowerKey()
+	mute.Get().LiftedByButton.Listen(func(struct{}) { muteLiftedNote() })
 	go d.watchLink()
 	// A device with no address a while after boot gets the Wi-Fi page without being asked: a
 	// fresh unit, or one carried to another house. The page ends the splash (frame), which would
@@ -2676,6 +2679,7 @@ func (d *Display) Start(context.Context) error {
 	// A panel's canvas is only known now: photos and the rest are made at it from here on.
 	home.SetPanelSize(w, h)
 	tessera.SetPanelSize(w, h)
+	addonhost.SetScreenSize(w, h) // what hello tells an add-on
 	// The calendar's two switches that go by the panel's size are shown for this one from now on.
 	panelWide.Store(wideScreen(w, h))
 	d.lookChanged()
@@ -2846,7 +2850,8 @@ func (d *Display) frame() (next time.Duration) {
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
-		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active()
+		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active() ||
+		keepawake.Held()
 	if d.coverTick(on) { // the night may have lit the panel under a closed cover
 		d.mu.Lock()
 		on = d.on
@@ -2998,6 +3003,7 @@ func (d *Display) frame() (next time.Duration) {
 	// here and since let go is shown paused too (see media.Player.Held).
 	s.playing, s.paused = media.Get().ScreenState()
 	s.muted, _ = mute.Get().Muted()
+	s.unlitMute = s.muted && mute.Get().UnlitMute()
 	s.linkDown = d.link.down(now)
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
 		s.volume, s.showVolume = volume, true

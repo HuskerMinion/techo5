@@ -379,7 +379,10 @@ func (f *Feature) NotifyPictureSized(message, title, picture, chime, speak, soun
 // has nothing of its own to follow up on. It never takes the place of a notification Home Assistant
 // sent, which somebody is meant to see. An empty message takes down the note this device put up, if one
 // is still up.
-func (f *Feature) Note(title, message string) {
+func (f *Feature) Note(title, message string) { f.NoteFor(title, message, noteFor) }
+
+// NoteFor is Note for a note that says something in passing and should not stay as long: up for d.
+func (f *Feature) NoteFor(title, message string, d time.Duration) {
 	message = clean(message, maxMessage)
 	f.order.Lock()
 	defer f.order.Unlock()
@@ -395,7 +398,7 @@ func (f *Feature) Note(title, message string) {
 		return
 	}
 	f.put(Notification{
-		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message, Until: f.now().Add(noteFor), Own: true,
+		ID: f.nextID(), Kind: Text, Title: clean(title, maxTitle), Message: message, Until: f.now().Add(d), Own: true,
 	}, how{silent: true, hushed: f.hushed()})
 }
 

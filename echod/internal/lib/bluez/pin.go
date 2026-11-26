@@ -76,17 +76,56 @@ func bluezError(err error, name string) bool {
 	return strings.Contains(err.Error(), name)
 }
 
+// objectGone is whether err says the device's object is not on the bus any more: bluetoothd took it
+// away, so the call never reached a device. libdbus answers a call to a path nothing holds with
+// UnknownMethod (`Method "Pair" with signature "" on interface "org.bluez.Device1" doesn't exist`,
+// techo5-dot#56), or UnknownObject or UnknownInterface.
+func objectGone(err error) bool {
+	if err == nil {
+		return false
+	}
+	var de dbus.Error
+	if errors.As(err, &de) {
+		switch de.Name {
+		case "org.freedesktop.DBus.Error.UnknownMethod", "org.freedesktop.DBus.Error.UnknownObject",
+			"org.freedesktop.DBus.Error.UnknownInterface":
+			return true
+		}
+		return false
+	}
+	return strings.Contains(err.Error(), "doesn't exist")
+}
+
 // pairWithPINs runs pair, and when a legacy-PIN pairing is refused with the PIN given, runs it again
 // with the next of legacyPINs. Only a refusal after the agent was asked for a PIN is retried: a
 // modern device that confirmed a number and still failed is not helped by another PIN.
-func pairWithPINs(ctx context.Context, path dbus.ObjectPath, pair func() error) error {
+//
+// back is for a speaker whose object bluetoothd removed after a refusal anyway (Pair trusts it first
+// so that it does not, techo5-dot#56): it waits for discovery to find the speaker again and says
+// whether it did. The PIN is then tried again, as the try that found the object gone never reached
+// the speaker.
+func pairWithPINs(ctx context.Context, path dbus.ObjectPath, pair func() error, back func(context.Context) bool) error {
 	defer pinDone(path)
-	for i := range legacyPINs {
+	waited := false
+	for i := 0; i < len(legacyPINs); i++ {
 		pinTry(path, i)
 		err := pair()
 		if bluezError(err, "AlreadyExists") {
 			return nil
 		}
+		// Only after a refusal, and once per PIN: on the first try the device was simply not there,
+		// and one that keeps vanishing is not going to pair.
+		if objectGone(err) && i > 0 && !waited && back != nil {
+			waited = true
+			slog.Info("bluetooth: the speaker went away after refusing a PIN, waiting for it to be found again",
+				"device", string(path))
+			if !back(ctx) {
+				return err
+			}
+			i-- // the same PIN again
+			continue
+		}
+		waited = false
 		if err == nil || !bluezError(err, "AuthenticationFailed") || !pinAsked(path) || i == len(legacyPINs)-1 {
 			return err
 		}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
@@ -173,13 +174,42 @@ func (f *Feature) fetchList(source string) {
 
 func browseStations(source string) ([]station, error) {
 	if !hass.Get().Ready() {
-		return directStations(source)
+		return directStations(source, config.Get().Home.Place)
 	}
 	m, err := hass.Get().Browse(context.Background(), "media-source://radio_browser/"+source)
-	if err != nil {
+	if err == nil {
+		toldNoRadioBrowser.Store(false)
+		return stationsOf(m, source), nil
+	}
+	if !hass.UnknownMediaSource(err, "radio_browser") {
 		return nil, err
 	}
-	return stationsOf(m, source), nil
+	// Home Assistant is there but has no Radio Browser integration (removed, or never added): the
+	// lists are radio-browser.info's either way, so the device asks it itself, as it does without
+	// Home Assistant (#752). The answer is kept as long as any list (fetchList), so this asks no more
+	// often than Home Assistant was asked. Said once rather than at every refresh of either list, and
+	// again only after the integration has come back and gone.
+	if toldNoRadioBrowser.CompareAndSwap(false, true) {
+		slog.Info("radio: Home Assistant has no Radio Browser integration; the device asks radio-browser.info for the stations itself")
+	}
+	return directStations(source, fallbackPlace())
+}
+
+// toldNoRadioBrowser is whether the log already says Home Assistant has no Radio Browser.
+var toldNoRadioBrowser atomic.Bool
+
+// fallbackPlace is where the direct lists are for on a device whose Home Assistant has no Radio
+// Browser: the place set on its setup page, else Home Assistant's own location and country, which
+// is what Home Assistant's Radio Browser would have gone by.
+func fallbackPlace() config.Place {
+	p := config.Get().Home.Place
+	if p.Set() {
+		return p
+	}
+	if c, err := hass.Get().Config(); err == nil && (c.Latitude != 0 || c.Longitude != 0) {
+		p.Lat, p.Lon, p.Country = c.Latitude, c.Longitude, strings.ToUpper(c.Country)
+	}
+	return p
 }
 
 // stationsOf is the playable entries of a listing, names tidied, the popular list cut short.
@@ -264,6 +294,10 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 		speaker := speakerEntity()
 		f.mu.Lock()
 		chosen := f.chosen
+		var seq uint64
+		if chosen == station && watch {
+			seq = f.askSeq() // in order with the check, so a later tap's watch always counts after it
+		}
 		f.mu.Unlock()
 		if chosen != station {
 			return
@@ -300,18 +334,21 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 		// The call has no answer: Home Assistant that refuses it says so only in its own log. So what
 		// comes of it is watched for instead (hint.go), from the call rather than from the tap, since
 		// naming the player can take seconds of its own.
-		f.watchStart(h.Service, station, wait, asked)
+		f.watchStart(h.Service, station, seq, wait, asked)
 	})
 }
 
-// Radio Browser's own lists for a device without Home Assistant: the stations within localRadius of
+// Radio Browser's own lists for a device without Home Assistant, or whose Home Assistant has no Radio
+// Browser integration: the stations within localRadius of
 // the device's place, and the most listened to in its country. MP3 only where the device has to play
 // them itself, since it decodes nothing else; every station where a music library is set up, since
 // the library plays what the device cannot (media/library.go).
 const localRadius = 100 // km, as Home Assistant's Radio Browser has it
 
-func directStations(source string) ([]station, error) {
-	p := config.Get().Home.Place
+// searchStations is Radio Browser's search, a variable so a test can answer in its place.
+var searchStations = radiobrowser.Search
+
+func directStations(source string, p config.Place) ([]station, error) {
 	if !p.Set() {
 		return nil, errors.New("set this device's place on the setup page to list stations near it")
 	}
@@ -330,7 +367,7 @@ func directStations(source string) ([]station, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	found, err := radiobrowser.Search(ctx, q)
+	found, err := searchStations(ctx, q)
 	if err != nil {
 		return nil, err
 	}

@@ -218,14 +218,21 @@ func newID() string {
 // an alarm saying what it is for.
 func Say(words string) { sayThroughHA(words) }
 
+// SayOr is Say for a caller that needs to know the words went nowhere: unheard is called, before it
+// returns, when no Home Assistant was connected to take them (an add-on's speak, feature/addonapi).
+func SayOr(words string, unheard func()) { sayVia(words, unheard) }
+
 // sayThroughHA asks Home Assistant to say the label on this device. Its own chime is skipped, since
 // the reminder has just played one. preannounce goes as a template: Home Assistant 2026.9 refuses the
 // text "false" for it, and a template renders to a real false (#58).
-func sayThroughHA(label string) {
+func sayThroughHA(label string) { sayVia(label, nil) }
+
+func sayVia(label string, unheard func()) {
 	component.CallService.Emit(component.Call{
 		Service:   "assist_satellite.announce",
 		Data:      map[string]string{"entity_id": satellite(), "message": label},
 		Templates: map[string]string{"preannounce": "{{ false }}"},
+		Unheard:   unheard,
 	})
 }
 

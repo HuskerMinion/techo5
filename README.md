@@ -755,8 +755,8 @@ table are photos from Wikimedia Commons; who took each one, and its license, is 
 - [Home Assistant](https://www.home-assistant.io/) and [ESPHome](https://esphome.io/): Assist, the
   native API, and the reason to build any of this.
 - [Music Assistant](https://www.music-assistant.io/) and [Sendspin](https://github.com/Sendspin/sendspin-go).
-- [Radio Browser](https://www.radio-browser.info/), through Home Assistant's integration, for stations
-  near home.
+- [Radio Browser](https://www.radio-browser.info/), through Home Assistant's integration or
+  directly, for stations near home.
 - The rain map and weather alerts: the U.S. [National Weather Service](https://www.weather.gov/) for
   the radar and the [alerts](https://www.weather.gov/documentation/services-web-api) (public domain),
   with the radar's map tiles from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/)

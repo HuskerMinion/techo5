@@ -27,9 +27,11 @@ type house struct {
 	later  []func()
 	opened []time.Time
 	faint  []time.Time
-	at0    int
-	sent   []claim
-	mine   *pending
+	// clarity is what each turn opened by wokeClear was told the wake was heard with.
+	clarity []float64
+	at0     int
+	sent    []claim
+	mine    *pending
 }
 
 func newHouse(t *testing.T) *house {
@@ -60,7 +62,11 @@ func newHouse(t *testing.T) *house {
 	n.after = func(_ time.Duration, f func()) { h.later = append(h.later, f) }
 	n.woke = func(_ int, at time.Time) { h.opened = append(h.opened, at) }
 	n.wokeNow = func(int) { h.at0++ }
-	n.faint = func(_ int, at time.Time) { h.faint = append(h.faint, at) }
+	n.wokeClear = func(_ int, at time.Time, clarity float64) {
+		h.opened = append(h.opened, at)
+		h.clarity = append(h.clarity, clarity)
+	}
+	n.faint = func(_ int, at time.Time, _ float64) { h.faint = append(h.faint, at) }
 	h.n = n
 	return h
 }
@@ -302,7 +308,7 @@ func TestAPanicDecidingStillAnswers(t *testing.T) {
 	h := newHouse(t)
 	h.n.Woke(0)
 	answered := 0
-	h.n.woke = func(int, time.Time) {
+	h.n.wokeClear = func(int, time.Time, float64) {
 		answered++
 		if answered == 1 {
 			panic("boom")

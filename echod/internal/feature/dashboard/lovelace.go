@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 )
 
@@ -233,7 +235,7 @@ func (c *compiler) cards(v any) []node {
 // entityCards are the cards that are one entity each, which become a tile.
 var entityCards = map[string]bool{
 	"tile": true, "button": true, "entity": true, "light": true, "thermostat": true, "humidifier": true,
-	"media-control": true, "weather-forecast": true, "alarm-panel": true,
+	"media-control": true, "alarm-panel": true,
 	"custom:mushroom-entity-card": true, "custom:mushroom-light-card": true, "custom:mushroom-climate-card": true,
 	"custom:mushroom-cover-card": true, "custom:mushroom-fan-card": true, "custom:mushroom-media-player-card": true,
 	"custom:mushroom-lock-card": true, "custom:mushroom-person-card": true, "custom:mushroom-alarm-control-panel-card": true,
@@ -327,6 +329,9 @@ func (c *compiler) cardItself(card raw) node {
 			return group{headingNode{text: c.render(title, "")}, g}
 		}
 		return g
+
+	case kind == "weather-forecast":
+		return c.forecastCard(card)
 
 	case kind == "gauge":
 		e := str(card, "entity")
@@ -423,6 +428,86 @@ func (c *compiler) cardItself(card raw) node {
 		return nil
 	}
 	return listNode{items: []tileItem{{name: cardName(kind), icon: "card-outline", value: "Shown when streamed", fixed: true}}}
+}
+
+// forecastSlots is how many days a forecast card shows when it does not say, as Home Assistant's.
+const forecastSlots = 5
+
+// forecastCard is a weather forecast card (#758): the weather now, as its entity's tile, over the
+// days to come, which are asked for (a weather entity's state has carried none since Home Assistant
+// 2024.3). show_current and show_forecast leave either out; with no forecast it is the tile alone.
+func (c *compiler) forecastCard(card raw) node {
+	e := str(card, "entity")
+	if e == "" {
+		return nil
+	}
+	c.follow(e)
+	item := c.item(card, e)
+	if card["show_forecast"] == false {
+		return listNode{items: []tileItem{item}}
+	}
+	kind := cmp.Or(str(card, "forecast_type"), "daily")
+	n := forecastNode{item: item, want: forecastWant{entity: e, kind: kind}, current: card["show_current"] != false, max: forecastSlots}
+	if v, ok := card["forecast_slots"].(float64); ok && v >= 1 {
+		n.max = int(v)
+	}
+	c.need.forecasts = append(c.need.forecasts, n.want)
+	return n
+}
+
+// forecastNode is a weather forecast card.
+type forecastNode struct {
+	item    tileItem
+	want    forecastWant
+	current bool
+	max     int
+}
+
+func (f forecastNode) blocks(l look) []Block {
+	t := f.item.tile(l, l.room)
+	e := l.states[f.want.entity]
+	fc := &Forecast{Current: f.current, Name: t.Name, Icon: t.Icon, Gone: t.Gone, Tap: t.Tap, Hourly: f.want.kind == "hourly", Max: f.max}
+	if !t.Gone {
+		fc.Condition, fc.Temp = weatherNow(e)
+	} else {
+		fc.Condition = t.Value
+	}
+	now := time.Now()
+	for _, d := range l.forecasts[f.want.key()] {
+		// Twice a day is its days, as the card's row of days: the nights' lows are the days' already.
+		if f.want.kind == "twice_daily" && d.Night || over(d, fc.Hourly, now) {
+			continue
+		}
+		fc.Days = append(fc.Days, d)
+	}
+	return []Block{{Forecast: fc}}
+}
+
+// over is whether a forecast's day, or hour, is over by now: a forecast read a while ago, or one an
+// integration updates seldom, may still start with one.
+func over(d hass.Day, hourly bool, now time.Time) bool {
+	if d.When.IsZero() {
+		return false
+	}
+	if hourly {
+		return !d.When.Add(time.Hour).After(now)
+	}
+	y, m, day := now.In(time.Local).Date()
+	return d.When.In(time.Local).Before(time.Date(y, m, day, 0, 0, 0, 0, time.Local))
+}
+
+// weatherNow is a weather entity's condition in words and its temperature, as its tile says them: the
+// words the clock says it in, which are the device's own, not Home Assistant's.
+func weatherNow(e hass.LiveEntity) (cond, temp string) {
+	cond = home.ConditionWords(e.State)
+	if v, ok := e.Attrs["temperature"].(float64); ok {
+		unit, _ := e.Attrs["temperature_unit"].(string)
+		temp = trimNumber(v) + "°"
+		if unit != "" && unit != "°F" && unit != "°C" {
+			temp += " " + unit
+		}
+	}
+	return cond, temp
 }
 
 // rowsCard is an entities card: a card of rows, with any sections in it as headings of their own.
@@ -611,7 +696,8 @@ type textNode struct {
 }
 
 func (t textNode) blocks(l look) []Block {
-	b := Block{Title: t.title.get(l.rendered), Text: plainText(t.body.get(l.rendered)), Color: t.color}
+	body := t.body.get(l.rendered)
+	b := Block{Title: t.title.get(l.rendered), Text: plainText(body), Marked: MarkText(body), Color: t.color}
 	if b.Title == "" && len(b.Text) == 0 {
 		return nil
 	}
@@ -647,7 +733,7 @@ func (n listNode) blocks(l look) []Block {
 	}
 	var tiles []Tile
 	for _, it := range n.items {
-		t := it.tile(l.states, room)
+		t := it.tile(l, room)
 		t.Wide, t.High = it.wide, it.high
 		tiles = append(tiles, t)
 	}
@@ -676,7 +762,7 @@ func (n rowsNode) blocks(l look) []Block {
 			room = it.section
 			continue
 		}
-		t := it.tile(l.states, room)
+		t := it.tile(l, room)
 		t.Switch = t.Tap != nil && strings.HasSuffix(t.Tap.Service, "toggle") && (t.Value == "On" || t.Value == "Off" || strings.HasPrefix(t.Value, "On ·"))
 		cur.Rows = append(cur.Rows, t)
 	}
@@ -688,7 +774,7 @@ func (n rowsNode) blocks(l look) []Block {
 
 // tile is the item as a tile. An entity's own name, when the card gives none, is shown without the
 // room it is under in front of it (withoutRoom); a name the card gives is shown as it is.
-func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
+func (it tileItem) tile(l look, room string) Tile {
 	if it.fixed {
 		t := Tile{Name: it.name, Icon: orIcon(it.icon, "gesture-tap"), Value: it.value, Tap: it.action}
 		if t.Tap != nil && t.Tap.Service == "" && t.Tap.View == "" {
@@ -696,7 +782,7 @@ func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 		}
 		return t
 	}
-	e, ok := states[it.entity]
+	e, ok := l.states[it.entity]
 	if !ok {
 		e = hass.LiveEntity{ID: it.entity, State: "unknown", Attrs: map[string]any{}}
 	}
@@ -708,7 +794,7 @@ func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 		}
 		name = withoutRoom(name, room)
 	}
-	t := describe(e, name)
+	t := describeIn(e, name, l.precision, l.ha)
 	if it.color.A != 0 && !t.Gone {
 		if domain, _, _ := strings.Cut(it.entity, "."); t.On || !colorsOnlyWhenActive[domain] {
 			t.Color = it.color
@@ -742,7 +828,7 @@ type templateNode struct {
 func (t templateNode) blocks(l look) []Block {
 	tile := Tile{Name: t.primary.get(l.rendered), Value: t.secondary.get(l.rendered), Icon: orIcon(t.icon.get(l.rendered), "card-text-outline")}
 	if t.item.entity != "" {
-		base := t.item.tile(l.states, l.room)
+		base := t.item.tile(l, l.room)
 		tile.On, tile.Tap = base.On, base.Tap
 	} else if t.item.action != nil && (t.item.action.Service != "" || t.item.action.View != "") {
 		tile.Tap = t.item.action
@@ -779,7 +865,7 @@ func (g graphNode) blocks(l look) []Block {
 	if name == "" {
 		name, _ = e.Attrs["friendly_name"].(string)
 	}
-	t := describe(e, name)
+	t := describeIn(e, name, l.precision, l.ha)
 	return []Block{{Graph: &Graph{Name: name, Icon: orIcon(g.icon, t.Icon), Value: t.Value, Points: buckets(l.history[g.entity], g.hours, graphPoints)}}}
 }
 
@@ -815,7 +901,7 @@ func (g gaugeNode) blocks(l look) []Block {
 			sev, best = k, at
 		}
 	}
-	return []Block{{Gauge: &Gauge{Name: name, Value: strings.TrimSpace(trimNumber(v) + " " + unit), Frac: frac, Severity: sev}}}
+	return []Block{{Gauge: &Gauge{Name: name, Value: strings.TrimSpace(shownNumber(v, l.precision, g.entity) + " " + unit), Frac: frac, Severity: sev}}}
 }
 
 // pictureNode is a camera or an image.
@@ -1082,26 +1168,131 @@ func (c *compiler) badges(v any) node {
 }
 
 var (
-	mdLink   = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
-	mdMarks  = regexp.MustCompile(`(\*\*|__|\*|_|~~|` + "`" + `)`)
-	mdTags   = regexp.MustCompile(`<[^>]+>`)
-	mdPrefix = regexp.MustCompile(`^\s*(#{1,6}\s+|[-*+]\s+|>\s*)`)
+	mdLink    = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	mdTags    = regexp.MustCompile(`<[^>]+>`)
+	mdHeading = regexp.MustCompile(`^\s*(#{1,6})\s+(.*?)(?:\s+#+)?\s*$`)
+	mdBullet  = regexp.MustCompile(`^\s*[-*+]\s+(.*)$`)
+	mdQuote   = regexp.MustCompile(`^\s*>\s?`)
+	mdRule    = regexp.MustCompile(`^\s*([-*_])(\s*[-*_]){2,}\s*$`)
+	// Bold is a pair of ** or __ around words that start and end with something other than a space.
+	mdBold = regexp.MustCompile(`\*\*(\S(?:.*?\S)?)\*\*|__(\S(?:.*?\S)?)__`)
+	// Italic, struck and code are drawn plain: only their marks go, and only in pairs, so a lone * in
+	// "2 * 3" stays, and an _ inside a word, snake_case's, is not a mark at all.
+	mdStar   = regexp.MustCompile(`\*(\S(?:[^*]*?\S)?)\*`)
+	mdUnder  = regexp.MustCompile(`(^|[^\pL\pN_])_(\S(?:[^_]*?\S)?)_([^\pL\pN_]|$)`)
+	mdStrike = regexp.MustCompile(`~~(\S(?:.*?\S)?)~~`)
+	mdCode   = regexp.MustCompile("`([^`]*)`")
 )
 
 // plainText is markdown as plain paragraphs: headings, emphasis, links and tags reduced to their
-// words, since the page draws text, not HTML.
+// words, since the page draws text, not HTML. A card filling the screen alone (drawn_lone) draws these.
 func plainText(md string) []string {
 	var out []string
+	for _, l := range MarkText(md) {
+		if l.Kind != "gap" {
+			out = append(out, l.Plain())
+		}
+	}
+	return out
+}
+
+// MarkText is markdown as the lines a card draws, with the little structure a short card has kept
+// (#757): headings, bullets, bold words, and a gap where a blank line was. Each line of the source is a
+// line of its own, as Home Assistant's markdown card breaks them. Links are their words, tags go, and
+// anything more (tables, pictures) is its words as written.
+func MarkText(md string) []TextLine {
+	var out []TextLine
 	for _, line := range strings.Split(md, "\n") {
-		line = html.UnescapeString(line)
-		line = mdPrefix.ReplaceAllString(line, "")
+		line = html.UnescapeString(strings.TrimRight(line, " \t\r"))
+		var l TextLine
+		switch {
+		case strings.TrimSpace(line) == "" || mdRule.MatchString(line):
+			// One gap for any number of blank lines, and none at either end of the card.
+			if n := len(out); n > 0 && out[n-1].Kind != "gap" {
+				out = append(out, TextLine{Kind: "gap"})
+			}
+			continue
+		case mdHeading.MatchString(line):
+			m := mdHeading.FindStringSubmatch(line)
+			l = TextLine{Kind: "heading", Level: len(m[1])}
+			line = m[2]
+		case mdBullet.MatchString(line):
+			l = TextLine{Kind: "bullet"}
+			line = mdBullet.FindStringSubmatch(line)[1]
+		default:
+			l = TextLine{Kind: "para"}
+			line = mdQuote.ReplaceAllString(line, "")
+		}
 		line = mdLink.ReplaceAllString(line, "$1")
 		line = mdTags.ReplaceAllString(line, "")
-		line = mdMarks.ReplaceAllString(line, "")
-		line = strings.Join(strings.Fields(line), " ")
-		if line != "" {
-			out = append(out, line)
+		l.Runs = inlineRuns(line)
+		if len(l.Runs) == 0 {
+			if n := len(out); n > 0 && out[n-1].Kind != "gap" {
+				out = append(out, TextLine{Kind: "gap"}) // a line of nothing but a tag
+			}
+			continue
 		}
+		out = append(out, l)
+	}
+	if n := len(out); n > 0 && out[n-1].Kind == "gap" {
+		out = out[:n-1]
+	}
+	return out
+}
+
+// inlineRuns is a line's words in runs of plain and bold, with every other mark taken off in pairs.
+// Runs of nothing are dropped, and the spaces in a line closed up, as a browser shows them.
+func inlineRuns(line string) []TextRun {
+	var runs []TextRun
+	add := func(text string, bold bool) {
+		text = mdCode.ReplaceAllString(text, "$1")
+		text = mdStrike.ReplaceAllString(text, "$1")
+		text = mdStar.ReplaceAllString(text, "$1")
+		for mdUnder.MatchString(text) {
+			text = mdUnder.ReplaceAllString(text, "$1$2$3")
+		}
+		if text == "" {
+			return
+		}
+		if n := len(runs); n > 0 && runs[n-1].Bold == bold {
+			runs[n-1].Text += text
+			return
+		}
+		runs = append(runs, TextRun{Text: text, Bold: bold})
+	}
+	at := 0
+	for _, m := range mdBold.FindAllStringSubmatchIndex(line, -1) {
+		add(line[at:m[0]], false)
+		inner := line[m[2]:m[3]]
+		if m[2] < 0 {
+			inner = line[m[4]:m[5]]
+		}
+		add(inner, true)
+		at = m[1]
+	}
+	add(line[at:], false)
+	// Spaces closed up across the runs, kept between them where the source had any.
+	var out []TextRun
+	for i, r := range runs {
+		lead := strings.TrimLeft(r.Text, " \t") != r.Text
+		trail := strings.TrimRight(r.Text, " \t") != r.Text
+		text := strings.Join(strings.Fields(r.Text), " ")
+		if text == "" {
+			if len(out) > 0 && !strings.HasSuffix(out[len(out)-1].Text, " ") {
+				out[len(out)-1].Text += " "
+			}
+			continue
+		}
+		if lead && len(out) > 0 && !strings.HasSuffix(out[len(out)-1].Text, " ") {
+			text = " " + text
+		}
+		if trail && i < len(runs)-1 {
+			text += " "
+		}
+		out = append(out, TextRun{Text: text, Bold: r.Bold})
+	}
+	if n := len(out); n > 0 {
+		out[n-1].Text = strings.TrimRight(out[n-1].Text, " ")
 	}
 	return out
 }

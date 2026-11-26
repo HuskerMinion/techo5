@@ -130,6 +130,10 @@ type watching struct {
 	peak    float64
 	clarity float64
 
+	// weighed is clarity having been weighed by Nearest device in its decision, so the turn reports it
+	// (#727): a faint wake's, measured as it was claimed, or a confirmed one's that was claimed.
+	weighed bool
+
 	at      time.Time
 	stop    func()
 	timeout *time.Timer
@@ -170,13 +174,13 @@ type Confirmation struct {
 
 // The nearest-device decision for a wake Home Assistant confirmed (#685). feature/nearest sets it, which
 // this package cannot import; without it the turn opens at once. decide is told whether this device
-// answers.
-var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))]
+// answers, and whether that came of a claim made with clarity (claimed), which the turn then reports.
+var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer, claimed bool))]
 
 // SetConfirmedContest is feature/nearest putting a confirmed wake through its decision. settled is the
 // unsure claim's, if one was made (nil if not): the decision takes it back when it answers without
 // claiming the word, so a device waiting on the unsure claim is not left waiting.
-func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))) {
+func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer, claimed bool))) {
 	confirmedContest.Store(&f)
 }
 
@@ -339,7 +343,7 @@ func (c *conversation) watchEvent(e event) bool {
 		return true
 
 	case evFaint:
-		if !c.confirmFaint(e.slot, e.at) && e.then != nil {
+		if !c.confirmFaint(e.slot, e.at, e.clarity) && e.then != nil {
 			safe.Go("faint wake", e.then)
 		}
 		return true
@@ -495,8 +499,8 @@ func (c *conversation) heardOnHA() {
 		gen, slot, from, clarity := c.decided, w.slot, w.from, w.clarity
 		c.deciding = &deciding{w: w, at: c.now(), gen: gen}
 		safe.Go("confirmed wake claim", func() {
-			(*f)(slot, from, clarity, settled, func(answer bool) {
-				c.post(event{kind: evContested, gen: gen, answer: answer})
+			(*f)(slot, from, clarity, settled, func(answer, claimed bool) {
+				c.post(event{kind: evContested, gen: gen, answer: answer, claimed: claimed})
 			})
 		})
 		return
@@ -514,6 +518,7 @@ func (c *conversation) contested(e event) {
 		return
 	}
 	c.deciding = nil
+	d.w.weighed = e.claimed
 	if !e.answer {
 		slog.Info("another device answers the wake home assistant confirmed", "slot", d.w.slot+1)
 		c.leds.Busy().Flash(led.WorkElsewhere, yieldFlash)
@@ -540,6 +545,9 @@ func (c *conversation) answerHeard(w *watching) {
 		// The request went on from the word while Home Assistant was asked: the turn reaches back to
 		// when the device scored it (historyFor, #477).
 		n.at, n.confirmed = w.from, true
+	}
+	if w.weighed {
+		n.clarity = wakeClarity{dB: w.clarity, measured: true}
 	}
 	if !c.start(n) {
 		c.closeRun()
@@ -630,7 +638,7 @@ func (c *conversation) mayConfirm(slot int) bool {
 // nearest-device score (#503), heard at at, and reports whether it did. One that can't be asked opens as
 // any wake does, so nothing said to the device is lost to the setting: unlike confirm, the spacing between
 // questions doesn't hold it back, since a wake over the threshold is not a steady sound near the word.
-func (c *conversation) confirmFaint(slot int, at time.Time) bool {
+func (c *conversation) confirmFaint(slot int, at time.Time, heard wakeClarity) bool {
 	switch {
 	case slot != 0 || config.Get().Wake.OnHA.FaintBelow() <= 0:
 		return false
@@ -646,6 +654,8 @@ func (c *conversation) confirmFaint(slot int, at time.Time) bool {
 	// The spacing between questions is the ordinary candidates' own: a faint ask leaves it as it was.
 	c.openWatch(watchConfirm, slot, 0)
 	c.watch.faint, c.watch.from = true, at
+	// Measured as the wake was claimed: the turn Home Assistant opens on reports it.
+	c.watch.clarity, c.watch.weighed = heard.dB, heard.measured
 	return true
 }
 
@@ -882,16 +892,17 @@ func (v *Voice) Candidate(slot int, peak float64) {
 
 // WokeFaint is WokeAt for a wake word this device won with a low nearest-device score (feature/nearest,
 // #503): Home Assistant is asked to hear it too before the turn opens, and when it can't be, the turn
-// opens as WokeAt's does.
+// opens as WokeClear's does.
 //
 // Not over a ringing alarm or timer: the ring is what made the word sound faint, Home Assistant may not
 // hear it over the ring either, and a wake word over a ring has always silenced it.
-func (v *Voice) WokeFaint(slot int, at time.Time) {
+func (v *Voice) WokeFaint(slot int, at time.Time, dB float64) {
 	if micTaken() || slot != 0 || wakeCallApplies(slot) || ring.IsSounding() {
-		v.WokeAt(slot, at)
+		v.WokeClear(slot, at, dB)
 		return
 	}
-	v.turn.post(event{kind: evFaint, slot: slot, at: at, then: func() { v.WokeAt(slot, at) }})
+	v.turn.post(event{kind: evFaint, slot: slot, at: at, clarity: wakeClarity{dB: dB, measured: true},
+		then: func() { v.WokeClear(slot, at, dB) }})
 }
 
 // WakeOnHAChanged says a Home Assistant wake word setting changed, so a stream starts or stops now

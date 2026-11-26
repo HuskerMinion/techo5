@@ -192,6 +192,10 @@ func (f *Remote) serve(w http.ResponseWriter, r *http.Request) {
 		f.set(w, strings.TrimPrefix(path, "entities/"), body)
 	case path == "logs" && r.Method == http.MethodGet:
 		f.logs(w, r)
+	case path == "deck" && r.Method == http.MethodGet:
+		f.deckGet(w)
+	case strings.HasPrefix(path, "deck/pages/") && (r.Method == http.MethodPut || r.Method == http.MethodDelete):
+		f.deckPage(w, r.Method, strings.TrimPrefix(path, "deck/pages/"), body)
 	default:
 		http.Error(w, "no such thing here", http.StatusNotFound)
 	}

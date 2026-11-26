@@ -61,6 +61,8 @@ type API struct {
 	handler esphome.Handler
 
 	reconnect chan struct{}
+	// relist is a Relist asked for since the lists were last read.
+	relist    atomic.Bool
 	announced sync.Once
 
 	// clients is the connections open now (clients.go).
@@ -154,6 +156,7 @@ func Get() *API {
 	once.Do(func() {
 		shared = &API{reconnect: make(chan struct{}, 1)}
 		component.Reconnect.Listen(func(struct{}) { shared.Reconnect() })
+		component.Relist.Listen(func(struct{}) { shared.relist.Store(true) })
 		component.Fire.Listen(func(e component.Event) { shared.fire(e) })
 		component.CallService.Listen(func(c component.Call) { shared.call(c) })
 	})
@@ -210,11 +213,7 @@ func (a *API) Start(ctx context.Context) error {
 	}
 
 	device := config.Get().Device
-	ents := esphome.NewEntities()
-	if err := ents.Add(heard(component.Default().Entities())...); err != nil {
-		return err
-	}
-	if err := ents.AddActions(heardActions(component.Default().Actions())...); err != nil {
+	if err := a.list(); err != nil {
 		return err
 	}
 
@@ -244,14 +243,60 @@ func (a *API) Start(ctx context.Context) error {
 		// device without anyone typing it in (#679).
 		Sendspin: sendspinPairing,
 	}
+	a.srv.Store(a.serverFor(psk))
+	return nil
+}
+
+// list reads the entities and actions from the components and makes the handler that serves them. It
+// runs at start and again between two spells of serving when something asked (component.Relist).
+func (a *API) list() error {
+	ents := esphome.NewEntities()
+	addEach(ents, heard(component.Default().Entities()))
+	if err := ents.AddActions(heardActions(component.Default().Actions())...); err != nil {
+		return err
+	}
 	// The handlers components answer for themselves rather than through an entity: the voice
 	// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
 	// Describers go first so what they add to the entity list lands before the library's Done, after
 	// the watch on a connection that lists the entities and never asks for their states (listed.go).
 	handlers := append([]esphome.Handler{newUnsubscribed()}, component.Default().Describers()...)
 	a.handler = esphome.Chain(append(append(handlers, ents), component.Default().Handlers()...)...)
-	a.srv.Store(a.serverFor(psk))
 	return nil
+}
+
+// addEach adds entities one at a time, leaving out one whose key another already has, and saying so
+// once for each: an add-on's entity named so that its object id is another's (two add-ons whose ids
+// differ only by a dash and an underscore, say) must cost that entity, never the whole link to Home
+// Assistant, which a batch refused for one duplicate would.
+func addEach(ents *esphome.Entities, list []esphome.Entity) {
+	for _, e := range list {
+		if err := ents.Add(e); err != nil {
+			dupOnce.Do(e.Object(), func() {
+				slog.Warn("an entity is left out: another has the same key", "object", e.Object(), "err", err)
+			})
+		}
+	}
+}
+
+// dupOnce says each left-out entity once while the daemon runs.
+var dupOnce onceEach
+
+type onceEach struct {
+	mu   sync.Mutex
+	seen map[string]bool
+}
+
+func (o *onceEach) Do(key string, f func()) {
+	o.mu.Lock()
+	first := !o.seen[key]
+	if o.seen == nil {
+		o.seen = map[string]bool{}
+	}
+	o.seen[key] = true
+	o.mu.Unlock()
+	if first {
+		f()
+	}
 }
 
 // nodeName is the ESPHome node's own name (layout.NodeName).
@@ -343,6 +388,13 @@ func (a *API) Run(ctx context.Context) error {
 		// Serve waits for its connections to end, so nothing is reading the entities now: what they say
 		// about themselves may change here (component.Between).
 		component.Between.Emit(struct{}{})
+		// An add-on installed or removed since asked for the lists to be read again: Home Assistant
+		// reads them on the next connection, which is this spell's.
+		if a.relist.Swap(false) {
+			if err := a.list(); err != nil {
+				slog.Error("reading the entities again failed; serving the ones before", "err", err)
+			}
+		}
 		a.srv.Store(a.nextServer())
 		slog.Info("serving again", "bluetooth", a.info.BluetoothFeatures)
 	}

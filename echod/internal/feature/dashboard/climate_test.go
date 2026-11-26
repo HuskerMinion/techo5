@@ -19,7 +19,7 @@ func TestAThermostatIsReadForItsSheet(t *testing.T) {
 	modes := []any{"off", "heat", "cool", "heat_cool"}
 	one := hass.LiveEntity{ID: "climate.hall", State: "heat", Attrs: map[string]any{"friendly_name": "Hall",
 		"current_temperature": 68.0, "temperature": 70.0, "min_temp": 45.0, "max_temp": 95.0, "hvac_modes": modes}}
-	tile := describe(one, "Hall")
+	tile := describe(one, "Hall", nil)
 	if tile.Tap != nil || tile.Adjust == nil || tile.Adjust.Value != 70 || tile.Adjust.Step != 1 || tile.Entity != "climate.hall" {
 		t.Errorf("one target: tile %+v, level %+v", tile, tile.Adjust)
 	}
@@ -37,7 +37,7 @@ func TestAThermostatIsReadForItsSheet(t *testing.T) {
 
 	both := hass.LiveEntity{ID: "climate.den", State: "heat_cool", Attrs: map[string]any{
 		"target_temp_low": 20.0, "target_temp_high": 24.0, "min_temp": 7.0, "max_temp": 35.0, "target_temp_step": 0.5, "hvac_modes": modes}}
-	if tile := describe(both, "Den"); tile.Tap != nil || tile.Adjust != nil {
+	if tile := describe(both, "Den", nil); tile.Tap != nil || tile.Adjust != nil {
 		t.Errorf("a range: tile %+v has a tap or a level", tile)
 	}
 	c = climateNow(both)

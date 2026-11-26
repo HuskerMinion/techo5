@@ -2,6 +2,7 @@ package detect
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,6 +39,13 @@ func wavs(t *testing.T, dir, kind string) int {
 	return len(files)
 }
 
+// takeClip reads the whole upload, as a trainer does. A whole clip (128 kB) does not fit in the socket's
+// buffers, and the sender asks with keep-alives off ("Connection: close"): a server that answers without
+// reading closes the connection on the rest, the sender's write of it fails (sendfile: broken pipe), and
+// on a loaded machine that failure can reach the sender before the answer does. It then tries again a
+// clip the server already counted.
+func takeClip(q *http.Request) { io.Copy(io.Discard, q.Body) }
+
 // An unreachable trainer: nothing listens on port 1.
 const nowhere = "http://127.0.0.1:1"
 
@@ -46,8 +54,9 @@ const nowhere = "http://127.0.0.1:1"
 func TestASentClipIsNeverWrittenToTheDevicesFolder(t *testing.T) {
 	// The server counts in its own goroutine, so the count is atomic for the race detector.
 	var got atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		got.Add(1)
+		takeClip(q)
 		fmt.Fprint(w, `{"ok": true}`)
 	}))
 	defer srv.Close()
@@ -212,8 +221,9 @@ func TestASentClipThatCannotBeRemovedIsNotSentAgain(t *testing.T) {
 	}
 	// The server counts in its own goroutine, so the count is atomic for the race detector.
 	var got atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) {
 		got.Add(1)
+		takeClip(q)
 		fmt.Fprint(w, `{"ok": true}`)
 	}))
 	defer srv.Close()

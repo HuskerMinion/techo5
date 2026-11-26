@@ -111,6 +111,11 @@ type Restorer interface {
 // server is a component like any other and may not exist.
 var Reconnect hook.Hook[struct{}]
 
+// Relist asks for the entity and action lists to be read from the components again before the next
+// spell of serving: something that adds or takes away entities at run time (an add-on installed or
+// removed, feature/addons) emits it before Reconnect. The lists are otherwise read once, at start.
+var Relist hook.Hook[struct{}]
+
 // Between fires while nothing is connected: after one spell of serving has ended, every connection with
 // it, and before the next one begins. It is the one moment something an entity says about itself (its
 // category, say) can be changed with no connection reading it, since each one is told again what every

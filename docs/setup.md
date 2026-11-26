@@ -1188,6 +1188,8 @@ other Shows don't have the switches.
   first): while the microphones are muted, a red **Microphone off** pill sits at the top of the screen.
   Turn the switch off to leave that to the red light on the mute button, which says it already; a lost
   Wi-Fi or Home Assistant is still shown at the top. The night clock never shows the pill either way.
+  On the 2nd gen Show 8 on TECHO5's kernel, a mute from Home Assistant or the screen doesn't light the
+  red light, so the pill always shows for it ([The microphone mute](install-athena.md#the-microphone-mute)).
   The Panel app has no mute light, so it always shows it and doesn't have the switch.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when
@@ -1625,8 +1627,9 @@ doesn't change it, and the remote API can read it but not change it.
 With the wake word first, a ringing alarm or timer stops when what's heard is a stop and nothing
 else: "stop", "turn off the timer", "stop the alarm, please", or the same in the screen's languages
 and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
-"выключи будильник"). A sentence with anything more in it ("stop the music") goes to Home Assistant
-as any other.
+"выключи будильник"). The ring ending is the answer: the request ends there, quietly, and Home
+Assistant's reply to it isn't played, even when the stop word heard the "stop" and ended the ring
+first. A sentence with anything more in it ("stop the music") goes to Home Assistant as any other.
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,
@@ -2782,12 +2785,68 @@ What it answers:
 | `GET /api/v1/entities` | Every setting and reading the device has, as Home Assistant sees them: `id`, `name`, `kind` (switch, number, select, text, button, sensor, binary_sensor, text_sensor), `state`, whether it is `writable` here, and a number's `min`, `max` and `unit` or a select's `options`. |
 | `POST /api/v1/entities/<id>` | Changes one: `{"state": true}` for a switch, a number for a number, one of the options for a select, a string for a text, and nothing for a button, which presses it. A setting that is not writable here answers 403. |
 | `GET /api/v1/logs` | The log as server-sent events: the last 200 lines, then each line as it is written, for up to 30 minutes; two at a time at most. |
+| `GET /api/v1/deck` | The [Deck](deck.md) (Show only): its grid, pages and buttons, the paired computers and the apps each one's agent lists, and the actions, colors and limits a button can have. |
+| `PUT /api/v1/deck/pages/<n>` | Replaces page `<n>`'s buttons (counted from 0) with a JSON array of buttons; `<n>` one past the last page adds a page, up to 10. Answers the deck as `GET` does. |
+| `DELETE /api/v1/deck/pages/<n>` | Removes page `<n>`; the pages after it move up. Answers the deck as `GET` does. |
 
 The log has the device's name, serial number, Wi-Fi networks, Bluetooth devices, passwords and keys
 taken out, as the diagnostics download does, along with addresses and logins, and what was said and
 answered replaced by how long it was; it still names rooms and other devices, so treat it as private. Turning the API off or making a new key ends a log being followed. An address that
 sends requests that do not check out is turned away for a minute after ten of them; nobody else is,
 except that a public IPv6 address is counted with the rest of its /64.
+
+### The Deck over the API
+
+For an app that edits the [Deck](deck.md) away from the setup page. `GET /api/v1/deck` answers:
+
+```json
+{
+  "cols": 4, "rows": 3,
+  "pages": [
+    {"buttons": [
+      {"label": "Live", "action": "obs_scene", "scene": "Live"},
+      {"label": "Mic", "icon": "microphone-off", "color": "red", "action": "obs_mute", "input": "Mic"},
+      {"label": "Backup", "action": "pc_run", "computer": "Studio", "value": "backup.sh"},
+      {"action": "pc_open", "computer": "Studio", "value": "Safari"},
+      {}
+    ]}
+  ],
+  "computers": [{"name": "Studio", "connected": true, "apps": ["OBS", "Safari"]}],
+  "obs": {"addr": "192.168.x.y", "password_set": true},
+  "actions": [{"id": "", "label": "Empty", "api": true}, {"id": "obs_scene", "label": "Switch scene", "api": true},
+              {"id": "pc_keys", "label": "Press keys", "api": false}],
+  "colors": ["", "blue", "green", "red", "orange", "purple", "gray"],
+  "limits": {"cols_min": 2, "cols_max": 6, "rows_min": 1, "rows_max": 4, "pages_max": 10,
+             "text_max": 256, "value_max": 4096}
+}
+```
+
+(`actions` lists all ten; two are shown here.) A page's buttons are its squares row by row, `{}` an
+empty one; a button has `label`, `icon` (a Material Design icon name), `color` (empty is the action's
+own), `action`, and what the action needs: `scene` (`obs_scene`, and `obs_source` with `source`),
+`input` (`obs_mute`), `computer` and `value` (the `pc_` actions). A computer is named only, with whether
+its agent answered the last time it was asked and the apps it lists; never its address or pairing key,
+and OBS's password is never shown, only whether one is set.
+
+`PUT /api/v1/deck/pages/<n>` takes the page's buttons as the same JSON array, at most the grid's
+`cols` × `rows`; squares not sent are empty. A button is checked as the setup page checks it (a scene
+button needs its scene, and so on), and a field the device does not know is refused, not left out.
+The API may make fewer kinds of button than the setup page, because a key in a script is not a person
+at the setup page:
+
+- It may make and change OBS buttons, and **Open app** (`pc_open`) buttons for a computer that is
+  paired, opening one of the apps that computer's agent lists (`apps` above); not a website.
+- It may not make **Press keys**, **Type text** or **Run script** buttons (`pc_keys`, `pc_type`,
+  `pc_run`), since those act in your signed-in session. Nor may it change, move or remove one made on
+  the setup page: send it back unchanged in its place. A page that has one cannot be removed here.
+- Any button sent back exactly as `GET` showed it, in its place, is kept as it is, so an app need not
+  understand every button to change one.
+
+A request that breaks a rule is answered 400 with the reason, such as `row 1, button 3 presses keys,
+types or runs a script on a computer: it is changed or removed on the setup page; send it back
+unchanged`, and nothing is saved. A page that is saved is written to the device's settings once. The
+settings lock (the screen's PIN) guards the settings on the screen, not the API: the API is guarded by
+its key.
 
 ## 12. Reaching the device from away
 
@@ -2876,8 +2935,9 @@ on the setup page's **Add-ons** card (**System** tab). The card has three parts:
   another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
   installed from the card yet, and one that needs more memory than the device can spare are listed
   too, grayed out with the reason.
-- **Installed:** whether each one is running, **Start** and **Stop**, the last lines of its log, **Update**
-  when the catalog has a newer version, **Remove**, and a link to its own page if it has one.
+- **Installed:** whether each one is running, how much it writes to the device's storage a day,
+  **Start** and **Stop**, the last lines of its log, **Update** when the catalog has a newer version,
+  **Remove**, and a link to its own page if it has one.
 - **Found on this device, not from the catalog:** programs started by hand from `rc.local` (below).
 
 Every install shows this warning first, and you have to tick the box under it to go on:
@@ -2926,6 +2986,15 @@ How the device runs them:
 - **A bounded log**, at most about 512 KB on the device's storage, shown on its card. What it keeps in
   its `state` folder is held to four times the storage its listing gives (at least 64 MB); one that
   grows past that is stopped, and the card says so.
+- **Its writes measured.** Every ten minutes the device reads how much each running add-on has
+  written to its storage (the kernel's `write_bytes` in `/proc/<pid>/io`, for its program, everything
+  under it and anything else its user runs), and the card says "Writes about N MB a day to storage",
+  over the last day, or from what it has seen once the add-on has run for an hour. Writes to `/tmp`,
+  `/run` and `/dev/shm` are memory and don't count. TECHO5 itself writes about 35 MB a day; an add-on
+  that writes more than 50 MB a day is said in the log and on the card, as it wears the device's
+  storage (the eMMC) faster, but it isn't stopped for it. The figures are kept in memory only, so they
+  start again when TECHO5 restarts, and a process that leaves the add-on's tree and exits between two
+  looks takes its last ten minutes' writes with it.
 - **Memory checked first.** An add-on that would leave less than 100 MB of memory for TECHO5 is not
   installed or started, and the card says why; one that can't start for memory is tried again, like a
   crash. An Echo Dot 2nd gen has about 445 MB free.
@@ -2936,6 +3005,14 @@ How the device runs them:
 - **Remove** stops it, closes its ports and deletes its folder, `/data/techo5-addons/<id>`. What
   it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
   the box to delete it too.
+
+An add-on can also use TECHO5's **add-on API** ([addon-api.md](addon-api.md)) to answer commands from
+Home Assistant and voice, say words, set timers that ring on the device, keep the screen on, add
+entities to Home Assistant, or play a video. Each thing it uses is a line on its card above the
+warning, it gets only those, and an update that uses something new asks for the box again. An add-on
+with settings of its own has them on its card, under **Its settings**, with **Save** and sometimes
+**Test**; they are kept beside the add-on, not in the device's settings or a backup, and a secret
+(a token, a password) is never shown again once saved.
 
 An add-on is a program on the device, so TECHO5 trusts it as it trusts itself: a video it sends to the
 device's own DLNA renderer plays without the question on the screen, for example. That is what "access

@@ -135,10 +135,32 @@ func (s *wsSession) call(cmd map[string]any) (json.RawMessage, error) {
 			continue
 		}
 		if !res.Success {
-			return nil, fmt.Errorf("hass: %v: %s %s", cmd["type"], res.Error.Code, res.Error.Message)
+			return nil, &CommandError{Command: fmt.Sprint(cmd["type"]), Code: res.Error.Code, Message: res.Error.Message}
 		}
 		return res.Result, nil
 	}
+}
+
+// CommandError is a websocket command Home Assistant answered with a failure: its code and message, so
+// a caller can tell one failure from another without reading the text of the whole error.
+type CommandError struct {
+	Command, Code, Message string
+}
+
+func (e *CommandError) Error() string {
+	return fmt.Sprintf("hass: %s: %s %s", e.Command, e.Code, e.Message)
+}
+
+// UnknownMediaSource is whether err is Home Assistant saying it has no media source by that domain
+// (media-source://<domain>/...): the integration behind it is not set up, rather than failing.
+func UnknownMediaSource(err error, domain string) bool {
+	var ce *CommandError
+	if !errors.As(err, &ce) {
+		return false
+	}
+	// The code is browse_media_failed for every browse that fails; the message is what names this one,
+	// "Unknown media source: radio_browser", which Home Assistant may wrap in its own words before it.
+	return strings.Contains(strings.ToLower(ce.Message), "unknown media source: "+strings.ToLower(domain))
 }
 
 // wsCall opens a connection for one command and returns its raw result.

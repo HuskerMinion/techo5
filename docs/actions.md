@@ -376,6 +376,7 @@ Assistant's bus, with:
 | `trigger` | What opened it: `wake_word`, `button`, `follow_up` (listening again after a reply), or `home_assistant` (an announcement that asked for an answer) |
 | `wake_word` | The slot's wake word. It picked the pipeline, so it is there for a button or follow-up too |
 | `wake_score` | Only on a turn a wake word opened: the highest score the word reached on the device, as `Last wake score` shows it (for a wake Home Assistant confirmed, the device's score under the threshold). Logged beside `heard`, it shows how close mistaken wakes come to the threshold |
+| `wake_clarity` | Only when **Nearest device answers** is on and measured it: how far the wake word stood out from the room on this device, in dB with one decimal, before **Nearest device offset** is added. It is the reading the devices compare to pick who answers, so set beside the other devices' events it shows how far apart they hear the same word, for tuning the offset or **Confirm below nearest-device score**. Left out with Nearest device off (nothing is measured then), for a wake answered at once with no other device to ask, and for a button, a follow-up or Home Assistant opening the turn |
 | `slot` | The wake word slot, `1` or `2` |
 | `heard` | What speech-to-text heard, up to 1000 characters. Left out while the device's **Send voice text** is off |
 | `reply` | The reply's text, up to 1000 characters. Left out while **Send voice text** is off |
@@ -556,8 +557,11 @@ The device stops a ring by itself as well, without these: while an alarm or time
 word silences it, and a sentence that only asks to stop ("stop", "stop the alarm", "turn it off")
 ends it. A sentence that asks to snooze ("snooze", "snooze for ten minutes", "snooze the alarm
 another 5 minutes") snoozes it, for that long or for the device's snooze length, from 1 to 30
-minutes; a ringing timer cannot be put off, so it stops. The automations are what make Home Assistant
-answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding.
+minutes; a ringing timer cannot be put off, so it stops. A stop said after a wake word that was said
+at the ring is answered by the ring ending, with nothing spoken, even when the stop word ended it
+first: Home Assistant's answer to that request isn't played. The automations are what make Home
+Assistant answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding, for a ring that
+starts while a request is open and for a snooze.
 
 "Stop the timer" is also Home Assistant's own sentence for canceling a timer, and an automation that
 catches a sentence takes it from Home Assistant. So with nothing ringing, the first automation cancels
@@ -2771,8 +2775,9 @@ Sample scripts, for stream addresses, Radio Browser and TuneIn stations, are und
 >   Assistant actions** turned on in the device's ESPHome entry (Configure). Without it, picking a
 >   favorite does nothing, and nothing on the device says why.
 > - The Radio Browser stations near your home, shown alongside your favorites, come through
->   `home_assistant`. Without it, the device asks radio-browser.info itself, for stations near the
->   place set on its setup page, and plays them itself.
+>   `home_assistant` and its Radio Browser integration. Without either, the device asks
+>   radio-browser.info itself, for stations near the place set on its setup page (or Home
+>   Assistant's location), and plays them itself.
 > - Call this once. The device keeps the wiring, and follows the entities from then on; call it again
 >   only to change something. Every argument goes in the call, as `""` for the ones you leave out.
 > - The device only reads `now`. Your play script, or an automation, has to set it to the station's
@@ -3546,4 +3551,47 @@ action: esphome.office_copy_settings
 data:
   settings: screen_theme, screen_clock_style, night_volume
   devices: Kitchen, Bedroom
+```
+
+## Call an add-on's command
+
+In YAML, refer to this action as `esphome.<node>_addon_command`.
+
+Calls a command of an add-on installed on the device that speaks the add-on API
+([addon-api.md](addon-api.md)), and answers with what the add-on says back, `{"text": "…"}`, if called
+with a `response_variable`: a sentence trigger can have the device read it out. The add-on has 4
+seconds to answer. One that is not installed, not running or not connected fails the call, so a voice
+command says so rather than nothing happening. Only commands the add-on's catalog entry lists, which
+its consent screen named, can be called.
+
+Each command that needs no arguments also has a button, `button.<node>_addon_<id>_<command>`, and an
+add-on's own entities are `<domain>.<node>_addon_<id>_<entity>`. Its `event.fire` arrives as an
+`esphome.techo5_addon` event with `addon`, `name` and its data.
+
+### addon (Required)
+
+*string*
+
+The add-on's id, as the catalog lists it: `meals`.
+
+### command (Required)
+
+*string*
+
+The command's name: `next`.
+
+### args (Can be empty)
+
+*string*
+
+The command's arguments as a JSON object, `{"to": "3"}`, checked against what the add-on declares; `""`
+for none.
+
+```yaml
+action: esphome.kitchen_addon_command
+data:
+  addon: meals
+  command: step
+  args: '{"to": "3"}'
+response_variable: answer
 ```

@@ -268,10 +268,14 @@
 	/*
 	 * NOT described as a device: GPIO159 is gpio-privacy "enable-gpio"
 	 * (confirmed: "privacy-enable-gpio", output, low at rest). Stock
-	 * pulses it for 1000 ms to flip the hardware mic/camera mute latch
+	 * pulses it for 1000 ms to engage the hardware mic/camera mute latch
 	 * (auto-toggle after 50 ms). Left unclaimed so userspace can
-	 * drive it with libgpiod (gpioset gpiochip0 159=...).
-	 * TODO: confirm the latch behavior before driving it.
+	 * drive it through the GPIO character device (gpiochip0 line 159).
+	 * Measured on a unit 2026-11-22: a 1000 ms high pulse engages the
+	 * latch (GPIO63 goes to muted). It only sets it: pulses of 50, 1000
+	 * and 3000 ms leave it set, whether the button or a pulse set it.
+	 * Only the button releases the latch. A latch set by a pulse sends
+	 * no key event; only GPIO63's SW_MUTE_DEVICE switch changes.
 	 */
 
 	/* ---------------- Stage 1: SDIO Wi-Fi (MT7663S) ---------------- */

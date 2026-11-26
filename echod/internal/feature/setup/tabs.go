@@ -252,7 +252,7 @@ var tabFor = map[string]string{
 	"name": "system", "place": "system", "timezone": "system", "calendar": "system", "calendar-remove": "system",
 	"updates": "system", "update-install": "system", "update-check": "system", "update-auto": "system",
 	"addons": "system", "addon-install": "system", "addon-update": "system", "addon-start": "system",
-	"addon-stop": "system", "addon-remove": "system", "addon-check": "system",
+	"addon-stop": "system", "addon-remove": "system", "addon-check": "system", "addon-settings": "system",
 	"ringwait": "system", "settingsfile": "system", "share": "system", "devices": "system", "giftreset": "system",
 }
 

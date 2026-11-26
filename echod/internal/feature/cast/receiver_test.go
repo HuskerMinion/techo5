@@ -365,7 +365,16 @@ func TestOtherRefusalsDoNotTurnTheAddressAway(t *testing.T) {
 	sink := &recSink{ended: make(chan struct{}), refuse: errors.New("in a call")}
 	addr := start(t, sink)
 	connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "x"})
-	if _, w := connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "x"}); w.Reason != "in a call" {
+	// The first phone's place is given back just after its refusal is sent, so a second phone that
+	// comes at once can still find it taken: that is "busy", not a turn-away, and it tries again.
+	var w Welcome
+	for end := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		_, w = connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "x"})
+		if w.Reason != reasonBusy || time.Now().After(end) {
+			break
+		}
+	}
+	if w.Reason != "in a call" {
 		t.Fatalf("welcome %+v, want asked again", w)
 	}
 }

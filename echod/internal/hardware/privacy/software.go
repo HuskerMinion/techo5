@@ -24,6 +24,8 @@ func (s software) Toggle() (bool, error) {
 	return now, s.Set(now)
 }
 
+func (software) heldByTheDaemon() {}
+
 // The press is only news to the key driver, so the daemon toggles.
 func (software) HardwareActs(bool) bool { return false }
 

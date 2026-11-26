@@ -52,8 +52,10 @@ The same software, laid out for the bigger screen.
 | **Alarms & Timers**, with the alarm sound | **A new alarm** |
 | ![Settings: Sound and Voice on the Show 8](show8/settings-sound.png) | ![Settings: Connections on the Show 8](show8/settings-connections.png) |
 | **Sound & Voice**, with quiet hours and bass | **Connections** |
-| ![The radio drawer on the Show 8](show8/drawer-radio.png) | |
-| **Radio** | |
+| ![The radio drawer on the Show 8](show8/drawer-radio.png) | ![Muted from Home Assistant on the Show 8](show8/mute-software.png) |
+| **Radio** | **Muted from Home Assistant** ([the microphone mute](../install-athena.md#the-microphone-mute)) |
+| ![The card after the mute button lifted a mute from Home Assistant](show8/mute-lifted.png) | |
+| **The mute button lifted it** | |
 
 ## Echo Spot
 

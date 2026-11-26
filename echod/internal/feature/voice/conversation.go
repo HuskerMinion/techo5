@@ -138,6 +138,12 @@ type event struct {
 	// peak is an evCandidate's or an evScored's score.
 	peak float64
 
+	// clarity is how clearly Nearest device heard an evStart's or an evFaint's wake, when it measured.
+	clarity wakeClarity
+
+	// claimed is an evContested whose answer came of a claim, the wake's clarity weighed by the devices.
+	claimed bool
+
 	// gen and answer are an evContested's: which decision (deciding.gen), and whether this device answers.
 	gen    uint64
 	answer bool
@@ -244,6 +250,12 @@ type conversation struct {
 	// lookHere says this turn's answer put a page on the screen (the rain map, the forecast), so it is
 	// not followed by listening again: the listening screen would cover the page asked for.
 	lookHere bool
+
+	// overRing says an alarm or timer was ringing when this turn opened: the wake word was said at it,
+	// and silenced it (Voice.open, answerHeard). It is kept for the turn, because the ring can end
+	// before the transcript comes (the stop word heard in the same "stop", #754), and a stop said to a
+	// ring is answered by the ring ending, whenever that was.
+	overRing bool
 
 	// closing says what was heard was only a way of ending the conversation ("thank you", "that's
 	// all"), so the reply to it is the last thing said: no follow-up listens after it (#510).
@@ -379,6 +391,9 @@ type nextTurn struct {
 	// confirmed is a wake the device was not sure of that Home Assistant confirmed (hawake.go): at is
 	// then when the device's own engine scored it, and the turn reaches back to there (historyFor).
 	confirmed bool
+
+	// clarity is how clearly Nearest device heard the wake that opened it, for the turn's event (#727).
+	clarity wakeClarity
 
 	// rtResume is a realtime follow-up that keeps the session the last turn opened, rather than opening
 	// one of its own, so the provider still has the conversation (#487). idle keeps the session for it
@@ -610,7 +625,7 @@ func (c *conversation) turnEvent(e event) {
 		// A turn that could not open (no pipeline, the microphones on a camera call) leaves no answer
 		// to follow an announced question, so the question goes as a cut-off one does. One only put off
 		// (a wake word run or a mistaken turn still closing) opens in a moment: the question stays.
-		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited}) && c.pending == nil {
+		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited, clarity: e.clarity}) && c.pending == nil {
 			c.dropQuestion()
 		}
 
@@ -688,6 +703,22 @@ func (c *conversation) turnEvent(e event) {
 			}
 		}
 		c.turn.Heard(e.text)
+
+		// A stop said to a ring is answered by the ring ending, here or by the stop word a moment
+		// before (#754): Home Assistant has no ring of the device's to stop, and "Stop" sent on to it
+		// is a stop for media, answered "Sorry, no device is playing". The turn ends quietly, as one
+		// woken by mistake does, and the rest of Home Assistant's run is not taken up. Only in a turn
+		// opened over a ring: a "stop" said with nothing ringing is Home Assistant's to answer.
+		if c.overRing && c.phase != phaseIdle && stopsRing(e.text) {
+			slog.Info("heard a stop in a turn opened over a ring, answered by the ring ending", "slot", c.slot+1)
+			c.clearPending()
+			c.idle("stopped the ring", activity.Answered)
+			if !c.stopsAtOnce() {
+				c.draining = true
+				c.grace = time.NewTimer(drainFor)
+			}
+			return
+		}
 
 		// A wake word followed by only what speech-to-text writes for noise was a wake by mistake. It
 		// ends here, before the answer to "Thank you." is spoken to an empty room. A follow-up is left
@@ -1047,7 +1078,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
-		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at}
+		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity}
 		c.turn.Cancels(activity.Interrupted)
 		c.idle("interrupted", activity.Canceled)
 
@@ -1111,6 +1142,8 @@ func (c *conversation) start(n nextTurn) (started bool) {
 		c.opened = time.Now()
 	}
 	c.lookHere = false
+	// A silenced ring still counts as sounding (ring.Silence), so a wake word said at one is seen here.
+	c.overRing = ring.IsSounding()
 	c.closing, c.closingExact = false, false
 	// Counted from the wake word: a turn it opens starts again, a follow-up is one more in a row.
 	if n.followUp {
@@ -1137,6 +1170,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	c.turn = c.log.Begin(slot+1, phrase, n.trigger())
 	if n.woke && !n.continued {
 		c.wakeOpened(slot, n.at)
+	}
+	// Only a wake's: a follow-up or a button never had one measured, and one it carried over would be
+	// another turn's.
+	if n.woke && !n.followUp && n.clarity.measured {
+		c.turn.Clarified(n.clarity.dB)
 	}
 	recording.Get().Opens(c.turn.ID(), slot)
 	be := c.be
@@ -1649,8 +1687,19 @@ func (c *conversation) Woke(slot int) {
 }
 
 // WokeAt is Woke for a wake word heard at at and acted on now.
-func (c *conversation) WokeAt(slot int, at time.Time) {
-	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0)})
+func (c *conversation) WokeAt(slot int, at time.Time) { c.wokeAt(slot, at, wakeClarity{}) }
+
+// wokeAt is WokeAt with how clearly Nearest device heard the word, if it measured.
+func (c *conversation) wokeAt(slot int, at time.Time, heard wakeClarity) {
+	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0), clarity: heard})
+}
+
+// wakeClarity is how far a wake word stood out from the room here, in dB, as Nearest device measured it to
+// weigh the wake against the other devices (#727). measured is false for a wake it did not weigh, Nearest
+// device off among them: nothing measures then, and a zero would read as a quiet room.
+type wakeClarity struct {
+	dB       float64
+	measured bool
 }
 
 // Cancel gives up on whatever is happening.

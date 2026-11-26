@@ -107,13 +107,27 @@ func eventually(t *testing.T, what string, ok func() bool) {
 // fakeProc is a started program that runs until exit or Stop.
 type fakeProc struct {
 	spec spec
+	pid  int
 	once sync.Once
 	done chan struct{}
 	err  error
+
+	// wrote is what wait4 would say it wrote, once it has exited; unknown when not set.
+	mu    sync.Mutex
+	wrote *uint64
 }
 
 func (p *fakeProc) Wait() error { <-p.done; return p.err }
 func (p *fakeProc) Stop()       { p.exit(errors.New("signal: terminated")) }
+func (p *fakeProc) Pid() int    { return p.pid }
+func (p *fakeProc) Wrote() (uint64, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.wrote == nil {
+		return 0, false
+	}
+	return *p.wrote, true
+}
 func (p *fakeProc) exit(err error) {
 	p.once.Do(func() { p.err = err; close(p.done) })
 }
@@ -132,7 +146,7 @@ func (s *fakeSpawner) spawn(sp spec) (process, error) {
 	if s.fail != nil {
 		return nil, s.fail
 	}
-	p := &fakeProc{spec: sp, done: make(chan struct{})}
+	p := &fakeProc{spec: sp, pid: 1000 + len(s.procs), done: make(chan struct{})}
 	s.procs = append(s.procs, p)
 	if s.exitAtOnce {
 		p.exit(errors.New("exit status 1"))
@@ -320,11 +334,11 @@ func newRig(t *testing.T) *rig {
 	swap := func(f func()) { restore = append(restore, f) }
 	oldFetch, oldVerify, oldSpawn, oldDrop, oldChown := fetchSigned, verifySigned, spawn, canDrop, chown
 	oldMem, oldFree, oldFirst, oldMost, oldLong, oldTrial, oldCheck := memAvailableMB, freeMB, restartFirst, restartMost, ranLong, trialFor, checkEvery
-	oldProc, oldTmp, oldKill, oldDu := procDir, tmpDirs, killPID, duMB
+	oldProc, oldTmp, oldKill, oldDu, oldRead := procDir, tmpDirs, killPID, duMB, readProcs
 	swap(func() {
 		fetchSigned, verifySigned, spawn, canDrop, chown = oldFetch, oldVerify, oldSpawn, oldDrop, oldChown
 		memAvailableMB, freeMB, restartFirst, restartMost, ranLong, trialFor, checkEvery = oldMem, oldFree, oldFirst, oldMost, oldLong, oldTrial, oldCheck
-		procDir, tmpDirs, killPID, duMB = oldProc, oldTmp, oldKill, oldDu
+		procDir, tmpDirs, killPID, duMB, readProcs = oldProc, oldTmp, oldKill, oldDu, oldRead
 	})
 	// No real process is looked at, or killed, and no real temporary folder swept.
 	procDir, tmpDirs = filepath.Join(t.TempDir(), "proc"), []string{t.TempDir()}
