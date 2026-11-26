@@ -124,11 +124,13 @@ func (athenaMute) SoftwareMuted() bool { return softwareCut.Load() }
 // LiftedByButton reports, once, that the button's release took the software mute with it.
 func (athenaMute) LiftedByButton() bool { return athenaLifted.Swap(false) }
 
-// athenaRelease takes the software mute off: the converter's channels first, then the frames.
+// athenaRelease takes the software mute off: the frames first, then the converter's channels.
 func athenaRelease() error {
-	err := codecCut(false)
+	// The flag before the channels: a capture opening in between (hardware/mic's athenaInit) reads the
+	// flag to decide the channels, and one that read it still set after the channels went on would
+	// switch them off again under microphones that are meant to be live.
 	softwareCut.Store(false)
-	return err
+	return codecCut(false)
 }
 
 // Observe follows the latch and calls fn whenever it moves, the button's release having lifted the

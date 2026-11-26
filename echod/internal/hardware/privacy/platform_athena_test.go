@@ -173,3 +173,39 @@ func TestAthenaMuteIsHeldByTheDaemon(t *testing.T) {
 		t.Errorf("converter reads cut=%v known=%v err=%v after a mute", cut, known, err)
 	}
 }
+
+// Releasing the software mute takes the flag down before the channels go on: a capture opening in
+// between reads the flag to decide the channels, and one that still read it set would switch them off
+// again under microphones that are meant to be live.
+func TestAthenaReleaseLowersTheFlagFirst(t *testing.T) {
+	newAthenaFake(t)
+	m := athenaMute{}
+	_ = m.Set(true)
+	var flagWhenOn []bool
+	SetCodec(func(cut bool) error {
+		if !cut {
+			flagWhenOn = append(flagWhenOn, SoftwareCut())
+		}
+		return nil
+	}, func() (bool, error) { return false, nil })
+	if err := m.Set(false); err != nil {
+		t.Fatal(err)
+	}
+	if len(flagWhenOn) != 1 || flagWhenOn[0] {
+		t.Fatalf("the channels went on with the flag still %v", flagWhenOn)
+	}
+}
+
+// Only the process that called HoldTheMute (the daemon) holds the mute.
+func TestMuteHeldHere(t *testing.T) {
+	was := heldHere.Load()
+	t.Cleanup(func() { heldHere.Store(was) })
+	heldHere.Store(false)
+	if MuteHeldHere() {
+		t.Fatal("a process that never called HoldTheMute held the mute")
+	}
+	HoldTheMute()
+	if !MuteHeldHere() {
+		t.Fatal("HoldTheMute did not take")
+	}
+}
