@@ -6,6 +6,7 @@ import (
 	"math"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -216,6 +217,43 @@ func (c Command) CheckArgs(args map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// CoerceArgs is args with each value Home Assistant may have turned into another type put back in the
+// type the command declares: a number or true/false where a string is declared becomes its text, and
+// text that reads as a number where a number is declared becomes that number. A Home Assistant template
+// renders "1" as the number 1 however it was quoted, so a season or an episode said as a number would
+// otherwise never reach a command that takes it as text. Anything else is left for CheckArgs to refuse.
+func (c Command) CoerceArgs(args map[string]any) map[string]any {
+	if len(args) == 0 {
+		return args
+	}
+	out := make(map[string]any, len(args))
+	for name, v := range args {
+		out[name] = v
+		a, ok := c.Args[name]
+		if !ok {
+			continue
+		}
+		switch a.Type {
+		case TypeString:
+			switch x := v.(type) {
+			case float64:
+				if !math.IsNaN(x) && !math.IsInf(x, 0) {
+					out[name] = strconv.FormatFloat(x, 'f', -1, 64)
+				}
+			case bool:
+				out[name] = strconv.FormatBool(x)
+			}
+		case TypeNumber:
+			if x, ok := v.(string); ok {
+				if f, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+					out[name] = f
+				}
+			}
+		}
+	}
+	return out
 }
 
 // Find is the command named name.

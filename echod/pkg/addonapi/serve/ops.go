@@ -671,6 +671,7 @@ func (s *Server) Command(ctx context.Context, id, name string, args map[string]a
 	if !ok {
 		return "", bad("the add-on %s has no command %q", id, name)
 	}
+	args = cmd.CoerceArgs(args)
 	if err := cmd.CheckArgs(args); err != nil {
 		return "", bad("%v", err)
 	}

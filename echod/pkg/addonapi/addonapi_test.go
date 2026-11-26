@@ -93,6 +93,17 @@ func TestCommands(t *testing.T) {
 			t.Errorf("%s args passed", name)
 		}
 	}
+	// What Home Assistant renders as a number or text goes back to the declared type before the check.
+	got := step.CoerceArgs(map[string]any{"to": 3.0, "n": "2"})
+	if got["to"] != "3" || got["n"] != 2.0 {
+		t.Errorf("coerced %v", got)
+	}
+	if err := step.CheckArgs(got); err != nil {
+		t.Errorf("coerced args refused: %v", err)
+	}
+	if got := step.CoerceArgs(map[string]any{"to": true, "n": "two"}); got["to"] != "true" || got["n"] != "two" {
+		t.Errorf("coerced %v", got)
+	}
 	if step.NeedsNothing() || !cmds[1].NeedsNothing() {
 		t.Error("NeedsNothing")
 	}
