@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -48,7 +50,7 @@ func (r *roomsSource) load(ctx context.Context, live *hass.Live) (needs, error) 
 	r.mu.Lock()
 	r.plan = plan
 	r.mu.Unlock()
-	return needs{entities: ids}, nil
+	return needs{entities: ids, precision: hass.Precisions(entities)}, nil
 }
 
 // sections is a section a room: its name and climate over its tiles.
@@ -65,7 +67,7 @@ func (r *roomsSource) sections(l look) []Section {
 			if !ok {
 				continue
 			}
-			if t, keep := tileOf(e, p.name); keep {
+			if t, keep := tileOf(e, p.name, l.precision); keep {
 				tiles = append(tiles, t)
 			}
 		}
@@ -145,19 +147,20 @@ func planRooms(areas []hass.Area, floors []hass.Floor, devices []hass.Device, en
 
 // tileOf is how one entity looks as a tile, and whether it is worth one: a binary sensor only
 // when it says whether something is open.
-func tileOf(e hass.LiveEntity, room string) (Tile, bool) {
+func tileOf(e hass.LiveEntity, room string, precision map[string]int) (Tile, bool) {
 	domain, _, _ := strings.Cut(e.ID, ".")
 	class, _ := e.Attrs["device_class"].(string)
 	if domain == "binary_sensor" && !openings[class] {
 		return Tile{}, false
 	}
-	return describe(e, nameOf(e, room)), true
+	return describe(e, nameOf(e, room), precision), true
 }
 
 // describe is how any entity looks as a tile: its icon, its name, and its state in words, with the
 // tap that suits it. Locks and thermostats get none: a tap is too easy to make by accident for a
 // front door, and a thermostat wants more than on and off (the screen opens its sheet instead).
-func describe(e hass.LiveEntity, name string) Tile {
+// precision is each entity's display precision from Home Assistant's registry, nil when unknown.
+func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
 	domain, _, _ := strings.Cut(e.ID, ".")
 	class, _ := e.Attrs["device_class"].(string)
 	t := Tile{Entity: e.ID, Name: name}
@@ -220,8 +223,14 @@ func describe(e hass.LiveEntity, name string) Tile {
 		t.On = false
 	case "sensor", "input_number", "number", "counter":
 		t.Value = e.State
-		if n := number(e.State); n != "" && strings.Contains(e.State, ".") {
-			// Two places are more than a glance wants; one is kept where the number is small.
+		f, err := strconv.ParseFloat(e.State, 64)
+		if dp, ok := precision[e.ID]; ok && err == nil {
+			// The owner's precision, or the integration's, as Home Assistant's own cards show it:
+			// a price to the tenth of a cent is no use rounded to the dime.
+			t.Value = fixed(f, dp)
+		} else if n := number(e.State); n != "" && strings.Contains(e.State, ".") {
+			// With no precision set, two places are more than a glance wants; one is kept where the
+			// number is small.
 			var f float64
 			fmt.Sscanf(e.State, "%g", &f)
 			t.Value = trimNumber(f)
@@ -258,6 +267,45 @@ func binaryWords(class string, on bool) string {
 		return w[0]
 	}
 	return w[1]
+}
+
+// shownNumber is a reading with the decimals Home Assistant shows the entity's number with, or as
+// trimNumber has it when it has no display precision.
+func shownNumber(f float64, precision map[string]int, id string) string {
+	if dp, ok := precision[id]; ok {
+		return fixed(f, dp)
+	}
+	return trimNumber(f)
+}
+
+// fixed is f with exactly dp decimals, rounded as Home Assistant's frontend rounds it
+// (Intl.NumberFormat): to the nearest, and a value exactly halfway away from zero. strconv rounds
+// the halfway value to even instead, so 2.5 with none would read 2 where the browser reads 3. Only a
+// float that is exactly halfway is affected, and big.Float tells which is without rounding of its own.
+func fixed(f float64, dp int) string {
+	dp = min(dp, 15) // more than a float64 holds; Home Assistant offers no more than six
+	s := strconv.FormatFloat(f, 'f', dp, 64)
+	if math.IsInf(f, 0) || math.IsNaN(f) {
+		return s
+	}
+	scaled := new(big.Float).SetPrec(256).SetFloat64(math.Abs(f))
+	scaled.Mul(scaled, new(big.Float).SetPrec(256).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(dp)), nil)))
+	whole, _ := scaled.Int(nil)
+	frac := new(big.Float).SetPrec(256).Sub(scaled, new(big.Float).SetPrec(256).SetInt(whole))
+	if frac.Cmp(big.NewFloat(0.5)) != 0 {
+		return s
+	}
+	digits := whole.Add(whole, big.NewInt(1)).String()
+	if dp > 0 {
+		if len(digits) <= dp {
+			digits = strings.Repeat("0", dp-len(digits)+1) + digits
+		}
+		digits = digits[:len(digits)-dp] + "." + digits[len(digits)-dp:]
+	}
+	if f < 0 {
+		digits = "-" + digits
+	}
+	return digits
 }
 
 func trimNumber(f float64) string {

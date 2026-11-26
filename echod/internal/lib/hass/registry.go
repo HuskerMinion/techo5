@@ -31,14 +31,45 @@ type Device struct {
 	Connections [][]string `json:"connections"`
 }
 
-// Registered is an entity as the registry lists it for display: where it is, and whether it is one
-// to show at all. Settings and diagnostics are not, and nor is anything hidden.
+// Registered is an entity as the registry lists it for display: where it is, whether it is one to
+// show at all (settings and diagnostics are not, and nor is anything hidden), and how many decimals
+// its number is shown with. The precision lives in the registry, not in the state's attributes: it is
+// the owner's own setting, or else the one the integration suggests, and nil when there is neither.
 type Registered struct {
-	ID       string `json:"ei"`
-	Device   string `json:"di"`
-	Area     string `json:"ai"`
-	Category *int   `json:"ec"`
-	Hidden   bool   `json:"hb"`
+	ID        string `json:"ei"`
+	Device    string `json:"di"`
+	Area      string `json:"ai"`
+	Category  *int   `json:"ec"`
+	Hidden    bool   `json:"hb"`
+	Precision *int   `json:"dp"`
+}
+
+// Precisions is the display precision of each entity that has one, by entity id.
+func Precisions(entities []Registered) map[string]int {
+	out := map[string]int{}
+	for _, e := range entities {
+		if e.Precision != nil && *e.Precision >= 0 {
+			out[e.ID] = *e.Precision
+		}
+	}
+	return out
+}
+
+// DisplayPrecision is the display precision of each entity that has one, by entity id, from the
+// listing Home Assistant's own frontend formats numbers with. Registries reads the same listing; this
+// is for a dashboard that wants nothing else from the registries.
+func (l *Live) DisplayPrecision(ctx context.Context) (map[string]int, error) {
+	raw, err := l.Call(ctx, map[string]any{"type": "config/entity_registry/list_for_display"})
+	if err != nil {
+		return nil, err
+	}
+	var display struct {
+		Entities []Registered `json:"entities"`
+	}
+	if err := json.Unmarshal(raw, &display); err != nil {
+		return nil, err
+	}
+	return Precisions(display.Entities), nil
 }
 
 // Registries is the house's areas, floors, devices and entities.

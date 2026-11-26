@@ -647,7 +647,7 @@ func (n listNode) blocks(l look) []Block {
 	}
 	var tiles []Tile
 	for _, it := range n.items {
-		t := it.tile(l.states, room)
+		t := it.tile(l, room)
 		t.Wide, t.High = it.wide, it.high
 		tiles = append(tiles, t)
 	}
@@ -676,7 +676,7 @@ func (n rowsNode) blocks(l look) []Block {
 			room = it.section
 			continue
 		}
-		t := it.tile(l.states, room)
+		t := it.tile(l, room)
 		t.Switch = t.Tap != nil && strings.HasSuffix(t.Tap.Service, "toggle") && (t.Value == "On" || t.Value == "Off" || strings.HasPrefix(t.Value, "On ·"))
 		cur.Rows = append(cur.Rows, t)
 	}
@@ -688,7 +688,7 @@ func (n rowsNode) blocks(l look) []Block {
 
 // tile is the item as a tile. An entity's own name, when the card gives none, is shown without the
 // room it is under in front of it (withoutRoom); a name the card gives is shown as it is.
-func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
+func (it tileItem) tile(l look, room string) Tile {
 	if it.fixed {
 		t := Tile{Name: it.name, Icon: orIcon(it.icon, "gesture-tap"), Value: it.value, Tap: it.action}
 		if t.Tap != nil && t.Tap.Service == "" && t.Tap.View == "" {
@@ -696,7 +696,7 @@ func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 		}
 		return t
 	}
-	e, ok := states[it.entity]
+	e, ok := l.states[it.entity]
 	if !ok {
 		e = hass.LiveEntity{ID: it.entity, State: "unknown", Attrs: map[string]any{}}
 	}
@@ -708,7 +708,7 @@ func (it tileItem) tile(states map[string]hass.LiveEntity, room string) Tile {
 		}
 		name = withoutRoom(name, room)
 	}
-	t := describe(e, name)
+	t := describe(e, name, l.precision)
 	if it.color.A != 0 && !t.Gone {
 		if domain, _, _ := strings.Cut(it.entity, "."); t.On || !colorsOnlyWhenActive[domain] {
 			t.Color = it.color
@@ -742,7 +742,7 @@ type templateNode struct {
 func (t templateNode) blocks(l look) []Block {
 	tile := Tile{Name: t.primary.get(l.rendered), Value: t.secondary.get(l.rendered), Icon: orIcon(t.icon.get(l.rendered), "card-text-outline")}
 	if t.item.entity != "" {
-		base := t.item.tile(l.states, l.room)
+		base := t.item.tile(l, l.room)
 		tile.On, tile.Tap = base.On, base.Tap
 	} else if t.item.action != nil && (t.item.action.Service != "" || t.item.action.View != "") {
 		tile.Tap = t.item.action
@@ -779,7 +779,7 @@ func (g graphNode) blocks(l look) []Block {
 	if name == "" {
 		name, _ = e.Attrs["friendly_name"].(string)
 	}
-	t := describe(e, name)
+	t := describe(e, name, l.precision)
 	return []Block{{Graph: &Graph{Name: name, Icon: orIcon(g.icon, t.Icon), Value: t.Value, Points: buckets(l.history[g.entity], g.hours, graphPoints)}}}
 }
 
@@ -815,7 +815,7 @@ func (g gaugeNode) blocks(l look) []Block {
 			sev, best = k, at
 		}
 	}
-	return []Block{{Gauge: &Gauge{Name: name, Value: strings.TrimSpace(trimNumber(v) + " " + unit), Frac: frac, Severity: sev}}}
+	return []Block{{Gauge: &Gauge{Name: name, Value: strings.TrimSpace(shownNumber(v, l.precision, g.entity) + " " + unit), Frac: frac, Severity: sev}}}
 }
 
 // pictureNode is a camera or an image.

@@ -2,6 +2,7 @@ package hass
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -181,5 +182,25 @@ func TestTheConnectionsDeadlineIsTheCallers(t *testing.T) {
 	defer s2.conn.Close()
 	if dl, ok := ctx.Deadline(); !ok || !s2.deadline.Equal(dl) {
 		t.Errorf("deadline = %v, want the caller's %v", s2.deadline, dl)
+	}
+}
+
+// The display listing gives an entity's display precision as "dp" (the owner's, else the
+// integration's suggested one), and leaves it out when there is none (#759). The shape is
+// list_for_display's own, short keys and all.
+func TestTheDisplayListingGivesPrecisions(t *testing.T) {
+	raw := `{"entity_categories":{"0":"config","1":"diagnostic"},"entities":[
+		{"ei":"sensor.price","di":"d1","pl":"nordpool","dp":3,"tk":"price"},
+		{"ei":"sensor.volts","di":"d2","dp":0},
+		{"ei":"light.hall","di":"d3","ai":"hall"}]}`
+	var display struct {
+		Entities []Registered `json:"entities"`
+	}
+	if err := json.Unmarshal([]byte(raw), &display); err != nil {
+		t.Fatal(err)
+	}
+	got := Precisions(display.Entities)
+	if len(got) != 2 || got["sensor.price"] != 3 || got["sensor.volts"] != 0 {
+		t.Errorf("precisions %v", got)
 	}
 }

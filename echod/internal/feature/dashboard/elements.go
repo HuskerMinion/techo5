@@ -257,7 +257,7 @@ func (e element) at(l look) (Element, bool) {
 		if !ok {
 			st = hass.LiveEntity{ID: e.entity, State: "unknown", Attrs: map[string]any{}}
 		}
-		t := describe(st, "")
+		t := describe(st, "", l.precision)
 		out.On, out.Gone = t.On, t.Gone
 		if e.kind == "state-icon" {
 			out.Icon = orIcon(e.icon, t.Icon)

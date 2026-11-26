@@ -44,7 +44,7 @@ func TestAFanIsReadForItsSheet(t *testing.T) {
 			n.Percentage != c.pct || n.Step != c.step || n.On != (c.state == "on") {
 			t.Errorf("%s: %+v", c.name, n)
 		}
-		tile := describe(hass.LiveEntity{ID: "fan.bedroom", State: c.state, Attrs: attrs}, "Fan")
+		tile := describe(hass.LiveEntity{ID: "fan.bedroom", State: c.state, Attrs: attrs}, "Fan", nil)
 		if (tile.Adjust != nil) != c.speed {
 			t.Errorf("%s: level %+v, want one: %v", c.name, tile.Adjust, c.speed)
 		}

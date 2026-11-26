@@ -40,24 +40,24 @@ func TestRoomsTakeTheRightEntities(t *testing.T) {
 func TestTiles(t *testing.T) {
 	light := hass.LiveEntity{ID: "light.kitchen_ceiling", State: "on",
 		Attrs: map[string]any{"friendly_name": "Kitchen ceiling", "brightness": 153.0}}
-	tile, ok := tileOf(light, "Kitchen")
+	tile, ok := tileOf(light, "Kitchen", nil)
 	if !ok || tile.Name != "Ceiling" || tile.Value != "On · 60%" || !tile.On || tile.Tap == nil || tile.Tap.Service != "light.toggle" || tile.Icon != "lightbulb" {
 		t.Errorf("light tile %+v", tile)
 	}
 	motion := hass.LiveEntity{ID: "binary_sensor.hall_motion", State: "on", Attrs: map[string]any{"device_class": "motion"}}
-	if _, ok := tileOf(motion, "Hall"); ok {
+	if _, ok := tileOf(motion, "Hall", nil); ok {
 		t.Error("a motion sensor got a tile")
 	}
 	door := hass.LiveEntity{ID: "binary_sensor.back_door", State: "off", Attrs: map[string]any{"device_class": "door"}}
-	if tile, ok := tileOf(door, "Hall"); !ok || tile.Value != "Closed" || tile.Tap != nil || tile.Icon != "door-closed" {
+	if tile, ok := tileOf(door, "Hall", nil); !ok || tile.Value != "Closed" || tile.Tap != nil || tile.Icon != "door-closed" {
 		t.Errorf("door tile %+v", tile)
 	}
 	gone := hass.LiveEntity{ID: "switch.fan", State: "unavailable", Attrs: map[string]any{}}
-	if tile, _ := tileOf(gone, "Den"); !tile.Gone || tile.Tap != nil {
+	if tile, _ := tileOf(gone, "Den", nil); !tile.Gone || tile.Tap != nil {
 		t.Errorf("unavailable tile %+v", tile)
 	}
 	lock := hass.LiveEntity{ID: "lock.front", State: "locked", Attrs: map[string]any{}}
-	if tile, _ := tileOf(lock, "Hall"); tile.Tap != nil {
+	if tile, _ := tileOf(lock, "Hall", nil); tile.Tap != nil {
 		t.Error("a lock is tappable")
 	}
 }
@@ -65,7 +65,7 @@ func TestTiles(t *testing.T) {
 // A weather tile says the condition as the clock does, with the temperature.
 func TestWeatherTile(t *testing.T) {
 	e := hass.LiveEntity{ID: "weather.home", State: "partlycloudy", Attrs: map[string]any{"temperature": 71.6, "temperature_unit": "°F"}}
-	if got := describe(e, "Home").Value; got != "Partly cloudy · 71.6°" {
+	if got := describe(e, "Home", nil).Value; got != "Partly cloudy · 71.6°" {
 		t.Errorf("weather tile says %q", got)
 	}
 }

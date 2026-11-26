@@ -147,12 +147,12 @@ func TestASpeakerPlayingFromElsewhereIsGroupedItsOwnWay(t *testing.T) {
 // Assistant leaves a group it could not pause, and a play there goes on with its queue.
 func TestAMediaPlayersTileTapsWhenIdle(t *testing.T) {
 	for _, state := range []string{"playing", "paused", "idle"} {
-		tile := describe(hass.LiveEntity{ID: "media_player.den", State: state}, "Den")
+		tile := describe(hass.LiveEntity{ID: "media_player.den", State: state}, "Den", nil)
 		if tile.Tap == nil || tile.Tap.Service != "media_player.media_play_pause" {
 			t.Errorf("%s: tap %+v, want play or pause", state, tile.Tap)
 		}
 	}
-	if tile := describe(hass.LiveEntity{ID: "media_player.den", State: "off"}, "Den"); tile.Tap != nil {
+	if tile := describe(hass.LiveEntity{ID: "media_player.den", State: "off"}, "Den", nil); tile.Tap != nil {
 		t.Errorf("off: tap %+v, want none", tile.Tap)
 	}
 }

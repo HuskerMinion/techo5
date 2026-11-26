@@ -175,6 +175,9 @@ type needs struct {
 	templates []template
 	graphs    map[string]int
 	pictures  []wanted
+	// precision is each entity's display precision, when the source has read the registry's display
+	// listing already (the Rooms dashboard does, for its areas); otherwise the session reads it.
+	precision map[string]int
 }
 
 // look is everything a source draws from.
@@ -183,7 +186,10 @@ type look struct {
 	rendered map[int]string
 	history  map[string][]point
 	pictures map[string]shot
-	width    int // the screen's, for a card shown only on a wide or a narrow one
+	// precision is how many decimals each entity's number is shown with, as Home Assistant's
+	// registry has it; an entity missing from it has none set (describe).
+	precision map[string]int
+	width     int // the screen's, for a card shown only on a wide or a narrow one
 	// room is the heading the cards are under in their section, often a room: an entity's own name
 	// is shown without it in front, as on the Rooms dashboard (withoutRoom).
 	room string
@@ -217,10 +223,13 @@ type session struct {
 	history  map[string][]point
 	graphs   map[string]int // entity to hours shown, for trimming its history
 	pictures map[string]shot
-	width    int
-	reload   bool // the connection was closed to read the dashboard again, not because it failed
-	view     Drawn
-	gen      int // f.recent's when the session began (recent.put)
+	// precision is each entity's display precision, read when the dashboard loads and again when
+	// the entity registry changes (followPrecision); it is replaced whole, never changed in place.
+	precision map[string]int
+	width     int
+	reload    bool // the connection was closed to read the dashboard again, not because it failed
+	view      Drawn
+	gen       int // f.recent's when the session began (recent.put)
 
 	// hold is the page that was up when a tap went to this view, shown instead of this one until it
 	// is ready (ready) or until holdUntil, whichever is first: a view and its picture take a fraction
@@ -670,6 +679,15 @@ func (s *session) once() error {
 		longest = max(longest, h)
 	}
 	history := loadHistory(lctx, live, graphed, longest)
+	precision := need.precision
+	if err == nil && precision == nil {
+		// Without it a number is shown as trimNumber has it, which is how it was before the registry
+		// was read for this: worth a log line, not a dashboard that will not load.
+		if precision, err = live.DisplayPrecision(lctx); err != nil {
+			slog.Info("drawn dashboard: no display precision from Home Assistant", "err", err)
+			precision, err = nil, nil
+		}
+	}
 	lcancel()
 	if err != nil {
 		// A sentence written for the screen as it is; anything else is the log's, an error being able
@@ -685,7 +703,7 @@ func (s *session) once() error {
 	}
 	s.mu.Lock()
 	s.view.Problem, s.view.Connect, s.view.Theme = "", false, theme
-	s.history, s.graphs = history, need.graphs
+	s.history, s.graphs, s.precision = history, need.graphs, precision
 	s.seed(need.pictures)
 	s.mu.Unlock()
 	s.publish()
@@ -750,16 +768,65 @@ func (s *session) once() error {
 			slog.Info("drawn dashboard: can't hear dashboard edits", "err", err)
 		}
 	}
+	s.followPrecision(fctx, ctx, live)
 	slog.Info("drawn dashboard following", "entities", len(ids), "templates", len(need.templates),
 		"graphs", len(need.graphs), "pictures", len(need.pictures), "theme", theme.Set)
 	<-live.Done()
 	return live.Err()
 }
 
+// precisionSettle is how long the registry is left after a change before its display listing is read
+// again: one edit in Home Assistant, or an integration setting up, changes many entries at once.
+const precisionSettle = 2 * time.Second
+
+// followPrecision reads the display precisions again when the entity registry changes, so a precision
+// set in Home Assistant shows without the dashboard being opened again. subscribing bounds the
+// subscription's answer; conn is the connection's, which the readings after it go by.
+func (s *session) followPrecision(subscribing, conn context.Context, live *hass.Live) {
+	var mu sync.Mutex
+	var again *time.Timer
+	err := live.SubscribeEvents(subscribing, "entity_registry_updated", func(data map[string]any) {
+		// A rename or a move cannot change a precision; it is kept in the entry's options.
+		if action, _ := data["action"].(string); action == "update" {
+			if changes, _ := data["changes"].(map[string]any); changes != nil {
+				if _, ok := changes["options"]; !ok {
+					return
+				}
+			}
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if again != nil {
+			again.Reset(precisionSettle)
+			return
+		}
+		// On the connection's reader: the listing is read off it, which a call made here would wait on.
+		again = time.AfterFunc(precisionSettle, func() {
+			mu.Lock()
+			again = nil
+			mu.Unlock()
+			rctx, cancel := context.WithTimeout(conn, 30*time.Second)
+			defer cancel()
+			p, err := live.DisplayPrecision(rctx)
+			if err != nil {
+				return // the old ones stand, and a connection that ended is opened again anyway
+			}
+			s.mu.Lock()
+			s.precision = p
+			s.mu.Unlock()
+			s.publishSoon()
+		})
+	})
+	if err != nil {
+		slog.Info("drawn dashboard: can't hear registry changes", "err", err)
+	}
+}
+
 // publish rebuilds the page from what has arrived, and says there is something new to draw.
 func (s *session) publish() {
 	s.mu.Lock()
-	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures, width: s.width})
+	sections := s.src.sections(look{states: s.states, rendered: s.rendered, history: s.history, pictures: s.pictures,
+		precision: s.precision, width: s.width})
 	for i := range sections {
 		for j := range sections[i].Blocks {
 			b := &sections[i].Blocks[j]
