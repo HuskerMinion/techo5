@@ -176,6 +176,9 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 			fmt.Fprintf(w, ` <a href="%s" data-addon-page="%s">Its page</a>.`, html.EscapeString(link), html.EscapeString(page))
 		}
 		fmt.Fprint(w, `</p>`)
+		if s.State == addons.StateRunning && s.WritesKnown {
+			addonWrites(w, s)
+		}
 		if s.Firewall != "" {
 			fmt.Fprintf(w, `<p class="note bad">Its ports may not be reachable from the network: %s</p>`, html.EscapeString(s.Firewall))
 		}
@@ -233,6 +236,22 @@ func addonsInstalled(w http.ResponseWriter, token string, f *addons.Feature, ins
 		  any account it was linked to); without this they are kept for installing it again</label></p>
 		 <p><button type="submit" class="danger">Remove %s</button></p></form>`, html.EscapeString(s.ID), html.EscapeString(s.Name))
 	}
+}
+
+// addonWrites is how much a running add-on writes to the device's storage, a day (feature/addons,
+// writes.go), and when that is more than TECHO5 itself writes, that it wears the storage: the owner is
+// the one who can choose another add-on, or ask its author, and nothing else would tell them.
+func addonWrites(w http.ResponseWriter, s addons.Status) {
+	n := "less than 1 MB"
+	if mb := (s.WritesPerDay + 1<<19) >> 20; mb >= 1 {
+		n = fmt.Sprintf("about %d MB", mb)
+	}
+	if s.WritesMuch {
+		fmt.Fprintf(w, `<p class="note bad">Writes %s a day to storage, more than TECHO5 itself writes; it wears the
+		 device's storage.</p>`, n)
+		return
+	}
+	fmt.Fprintf(w, `<p class="note" style="margin:.2rem 0">Writes %s a day to storage.</p>`, n)
 }
 
 // addonsAvailable is the catalog's add-ons not installed here: each with what it asks for, and the

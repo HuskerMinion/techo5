@@ -2934,8 +2934,9 @@ on the setup page's **Add-ons** card (**System** tab). The card has three parts:
   another kind of device or another model, one that needs a newer TECHO5, one whose release can't be
   installed from the card yet, and one that needs more memory than the device can spare are listed
   too, grayed out with the reason.
-- **Installed:** whether each one is running, **Start** and **Stop**, the last lines of its log, **Update**
-  when the catalog has a newer version, **Remove**, and a link to its own page if it has one.
+- **Installed:** whether each one is running, how much it writes to the device's storage a day,
+  **Start** and **Stop**, the last lines of its log, **Update** when the catalog has a newer version,
+  **Remove**, and a link to its own page if it has one.
 - **Found on this device, not from the catalog:** programs started by hand from `rc.local` (below).
 
 Every install shows this warning first, and you have to tick the box under it to go on:
@@ -2984,6 +2985,15 @@ How the device runs them:
 - **A bounded log**, at most about 512 KB on the device's storage, shown on its card. What it keeps in
   its `state` folder is held to four times the storage its listing gives (at least 64 MB); one that
   grows past that is stopped, and the card says so.
+- **Its writes measured.** Every ten minutes the device reads how much each running add-on has
+  written to its storage (the kernel's `write_bytes` in `/proc/<pid>/io`, for its program, everything
+  under it and anything else its user runs), and the card says "Writes about N MB a day to storage",
+  over the last day, or from what it has seen once the add-on has run for an hour. Writes to `/tmp`,
+  `/run` and `/dev/shm` are memory and don't count. TECHO5 itself writes about 35 MB a day; an add-on
+  that writes more than 50 MB a day is said in the log and on the card, as it wears the device's
+  storage (the eMMC) faster, but it isn't stopped for it. The figures are kept in memory only, so they
+  start again when TECHO5 restarts, and a process that leaves the add-on's tree and exits between two
+  looks takes its last ten minutes' writes with it.
 - **Memory checked first.** An add-on that would leave less than 100 MB of memory for TECHO5 is not
   installed or started, and the card says why; one that can't start for memory is tried again, like a
   crash. An Echo Dot 2nd gen has about 445 MB free.

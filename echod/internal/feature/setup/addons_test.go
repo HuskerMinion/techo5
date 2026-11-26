@@ -160,6 +160,37 @@ func TestAnInstalledAddon(t *testing.T) {
 	}
 }
 
+// A running add-on says how much it writes a day, once that is known, and one that writes more than
+// TECHO5 itself says it wears the storage; a stopped one says nothing of it.
+func TestAnAddonsWrites(t *testing.T) {
+	card := func(s addons.Status) string {
+		w := httptest.NewRecorder()
+		addonsInstalled(w, "tok", addons.Get(), []addons.Status{s})
+		return strings.Join(strings.Fields(w.Body.String()), " ")
+	}
+	s := addons.Status{ID: "techo5-plex", Name: "Plex player", Author: "HuskerMinion", Version: "0.1.0", Enabled: true,
+		State: addons.StateRunning}
+	if body := card(s); strings.Contains(body, "a day to storage") {
+		t.Errorf("a rate before one is known:\n%s", body)
+	}
+	s.WritesKnown, s.WritesPerDay = true, 12<<20+300<<10
+	if body := card(s); !strings.Contains(body, "Writes about 12 MB a day to storage.") || strings.Contains(body, "wears") {
+		t.Errorf("12 MB a day:\n%s", body)
+	}
+	s.WritesPerDay = 100 << 10
+	if body := card(s); !strings.Contains(body, "Writes less than 1 MB a day to storage.") {
+		t.Errorf("100 kB a day:\n%s", body)
+	}
+	s.WritesPerDay, s.WritesMuch = 180<<20, true
+	if body := card(s); !strings.Contains(body, "Writes about 180 MB a day to storage, more than TECHO5 itself writes; it wears the device's storage.") {
+		t.Errorf("180 MB a day:\n%s", body)
+	}
+	s.State = addons.StateStopped
+	if body := card(s); strings.Contains(body, "a day to storage") {
+		t.Errorf("a stopped one:\n%s", body)
+	}
+}
+
 // One stopped for its storage offers Start, which runs it again, not Stop, which would do nothing.
 func TestAnAddonStoppedForItsStorageOffersStart(t *testing.T) {
 	s := addons.Status{ID: "techo5-plex", Name: "Plex player", Author: "HuskerMinion", Version: "0.1.0", Enabled: true,

@@ -113,6 +113,8 @@ type addon struct {
 	state, problem string
 	firewall       string // why its ports may not be open, when they may not
 
+	writes writeMeter // how much it writes to storage (writes.go)
+
 	cancel context.CancelFunc
 	done   chan struct{} // closed when its supervising loop has ended
 	exits  chan struct{} // a token each time it exits, for an update's trial
@@ -373,12 +375,13 @@ func (m *Manager) Run(ctx context.Context) error {
 		}
 		if ticks++; ticks%storageEvery == 0 {
 			m.checkStorage()
+			m.checkWrites()
 		}
 	}
 }
 
 // checkEvery is how often the firewall's rules are checked, and storageEvery how many of those go by
-// between looks at how much the add-ons keep, which walks their folders.
+// between looks at how much the add-ons keep, which walks their folders, and at how much they write.
 var (
 	checkEvery   = time.Minute
 	storageEvery = 10
@@ -581,6 +584,9 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 			m.mu.Lock()
 			a.firewall = fwProblem
 			m.mu.Unlock()
+			m.mu.Lock()
+			a.writes.begin(p.Pid(), m.clock.Now())
+			m.mu.Unlock()
 			m.set(a, StateRunning, "")
 			start := m.clock.Now()
 			gone := make(chan error, 1)
@@ -589,6 +595,7 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 			case <-ctx.Done():
 				p.Stop()
 				<-gone
+				m.wroteLast(a, p)
 				m.fw.closeFor(rec.ID)
 				cleanUp(c, rec.ID)
 				lf.Note("stopped")
@@ -596,6 +603,7 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 				return
 			case err = <-gone:
 			}
+			m.wroteLast(a, p)
 			m.fw.closeFor(rec.ID)
 			cleanUp(c, rec.ID)
 			ran := m.clock.Now().Sub(start)
@@ -641,6 +649,14 @@ func (m *Manager) keep(ctx context.Context, a *addon, done chan struct{}) {
 			wait = min(wait*2, restartMost)
 		}
 	}
+}
+
+// wroteLast counts the last of what an add-on's program wrote, once it has exited.
+func (m *Manager) wroteLast(a *addon, p process) {
+	final, known := p.Wrote()
+	m.mu.Lock()
+	a.writes.end(final, known, m.clock.Now())
+	m.mu.Unlock()
 }
 
 // exited tells an update on trial that the add-on is not up: it stopped, or never started.
@@ -1336,6 +1352,12 @@ type Status struct {
 	RolledBack                string
 	Log                       string // its log file
 
+	// WritesPerDay is how much it writes to storage, in bytes a day, when WritesKnown: there is a rate
+	// once it has run for an hour since the daemon started (writes.go). WritesMuch is a rate past
+	// writesWarnMB, more than TECHO5 itself writes.
+	WritesPerDay            uint64
+	WritesKnown, WritesMuch bool
+
 	// Working is what an install, update or removal of it is doing now ("" for nothing), and At how far
 	// its download has got, 0 to 1.
 	Working string
@@ -1357,6 +1379,8 @@ func (m *Manager) Installed() []Status {
 			State: a.state, Problem: a.problem, Firewall: a.firewall, AsRoot: RunsAsRoot(a.man.Root),
 			Ports: a.man.Ports, Page: a.man.Page, RolledBack: a.rec.RolledBack,
 			Log: filepath.Join(m.dir(a.rec.ID), "log")}
+		s.WritesPerDay, s.WritesKnown = a.writes.perDay()
+		s.WritesMuch = s.WritesKnown && s.WritesPerDay > writesWarnMB<<20
 		if m.busy != nil && m.busy.ID == a.rec.ID {
 			s.Working, s.At = m.busy.What, m.busy.At
 		}
