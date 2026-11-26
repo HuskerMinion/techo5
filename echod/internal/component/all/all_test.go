@@ -291,6 +291,7 @@ var registered = []string{
 	"thinking_effect_2",
 	"timer_sounding",
 	"timers",
+	"timers_in_ha_list",
 	"treble",
 	"update_automatically",
 	"update_channel",

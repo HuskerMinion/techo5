@@ -66,6 +66,9 @@ type API struct {
 	// clients is the connections open now (clients.go).
 	clients atomic.Int32
 
+	// replies is the actions asked with an answer wanted, and where they can go (reply.go).
+	replies *replies
+
 	// mu guards nextPSK, a key for the server to take when it next listens, key, the key in force,
 	// and unkeyed, whether that is the zero key (adopt.go).
 	mu      sync.Mutex
@@ -152,7 +155,7 @@ var (
 
 func Get() *API {
 	once.Do(func() {
-		shared = &API{reconnect: make(chan struct{}, 1)}
+		shared = &API{reconnect: make(chan struct{}, 1), replies: newReplies()}
 		component.Reconnect.Listen(func(struct{}) { shared.Reconnect() })
 		component.Fire.Listen(func(e component.Event) { shared.fire(e) })
 		component.CallService.Listen(func(c component.Call) { shared.call(c) })
@@ -170,6 +173,9 @@ func (a *API) call(c component.Call) {
 		if c.Unheard != nil {
 			c.Unheard()
 		}
+		if c.Reply != nil {
+			go c.Reply(nil, errNoHomeAssistant)
+		}
 		return
 	}
 	pairs := func(m map[string]string) []*api.HomeassistantServiceMap {
@@ -180,6 +186,14 @@ func (a *API) call(c component.Call) {
 		return out
 	}
 	req := &api.HomeassistantActionRequest{Service: c.Service, Data: pairs(c.Data), DataTemplate: pairs(c.Templates)}
+	if c.Reply != nil {
+		if a.replies == nil {
+			go c.Reply(nil, errNoHomeAssistant)
+			return
+		}
+		a.replies.ask(c, req)
+		return
+	}
 	if err := srv.Broadcast(req); err != nil {
 		slog.Warn("calling a home assistant action failed", "service", c.Service, "err", err)
 	} else {
@@ -248,7 +262,7 @@ func (a *API) Start(ctx context.Context) error {
 	// satellite's pipeline traffic, and the Bluetooth proxy's subscribe and set-mode messages.
 	// Describers go first so what they add to the entity list lands before the library's Done, after
 	// the watch on a connection that lists the entities and never asks for their states (listed.go).
-	handlers := append([]esphome.Handler{newUnsubscribed()}, component.Default().Describers()...)
+	handlers := append([]esphome.Handler{newUnsubscribed(), a.replies}, component.Default().Describers()...)
 	a.handler = esphome.Chain(append(append(handlers, ents), component.Default().Handlers()...)...)
 	a.srv.Store(a.serverFor(psk))
 	return nil
