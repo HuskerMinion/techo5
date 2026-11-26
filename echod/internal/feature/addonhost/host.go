@@ -28,7 +28,10 @@ func init() {
 	if !addons.Here {
 		return
 	}
-	component.Register(component.Network, Get(), component.Order(97))
+	// After the add-ons' update entities (Order 98): the entity list is read in this order, so should an
+	// add-on's entity have the key of another add-on's update entity, the add-on's entity is the one
+	// left out (api.addEach), never the update entity the owner relies on.
+	component.Register(component.Network, Get(), component.Order(99))
 }
 
 // Host is the add-on API on this device. There is one (Get); tests make their own.
