@@ -138,6 +138,12 @@ type event struct {
 	// peak is an evCandidate's or an evScored's score.
 	peak float64
 
+	// clarity is how clearly Nearest device heard an evStart's or an evFaint's wake, when it measured.
+	clarity wakeClarity
+
+	// claimed is an evContested whose answer came of a claim, the wake's clarity weighed by the devices.
+	claimed bool
+
 	// gen and answer are an evContested's: which decision (deciding.gen), and whether this device answers.
 	gen    uint64
 	answer bool
@@ -386,6 +392,9 @@ type nextTurn struct {
 	// then when the device's own engine scored it, and the turn reaches back to there (historyFor).
 	confirmed bool
 
+	// clarity is how clearly Nearest device heard the wake that opened it, for the turn's event (#727).
+	clarity wakeClarity
+
 	// rtResume is a realtime follow-up that keeps the session the last turn opened, rather than opening
 	// one of its own, so the provider still has the conversation (#487). idle keeps the session for it
 	// instead of closing it, and start reuses it rather than dialing.
@@ -616,7 +625,7 @@ func (c *conversation) turnEvent(e event) {
 		// A turn that could not open (no pipeline, the microphones on a camera call) leaves no answer
 		// to follow an announced question, so the question goes as a cut-off one does. One only put off
 		// (a wake word run or a mistaken turn still closing) opens in a moment: the question stays.
-		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited}) && c.pending == nil {
+		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited, clarity: e.clarity}) && c.pending == nil {
 			c.dropQuestion()
 		}
 
@@ -1069,7 +1078,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
-		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at}
+		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity}
 		c.turn.Cancels(activity.Interrupted)
 		c.idle("interrupted", activity.Canceled)
 
@@ -1161,6 +1170,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	c.turn = c.log.Begin(slot+1, phrase, n.trigger())
 	if n.woke && !n.continued {
 		c.wakeOpened(slot, n.at)
+	}
+	// Only a wake's: a follow-up or a button never had one measured, and one it carried over would be
+	// another turn's.
+	if n.woke && !n.followUp && n.clarity.measured {
+		c.turn.Clarified(n.clarity.dB)
 	}
 	recording.Get().Opens(c.turn.ID(), slot)
 	be := c.be
@@ -1673,8 +1687,19 @@ func (c *conversation) Woke(slot int) {
 }
 
 // WokeAt is Woke for a wake word heard at at and acted on now.
-func (c *conversation) WokeAt(slot int, at time.Time) {
-	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0)})
+func (c *conversation) WokeAt(slot int, at time.Time) { c.wokeAt(slot, at, wakeClarity{}) }
+
+// wokeAt is WokeAt with how clearly Nearest device heard the word, if it measured.
+func (c *conversation) wokeAt(slot int, at time.Time, heard wakeClarity) {
+	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0), clarity: heard})
+}
+
+// wakeClarity is how far a wake word stood out from the room here, in dB, as Nearest device measured it to
+// weigh the wake against the other devices (#727). measured is false for a wake it did not weigh, Nearest
+// device off among them: nothing measures then, and a zero would read as a quiet room.
+type wakeClarity struct {
+	dB       float64
+	measured bool
 }
 
 // Cancel gives up on whatever is happening.

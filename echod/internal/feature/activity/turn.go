@@ -98,6 +98,12 @@ type Turn struct {
 	score    float64
 	scoreDue bool
 
+	// clarity is how far the wake word stood out from the room here, in dB, as Nearest device measured
+	// it to weigh the wake against the other devices (#727); measured says it did. Not every wake has one:
+	// with Nearest device off nothing is measured, and a zero then is no reading, not a quiet room.
+	clarity  float64
+	measured bool
+
 	// audio is seconds of recording kept for this turn, zero when none was.
 	audio float64
 
@@ -215,6 +221,31 @@ func (t *Turn) Scored(peak float64) {
 	if held {
 		t.send()
 	}
+}
+
+// Clarified gives the turn how clearly Nearest device heard the wake word that opened it, in dB. Only
+// for a wake it measured: a turn that never gets this leaves wake_clarity out of its event.
+func (t *Turn) Clarified(dB float64) {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.sent {
+		t.clarity, t.measured = dB, true
+	}
+}
+
+// Clarity is what Clarified gave the turn, and whether it was given anything.
+func (t *Turn) Clarity() (dB float64, measured bool) {
+	if t == nil {
+		return 0, false
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.clarity, t.measured
 }
 
 // TimesOut says the turn is about to end because the device gave up waiting.
@@ -383,6 +414,11 @@ func (t *Turn) fields(how Ending) map[string]string {
 	}
 	if t.score > 0 {
 		out["wake_score"] = strconv.FormatFloat(t.score, 'f', 2, 64)
+	}
+	if t.measured {
+		// One decimal: a tenth of a dB is finer than the measurement is good for, and enough to compare
+		// devices by.
+		out["wake_clarity"] = strconv.FormatFloat(t.clarity, 'f', 1, 64)
 	}
 	t.durations(out, "reply_ms")
 	return out

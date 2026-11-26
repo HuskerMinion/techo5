@@ -376,6 +376,7 @@ Assistant's bus, with:
 | `trigger` | What opened it: `wake_word`, `button`, `follow_up` (listening again after a reply), or `home_assistant` (an announcement that asked for an answer) |
 | `wake_word` | The slot's wake word. It picked the pipeline, so it is there for a button or follow-up too |
 | `wake_score` | Only on a turn a wake word opened: the highest score the word reached on the device, as `Last wake score` shows it (for a wake Home Assistant confirmed, the device's score under the threshold). Logged beside `heard`, it shows how close mistaken wakes come to the threshold |
+| `wake_clarity` | Only when **Nearest device answers** is on and measured it: how far the wake word stood out from the room on this device, in dB with one decimal, before **Nearest device offset** is added. It is the reading the devices compare to pick who answers, so set beside the other devices' events it shows how far apart they hear the same word, for tuning the offset or **Confirm below nearest-device score**. Left out with Nearest device off (nothing is measured then), for a wake answered at once with no other device to ask, and for a button, a follow-up or Home Assistant opening the turn |
 | `slot` | The wake word slot, `1` or `2` |
 | `heard` | What speech-to-text heard, up to 1000 characters. Left out while the device's **Send voice text** is off |
 | `reply` | The reply's text, up to 1000 characters. Left out while **Send voice text** is off |

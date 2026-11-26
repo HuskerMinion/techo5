@@ -144,9 +144,12 @@ type Nearest struct {
 
 	// The device, replaced in tests: which wakes open a turn, whether one could, how well this device
 	// heard the word, whether it hears at all, the others, how a claim reaches them, and the clock.
+	// wokeClear is woke for a wake this device won against the others, with how clearly it heard it
+	// (pending.clarity), which the turn's event reports (#727); woke is for one nothing measured.
 	woke      func(slot int, at time.Time)
+	wokeClear func(slot int, at time.Time, clarity float64)
 	wokeNow   func(slot int)
-	faint     func(slot int, at time.Time) // a faint win (won): asked about first, else woke's (#503)
+	faint     func(slot int, at time.Time, clarity float64) // a faint win (won): asked about first, else wokeClear's (#503)
 	busy      func() bool
 	cancel    func() // ends the turn running here (cutOff)
 	canAnswer func(slot int) bool
@@ -211,7 +214,8 @@ func build() *Nearest {
 		},
 		woke:      func(slot int, at time.Time) { voice.Get().WokeAt(slot, at) },
 		wokeNow:   func(slot int) { voice.Get().Woke(slot) },
-		faint:     func(slot int, at time.Time) { voice.Get().WokeFaint(slot, at) },
+		wokeClear: func(slot int, at time.Time, clarity float64) { voice.Get().WokeClear(slot, at, clarity) },
+		faint:     func(slot int, at time.Time, clarity float64) { voice.Get().WokeFaint(slot, at, clarity) },
 		busy:      func() bool { return voice.Get().Busy() },
 		cancel:    func() { voice.Get().Cancel() },
 		canAnswer: func(slot int) bool { return voice.Get().CanAnswer(slot) },
@@ -379,10 +383,10 @@ func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
 func (n *Nearest) won(slot int, at time.Time, score float64) {
 	if below := config.Get().Wake.OnHA.FaintBelow(); below > 0 && slot == 0 && score < below {
 		slog.Info("nearest device: heard it faintly, asking home assistant", "score", round(score), "below", below)
-		n.faint(slot, at)
+		n.faint(slot, at, score)
 		return
 	}
-	n.woke(slot, at)
+	n.wokeClear(slot, at, score)
 }
 
 // wonOver is won for a wake word claimed over a turn of this device's own (over: busy when it was
@@ -390,7 +394,7 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 // reply, and a wake word that interrupts one has always opened at once.
 func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64) {
 	if over {
-		n.woke(slot, at)
+		n.wokeClear(slot, at, score)
 		return
 	}
 	n.won(slot, at, score)
@@ -400,20 +404,21 @@ func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64) {
 // with clarity, measured then. It takes part in the decision as a wake over the threshold does, claimed
 // only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
-// confirmed it, so a faint one is not asked about again (#503).
-func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
+// confirmed it, so a faint one is not asked about again (#503). claimed says the answer came of a claim,
+// clarity weighed against the others: only then is it the turn's to report (#727).
+func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer, claimed bool)) {
 	n.contendHeard(n.wakeWord(slot), at, clarity, true,
 		func() bool { return n.canAnswer(slot) },
-		func(time.Time, float64) { decide(true) },
+		func(time.Time, float64) { decide(true, true) },
 		func() {
 			// Answered without a claim for the word (busy, unable, nobody to ask): the unsure claim
 			// is taken back, or a device that heard it for sure would wait unsureFor on it for nothing.
 			if settled != nil {
 				settled(false)
 			}
-			decide(true)
+			decide(true, false)
 		},
-		func() { decide(false) })
+		func() { decide(false, true) })
 }
 
 // Asking is a wake this device was not sure of, being asked about now (#685), heard with clarity. The
