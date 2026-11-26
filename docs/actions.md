@@ -3552,3 +3552,46 @@ data:
   settings: screen_theme, screen_clock_style, night_volume
   devices: Kitchen, Bedroom
 ```
+
+## Call an add-on's command
+
+In YAML, refer to this action as `esphome.<node>_addon_command`.
+
+Calls a command of an add-on installed on the device that speaks the add-on API
+([addon-api.md](addon-api.md)), and answers with what the add-on says back, `{"text": "…"}`, if called
+with a `response_variable`: a sentence trigger can have the device read it out. The add-on has 4
+seconds to answer. One that is not installed, not running or not connected fails the call, so a voice
+command says so rather than nothing happening. Only commands the add-on's catalog entry lists, which
+its consent screen named, can be called.
+
+Each command that needs no arguments also has a button, `button.<node>_addon_<id>_<command>`, and an
+add-on's own entities are `<domain>.<node>_addon_<id>_<entity>`. Its `event.fire` arrives as an
+`esphome.techo5_addon` event with `addon`, `name` and its data.
+
+### addon (Required)
+
+*string*
+
+The add-on's id, as the catalog lists it: `meals`.
+
+### command (Required)
+
+*string*
+
+The command's name: `next`.
+
+### args (Can be empty)
+
+*string*
+
+The command's arguments as a JSON object, `{"to": "3"}`, checked against what the add-on declares; `""`
+for none.
+
+```yaml
+action: esphome.kitchen_addon_command
+data:
+  addon: meals
+  command: step
+  args: '{"to": "3"}'
+response_variable: answer
+```

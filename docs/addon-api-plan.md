@@ -4,7 +4,9 @@ A local interface that installed add-ons use to extend the device: commands Home
 can call, words said on the device, its own timers, settings on the setup page, entities, and later a
 screen drawn by the daemon. Meals, the Mealie add-on from #720, is the first user.
 
-**Status (2026-11-26):** draft for the user to decide on. Nothing built.
+**Status (2026-11-26):** stage 1 (`api1`) built on `feat-addon-api1`, as written down in
+[addon-api.md](addon-api.md); stages 2 and 3 not started. Where stage 1 differs from this plan, the
+section [Stage 1 as built](#stage-1-as-built) at the end says how and why.
 
 ## What is already there
 
@@ -321,3 +323,46 @@ How Meals maps:
 - **Night:** an add-on's card may stay over the night clock, drawn in the night clock's dim colors.
 - **Transcripts:** never by default; only behind a separate bold consent line, text only, never audio.
 - **Process:** the draft goes to nachtschatt3n on #720 first; it can change from there.
+
+## Stage 1 as built
+
+What [addon-api.md](addon-api.md) describes is what was built. It follows the plan above and the
+decisions, with these changes, each made for the reason given:
+
+- **An `events` capability** for `event.fire`, with the line "Sends events of its own to Home
+  Assistant." The plan put events in stage 1 without a capability, and every capability being a line
+  that is enforced means putting something on Home Assistant's bus needs one too.
+- **A `media` capability**, from the decisions: "Plays video and audio from the network on this
+  device." It plays through `play_video`'s player and the media player, acts only on what the add-on
+  started while that still plays, is refused in quiet hours (`busy`) as speech and sounds are, and has
+  no video on a Dot.
+- **Object ids are `addon_<id>_<name>`**, not `<id>_<name>`: under the prefix the add-on's update
+  entity already has, so an add-on's entity or command button can never take the name of one of the
+  device's own. A command and an entity of one add-on can't share a name.
+- **Root add-ons cannot use the API.** The plan says root is refused on the socket and also that an
+  add-on asking for root still talks through it; the two can't both hold, since the kernel says root
+  for both the add-on and a root shell. So `api` with `"root": true` is refused in the manifest and in
+  the catalog, and a device that cannot drop root for an add-on serves it no socket.
+- **Timers stay when an add-on stops or crashes**, and are canceled when it is removed: they are the
+  device's timers, and a kitchen timer should still ring when the add-on that set it restarts.
+  Keep-awake holds end when their connection drops, as planned.
+- **`speak.cancel` drops the words still waiting**; the ones being said are stopped by the stop word,
+  as any announcement. Words are paced by the device's own sounding state, so the next waits for the
+  last to be heard (at most a minute; 10 seconds when nothing sounds at all).
+- **The `addon_command` action waits 4 seconds** for an answer: it runs on Home Assistant's
+  connection, which waits with it. A settings test waits 10.
+- **An event's data is strings by key**, at most 1 KB, and may not use `addon` or `name`, which say
+  whose event it is.
+- **"Keeps on" past a limit** is 20 requests refused for limits within a minute, which disconnects
+  the add-on and refuses it for a minute; half a message has 5 seconds to arrive, and an add-on that
+  leaves 128 messages unread is disconnected.
+- **Entity commands from Home Assistant** reach the add-on as `entity.command`, and the entity keeps
+  its state until the add-on sets it, so it never shows what didn't happen.
+- **A WAV** may be 8 to 48 kHz, mono, 16-bit; the device resamples it.
+- **Not built yet:** the blueprint for sentence triggers in `docs/`, the fake daemon's PNG of a scene
+  (stage 2), and golden screens (stage 1 draws nothing on the device's screen).
+
+Storage, per day on a device with one add-on in use: nothing per message; a settings write each time
+Save changes them (a few hundred bytes, so a handful of writes in a day of setting up, none after);
+and each timer the add-on sets is written twice, when set and when it ends, as every device timer is
+(the whole of state.json each time, as for any timer: a cooking session of 10 timers is 20 writes).

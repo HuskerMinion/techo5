@@ -3005,6 +3005,14 @@ How the device runs them:
   it keeps (its settings, an account it was linked to) is kept for installing it again unless you tick
   the box to delete it too.
 
+An add-on can also use TECHO5's **add-on API** ([addon-api.md](addon-api.md)) to answer commands from
+Home Assistant and voice, say words, set timers that ring on the device, keep the screen on, add
+entities to Home Assistant, or play a video. Each thing it uses is a line on its card above the
+warning, it gets only those, and an update that uses something new asks for the box again. An add-on
+with settings of its own has them on its card, under **Its settings**, with **Save** and sometimes
+**Test**; they are kept beside the add-on, not in the device's settings or a backup, and a secret
+(a token, a password) is never shown again once saved.
+
 An add-on is a program on the device, so TECHO5 trusts it as it trusts itself: a video it sends to the
 device's own DLNA renderer plays without the question on the screen, for example. That is what "access
 to … your Home Assistant connection" in the warning means.
