@@ -360,7 +360,7 @@ func (n *Nearest) won(slot int, at time.Time, score float64) {
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
 // confirmed it, so a faint one is not asked about again (#503).
 func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
-	n.contendHeard(n.wakeWord(slot), true, at, clarity,
+	n.contendHeard(n.wakeWord(slot), false, at, clarity,
 		func() bool { return n.canAnswer(slot) },
 		func(time.Time, float64) { decide(true) },
 		func() {
@@ -603,7 +603,6 @@ func (n *Nearest) unsureSince(from time.Time, mine claim, now time.Time) (arrive
 		}
 		c := a.claim
 		c.Word = mine.Word
-		// ponytail: an unsure claim is compared the old way, as if one claim were unmeasured
 		if better(c, mine, false) && (!found || better(a.claim, best.claim, false)) {
 			best, found = a, true
 		}

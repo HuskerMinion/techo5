@@ -700,3 +700,41 @@ func TestARepeatFiringOfTheSameWordsOpensNoSecondTurn(t *testing.T) {
 	}
 
 }
+
+// Every device runs bestSince over the claims it heard from the others, and exactly one of them finds
+// nobody better: in a near-tie everyone measured, and in one where a claim has no mean (an older
+// device, or a wake Home Assistant confirmed).
+func TestEachDeviceSeesTheSameWinner(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	contests := map[string][]claim{
+		"measured near-tie": {
+			{From: "a", Word: "nora", Score: 10.4, Mean: f(5)},
+			{From: "b", Word: "nora", Score: 9.6, Mean: f(8)},
+			{From: "c", Word: "nora", Score: 3, Mean: f(9)},
+		},
+		"one unmeasured": {
+			{From: "a", Word: "nora", Score: 10.4, Mean: f(5)},
+			{From: "b", Word: "nora", Score: 9.6, Mean: f(8)},
+			{From: "old", Word: "nora", Score: 3},
+		},
+	}
+	want := map[string]string{"measured near-tie": "b", "one unmeasured": "a"}
+	for name, claims := range contests {
+		var winners []string
+		for i, mine := range claims {
+			n := &Nearest{}
+			for j, c := range claims {
+				if j != i {
+					n.others = append(n.others, arrived{claim: c, at: at})
+				}
+			}
+			if _, beaten := n.bestSince(at.Add(-time.Second), mine); !beaten {
+				winners = append(winners, mine.From)
+			}
+		}
+		if len(winners) != 1 || winners[0] != want[name] {
+			t.Errorf("%s: devices that think they won: %v, want only %s", name, winners, want[name])
+		}
+	}
+}
