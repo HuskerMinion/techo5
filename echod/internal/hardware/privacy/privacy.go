@@ -82,6 +82,7 @@ func SetCodec(cut func(bool) error, read func() (bool, error)) {
 	codecRead.Store(&read)
 }
 
+//lint:ignore U1000 used by the 2nd gen Show 8's mute (platform_athena.go), which the Spot, Dot and panel builds leave out
 func codecCut(cut bool) error {
 	fn := codec.Load()
 	if fn == nil {
