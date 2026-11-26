@@ -155,3 +155,52 @@ func TestAnAddonWhoseNamesClashIsRefused(t *testing.T) {
 		t.Error("it was installed")
 	}
 }
+
+// An update that adds a command reaches Home Assistant at once: the entities are read again once it is
+// kept, as they are for an install. One that adds nothing there does not ask for that.
+func TestAnUpdateWithNewNamesRelists(t *testing.T) {
+	r := newRig(t)
+	r.m.SetAPI(&fakeAPI{})
+	var mu sync.Mutex
+	relists := 0
+	r.m.changed = func(entities bool) {
+		if entities {
+			mu.Lock()
+			relists++
+			mu.Unlock()
+		}
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return relists }
+	v1 := r.apiVersion("meals", "0.1.0")
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("meals", v1)}})
+	r.run()
+	if err := r.m.Install(context.Background(), "meals", "0.1.0", r.shown("meals", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	r.waitState("meals", StateRunning)
+	before := count()
+
+	v2 := r.version("meals", "0.2.0", []byte("{}"))
+	v2.Requires, v2.API = []string{"api1"}, 1
+	v2.Capabilities, v2.Commands = []string{"commands", "speak", "settings"}, []string{"back", "next"}
+	b, _ := json.Marshal(catalog.Manifest{ID: "meals", Version: "0.2.0", Command: []string{"meals"}, Ports: v2.Ports, MemoryMB: v2.MemoryMB,
+		API: 1, Capabilities: v2.Capabilities, Commands: []addonapi.Command{{Name: "next"}, {Name: "back"}},
+		Settings: &addonapi.Settings{Fields: []addonapi.Setting{{Key: "token", Label: "Token", Type: addonapi.TypeSecret}}}})
+	m := r.assets.put("/meals/0.2.0/addon.json", b)
+	v2.Manifest = &m
+	r.serve(catalog.Catalog{Format: 2, Serial: 2, Addons: []catalog.Addon{entry("meals", v1, v2)}})
+	if err := r.m.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- r.m.Update(context.Background(), "meals", r.offered("meals"), true, false) }()
+	eventually(t, "the new version to start", func() bool { return r.procs.count() == 2 })
+	r.clock.waitPending(t, 1, trialFor)
+	r.clock.Advance(trialFor)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if count() != before+1 {
+		t.Errorf("relisted %d times for an update that added a command", count()-before)
+	}
+}

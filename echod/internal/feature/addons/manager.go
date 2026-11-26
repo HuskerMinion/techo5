@@ -1259,7 +1259,12 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 	}
 	m.mu.Lock()
 	rec = a.rec // as it is now, under the job: nothing else changes it from here
+	names := objectIDsOf(id, a.man)
 	m.mu.Unlock()
+	// However it ends, Home Assistant is given the add-on's entities as they are then, when they are not
+	// the ones it was given: an update that adds a command or an entity brings it, and one put back
+	// takes it away again.
+	defer m.relistIf(a, names)
 
 	dir := m.dir(id)
 	stage, old := filepath.Join(dir, ".new"), filepath.Join(dir, ".old")
@@ -1366,6 +1371,17 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 	_ = os.RemoveAll(old)
 	slog.Info("addons: updated", "id", id, "from", rec.Version, "to", v.Version)
 	return nil
+}
+
+// relistIf asks Home Assistant to read the entities again when the add-on's names there are not
+// before's any more.
+func (m *Manager) relistIf(a *addon, before []string) {
+	m.mu.Lock()
+	now := objectIDsOf(a.rec.ID, a.man)
+	m.mu.Unlock()
+	if !slices.Equal(before, now) {
+		m.changed(true)
+	}
 }
 
 // putBack moves the version in old back over whatever is in dir, name by name, deleting a name in dir
