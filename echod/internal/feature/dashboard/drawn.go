@@ -331,6 +331,9 @@ type session struct {
 	// soon is a rebuild waiting to happen: a house changes a lot of entities at once, and the page
 	// is rebuilt a few times a second at most, not once for each of them.
 	soon *time.Timer
+	// redraws says the page was rebuilt, to keepPictures: an image its server said not to keep is
+	// fetched again on the next one. Set when the session is made, nil in a test's session by hand.
+	redraws chan struct{}
 }
 
 // publishEvery is how often the page is rebuilt at most while entities change.
@@ -399,7 +402,7 @@ func (f *Feature) Drawn(width int) Drawn {
 		}
 		s = &session{f: f, src: src, width: width, states: map[string]hass.LiveEntity{}, rendered: map[int]string{}, pending: map[string]pending{},
 			history: map[string][]point{}, graphs: map[string]int{}, pictures: map[string]shot{}, forecasts: map[string][]hass.Day{},
-			gen: f.recent.generation()}
+			gen: f.recent.generation(), redraws: make(chan struct{}, 1)}
 		if held != nil {
 			s.hold, s.holdUntil = held, time.Now().Add(holdFor)
 			// Nothing else may say there is something new by then: a dashboard that never loads.
@@ -805,7 +808,7 @@ func (s *session) once() error {
 	s.publish()
 
 	safe.Go("dashboard pictures", func() {
-		keepPictures(ctx, need.pictures, s.got)
+		keepPictures(ctx, need.pictures, s.redraws, s.got)
 	})
 
 	fctx, fcancel := context.WithTimeout(ctx, 30*time.Second)
@@ -989,6 +992,11 @@ func (s *session) publish() {
 		s.hold = nil
 	}
 	s.mu.Unlock()
+	// Without waiting: one redraw said is as good as several, and the pictures may be mid-fetch.
+	select {
+	case s.redraws <- struct{}{}:
+	default:
+	}
 	s.f.Changed.Emit(struct{}{})
 }
 
