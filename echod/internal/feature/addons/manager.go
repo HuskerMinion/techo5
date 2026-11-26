@@ -881,6 +881,30 @@ func (m *Manager) offered(id, version string) (catalog.Addon, catalog.Version, e
 	return a, v, nil
 }
 
+// nameClash is another installed add-on whose names in Home Assistant one of this add-on's would be:
+// an add-on's id has its dashes made underscores there, so "foo" with an entity "bar_x" and "foo-bar"
+// with one called "x" would both be addon_foo_bar_x, and "foo" with an entity "bar" would be "foo-bar"'s
+// update entity. Two alike would leave one of them out of Home Assistant, so the second is refused.
+func (m *Manager) nameClash(id string, man catalog.Manifest) error {
+	mine := map[string]bool{}
+	for _, o := range objectIDsOf(id, man) {
+		mine[o] = true
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for other, a := range m.addons {
+		if other == id {
+			continue
+		}
+		for _, o := range objectIDsOf(other, a.man) {
+			if mine[o] {
+				return fmt.Errorf("addons: its name in Home Assistant, %s, would be one of %s's", o, a.rec.Name)
+			}
+		}
+	}
+	return nil
+}
+
 // clash is another installed add-on already asking for one of these ports.
 func (m *Manager) clash(id string, ports []catalog.Port) error {
 	m.mu.Lock()
@@ -1101,6 +1125,9 @@ func (m *Manager) Install(ctx context.Context, id, version, shown string, agreed
 	if err != nil {
 		return err
 	}
+	if err := m.nameClash(id, man); err != nil {
+		return err
+	}
 	uid, err := m.allocUID(id)
 	if err != nil {
 		return err
@@ -1241,6 +1268,9 @@ func (m *Manager) Update(ctx context.Context, id, shown string, agreed, fromHA b
 	defer os.RemoveAll(stage)
 	man, err := m.fetchVersion(ctx, id, v, stage)
 	if err != nil {
+		return err
+	}
+	if err := m.nameClash(id, man); err != nil {
 		return err
 	}
 

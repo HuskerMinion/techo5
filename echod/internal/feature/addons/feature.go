@@ -20,6 +20,7 @@ import (
 	esphome "github.com/ygelfand/go-esphome-device"
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/peeruid"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
@@ -84,6 +85,19 @@ func Family() string { return family }
 // objectID is an add-on's update entity: addon_<id>, the id's dashes as underscores.
 func objectID(id string) string { return "addon_" + strings.ReplaceAll(id, "-", "_") }
 
+// objectIDsOf is every Home Assistant object id an add-on adds: its update entity's, and under its
+// prefix a button for each command and each entity it declares (feature/addonhost).
+func objectIDsOf(id string, man catalog.Manifest) []string {
+	out := []string{objectID(id)}
+	for _, c := range man.Commands {
+		out = append(out, ObjectPrefix(id)+c.Name)
+	}
+	for _, e := range man.Entities {
+		out = append(out, ObjectPrefix(id)+e.ID)
+	}
+	return out
+}
+
 // ObjectPrefix is what every Home Assistant object id an add-on adds starts with: its update entity's,
 // and an underscore. Its entities and its commands' buttons (feature/addonhost) are named under it, so
 // none can take the name of one of the device's own.
@@ -126,6 +140,9 @@ func (f *Feature) Entities() []esphome.Entity {
 // entity list, which takes a reconnect.
 func (f *Feature) publish(entitiesChanged bool) {
 	if entitiesChanged {
+		// The entity list is read again first: it is read once at start otherwise, and an add-on
+		// installed since would have no update entity, nor any of its own, until a restart.
+		component.Relist.Emit(struct{}{})
 		component.Reconnect.Emit(struct{}{})
 		return
 	}

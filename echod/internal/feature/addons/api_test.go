@@ -130,3 +130,28 @@ func TestTheGrantIsWhatWasAgreedTo(t *testing.T) {
 		t.Errorf("granted %v", got)
 	}
 }
+
+// An add-on whose names in Home Assistant would be another installed add-on's is refused: meals'
+// button for next is addon_meals_next, which is what meals-next's update entity would be.
+func TestAnAddonWhoseNamesClashIsRefused(t *testing.T) {
+	r := newRig(t)
+	r.m.SetAPI(&fakeAPI{})
+	v := r.apiVersion("meals", "0.1.0")
+	w := r.version("meals-next", "0.1.0", nil)
+	w.Ports = nil
+	b, _ := json.Marshal(catalog.Manifest{ID: "meals-next", Version: "0.1.0", Command: []string{"meals-next"}, MemoryMB: w.MemoryMB})
+	m := r.assets.put("/meals-next/0.1.0/addon.json", b)
+	w.Manifest = &m
+	r.serve(catalog.Catalog{Format: 2, Serial: 1, Addons: []catalog.Addon{entry("meals", v), entry("meals-next", w)}})
+	r.run()
+	if err := r.m.Install(context.Background(), "meals", "0.1.0", r.shown("meals", "0.1.0"), true); err != nil {
+		t.Fatal(err)
+	}
+	err := r.m.Install(context.Background(), "meals-next", "0.1.0", r.shown("meals-next", "0.1.0"), true)
+	if err == nil || !strings.Contains(err.Error(), "addon_meals_next") {
+		t.Errorf("a clashing install: %v", err)
+	}
+	if _, ok := r.m.addons["meals-next"]; ok {
+		t.Error("it was installed")
+	}
+}
