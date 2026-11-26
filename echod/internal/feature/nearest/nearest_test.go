@@ -234,12 +234,12 @@ func TestATieGoesToTheNameThatSortsFirst(t *testing.T) {
 	}
 }
 
-// Measured claims compare the score to 1 dB, then the mean standout, then the exact score, then the name.
+// Measured claims compare the score rounded to the dB, then the mean standout, then the exact score, then the name.
 func TestTheMeanBreaksANearTie(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	order := []claim{
 		{From: "e", Score: 20, Mean: f(1)},   // more than 1 dB ahead beats a higher mean
-		{From: "d", Score: 9.6, Mean: f(8)},  // within 1 dB, the mean decides
+		{From: "d", Score: 9.6, Mean: f(8)},  // rounded to the same dB, the mean decides
 		{From: "c", Score: 10.4, Mean: f(5)}, // then the exact score
 		{From: "a", Score: 10, Mean: f(5)},   // then the name
 		{From: "b", Score: 10, Mean: f(5)},
@@ -737,5 +737,36 @@ func TestEachDeviceSeesTheSameWinner(t *testing.T) {
 		if len(winners) != 1 || winners[0] != want[name] {
 			t.Errorf("%s: devices that think they won: %v, want only %s", name, winners, want[name])
 		}
+	}
+}
+
+// A confirmed claim arrives after one device has decided and before another does. With its mean, every
+// device compares the same way, so exactly one of them answers.
+func TestALateConfirmedClaimDoesNotSplitTheOrder(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	a := claim{From: "A", Word: "nora", Score: 10.4, Mean: f(5)}
+	b := claim{From: "B", Word: "nora", Score: 9.6, Mean: f(8)}
+	u := claim{From: "U", Word: "nora", Score: 9.8, Mean: f(6)}
+	views := map[string]struct {
+		mine   claim
+		others []claim
+	}{
+		"A, before U's claim": {a, []claim{b}},
+		"B, after it":         {b, []claim{a, u}},
+		"U":                   {u, []claim{a, b}},
+	}
+	var winners []string
+	for name, v := range views {
+		n := &Nearest{}
+		for _, c := range v.others {
+			n.others = append(n.others, arrived{claim: c, at: at})
+		}
+		if _, beaten := n.bestSince(at.Add(-time.Second), v.mine); !beaten {
+			winners = append(winners, name)
+		}
+	}
+	if len(winners) != 1 || winners[0] != "B, after it" {
+		t.Fatalf("devices that answer: %v, want only B", winners)
 	}
 }

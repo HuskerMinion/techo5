@@ -397,12 +397,12 @@ func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64) {
 }
 
 // Confirmed is a wake this device was not sure of that Home Assistant then heard too (#685), heard at at
-// with clarity, measured then. It takes part in the decision as a wake over the threshold does, claimed
+// with clarity and mean, measured then. It takes part in the decision as a wake over the threshold does, claimed
 // only now that Home Assistant has heard it: a candidate it turned down never makes the device somebody
 // is talking to stand down. decide is told whether this device answers. Home Assistant has already
 // confirmed it, so a faint one is not asked about again (#503).
-func (n *Nearest) Confirmed(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool)) {
-	n.contendHeard(n.wakeWord(slot), at, clarity, nil, true,
+func (n *Nearest) Confirmed(slot int, at time.Time, clarity, mean float64, settled func(confirmed bool), decide func(answer bool)) {
+	n.contendHeard(n.wakeWord(slot), at, clarity, finite(mean), true,
 		func() bool { return n.canAnswer(slot) },
 		func(time.Time, float64) { decide(true) },
 		func() {
@@ -469,11 +469,15 @@ func (n *Nearest) measured(wake bool) *float64 {
 	if !wake || n.mean == nil {
 		return nil
 	}
-	e := n.mean()
-	if math.IsNaN(e) || math.IsInf(e, 0) {
+	return finite(n.mean())
+}
+
+// finite is v, or nil when it is not a number a claim can carry.
+func finite(v float64) *float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return nil
 	}
-	return &e
+	return &v
 }
 
 // claimsOver is whether a word heard during a turn of this device's own is claimed all the same: a
@@ -488,7 +492,7 @@ func (n *Nearest) claimsOver(wake bool) bool {
 }
 
 // contendHeard is contend with how clearly this device heard the word already measured, and its mean
-// standout, nil when it was not measured with the clarity; lost, if not nil, runs when another device
+// standout, nil when it was not measured; lost, if not nil, runs when another device
 // has it instead.
 func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, mean *float64, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
 	if !n.open() || n.busy() && !n.claimsOver(wake) || !can() {
@@ -674,7 +678,7 @@ func (n *Nearest) unsureSince(from time.Time, mine claim, now time.Time) (arrive
 // better is whether a heard the word better than b. measured is whether every claim for the word in the
 // window carries its mean, decided for the whole contest rather than per pair, so an older device and a
 // newer one never split. Unmeasured, it is the score, then the name that sorts first. Measured, scores
-// within the same 1 dB are a near-tie, broken by the mean standout (steadier than the peak the score is
+// rounded to the same dB are a near-tie, broken by the mean standout (steadier than the peak the score is
 // made of, and against each device's own floor, so a hotter mic or louder room does not win it), then
 // the exact score, then the name.
 func better(a, b claim, measured bool) bool {

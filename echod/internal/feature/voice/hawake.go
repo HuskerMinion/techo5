@@ -124,11 +124,12 @@ type watching struct {
 	mode watchMode
 	slot int
 
-	// peak is what the device's own engine scored the wake that is being confirmed, and clarity how
-	// clearly the microphones heard it stand out then, for the nearest-device decision once Home
-	// Assistant has heard it too (#685).
+	// peak is what the device's own engine scored the wake that is being confirmed, and clarity and mean
+	// how clearly the microphones heard it stand out then, at its peak and on average, for the
+	// nearest-device decision once Home Assistant has heard it too (#685).
 	peak    float64
 	clarity float64
+	mean    float64
 
 	at      time.Time
 	stop    func()
@@ -171,12 +172,12 @@ type Confirmation struct {
 // The nearest-device decision for a wake Home Assistant confirmed (#685). feature/nearest sets it, which
 // this package cannot import; without it the turn opens at once. decide is told whether this device
 // answers.
-var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))]
+var confirmedContest atomic.Pointer[func(slot int, at time.Time, clarity, mean float64, settled func(confirmed bool), decide func(answer bool))]
 
 // SetConfirmedContest is feature/nearest putting a confirmed wake through its decision. settled is the
 // unsure claim's, if one was made (nil if not): the decision takes it back when it answers without
 // claiming the word, so a device waiting on the unsure claim is not left waiting.
-func SetConfirmedContest(f func(slot int, at time.Time, clarity float64, settled func(confirmed bool), decide func(answer bool))) {
+func SetConfirmedContest(f func(slot int, at time.Time, clarity, mean float64, settled func(confirmed bool), decide func(answer bool))) {
 	confirmedContest.Store(&f)
 }
 
@@ -191,12 +192,13 @@ func SetAskingClaim(f func(slot int, clarity float64) func(confirmed bool)) {
 }
 
 // earlyClaim is an unsure claim made as a candidate's score first went over the confirm threshold, at
-// at with clarity, before it is known whether it stays unsure and is asked about. The question takes
+// at with clarity and mean, before it is known whether it stays unsure and is asked about. The question takes
 // it over (confirm); one that never comes takes it back after earlyFor.
 type earlyClaim struct {
 	slot    int
 	at      time.Time
 	clarity float64
+	mean    float64
 	settled func(confirmed bool)
 }
 
@@ -212,12 +214,12 @@ func (c *conversation) claimEarly(slot int) {
 	if f == nil || c.early != nil || !c.mayConfirm(slot) {
 		return
 	}
-	clarity := 0.0
+	clarity, mean := 0.0, 0.0
 	if c.source != nil {
-		clarity = c.source.Standout(claimSpan)
+		clarity, mean = c.source.Standout(claimSpan), c.source.StandoutMean(claimSpan)
 	}
 	if settled := (*f)(slot, clarity); settled != nil {
-		c.early = &earlyClaim{slot: slot, at: c.now(), clarity: clarity, settled: settled}
+		c.early = &earlyClaim{slot: slot, at: c.now(), clarity: clarity, mean: mean, settled: settled}
 	}
 }
 
@@ -492,10 +494,10 @@ func (c *conversation) heardOnHA() {
 	// A faint one was claimed before it was asked about (#503).
 	if f := confirmedContest.Load(); f != nil && w.mode == watchConfirm && !w.faint {
 		c.decided++
-		gen, slot, from, clarity := c.decided, w.slot, w.from, w.clarity
+		gen, slot, from, clarity, mean := c.decided, w.slot, w.from, w.clarity, w.mean
 		c.deciding = &deciding{w: w, at: c.now(), gen: gen}
 		safe.Go("confirmed wake claim", func() {
-			(*f)(slot, from, clarity, settled, func(answer bool) {
+			(*f)(slot, from, clarity, mean, settled, func(answer bool) {
 				c.post(event{kind: evContested, gen: gen, answer: answer})
 			})
 		})
@@ -596,11 +598,11 @@ func (c *conversation) confirm(slot int, peak float64) {
 	if e := c.early; e != nil && e.slot == slot {
 		// Told of as its score went over: the question keeps that claim, and the clarity it was made with.
 		c.early = nil
-		c.watch.clarity, c.watch.settled = e.clarity, e.settled
+		c.watch.clarity, c.watch.mean, c.watch.settled = e.clarity, e.mean, e.settled
 		return
 	}
 	if c.source != nil {
-		c.watch.clarity = c.source.Standout(claimSpan)
+		c.watch.clarity, c.watch.mean = c.source.Standout(claimSpan), c.source.StandoutMean(claimSpan)
 	}
 	if f := askingClaim.Load(); f != nil {
 		c.watch.settled = (*f)(slot, c.watch.clarity)

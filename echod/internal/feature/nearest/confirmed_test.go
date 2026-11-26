@@ -13,7 +13,7 @@ func TestAConfirmedWakeWithNoBetterClaimAnswers(t *testing.T) {
 	heard := h.now
 	h.now = h.now.Add(900 * time.Millisecond) // Home Assistant took most of a second to hear it
 	var answer *bool
-	h.n.Confirmed(0, heard, 11, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, heard, 11, 11, nil, func(a bool) { answer = &a })
 	if len(h.sent) != 1 || h.sent[0].Score != 11 {
 		t.Fatalf("claims sent: %+v, want one at the clarity measured at the candidate", h.sent)
 	}
@@ -35,7 +35,7 @@ func TestAConfirmedWakeLosesToABetterClaimFromBeforeIt(t *testing.T) {
 	h.claimFrom("Lounge", 30) // the device somebody stands next to claimed it as it heard it
 	h.now = h.now.Add(900 * time.Millisecond)
 	var answer *bool
-	h.n.Confirmed(0, heard, 4, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, heard, 4, 4, nil, func(a bool) { answer = &a })
 	h.wait(300 * time.Millisecond)
 	if answer == nil || *answer {
 		t.Fatalf("a better claim from before: answer %v, want false", answer)
@@ -47,7 +47,7 @@ func TestAConfirmedWakeStandsDownForOneAlreadyAnswered(t *testing.T) {
 	heard := h.now
 	h.now = h.now.Add(900 * time.Millisecond)
 	var answer *bool
-	h.n.Confirmed(0, heard, 25, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, heard, 25, 25, nil, func(a bool) { answer = &a })
 	h.n.answeredElsewhere(h.mine, "Lounge")
 	h.wait(300 * time.Millisecond)
 	if answer == nil || *answer {
@@ -60,7 +60,7 @@ func TestAConfirmedWakeAnswersAtOnceWithNobodyToAsk(t *testing.T) {
 	h := newHouse(t)
 	h.n.enabled = false
 	var answer *bool
-	h.n.Confirmed(0, h.now, 4, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, h.now, 4, 4, nil, func(a bool) { answer = &a })
 	if answer == nil || !*answer || len(h.sent) != 0 {
 		t.Fatalf("off: answer %v, claims %+v; want an answer at once and no claim", answer, h.sent)
 	}
@@ -71,7 +71,7 @@ func TestAConfirmedWakeIsNotFaint(t *testing.T) {
 	h := newHouse(t)
 	confirmBelow(t, true, 15)
 	var answer *bool
-	h.n.Confirmed(0, h.now, 4, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, h.now, 4, 4, nil, func(a bool) { answer = &a })
 	h.wait(300 * time.Millisecond)
 	if answer == nil || !*answer || len(h.faint) != 0 {
 		t.Fatalf("answer %v, faint %v; want an answer and no second question", answer, h.faint)
@@ -83,7 +83,7 @@ func TestAConfirmedWakeIsNotFaint(t *testing.T) {
 func TestASupersededConfirmedWakeIsTold(t *testing.T) {
 	h := newHouse(t)
 	var answer *bool
-	h.n.Confirmed(0, h.now, 11, nil, func(a bool) { answer = &a })
+	h.n.Confirmed(0, h.now, 11, 11, nil, func(a bool) { answer = &a })
 	h.n.Woke(0)
 	h.wait(300 * time.Millisecond)
 	if answer == nil || *answer {
@@ -100,7 +100,7 @@ func TestAConfirmedWakeAnsweredAtOnceTakesBackItsUnsureClaim(t *testing.T) {
 	h := newHouse(t)
 	h.n.busy = func() bool { return true }
 	var took, answer *bool
-	h.n.Confirmed(0, h.now, 11, func(c bool) { took = &c }, func(a bool) { answer = &a })
+	h.n.Confirmed(0, h.now, 11, 11, func(c bool) { took = &c }, func(a bool) { answer = &a })
 	if answer == nil || !*answer {
 		t.Fatal("a busy device did not answer at once")
 	}
