@@ -55,6 +55,13 @@ On the device's setup page, **Screen → Deck**:
 Home Assistant can press a button too, with the `deck_press` action
 ([Actions](actions.md#press-a-deck-button)).
 
+### From an app
+
+An app on your computer can read the deck and set its pages through the device's signed remote API
+([The Deck over the API](setup.md#the-deck-over-the-api)). It can set OBS buttons and buttons that open
+an app your computer's Deck agent lists; buttons that press keys, type or run a script are set on the
+setup page only, and the API leaves them as they are.
+
 ## Computer buttons
 
 Buttons can press a shortcut or a media key, type text, open an app or a website, or run a script

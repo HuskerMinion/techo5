@@ -243,7 +243,7 @@ func saveDeckPage(r *http.Request) string {
 				b.Value = strings.TrimSpace(b.Value)
 			}
 		}
-		if problem := deckButtonProblem(i, cols, b); problem != "" {
+		if problem := config.DeckButtonProblem(i, cols, b); problem != "" {
 			return problem
 		}
 		buttons = append(buttons, b)
@@ -261,25 +261,6 @@ func saveDeckPage(r *http.Request) string {
 		}
 	}
 	deck.Get().Reload()
-	return ""
-}
-
-// deckButtonProblem is what a button is missing, said so the row can be found.
-func deckButtonProblem(i, cols int, b config.DeckButton) string {
-	where := fmt.Sprintf("row %d, button %d", i/cols+1, i%cols+1)
-	switch {
-	case b.Action == config.DeckOBSScene && b.Scene == "":
-		return where + ": which scene?"
-	case b.Action == config.DeckOBSMute && b.Input == "":
-		return where + ": which input?"
-	case b.Action == config.DeckOBSSource && (b.Scene == "" || b.Source == ""):
-		return where + ": which scene and source?"
-	case b.Action.OnComputer() && b.Computer == "":
-		return where + ": which computer?"
-	case b.Action.OnComputer() && b.Value == "":
-		return where + ": " + map[config.DeckAction]string{config.DeckPCKeys: "which keys?", config.DeckPCType: "what text?",
-			config.DeckPCOpen: "which app or website?", config.DeckPCRun: "which script?"}[b.Action]
-	}
 	return ""
 }
 

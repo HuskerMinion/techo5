@@ -2784,12 +2784,68 @@ What it answers:
 | `GET /api/v1/entities` | Every setting and reading the device has, as Home Assistant sees them: `id`, `name`, `kind` (switch, number, select, text, button, sensor, binary_sensor, text_sensor), `state`, whether it is `writable` here, and a number's `min`, `max` and `unit` or a select's `options`. |
 | `POST /api/v1/entities/<id>` | Changes one: `{"state": true}` for a switch, a number for a number, one of the options for a select, a string for a text, and nothing for a button, which presses it. A setting that is not writable here answers 403. |
 | `GET /api/v1/logs` | The log as server-sent events: the last 200 lines, then each line as it is written, for up to 30 minutes; two at a time at most. |
+| `GET /api/v1/deck` | The [Deck](deck.md) (Show only): its grid, pages and buttons, the paired computers and the apps each one's agent lists, and the actions, colors and limits a button can have. |
+| `PUT /api/v1/deck/pages/<n>` | Replaces page `<n>`'s buttons (counted from 0) with a JSON array of buttons; `<n>` one past the last page adds a page, up to 10. Answers the deck as `GET` does. |
+| `DELETE /api/v1/deck/pages/<n>` | Removes page `<n>`; the pages after it move up. Answers the deck as `GET` does. |
 
 The log has the device's name, serial number, Wi-Fi networks, Bluetooth devices, passwords and keys
 taken out, as the diagnostics download does, along with addresses and logins, and what was said and
 answered replaced by how long it was; it still names rooms and other devices, so treat it as private. Turning the API off or making a new key ends a log being followed. An address that
 sends requests that do not check out is turned away for a minute after ten of them; nobody else is,
 except that a public IPv6 address is counted with the rest of its /64.
+
+### The Deck over the API
+
+For an app that edits the [Deck](deck.md) away from the setup page. `GET /api/v1/deck` answers:
+
+```json
+{
+  "cols": 4, "rows": 3,
+  "pages": [
+    {"buttons": [
+      {"label": "Live", "action": "obs_scene", "scene": "Live"},
+      {"label": "Mic", "icon": "microphone-off", "color": "red", "action": "obs_mute", "input": "Mic"},
+      {"label": "Backup", "action": "pc_run", "computer": "Studio", "value": "backup.sh"},
+      {"action": "pc_open", "computer": "Studio", "value": "Safari"},
+      {}
+    ]}
+  ],
+  "computers": [{"name": "Studio", "connected": true, "apps": ["OBS", "Safari"]}],
+  "obs": {"addr": "192.168.x.y", "password_set": true},
+  "actions": [{"id": "", "label": "Empty", "api": true}, {"id": "obs_scene", "label": "Switch scene", "api": true},
+              {"id": "pc_keys", "label": "Press keys", "api": false}],
+  "colors": ["", "blue", "green", "red", "orange", "purple", "gray"],
+  "limits": {"cols_min": 2, "cols_max": 6, "rows_min": 1, "rows_max": 4, "pages_max": 10,
+             "text_max": 256, "value_max": 4096}
+}
+```
+
+(`actions` lists all ten; two are shown here.) A page's buttons are its squares row by row, `{}` an
+empty one; a button has `label`, `icon` (a Material Design icon name), `color` (empty is the action's
+own), `action`, and what the action needs: `scene` (`obs_scene`, and `obs_source` with `source`),
+`input` (`obs_mute`), `computer` and `value` (the `pc_` actions). A computer is named only, with whether
+its agent answered the last time it was asked and the apps it lists; never its address or pairing key,
+and OBS's password is never shown, only whether one is set.
+
+`PUT /api/v1/deck/pages/<n>` takes the page's buttons as the same JSON array, at most the grid's
+`cols` × `rows`; squares not sent are empty. A button is checked as the setup page checks it (a scene
+button needs its scene, and so on), and a field the device does not know is refused, not left out.
+The API may make fewer kinds of button than the setup page, because a key in a script is not a person
+at the setup page:
+
+- It may make and change OBS buttons, and **Open app** (`pc_open`) buttons for a computer that is
+  paired, opening one of the apps that computer's agent lists (`apps` above); not a website.
+- It may not make **Press keys**, **Type text** or **Run script** buttons (`pc_keys`, `pc_type`,
+  `pc_run`), since those act in your signed-in session. Nor may it change, move or remove one made on
+  the setup page: send it back unchanged in its place. A page that has one cannot be removed here.
+- Any button sent back exactly as `GET` showed it, in its place, is kept as it is, so an app need not
+  understand every button to change one.
+
+A request that breaks a rule is answered 400 with the reason, such as `row 1, button 3 presses keys,
+types or runs a script on a computer: it is changed or removed on the setup page; send it back
+unchanged`, and nothing is saved. A page that is saved is written to the device's settings once. The
+settings lock (the screen's PIN) guards the settings on the screen, not the API: the API is guarded by
+its key.
 
 ## 12. Reaching the device from away
 

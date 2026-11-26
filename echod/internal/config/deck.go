@@ -1,6 +1,9 @@
 package config
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+)
 
 // Deck is TECHO5 Deck: pages of buttons on the Show's screen that act straight on OBS (and, later, on a
 // computer through the deck agent), opened by a swipe up from the bottom edge of the clock.
@@ -133,7 +136,11 @@ const (
 	DeckColsMin, DeckColsMax, DeckColsDefault = 2, 6, 4
 	DeckRowsMin, DeckRowsMax, DeckRowsDefault = 1, 4, 3
 	DeckPagesMax                              = 10
-	deckTextMax                               = 256
+
+	// DeckTextMax is the longest a label, icon, scene, source, input or computer name is kept, and
+	// DeckValueMax the longest a computer button's value.
+	DeckTextMax  = 256
+	DeckValueMax = 4096
 )
 
 // Grid is the deck's columns and rows, the defaults filled in and both kept in range.
@@ -184,15 +191,15 @@ func (d Deck) clone() Deck {
 // tidy keeps a button's text to a sane length, and its action and color to known ones.
 func (b DeckButton) tidy() DeckButton {
 	clip := func(s string) string {
-		if len(s) > deckTextMax {
-			return s[:deckTextMax]
+		if len(s) > DeckTextMax {
+			return s[:DeckTextMax]
 		}
 		return s
 	}
 	b.Label, b.Icon, b.Scene, b.Source, b.Input = clip(b.Label), clip(b.Icon), clip(b.Scene), clip(b.Source), clip(b.Input)
 	b.Computer = clip(b.Computer)
-	if len(b.Value) > 4096 {
-		b.Value = b.Value[:4096]
+	if len(b.Value) > DeckValueMax {
+		b.Value = b.Value[:DeckValueMax]
 	}
 	if !slices.Contains(DeckActions(), b.Action) {
 		b.Action = DeckNone
@@ -201,6 +208,26 @@ func (b DeckButton) tidy() DeckButton {
 		b.Color = ""
 	}
 	return b
+}
+
+// DeckButtonProblem is what button i of a page cols wide is missing, said so the row can be found, or
+// "". It lives here rather than on the setup page so the remote API holds a button to the same rules.
+func DeckButtonProblem(i, cols int, b DeckButton) string {
+	where := fmt.Sprintf("row %d, button %d", i/cols+1, i%cols+1)
+	switch {
+	case b.Action == DeckOBSScene && b.Scene == "":
+		return where + ": which scene?"
+	case b.Action == DeckOBSMute && b.Input == "":
+		return where + ": which input?"
+	case b.Action == DeckOBSSource && (b.Scene == "" || b.Source == ""):
+		return where + ": which scene and source?"
+	case b.Action.OnComputer() && b.Computer == "":
+		return where + ": which computer?"
+	case b.Action.OnComputer() && b.Value == "":
+		return where + ": " + map[DeckAction]string{DeckPCKeys: "which keys?", DeckPCType: "what text?",
+			DeckPCOpen: "which app or website?", DeckPCRun: "which script?"}[b.Action]
+	}
+	return ""
 }
 
 type DeckWriter struct{ st *Store }
