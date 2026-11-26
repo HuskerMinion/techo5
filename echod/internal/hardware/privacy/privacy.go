@@ -44,12 +44,13 @@ func present(path string) bool {
 	return err == nil
 }
 
-// softwareCut is set by a device whose mute exists only in software (the Echo Spot); nothing else
-// ever sets it.
+// softwareCut is set by a device whose mute exists only in software (the Echo Spot), and by the 2nd
+// gen Show 8 on TECHO5's mainline kernel for its software mute over the latch (platform_athena.go);
+// nothing else ever sets it.
 var softwareCut atomic.Bool
 
-// SoftwareCut reports whether the capture source must hand on silence because a software-only mute
-// is on. It is always false where the hardware cuts the microphones itself.
+// SoftwareCut reports whether the capture source must hand on silence because a software mute is on.
+// It is always false where only the hardware cuts the microphones.
 func SoftwareCut() bool { return softwareCut.Load() }
 
 // Seed puts the saved mute in force before the first frame is captured, on a device whose mute is
@@ -60,7 +61,51 @@ func SoftwareCut() bool { return softwareCut.Load() }
 // and powered on, the pre-roll history and wake detection heard the room for that window, and a wake
 // word spoken in it started a turn on a device its owner believed was deaf. Short, and every boot.
 //
-// Only where the cut is software. On a Show or a Dot the hardware holds the microphones and nothing
-// reads this; setting it there would be worse than useless, because unmuting writes the latch rather
+// Only where the cut is software (the Spot, and the software mute of the 2nd gen Show 8 on TECHO5's
+// mainline kernel). On any other Show or a Dot the hardware holds the microphones and nothing reads
+// this; setting it there would be worse than useless, because unmuting writes the latch rather
 // than this flag and the frames would stay silent afterwards.
 func Seed(muted bool) { seedSoftwareCut(muted) }
+
+// codec switches the microphone converter's channels off (true) or on, and codecRead reads whether
+// they are off, for a device whose software mute includes the converter (the 2nd gen Show 8 on
+// TECHO5's mainline kernel, platform_athena.go). hardware/mic sets both, since the card is its own;
+// nil until it has.
+var (
+	codec     atomic.Pointer[func(cut bool) error]
+	codecRead atomic.Pointer[func() (bool, error)]
+)
+
+// SetCodec is how hardware/mic hands over the converter's channel switch and its reading.
+func SetCodec(cut func(bool) error, read func() (bool, error)) {
+	codec.Store(&cut)
+	codecRead.Store(&read)
+}
+
+func codecCut(cut bool) error {
+	fn := codec.Load()
+	if fn == nil {
+		return nil
+	}
+	return (*fn)(cut)
+}
+
+// CodecCut reads whether the converter's channels are off. known is false where there is no
+// converter cut.
+func CodecCut() (cut, known bool, err error) {
+	fn := codecRead.Load()
+	if fn == nil {
+		return false, false, nil
+	}
+	cut, err = (*fn)()
+	return cut, true, err
+}
+
+// HeldByTheDaemon reports whether a mute has a part that only the running daemon holds: the Spot's
+// and a panel's software cut, and the software mute beside the latch on the 2nd gen Show 8 on TECHO5's
+// mainline kernel. Another process (the CLI) sees only its own copy of that part, so it must not
+// read it as the device's or set it.
+func HeldByTheDaemon(m Mute) bool {
+	_, ok := m.(interface{ heldByTheDaemon() })
+	return ok
+}

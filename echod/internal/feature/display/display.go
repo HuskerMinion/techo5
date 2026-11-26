@@ -638,6 +638,7 @@ func build() *Display {
 	touch.Get().Landed.Listen(d.fingerLanded)
 	touch.Get().Down.Listen(d.fingerDown)
 	d.listenPowerKey()
+	mute.Get().LiftedByButton.Listen(func(struct{}) { muteLiftedNote() })
 	go d.watchLink()
 	// A device with no address a while after boot gets the Wi-Fi page without being asked: a
 	// fresh unit, or one carried to another house. The page ends the splash (frame), which would
@@ -2998,6 +2999,7 @@ func (d *Display) frame() (next time.Duration) {
 	// here and since let go is shown paused too (see media.Player.Held).
 	s.playing, s.paused = media.Get().ScreenState()
 	s.muted, _ = mute.Get().Muted()
+	s.unlitMute = s.muted && mute.Get().UnlitMute()
 	s.linkDown = d.link.down(now)
 	if !volAt.IsZero() && now.Sub(volAt) < volumeShow {
 		s.volume, s.showVolume = volume, true

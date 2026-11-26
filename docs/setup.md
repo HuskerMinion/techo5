@@ -1187,6 +1187,8 @@ other Shows don't have the switches.
   first): while the microphones are muted, a red **Microphone off** pill sits at the top of the screen.
   Turn the switch off to leave that to the red light on the mute button, which says it already; a lost
   Wi-Fi or Home Assistant is still shown at the top. The night clock never shows the pill either way.
+  On the 2nd gen Show 8 on TECHO5's kernel, a mute from Home Assistant or the screen doesn't light the
+  red light, so the pill always shows for it ([The microphone mute](install-athena.md#the-microphone-mute)).
   The Panel app has no mute light, so it always shows it and doesn't have the switch.
 - **Camera dot** (Spot, in Home Assistant): **Whenever the camera runs** (the default) lights the green
   dot at the top of the rim for presence and person detection too, which stay on the device. **Only when

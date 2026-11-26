@@ -26,7 +26,9 @@ On TECHO5's kernel:
 - the four microphones and the speaker, with Amazon's own tuning for the amp;
 - Bluetooth audio with phones;
 - the light sensor;
-- Wi-Fi.
+- Wi-Fi;
+- the mute button, and a microphone mute from Home Assistant or the screen that can be lifted again
+  (see [The microphone mute](#the-microphone-mute)).
 
 Known limits:
 
@@ -135,6 +137,63 @@ you gave it. Add it and paste the key the installer printed (it's also in
 `backups/<serial>/home-assistant.key`). If it doesn't appear, add the ESPHome integration by hand
 with the unit's address and port 6053. The rest of the setup is as on the other Shows
 ([install.md](install.md), "Add it to Home Assistant").
+
+## The microphone mute
+
+On TECHO5's kernel the microphones can be muted two ways, as on a Home Assistant Voice PE:
+
+- **The mute button** sets the hardware latch and the red light comes on. Only the button lets it go
+  again: Home Assistant and the screen can't unmute it, and say so.
+- **Home Assistant** (the **Microphone mute** switch) and **the screen** (the microphone switch in
+  the settings sheet) switch the microphone chip's channels off, so the microphones hand on nothing
+  at all. They can switch them back on. The red light stays off for this mute, since it belongs to the
+  button's latch; the screen shows **MICROPHONE OFF** at the top instead, even with **Show Microphone
+  off** turned off (that switch only leaves the button's mute to the red light). It is kept over a
+  restart.
+
+> [!IMPORTANT]
+> **The button always wins.** If you press the mute button while Home Assistant or the screen has
+> muted the microphones, the latch goes on as well (red light). Press it again to let the latch go and
+> **both mutes come off**: the microphones are live again, and Home Assistant's switch goes off. The
+> screen shows a short card that the button also lifted the mute from Home Assistant or the screen.
+> So someone at the device can always get the microphones back with the button, and a mute set from
+> afar never holds against it.
+
+| What you do | Microphones | Red light | Home Assistant switch |
+|---|---|---|---|
+| Mute in Home Assistant or on the screen | off | off | on |
+| Unmute in Home Assistant or on the screen | live | off | off |
+| Press the button (nothing muted) | off | on | on |
+| Press the button again | live | off | off |
+| Mute in Home Assistant, then press the button | off | on | on |
+| ... and press the button again | **live** (both mutes lifted, card on the screen) | off | off |
+| Unmute in Home Assistant while the button holds the latch | stays off (only the button) | on | on |
+
+The **MICROPHONE OFF** pill at the top of the screen, with the **Show Microphone off** switch in
+Home Assistant:
+
+| Muted by | Red light | Show Microphone off **on** (the default) | Show Microphone off **off** |
+|---|---|---|---|
+| nothing | off | no pill | no pill |
+| the button only (the latch) | on | pill | no pill, the red light says it |
+| Home Assistant or the screen only | off | pill | pill (nothing else says it) |
+| the button and Home Assistant or the screen | on | pill | pill |
+
+| | |
+|---|---|
+| ![Muted from Home Assistant: "Microphone off" at the top, the red light off](screenshots/show8/mute-software.png) | ![The card after the button lifted a mute from Home Assistant](screenshots/show8/mute-lifted.png) |
+| **Muted from Home Assistant**: the pill says it, even with Show Microphone off turned off | **The button lifted it**: the card for 3 seconds, the microphones live |
+| ![Muted with the button, Show Microphone off on: the pill at the top](screenshots/show8/mute-button-pill.png) | ![Muted with the button, Show Microphone off off: no pill, the red light says it](screenshots/show8/mute-button-no-pill.png) |
+| **Muted with the button**, Show Microphone off on (the default) | **Muted with the button**, Show Microphone off off: the red light alone |
+
+The button's latch takes about a second to go on (the red light comes on then) but comes off at
+once. A second press while it is still going on is lost, so wait for the red light before pressing
+again.
+
+The software mute is as strong as the device's own software: it isn't a hardware interlock like the
+button's latch. For a mute nothing on the device can undo, use the button. The camera goes off with
+either mute: the button's latch cuts it in hardware, and with the software mute on the camera can't
+be started and a running camera view stops within a moment.
 
 ## Which screen
 
