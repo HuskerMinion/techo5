@@ -78,8 +78,16 @@ func (f *Feature) Run(ctx context.Context) error {
 	return f.Manager.Run(ctx)
 }
 
+// Family is the catalog's name for this build's devices: "show", "spot" or "dot".
+func Family() string { return family }
+
 // objectID is an add-on's update entity: addon_<id>, the id's dashes as underscores.
 func objectID(id string) string { return "addon_" + strings.ReplaceAll(id, "-", "_") }
+
+// ObjectPrefix is what every Home Assistant object id an add-on adds starts with: its update entity's,
+// and an underscore. Its entities and its commands' buttons (feature/addonhost) are named under it, so
+// none can take the name of one of the device's own.
+func ObjectPrefix(id string) string { return objectID(id) + "_" }
 
 // Entities is an update entity for each installed add-on. Home Assistant reads the list once per
 // connection, so an install or a removal asks for a reconnect (publish).

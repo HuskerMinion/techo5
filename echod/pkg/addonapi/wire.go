@@ -92,7 +92,6 @@ const (
 	EventSettings      = "settings"
 	EventSettingsTest  = "settings.test"
 	EventEntityCommand = "entity.command"
-	EventMedia         = "media"
 )
 
 // Error codes, a fixed set.

@@ -11,6 +11,7 @@ package all
 import (
 	_ "github.com/HuskerMinion/techo5/echod/internal/android/setup"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/activity"
+	_ "github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/addons"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	_ "github.com/HuskerMinion/techo5/echod/internal/feature/announce"

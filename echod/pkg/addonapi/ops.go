@@ -192,10 +192,3 @@ type EntityCommand struct {
 	State any    `json:"state,omitempty"`
 	Press bool   `json:"press,omitempty"`
 }
-
-// MediaEvent is what became of the add-on's media: "ended" by itself, "stopped" by someone or
-// something else, or "failed".
-type MediaEvent struct {
-	State string `json:"state"`
-	Error string `json:"error,omitempty"`
-}

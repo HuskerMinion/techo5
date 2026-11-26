@@ -40,6 +40,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
@@ -1472,6 +1473,7 @@ func (d *Display) Start(context.Context) error {
 	d.r = newRoundRenderer(dev.Canvas())
 	fw, fh := dev.FrameSize()
 	w, h := dev.Size()
+	addonhost.SetScreenSize(w, h) // what hello tells an add-on
 	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
 	d.settleScreen(dev)
 	slog.Info("screen open", "fb", dev.String())

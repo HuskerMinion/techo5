@@ -34,6 +34,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/alarm"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/announce"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/assistant"
@@ -2678,6 +2679,7 @@ func (d *Display) Start(context.Context) error {
 	// A panel's canvas is only known now: photos and the rest are made at it from here on.
 	home.SetPanelSize(w, h)
 	tessera.SetPanelSize(w, h)
+	addonhost.SetScreenSize(w, h) // what hello tells an add-on
 	// The calendar's two switches that go by the panel's size are shown for this one from now on.
 	panelWide.Store(wideScreen(w, h))
 	d.lookChanged()
