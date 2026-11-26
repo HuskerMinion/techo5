@@ -1,0 +1,198 @@
+package catalog
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/update"
+)
+
+// mealsVersion is a version that speaks the add-on API, as Meals (#720) would be listed.
+func mealsVersion(v string) Version {
+	m := bin("addon.json")
+	return Version{
+		Version:      v,
+		Requires:     []string{"api1"},
+		MinTECHO5:    map[string]string{"show": "v1.7.0"},
+		Binaries:     map[string]update.Binary{"arm": bin("arm")},
+		Manifest:     &m,
+		Ports:        []Port{},
+		MemoryMB:     20,
+		DiskMB:       2,
+		API:          1,
+		Capabilities: []string{"commands", "speak", "timers", "settings", "entities"},
+		Commands:     []string{"next", "start_cooking"},
+		Entities:     []string{"sensor.step"},
+	}
+}
+
+func meals() Addon {
+	return Addon{ID: "meals", Name: "Meals", Author: "nachtschatt3n", Summary: "Cooks along with Mealie.",
+		Repo: "https://github.com/example/meals", Versions: []Version{mealsVersion("0.1.0")}}
+}
+
+const mealsManifest = `{"id":"meals","version":"0.1.0","command":["meals"],"ports":[],"root":false,"memory_mb":20,
+ "api":1,"capabilities":["commands","speak","timers","settings","entities"],
+ "commands":[{"name":"next"},{"name":"start_cooking","args":{"recipe":{"type":"string","max":64}}}],
+ "settings":{"fields":[{"key":"address","label":"Mealie address","type":"string"},{"key":"token","label":"API token","type":"secret"}],"test":true},
+ "entities":[{"domain":"sensor","id":"step","name":"Step","text":true}]}`
+
+func TestAnAPIVersionIsTaken(t *testing.T) {
+	c := valid()
+	c.Addons = append(c.Addons, meals())
+	b, _ := json.Marshal(c)
+	got, err := ParseKnown(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := got.Find("meals")
+	if v := a.Versions[0]; v.API != 1 || len(v.Capabilities) != 5 || v.Commands[1] != "start_cooking" {
+		t.Errorf("read as %+v", v)
+	}
+	// A format 1 device is not given it.
+	if _, ok := got.V1().Find("meals"); ok {
+		t.Error("an API version is in the format 1 copy")
+	}
+}
+
+// A device that does not speak api1 skips the version rather than refusing the catalog, as it skips
+// any other feature it does not know.
+func TestAnAPIVersionIsSkippedWhereAPI1IsUnknown(t *testing.T) {
+	was := Features
+	Features = []string{"files"}
+	defer func() { Features = was }()
+	c := valid()
+	c.Addons = append(c.Addons, meals())
+	b, _ := json.Marshal(c)
+	got, err := Parse(b)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if a, _ := got.Find("meals"); !a.NeedsNewer() {
+		t.Errorf("read as %+v", a)
+	}
+}
+
+func TestABadAPIVersionRefusesTheCatalog(t *testing.T) {
+	for name, change := range map[string]func(v *Version){
+		"no requires":       func(v *Version) { v.Requires = nil },
+		"level 2":           func(v *Version) { v.API = 2 },
+		"no level":          func(v *Version) { v.API = 0 },
+		"unknown cap":       func(v *Version) { v.Capabilities = append(v.Capabilities, "screen") },
+		"cap twice":         func(v *Version) { v.Capabilities = append(v.Capabilities, "speak") },
+		"no caps":           func(v *Version) { v.Capabilities = nil; v.Commands = nil; v.Entities = nil },
+		"commands, no cap":  func(v *Version) { v.Capabilities = []string{"speak", "entities"} },
+		"cap, no commands":  func(v *Version) { v.Commands = nil },
+		"entities, no cap":  func(v *Version) { v.Capabilities = []string{"commands"} },
+		"bad entity domain": func(v *Version) { v.Entities = []string{"light.x"} },
+		"bad entity":        func(v *Version) { v.Entities = []string{"sensor"} },
+		"bad command":       func(v *Version) { v.Commands = []string{"Next"} },
+		"root":              func(v *Version) { v.Root = true },
+	} {
+		c := valid()
+		a := meals()
+		change(&a.Versions[0])
+		c.Addons = append(c.Addons, a)
+		b, _ := json.Marshal(c)
+		if _, err := ParseKnown(b); err == nil {
+			t.Errorf("%s: taken", name)
+		}
+	}
+}
+
+func TestAnAPIManifest(t *testing.T) {
+	m, err := ParseManifest([]byte(mealsManifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Matches("meals", mealsVersion("0.1.0"), "arm"); err != nil {
+		t.Errorf("matches its entry: %v", err)
+	}
+	for name, change := range map[string]func(v *Version){
+		"another cap":     func(v *Version) { v.Capabilities = append(v.Capabilities, "sound") },
+		"another command": func(v *Version) { v.Commands = append(v.Commands, "back") },
+		"another entity":  func(v *Version) { v.Entities = append(v.Entities, "switch.cooking") },
+		"no api":          func(v *Version) { v.API = 0 },
+	} {
+		v := mealsVersion("0.1.0")
+		change(&v)
+		if err := m.Matches("meals", v, "arm"); err == nil {
+			t.Errorf("%s: matched", name)
+		}
+	}
+	for name, bad := range map[string]string{
+		"no api":           strings.Replace(mealsManifest, `"api":1,`, ``, 1),
+		"api 2":            strings.Replace(mealsManifest, `"api":1`, `"api":2`, 1),
+		"root":             strings.Replace(mealsManifest, `"root":false`, `"root":true`, 1),
+		"unknown cap":      strings.Replace(mealsManifest, `"commands","speak"`, `"commands","ha.call"`, 1),
+		"settings, no cap": strings.Replace(mealsManifest, `"settings","entities"]`, `"entities"]`, 1),
+		"bad arg":          strings.Replace(mealsManifest, `"type":"string","max":64`, `"type":"list"`, 1),
+		"unknown key":      strings.Replace(mealsManifest, `"text":true`, `"text":true,"color":"red"`, 1),
+		"bad setting":      strings.Replace(mealsManifest, `"type":"secret"`, `"type":"password"`, 1),
+		"name both":        strings.Replace(mealsManifest, `{"name":"next"}`, `{"name":"step"}`, 1),
+	} {
+		if _, err := ParseManifest([]byte(bad)); err == nil {
+			t.Errorf("%s: taken", name)
+		}
+	}
+}
+
+// An update that adds a capability, a command or an entity asks again; one that adds none does not.
+func TestMoreCoversTheAPI(t *testing.T) {
+	before := mealsVersion("0.1.0").Asks("arm")
+	if more := before.More(before); len(more) != 0 {
+		t.Errorf("the same: %v", more)
+	}
+	v := mealsVersion("0.2.0")
+	v.Capabilities = append(v.Capabilities, "media")
+	v.Commands = append(v.Commands, "back")
+	v.Entities = append(v.Entities, "switch.cooking")
+	more := v.Asks("arm").More(before)
+	if !slices.Equal(more, []string{"the media capability", "the command back", "the entity switch.cooking"}) {
+		t.Errorf("more: %v", more)
+	}
+	fewer := mealsVersion("0.2.0")
+	fewer.Commands = fewer.Commands[:1]
+	if more := fewer.Asks("arm").More(before); len(more) != 0 {
+		t.Errorf("fewer: %v", more)
+	}
+	// One installed before the API asks for every capability of an update that brings it.
+	if more := mealsVersion("0.2.0").Asks("arm").More(Asks{}); len(more) != 8 {
+		t.Errorf("from nothing: %v", more)
+	}
+}
+
+// The digest the box agrees to covers what a version uses of the API, and a listing without any keeps
+// the digest it had before the API.
+func TestShownCoversTheAPI(t *testing.T) {
+	a, v := meals(), mealsVersion("0.1.0")
+	base := Shown(a, v)
+	for name, change := range map[string]func(v *Version){
+		"cap":     func(v *Version) { v.Capabilities = append(v.Capabilities, "sound") },
+		"command": func(v *Version) { v.Commands = append(v.Commands, "back") },
+		"entity":  func(v *Version) { v.Entities = append(v.Entities, "switch.x") },
+	} {
+		w := mealsVersion("0.1.0")
+		change(&w)
+		if Shown(a, w) == base {
+			t.Errorf("a change of %s left the digest the same", name)
+		}
+	}
+	// Without any of it, the digest is the one this version had before the API's fields were added.
+	p := plexVersion("0.1.0")
+	b, _ := json.Marshal(struct {
+		ID, Name, Author, Version string
+		Ports                     []Port
+		Root                      bool
+		MemoryMB, DiskMB          int
+		Files                     map[string][]FilePin `json:",omitempty"`
+	}{plex().ID, plex().Name, plex().Author, p.Version, p.Ports, p.Root, p.MemoryMB, p.DiskMB, nil})
+	sum := sha256.Sum256(b)
+	if want := hex.EncodeToString(sum[:16]); Shown(plex(), p) != want {
+		t.Errorf("a listing without the API changed digest: %s, was %s", Shown(plex(), p), want)
+	}
+}

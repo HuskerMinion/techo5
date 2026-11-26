@@ -1274,7 +1274,19 @@ func (m *Manager) restart(a *addon, on bool) {
 // merged is everything agreed to in either, but for the extra files, which are the ones agreed to now:
 // a file is agreed to by its hash, and the ones before are not on the device any more.
 func merged(a, b catalog.Asks) catalog.Asks {
-	out := catalog.Asks{Ports: slices.Clone(a.Ports), Root: a.Root || b.Root, Files: slices.Clone(b.Files)}
+	// What it uses of the add-on API is everything agreed to in either, as ports are.
+	union := func(x, y []string) []string {
+		out := slices.Clone(x)
+		for _, s := range y {
+			if !slices.Contains(out, s) {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	out := catalog.Asks{Ports: slices.Clone(a.Ports), Root: a.Root || b.Root, Files: slices.Clone(b.Files),
+		Capabilities: union(a.Capabilities, b.Capabilities), Commands: union(a.Commands, b.Commands),
+		Entities: union(a.Entities, b.Entities)}
 	for _, p := range b.Ports {
 		covered := false
 		for _, q := range out.Ports {

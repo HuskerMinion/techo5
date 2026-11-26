@@ -297,3 +297,34 @@ func TestThePublishedFormat2CatalogIsWanted(t *testing.T) {
 		t.Errorf("nothing published yet: %v", err)
 	}
 }
+
+// An add-on that speaks the API is checked for what it declares, as a device would, and against the
+// capabilities, commands and entities its entry lists.
+func TestCheckManifestWithTheAPI(t *testing.T) {
+	dir := t.TempDir()
+	bin := `{"url":"https://example.com/x","sha256":"` + strings.Repeat("a", 64) + `","size":1}`
+	entry := write(t, dir, "catalog.json", `{"format":2,"serial":1,"addons":[{"id":"meals","name":"Meals","author":"A",
+	 "summary":"Cooks.","repo":"https://example.com/x","versions":[{"version":"1.0.0","requires":["api1"],"min_techo5":{"show":"v1.7.0"},
+	 "binaries":{"arm":`+bin+`},"ports":[],"root":false,"memory_mb":10,"disk_mb":1,
+	 "api":1,"capabilities":["commands","speak"],"commands":["next"]}]}]}`)
+	man := func(api string) string {
+		return write(t, dir, "addon.json", `{"id":"meals","version":"1.0.0","command":["meals"],"ports":[],"root":false,
+		 "memory_mb":10,`+api+`}`)
+	}
+	var b bytes.Buffer
+	good := `"api":1,"capabilities":["speak","commands"],"commands":[{"name":"next"}]`
+	if err := checkManifest(&b, man(good), entry); err != nil || !strings.Contains(b.String(), "matches its entry") {
+		t.Errorf("a matching manifest: %v, %s", err, b.String())
+	}
+	for name, api := range map[string]string{
+		"another command":     `"api":1,"capabilities":["speak","commands"],"commands":[{"name":"back"}]`,
+		"another capability":  `"api":1,"capabilities":["speak","commands","sound"],"commands":[{"name":"next"}]`,
+		"a bad argument":      `"api":1,"capabilities":["speak","commands"],"commands":[{"name":"next","args":{"n":{"type":"list"}}}]`,
+		"commands without it": `"api":1,"capabilities":["speak"],"commands":[{"name":"next"}]`,
+		"a level unknown":     `"api":3,"capabilities":["speak","commands"],"commands":[{"name":"next"}]`,
+	} {
+		if err := checkManifest(&b, man(api), entry); err == nil {
+			t.Errorf("%s passed", name)
+		}
+	}
+}
