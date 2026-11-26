@@ -176,8 +176,16 @@ func describe(e hass.LiveEntity, name string, precision map[string]int) Tile {
 				t.Value = fmt.Sprintf("On · %d%%", int(math.Round(b/255*100)))
 			}
 		}
-	case "switch", "input_boolean", "fan", "siren", "automation":
+	case "switch", "input_boolean", "siren", "automation":
 		t.Value, t.Tap = onOff(e.State), toggle(domain+".toggle")
+	case "fan":
+		// Worded like a light's brightness: the speed is what a running fan's tile is looked at for,
+		// and its bar already shows it. fanNow has a percentage only while the fan is on, so a fan
+		// that is off reads "Off", and one with no speeds just "On".
+		t.Value, t.Tap = onOff(e.State), toggle("fan.toggle")
+		if n := fanNow(e); n.HasSpeed && n.Percentage > 0 {
+			t.Value = fmt.Sprintf("On · %d%%", int(math.Round(n.Percentage)))
+		}
 	case "cover":
 		t.Value, t.Tap = title(e.State), toggle("cover.toggle")
 		if p, ok := e.Attrs["current_position"].(float64); ok && e.State == "open" && p < 100 {
