@@ -1866,6 +1866,22 @@ func (p *Player) PlayReceived(name string, src PCMSource, rate, channels int) {
 	p.stream.PlayPCM(name, src, rate, channels)
 }
 
+// Speaking is whether a reply or an announcement is sounding now: how something that asked Home
+// Assistant to say words here can tell they have been said.
+func (p *Player) Speaking() bool { return p.speaking.Load() }
+
+// PlayNamed starts url as a track named title, for something that may later act on its own track and
+// no other (an add-on's audio, feature/addonapi): Loaded is title, the same pointer, for as long as that
+// track is the one loaded. It plays once and ends, and is never handed to the music library.
+func (p *Player) PlayNamed(url string, title *Title) {
+	p.ours()
+	p.stream.PlayTitled(url, title)
+}
+
+// Loaded is the title the loaded track was started with, nil when it was given none or nothing is
+// loaded.
+func (p *Player) Loaded() *Title { return p.stream.Title() }
+
 // Receiving names what is being played from a remote, empty when nothing is.
 func (p *Player) Receiving() string { return p.stream.Receiving() }
 

@@ -17,6 +17,10 @@ const (
 	// FromDLNA is a DLNA controller, which anybody on the network can be: the first video from an
 	// address asks on the screen first, unless the controller is on the device itself (FromDevice).
 	FromDLNA
+
+	// FromAddon is an installed add-on granted the media capability (feature/addonapi): the owner agreed
+	// to it on the consent screen, so it never asks on the screen, as play_video does not.
+	FromAddon
 )
 
 // FromDevice is whether a DLNA controller's address is the device's own loopback (127.0.0.0/8, ::1):
