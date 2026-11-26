@@ -296,8 +296,14 @@ So on checkers the daemon replaces them with the reference made in software from
 sends (`echod/internal/lib/echoref`, `echod/internal/hardware/mic/softref_cronos.go`), as athena does
 on the mainline kernel. On the same music the canceller then took 17 dB off 0.6-1.2 kHz and 5 to
 7 dB off 1.2-8 kHz, and the wake word over music was heard 8 times in two minutes where it had been
-heard twice. Cronos and crown read their loopback through what looks like the same FPGA and may have
-the same fault; theirs has not been measured, so they keep the card's loopback.
+heard twice.
+
+Crown has the same fault: a 10 kHz tone played reaches its loopback at 6 kHz and a 13 kHz one at
+3 kHz, while the microphones hear neither, so crown takes the software reference too. With the
+built-in canceller that made no difference to the wake word over music that could be measured, but
+with Amazon's factory ASP as the External ASP the wake word scores over music rose from 0.60-1.00 to
+0.88-1.00. Cronos reads its loopback through what looks like the same FPGA and may have the same
+fault; it has not been measured, so it keeps the card's loopback.
 
 ### Android's audio stack cannot share the devices
 

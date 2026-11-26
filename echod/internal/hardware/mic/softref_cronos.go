@@ -23,9 +23,6 @@ import (
 // took 17 dB off 0.6-1.2 kHz and 5 to 7 dB off 1.2-8 kHz, where the loopback took 0 to 3.5, and with
 // the same music at the same volume the wake word was heard 8 times in two minutes where it had been
 // heard twice.
-//
-// Only checkers: the 2nd gen Show 5 and the Show 8 (crown) read their loopback through what looks
-// like the same FPGA, but nobody has measured theirs.
 
 // delayedCapture is a capture that can say how long ago its newest frame was recorded, and how it is
 // open: the External ASP's native path (native.go) reads the device's format from Config, and gets
@@ -48,7 +45,7 @@ type softRefCapture struct {
 // withSoftRef is c, with the software reference in place of its loopback where the board wants that.
 func withSoftRef(c capture) capture {
 	d, ok := c.(delayedCapture)
-	if !layout.Checkers() || !ok || Refs != 2 {
+	if !(layout.Checkers() || layout.Crown()) || !ok || Refs != 2 {
 		return c
 	}
 	echoref.Use(true)
