@@ -338,10 +338,13 @@ func (f *Feature) sessionEnded(s *session, err error, itself bool) {
 	}
 	shown, dropped, _ := s.numbers()
 	switch {
+	case err != nil && s.req.Origin == FromAddon:
+		slog.Debug("video: could not be played", "id", s.id, "err", err)
 	case err != nil:
-		slog.Warn("video: could not be played", "id", s.id, "err", err)
+		// The decoder's words can carry the address, query and all.
+		slog.Warn("video: could not be played", "id", s.id, "err", strings.ReplaceAll(err.Error(), s.u.String(), Redacted(s.u)))
 	default:
-		slog.Info("video: over", "id", s.id, "by itself", itself, "shown", shown, "dropped", dropped)
+		slog.Log(context.TODO(), s.level(), "video: over", "id", s.id, "by itself", itself, "shown", shown, "dropped", dropped)
 	}
 	if current {
 		f.Changed.Emit(struct{}{})

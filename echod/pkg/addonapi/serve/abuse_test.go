@@ -225,20 +225,27 @@ func TestAHoldOnAClosedConnectionIsRefused(t *testing.T) {
 	}
 }
 
-// media.play is held to once every two seconds, and carrying on is refused in quiet hours.
+// media.play is held to 3 at once and then one every 30 seconds, and carrying on is refused in quiet
+// hours.
 func TestMediaLimits(t *testing.T) {
 	r := newRig(t, everything)
 	r.freeze()
 	c := r.dial()
-	if err := c.PlayMedia(ctx(t), "audio", "http://x/a.mp3", ""); err != nil {
-		t.Fatal(err)
+	for range addonapi.MediaPlayBurst {
+		if err := c.PlayMedia(ctx(t), "audio", "http://x/a.mp3", ""); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := c.PlayMedia(ctx(t), "audio", "http://x/b.mp3", ""); code(err) != addonapi.CodeRateLimited {
-		t.Errorf("a second play at once: %v", err)
+		t.Errorf("a fourth play at once: %v", err)
 	}
-	r.advance(addonapi.MediaPlayEvery)
+	r.advance(addonapi.MediaPlayEvery / 2)
+	if err := c.PlayMedia(ctx(t), "audio", "http://x/b.mp3", ""); code(err) != addonapi.CodeRateLimited {
+		t.Errorf("after 15 seconds: %v", err)
+	}
+	r.advance(addonapi.MediaPlayEvery / 2)
 	if err := c.PlayMedia(ctx(t), "audio", "http://x/b.mp3", ""); err != nil {
-		t.Errorf("after two seconds: %v", err)
+		t.Errorf("after 30 seconds: %v", err)
 	}
 	r.d.mu.Lock()
 	r.d.quiet = true

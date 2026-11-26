@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	neturl "net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -324,7 +325,7 @@ func (m *Stream) drop(t *track) {
 func (m *Stream) play(url string, handOff bool, title *Title, guarded bool) *track {
 	if m == nil {
 		if !guarded {
-			slog.Warn("asked to play media with no speaker", "url", url)
+			slog.Warn("asked to play media with no speaker", "url", safeURL(url))
 		}
 		return nil
 	}
@@ -336,7 +337,7 @@ func (m *Stream) play(url string, handOff bool, title *Title, guarded bool) *tra
 	if guarded {
 		slog.Debug("playing media for a program on the device", "live", live)
 	} else {
-		slog.Info("playing media", "url", url, "live", live)
+		slog.Info("playing media", "url", safeURL(url), "live", live)
 	}
 
 	safe.Go("media", func() {
@@ -364,7 +365,12 @@ func (m *Stream) play(url string, handOff bool, title *Title, guarded bool) *tra
 			}
 		}
 		if err != nil && ctx.Err() == nil {
-			slog.Error("playing media failed", "err", err)
+			// Go's errors carry the address, query and all; an add-on's is not said at all but at Debug.
+			if t.guarded {
+				slog.Debug("media of a program on the device failed")
+			} else {
+				slog.Error("playing media failed", "err", safeErr(err, url))
+			}
 			t.failed = err
 			if t.handOff && m.handOff != nil && IsUnplayable(err) {
 				wanted := func() bool {
@@ -725,7 +731,11 @@ func (m *Stream) finished(t *track, itself bool) {
 
 	m.bg.Gave(m)
 
-	slog.Info("media finished", "item", t.item, "by itself", itself)
+	if t.guarded {
+		slog.Debug("media of a program on the device finished", "by itself", itself)
+	} else {
+		slog.Info("media finished", "item", safeURL(t.item), "by itself", itself)
+	}
 	if itself && t.item != "" && len(t.sounds) == 0 && m.ended != nil {
 		m.ended(t.item)
 	}
@@ -1052,4 +1062,27 @@ func supported(fmtChunk []byte) error {
 		return fmt.Errorf("cannot play %d Hz %d channel %d bit audio", rate, channels, bits)
 	}
 	return nil
+}
+
+// safeURL is a media address as the log says it: without a login, a query or a fragment, where a
+// token or a password is carried. Anything that is not an address (a sound's name) is as it is.
+func safeURL(raw string) string {
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	u.User = nil
+	if u.RawQuery != "" {
+		u.RawQuery = "…"
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
+// safeErr is err's words with the address in them said as safeURL says it.
+func safeErr(err error, raw string) string {
+	if raw == "" {
+		return err.Error()
+	}
+	return strings.ReplaceAll(err.Error(), raw, safeURL(raw))
 }

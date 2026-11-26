@@ -246,7 +246,7 @@ already costs nothing and is not sent on. States are not saved: set them again a
 `media.play` `{"url": "https://…", "kind": "video", "title": "Step 3"}` plays a video full screen (not
 on a Dot: `unavailable`), or with `"kind": "audio"` audio on the speaker, from an http or https
 address, never from the device itself, loopback or link-local, whatever the name resolves to. At most
-one every 2 seconds. `media.pause`, `media.resume` and `media.stop` act on what the add-on started,
+3 at once, then one every 30 seconds. `media.pause`, `media.resume` and `media.stop` act on what the add-on started,
 while it is still what plays, and on nothing else (`bad_request`). `media.play` and `media.resume` are
 `busy` in quiet hours.
 

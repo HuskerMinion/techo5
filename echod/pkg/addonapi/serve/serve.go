@@ -220,7 +220,7 @@ func (s *Server) Open(g Grant) (string, error) {
 		events:  bucket{rate: addonapi.EventsPerSecond, burst: addonapi.EventsPerSecond},
 		states:  bucket{rate: addonapi.StatesPerSecond, burst: addonapi.StatesPerSecond},
 		timerOp: bucket{rate: 1 / addonapi.TimerOpEvery.Seconds(), burst: addonapi.TimerOpBurst},
-		plays:   bucket{rate: 1 / addonapi.MediaPlayEvery.Seconds(), burst: 1},
+		plays:   bucket{rate: 1 / addonapi.MediaPlayEvery.Seconds(), burst: addonapi.MediaPlayBurst},
 		sets:    map[string]*bucket{}, shown: map[string]string{}, holds: map[string]*hold{}, calls: map[uint64]*pending{}}
 	s.mu.Lock()
 	if s.addons == nil {

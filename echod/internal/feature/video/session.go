@@ -211,7 +211,7 @@ func (s *session) play(insecure bool) (error, bool) {
 		s.sound = info.AudioIndex >= 0
 		s.mu.Unlock()
 		fit := FitIn(info, s.screen)
-		slog.Info("video: playing", "id", s.id, "url", Redacted(s.u), "video", info.VideoCodec,
+		slog.Log(context.TODO(), s.level(), "video: playing", "id", s.id, "url", Redacted(s.u), "video", info.VideoCodec,
 			"size", itoa(info.Width)+"x"+itoa(info.Height), "fps", info.FPS, "shown", itoa(fit.W)+"x"+itoa(fit.H),
 			"sound", info.AudioCodec, "silent", !s.sound, "duration", info.Duration.Round(time.Second),
 			"probed in", time.Since(began).Round(time.Millisecond))
@@ -324,7 +324,7 @@ func (s *session) readFrames(r *os.File) error {
 			sh, dr := s.shown-shown, s.dropped-dropped
 			shown, dropped = s.shown, s.dropped
 			s.mu.Unlock()
-			slog.Info("video: playing", "id", s.id, "shown", sh, "dropped", dr, "at", s.clock().Round(100*time.Millisecond),
+			slog.Log(context.TODO(), s.level(), "video: playing", "id", s.id, "shown", sh, "dropped", dr, "at", s.clock().Round(100*time.Millisecond),
 				"fps", float64(sh)/statsEvery.Seconds())
 		default:
 		}
@@ -680,3 +680,12 @@ func (a *soundSource) end() bool {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// level is what a session's lines are said at: Info, but Debug for an add-on's video, which it may
+// start as often as its limit lets it, while the log is on the flash.
+func (s *session) level() slog.Level {
+	if s.req.Origin == FromAddon {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
+}

@@ -288,7 +288,8 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		s.mu.Unlock()
 		if !ok {
 			s.strike(c.a)
-			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "media.play at most once every %v", addonapi.MediaPlayEvery)
+			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "media.play %d at once, then once every %v",
+				addonapi.MediaPlayBurst, addonapi.MediaPlayEvery)
 		}
 		return nil, s.Device.Media(g.ID, req.Op, m)
 

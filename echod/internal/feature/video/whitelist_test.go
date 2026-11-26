@@ -3,6 +3,7 @@
 package video
 
 import (
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -23,5 +24,12 @@ func TestTheDecoderOpensOnlyTheNetwork(t *testing.T) {
 		if i < 0 || args[i+1] != protocols || i > slices.Index(args, "-i") && slices.Index(args, "-i") >= 0 {
 			t.Errorf("the whitelist is not before the input: %q", args)
 		}
+	}
+}
+
+// An add-on's video is not said at Info: it may start them as often as its limit lets it.
+func TestAnAddonsVideoIsSaidAtDebug(t *testing.T) {
+	if (&session{req: Request{Origin: FromAddon}}).level() != slog.LevelDebug || (&session{}).level() != slog.LevelInfo {
+		t.Error("the levels")
 	}
 }

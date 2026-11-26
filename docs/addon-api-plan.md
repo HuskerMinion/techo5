@@ -358,7 +358,7 @@ decisions, with these changes, each made for the reason given:
   once, at start, which left the existing update entities waiting for a restart too); one whose key
   another has is left out rather than failing the link, and an add-on whose names would be another's
   is refused at install.
-- **Media** plays at most once every 2 s; an add-on's audio is fetched with a dialer that refuses the
+- **Media** plays at most 3 at once, then one every 30 s; an add-on's audio is fetched with a dialer that refuses the
   device itself, loopback and link-local; resume is refused in quiet hours too.
 - **`speak.cancel` drops the words still waiting**; the ones being said are stopped by the stop word,
   as any announcement. Words are paced by the device's own sounding state, so the next waits for the

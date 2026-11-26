@@ -1,6 +1,7 @@
 package media
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,21 @@ func TestAnAddonsAudioIsNotFetchedFromTheDevice(t *testing.T) {
 		t.Fatalf("the stations' client: %v", err)
 	}
 	resp.Body.Close()
+}
+
+// A media address is logged without its login, query or fragment, and an error's words with it.
+func TestMediaAddressesAreLoggedSafely(t *testing.T) {
+	raw := "https://user:pw@mealie.local/media/a.mp3?token=s3cret#t=3"
+	if got := safeURL(raw); strings.Contains(got, "s3cret") || strings.Contains(got, "pw") || got != "https://mealie.local/media/a.mp3?…" {
+		t.Errorf("logged as %q", got)
+	}
+	err := errors.New(`Get "` + raw + `": dial tcp: refused`)
+	if got := safeErr(err, raw); strings.Contains(got, "s3cret") {
+		t.Errorf("the error logged as %q", got)
+	}
+	if got := safeURL("rain"); got != "rain" {
+		t.Errorf("a sound's name logged as %q", got)
+	}
 }
 
 // PlayNamed, the add-ons' way to play, plays guarded.

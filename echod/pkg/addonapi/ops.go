@@ -39,8 +39,10 @@ const (
 	// then one every TimerOpEvery.
 	TimerOpBurst = 8
 	TimerOpEvery = 10 * time.Second
-	// MediaPlayEvery is how often an add-on may start media.
-	MediaPlayEvery = 2 * time.Second
+	// MediaPlayBurst and MediaPlayEvery bound media.play: that many at once, then one every
+	// MediaPlayEvery.
+	MediaPlayBurst = 3
+	MediaPlayEvery = 30 * time.Second
 	// MaxURL and MaxTitle bound a media.play.
 	MaxURL   = 2048
 	MaxTitle = 100
