@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"strings"
 )
 
 // Version is the API level this package speaks: stage 1, "api1" in the catalog's requires.
@@ -42,6 +41,8 @@ const (
 	MaxConns = 4
 	// MaxOutstanding is how many requests of one connection may wait for their answers at once.
 	MaxOutstanding = 64
+	// MaxKeys is the most keys one object in a message may have.
+	MaxKeys = 256
 )
 
 // Capabilities an add-on can be granted in stage 1. Each is a line on the consent screen, pinned by
@@ -256,13 +257,16 @@ func checkKeys(b []byte) error {
 			if !ok {
 				return errors.New("an object key is not a string")
 			}
+			// Lowercase ASCII only, so a key in another case is refused here and two alike are the same
+			// string: a map finds them, where comparing each with every other grows with the square.
 			if !keyPattern.MatchString(k) {
 				return fmt.Errorf("the key %q is not lowercase ASCII letters, digits and underscores", k)
 			}
-			for seen := range top.keys {
-				if strings.EqualFold(seen, k) {
-					return fmt.Errorf("the key %q is given twice in one object", k)
-				}
+			if top.keys[k] {
+				return fmt.Errorf("the key %q is given twice in one object", k)
+			}
+			if len(top.keys) >= MaxKeys {
+				return fmt.Errorf("an object has more than %d keys", MaxKeys)
 			}
 			top.keys[k] = true
 			top.key = false
