@@ -76,7 +76,7 @@ Each is one line on the consent screen, word for word:
 | `keepawake` | Keeps the screen on while you use it. | `awake.hold`, `awake.renew`, `awake.release` |
 | `settings` | Has settings of its own on this page. | `settings.get`, `settings.reply` |
 | `entities` | Adds entities to Home Assistant: *sensor.step*. | `entity.set` |
-| `media` | Plays video and audio from the network on this device. | `media.play`, `media.pause`, `media.resume`, `media.stop` |
+| `media` | Plays video and audio from the network on this device. | `media.play`, `media.pause`, `media.resume`, `media.stop`, `media.status` |
 
 `commands`, `settings` and `entities` are declared in `addon.json` exactly when their capability is
 listed.
@@ -246,9 +246,16 @@ already costs nothing and is not sent on. States are not saved: set them again a
 `media.play` `{"url": "https://…", "kind": "video", "title": "Step 3"}` plays a video full screen (not
 on a Dot: `unavailable`), or with `"kind": "audio"` audio on the speaker, from an http or https
 address, never from the device itself, loopback or link-local, whatever the name resolves to. At most
-3 at once, then one every 30 seconds. `media.pause`, `media.resume` and `media.stop` act on what the add-on started,
+3 at once, then one every 30 seconds. It answers `{"media": "7"}`, the id the `media.state` events of
+what it started carry. `media.pause`, `media.resume` and `media.stop` act on what the add-on started,
 while it is still what plays, and on nothing else (`bad_request`). `media.play` and `media.resume` are
 `busy` in quiet hours.
+
+### media.status
+
+Answers what the add-on's latest media is doing, as a `media.state` event says it: the latest it
+started that still plays, else how the latest ended, else `{"state": "idle"}` when it has started
+nothing since the daemon started. It never says anything about media the add-on did not start.
 
 ## Events
 
@@ -274,6 +281,34 @@ follows.
 
 `{"call": 4, "values": {…}}`: the owner pressed Test, with these values in the form (a secret left
 empty is the one saved). Nothing is saved. Answer with `settings.reply` within 10 seconds.
+
+### media.state
+
+What media the add-on started is doing, sent as it changes, with the `media` capability. It is only
+ever about the add-on's own media: never about what else plays, and an add-on whose media something
+else replaced is told `replaced`, not by what.
+
+```json
+{"media": "7", "kind": "video", "state": "playing", "position_ms": 754000, "duration_ms": 7260000}
+{"media": "7", "kind": "video", "state": "stopped", "reason": "device", "position_ms": 761000}
+```
+
+| Field | Means |
+| --- | --- |
+| `media` | `media.play`'s id for it |
+| `kind` | `video` or `audio` |
+| `state` | `buffering` (started, or moved through, and not yet seen or heard), `playing`, `paused`, or `stopped` |
+| `reason` | with `stopped`: `ended` (played to its end), `device` (stopped on the device: its Stop button, the stop word, Home Assistant, the sleep timer, the Video switch), `replaced` (by the add-on's own next `media.play` of that kind, or by anything else), `error` (could not be fetched or played), `addon` (the add-on's own `media.stop`) |
+| `position_ms` | how far into it the device is, in milliseconds, when it can tell |
+| `duration_ms` | how long it is, when it says: a video that has a length; audio and live streams have none |
+
+A change of state is sent within half a second, changes that come together as one event (the latest),
+so at most two a second besides each media's end. While it plays, its position is sent at most every
+10 seconds, and not at all while it is paused. Its end, `stopped`, is sent once, at once, and nothing
+of that media after it: an add-on whose next `media.play` replaced its last hears of that end before
+anything of the next. A video paused because something covers it (a call, a ring) is `paused`, and
+`playing` again when it carries on. The events go to every connection that has said hello; one that
+connects later asks `media.status`.
 
 ### entity.command
 
@@ -306,7 +341,8 @@ and it calls `addon_command`.
 
 The daemon writes nothing per message, and logs nothing per message or connection. The socket is on
 `/run`, in RAM. An add-on's settings are written to `/data/techo5-addons/<id>/settings.json` (root's,
-`0600`) only when Save changes them. Its timers, queues, holds and entity states are in memory only.
+`0600`) only when Save changes them. Its timers, queues, holds, entity states and what its media is
+doing are in memory only; nothing about `media.state` is logged above Debug.
 
 ## The fake daemon
 
@@ -320,3 +356,13 @@ not as root), grants every capability the manifest lists, logs every request and
 done, and takes from the keyboard what a device would send: `command NAME [JSON]`, `press NAME`,
 `entity ID JSON`, `push ID`, `settings JSON`, `test [JSON]`, `stop` and `quit`. `-settings values.json`
 gives it settings to start with, and `-family spot` or `dot` changes the device hello describes.
+
+Media the add-on plays buffers for a second and then plays, its position moving on as a device's
+does, and `media.state` is sent with the device's own timing. From the keyboard, `media playing`,
+`media paused` or `media buffering`, each with a position in seconds if wanted, `media duration
+SECONDS`, and an end, `media ended`, `media device`, `media replaced` or `media error`, say what it
+does next.
+
+In Go, `Client.StartMedia` answers the media's id, `Client.MediaStatus` asks `media.status`, and
+`Client.WatchMedia` has `media.state` events arrive decoded on a channel of their own instead of on
+`Events`.

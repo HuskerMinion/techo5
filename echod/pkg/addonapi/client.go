@@ -26,6 +26,9 @@ type Client struct {
 
 	events chan Event
 	done   chan struct{}
+
+	// media, once WatchMedia has made it, is where media.state events go instead of events.
+	media chan MediaState
 }
 
 // ErrClosed is a request on a connection that has ended.
@@ -93,6 +96,11 @@ func (c *Client) read() {
 			close(ch)
 			delete(c.pending, id)
 		}
+		// Under mu, with err set, so a WatchMedia after this finds the connection over and closes its
+		// own.
+		if c.media != nil {
+			close(c.media)
+		}
 		c.mu.Unlock()
 		close(c.events)
 		close(c.done)
@@ -108,6 +116,16 @@ func (c *Client) read() {
 			return
 		}
 		if f.Event != "" {
+			c.mu.Lock()
+			media := c.media
+			c.mu.Unlock()
+			if media != nil && f.Event == EventMediaState {
+				var st MediaState
+				if err := json.Unmarshal(f.Data, &st); err == nil {
+					media <- st
+					continue
+				}
+			}
 			c.events <- Event{Event: f.Event, Data: f.Data}
 			continue
 		}
@@ -273,7 +291,38 @@ func (c *Client) SetEntity(ctx context.Context, id string, state any) error {
 
 // PlayMedia plays a video (MediaVideo) or audio (MediaAudio) from an http(s) address.
 func (c *Client) PlayMedia(ctx context.Context, kind, url, title string) error {
-	return c.Call(ctx, OpMediaPlay, MediaPlay{URL: url, Kind: kind, Title: title}, nil)
+	_, err := c.StartMedia(ctx, kind, url, title)
+	return err
+}
+
+// StartMedia is PlayMedia, answering the id the media.state events of what it started carry.
+func (c *Client) StartMedia(ctx context.Context, kind, url, title string) (string, error) {
+	var m MediaStarted
+	err := c.Call(ctx, OpMediaPlay, MediaPlay{URL: url, Kind: kind, Title: title}, &m)
+	return m.Media, err
+}
+
+// MediaStatus is what the add-on's latest media is doing now: State MediaIdle when it has started none.
+func (c *Client) MediaStatus(ctx context.Context) (MediaState, error) {
+	var m MediaState
+	err := c.Call(ctx, OpMediaStatus, None{}, &m)
+	return m, err
+}
+
+// WatchMedia has media.state events, which say what the media the add-on started is doing, arrive on
+// the channel it returns rather than on Events, decoded; it is closed when the connection ends. Like
+// Events, an add-on that leaves it unread holds up everything the daemon sends, answers included, and
+// is disconnected once the daemon's queue for it is full. Asked again, it returns the same channel.
+func (c *Client) WatchMedia() <-chan MediaState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.media == nil {
+		c.media = make(chan MediaState, 16)
+		if c.err != nil {
+			close(c.media) // ended already, and nothing else would close it
+		}
+	}
+	return c.media
 }
 
 // PauseMedia, ResumeMedia and StopMedia act on what the add-on is playing, and on nothing else.

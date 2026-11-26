@@ -2,7 +2,8 @@
 // it serves an add-on's socket with the daemon's own server (pkg/addonapi/serve), so the framing, the
 // peer check, the limits and every capability's refusal are the device's, and logs what each request
 // would have done instead of doing it. From the keyboard it sends the add-on what a device would: a
-// command from Home Assistant, a button press, a timer ringing, new settings, a settings test.
+// command from Home Assistant, a button press, a timer ringing, new settings, a settings test, and what
+// the media it started is doing (media.state).
 //
 //	techo5-addon-fake -manifest addon.json [-settings values.json] [-socket path] [-- program args...]
 //
@@ -124,6 +125,13 @@ type fake struct {
 	timers   map[string]*fakeTimer
 	next     int
 	settings map[string]any
+
+	// The add-on's latest media, as the fake plays it: its state, and its position as of posAt, which
+	// moves on while it plays, as a device's does.
+	mediaSeq int
+	media    addonapi.MediaState
+	pos      time.Duration
+	posAt    time.Time
 }
 
 type fakeTimer struct {
@@ -249,13 +257,155 @@ func (d *fake) SetEntity(id string, e addonapi.Entity, state any) error {
 	return nil
 }
 
-func (d *fake) Media(id, op string, p addonapi.MediaPlay) error {
+// fakeBuffers is how long the fake's media takes to start playing.
+var fakeBuffers = time.Second
+
+func (d *fake) Media(id, op string, p addonapi.MediaPlay) (string, error) {
 	if op == addonapi.OpMediaPlay {
-		d.say("plays %s %s (%q)", p.Kind, p.URL, p.Title)
-		return nil
+		d.mu.Lock()
+		prev := d.endLocked(addonapi.MediaReplaced)
+		d.mediaSeq++
+		media := fmt.Sprint(d.mediaSeq)
+		d.media, d.pos, d.posAt = addonapi.MediaState{Media: media, Kind: p.Kind, State: addonapi.MediaBuffering}, 0, time.Now()
+		d.mu.Unlock()
+		if prev != nil {
+			d.srv.MediaEnded(d.id, *prev)
+		}
+		d.say("plays %s %s (%q) as media %s; it buffers for %v, then plays (type help for media)", p.Kind, p.URL, p.Title, media, fakeBuffers)
+		time.AfterFunc(fakeBuffers, func() {
+			d.mu.Lock()
+			now := d.media.Media == media && d.media.State == addonapi.MediaBuffering
+			if now {
+				d.setLocked(addonapi.MediaPlaying, -1)
+			}
+			d.mu.Unlock()
+			if now {
+				d.srv.MediaChanged(d.id)
+			}
+		})
+		return media, nil
+	}
+	d.mu.Lock()
+	on := d.media.Media != "" && d.media.State != addonapi.MediaStopped
+	var end *addonapi.MediaState
+	if on {
+		switch op {
+		case addonapi.OpMediaPause:
+			d.setLocked(addonapi.MediaPaused, -1)
+		case addonapi.OpMediaResume:
+			d.setLocked(addonapi.MediaPlaying, -1)
+		case addonapi.OpMediaStop:
+			end = d.endLocked(addonapi.MediaStoppedByAddon)
+		}
+	}
+	d.mu.Unlock()
+	if !on {
+		return "", addonapi.Errorf(addonapi.CodeBadRequest, "nothing the add-on started is playing")
+	}
+	if end != nil {
+		d.srv.MediaEnded(d.id, *end)
 	}
 	d.say("%s", strings.TrimPrefix(op, "media."))
-	return nil
+	return "", nil
+}
+
+// setLocked moves the media to state, and its position to pos when that is not negative.
+func (d *fake) setLocked(state string, pos time.Duration) {
+	d.pos = d.positionLocked()
+	if pos >= 0 {
+		d.pos = pos
+	}
+	d.posAt = time.Now()
+	d.media.State = state
+}
+
+// positionLocked is where the media is now: it moves on only while it plays.
+func (d *fake) positionLocked() time.Duration {
+	if d.media.State == addonapi.MediaPlaying {
+		return d.pos + time.Since(d.posAt)
+	}
+	return d.pos
+}
+
+// endLocked ends the media for reason, when one is on, and answers its end to tell the add-on.
+func (d *fake) endLocked(reason string) *addonapi.MediaState {
+	if d.media.Media == "" || d.media.State == addonapi.MediaStopped {
+		return nil
+	}
+	d.setLocked(addonapi.MediaStopped, -1)
+	d.media.Reason = reason
+	st := d.statusLocked()
+	return &st
+}
+
+func (d *fake) statusLocked() addonapi.MediaState {
+	if d.media.Media == "" {
+		return addonapi.MediaState{State: addonapi.MediaIdle}
+	}
+	st := d.media
+	st.PositionMs = addonapi.Ms(d.positionLocked())
+	return st
+}
+
+func (d *fake) MediaStatus(string) addonapi.MediaState {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.statusLocked()
+}
+
+// mediaKeys is the keyboard's media command: what the add-on's media does on the device.
+func (d *fake) mediaKeys(rest string) {
+	verb, arg, _ := strings.Cut(rest, " ")
+	arg = strings.TrimSpace(arg)
+	secs := func() (time.Duration, bool) {
+		if arg == "" {
+			return -1, true
+		}
+		var f float64
+		if _, err := fmt.Sscan(arg, &f); err != nil || f < 0 {
+			d.say("media %s takes a number of seconds", verb)
+			return 0, false
+		}
+		return time.Duration(f * float64(time.Second)), true
+	}
+	d.mu.Lock()
+	if d.media.Media == "" || d.media.State == addonapi.MediaStopped {
+		d.mu.Unlock()
+		d.say("the add-on has no media playing; it starts some with media.play")
+		return
+	}
+	d.mu.Unlock()
+	switch verb {
+	case addonapi.MediaPlaying, addonapi.MediaPaused, addonapi.MediaBuffering:
+		at, ok := secs()
+		if !ok {
+			return
+		}
+		d.mu.Lock()
+		d.setLocked(verb, at)
+		d.mu.Unlock()
+		d.srv.MediaChanged(d.id)
+	case "duration":
+		at, ok := secs()
+		if !ok || at < 0 {
+			return
+		}
+		d.mu.Lock()
+		d.media.DurationMs = addonapi.Ms(at)
+		d.mu.Unlock()
+		d.srv.MediaChanged(d.id)
+	case addonapi.MediaEnded, addonapi.MediaStoppedOnDevice, addonapi.MediaReplaced, addonapi.MediaError:
+		d.mu.Lock()
+		end := d.endLocked(verb)
+		d.mu.Unlock()
+		if end != nil {
+			d.srv.MediaEnded(d.id, *end)
+		}
+	default:
+		d.say("media takes playing, paused or buffering [SECONDS], duration SECONDS, or an end: ended, device, replaced, error")
+		return
+	}
+	d.say("the media is now %s", verb)
 }
 
 const help = `the keyboard's commands:
@@ -266,6 +416,9 @@ const help = `the keyboard's commands:
   settings JSON         the setup page saves these settings
   test [JSON]           the setup page's Test, with these values (or the ones saved)
   stop                  the stop word: stops every timer ringing
+  media STATE [SECONDS] the add-on's media is playing, paused or buffering (at SECONDS in), as media.state says
+  media duration SECONDS the add-on's media says how long it is
+  media REASON          the add-on's media ends: ended, device (the Stop button), replaced (other media), error
   quit                  stop serving`
 
 // keyboard reads what to send the add-on, a line at a time.
@@ -343,6 +496,8 @@ func (d *fake) keyboard(in io.Reader, m catalog.Manifest) error {
 			default:
 				d.say("the add-on says the settings do not work: %s", why)
 			}
+		case "media":
+			d.mediaKeys(rest)
 		case "stop":
 			d.mu.Lock()
 			var rung []addonapi.TimerEvent

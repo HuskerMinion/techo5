@@ -353,7 +353,7 @@ func eventuallyTrue(t *testing.T, what string, ok func() bool) {
 func TestAddonAudioIsNotFromTheDevice(t *testing.T) {
 	d := &device{host: newHostRig(t).h}
 	for _, u := range []string{"http://127.0.0.1:8181/x.mp3", "http://[::1]/x.mp3", "http://169.254.1.1/x", "http://a b/x"} {
-		if err := d.Media("meals", addonapi.OpMediaPlay, addonapi.MediaPlay{URL: u, Kind: addonapi.MediaAudio}); addonapi.CodeOf(err) != addonapi.CodeBadRequest {
+		if _, err := d.Media("meals", addonapi.OpMediaPlay, addonapi.MediaPlay{URL: u, Kind: addonapi.MediaAudio}); addonapi.CodeOf(err) != addonapi.CodeBadRequest {
 			t.Errorf("%s: %v", u, err)
 		}
 	}

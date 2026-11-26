@@ -102,8 +102,12 @@ type Device interface {
 	// SetEntity sets one of the add-on's entities, checked against its declaration.
 	SetEntity(id string, e addonapi.Entity, state any) error
 	// Media plays (op media.play, with p), pauses, resumes or stops the add-on's video or audio, and
-	// only its own.
-	Media(id, op string, p addonapi.MediaPlay) error
+	// only its own. A play answers the id its media.state events carry.
+	Media(id, op string, p addonapi.MediaPlay) (string, error)
+	// MediaStatus is what the add-on's latest media is doing: State idle when it started none. It is
+	// about the add-on's own media only, never what else plays. The device tells the server when it may
+	// have changed (MediaChanged) and when it ends (MediaEnded).
+	MediaStatus(id string) addonapi.MediaState
 }
 
 // Server serves every running add-on's socket.
@@ -166,6 +170,8 @@ type addon struct {
 	holds    map[string]*hold
 	calls    map[uint64]*pending
 	nextCall uint64
+
+	media mediaWatch
 }
 
 // pending is a call waiting for the add-on's reply: a command's, or a settings test's, which is
@@ -250,6 +256,7 @@ func (s *Server) Close(id string) {
 		return
 	}
 	a.cancel()
+	s.mediaClose(a)
 	a.ln.Close()
 	for _, c := range conns {
 		c.close()

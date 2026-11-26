@@ -39,6 +39,7 @@ var needs = map[string]string{
 	addonapi.OpMediaPause:    addonapi.CapMedia,
 	addonapi.OpMediaResume:   addonapi.CapMedia,
 	addonapi.OpMediaStop:     addonapi.CapMedia,
+	addonapi.OpMediaStatus:   addonapi.CapMedia,
 }
 
 func bad(format string, a ...any) error {
@@ -291,7 +292,18 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "media.play %d at once, then once every %v",
 				addonapi.MediaPlayBurst, addonapi.MediaPlayEvery)
 		}
-		return nil, s.Device.Media(g.ID, req.Op, m)
+		media, err := s.Device.Media(g.ID, req.Op, m)
+		if err != nil {
+			return nil, err
+		}
+		s.MediaChanged(g.ID)
+		return addonapi.MediaStarted{Media: media}, nil
+
+	case addonapi.OpMediaStatus:
+		if err := args(req, &addonapi.None{}); err != nil {
+			return nil, err
+		}
+		return s.Device.MediaStatus(g.ID), nil
 
 	case addonapi.OpMediaPause, addonapi.OpMediaResume, addonapi.OpMediaStop:
 		if err := args(req, &addonapi.None{}); err != nil {
@@ -302,7 +314,11 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		if req.Op == addonapi.OpMediaResume && s.Device.Quiet() {
 			return nil, addonapi.Errorf(addonapi.CodeBusy, "it is quiet hours on this device")
 		}
-		return nil, s.Device.Media(g.ID, req.Op, addonapi.MediaPlay{})
+		if _, err := s.Device.Media(g.ID, req.Op, addonapi.MediaPlay{}); err != nil {
+			return nil, err
+		}
+		s.MediaChanged(g.ID)
+		return nil, nil
 	}
 	return nil, addonapi.Errorf(addonapi.CodeUnknownOp, "there is no op %q at API level %d", req.Op, addonapi.Version)
 }

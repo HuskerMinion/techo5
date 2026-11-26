@@ -360,6 +360,15 @@ decisions, with these changes, each made for the reason given:
   is refused at install.
 - **Media** plays at most 3 at once, then one every 30 s; an add-on's audio is fetched with a dialer that refuses the
   device itself, loopback and link-local; resume is refused in quiet hours too.
+- **`media.state` and `media.status`**, under `media`, with no line of their own: an add-on that plays
+  a film could not tell what the player was doing, so one stopped with the device's own Stop button
+  went on counting as watched (the Plex add-on). The daemon tells it what its own media does (buffering,
+  playing, paused, stopped with a reason: ended, device, replaced, error, addon), with the position and
+  length when known, and `media.status` answers the same. Only its own media, never what else plays or
+  what replaced it: telling one add-on what the room plays would be a capability of its own. Changes are
+  gathered for half a second, a playing position said at most every 10 s, each end once, all in
+  memory and nothing logged above Debug. `media.play` answers the media's id, which each event carries,
+  so an add-on whose next play replaced its last can tell the two apart.
 - **`speak.cancel` drops the words still waiting**; the ones being said are stopped by the stop word,
   as any announcement. Words are paced by the device's own sounding state, so the next waits for the
   last to be heard (at most a minute; 10 seconds when nothing sounds at all).

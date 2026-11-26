@@ -46,6 +46,14 @@ const (
 	// MaxURL and MaxTitle bound a media.play.
 	MaxURL   = 2048
 	MaxTitle = 100
+	// MediaPositionEvery is the most often a media.state event says only that the position moved:
+	// a change of state is said at once (within MediaCoalesce), a playing track's position at most this
+	// often.
+	MediaPositionEvery = 10 * time.Second
+	// MediaCoalesce is how long changes to an add-on's media are gathered before the latest is said, so
+	// a burst of them (loading, playing, paused) costs one event: at most two a second, besides the one
+	// end each media.play has.
+	MediaCoalesce = 500 * time.Millisecond
 )
 
 // Sounds are the fixed set sound.play plays by name.
@@ -160,6 +168,74 @@ type MediaPlay struct {
 	URL   string `json:"url"`
 	Kind  string `json:"kind"`
 	Title string `json:"title,omitempty"`
+}
+
+// MediaStarted is media.play's answer: the id the media.state events of what it started carry.
+type MediaStarted struct {
+	Media string `json:"media"`
+}
+
+// Media states a media.state event and media.status say.
+const (
+	// MediaIdle is media.status for an add-on that has started nothing since the daemon started.
+	MediaIdle = "idle"
+	// MediaBuffering is media started, or moved through, whose picture or sound has not arrived yet.
+	MediaBuffering = "buffering"
+	MediaPlaying   = "playing"
+	MediaPaused    = "paused"
+	// MediaStopped is media that is over, for the Reason given. Nothing follows it for that media.
+	MediaStopped = "stopped"
+)
+
+// Reasons a media.state that says MediaStopped gives.
+const (
+	// MediaEnded is media that played to its end.
+	MediaEnded = "ended"
+	// MediaStoppedOnDevice is media stopped on the device: its Stop button, the stop word, Home
+	// Assistant, the sleep timer, the Video switch turned off.
+	MediaStoppedOnDevice = "device"
+	// MediaReplaced is media something else was played in place of: the add-on's own next media.play,
+	// or anything else, which the add-on is not told about.
+	MediaReplaced = "replaced"
+	// MediaError is media that could not be fetched or played.
+	MediaError = "error"
+	// MediaStoppedByAddon is media the add-on stopped itself (media.stop).
+	MediaStoppedByAddon = "addon"
+)
+
+// MediaState is what media an add-on started is doing: a media.state event's data, and media.status's
+// answer. It is only ever about media the add-on started itself.
+type MediaState struct {
+	// Media is media.play's id for it; empty with State idle.
+	Media string `json:"media,omitempty"`
+	// Kind is MediaVideo or MediaAudio.
+	Kind  string `json:"kind,omitempty"`
+	State string `json:"state"`
+	// Reason is why, with State stopped.
+	Reason string `json:"reason,omitempty"`
+	// PositionMs is how far into it the device is, in milliseconds; DurationMs how long it is. Each is
+	// left out when the device cannot tell: audio says no length, and a live stream none either.
+	PositionMs *int64 `json:"position_ms,omitempty"`
+	DurationMs *int64 `json:"duration_ms,omitempty"`
+}
+
+// Position is PositionMs as a duration, and whether it is known.
+func (m MediaState) Position() (time.Duration, bool) { return msOf(m.PositionMs) }
+
+// Duration is DurationMs as a duration, and whether it is known.
+func (m MediaState) Duration() (time.Duration, bool) { return msOf(m.DurationMs) }
+
+func msOf(p *int64) (time.Duration, bool) {
+	if p == nil {
+		return 0, false
+	}
+	return time.Duration(*p) * time.Millisecond, true
+}
+
+// Ms is d as a MediaState's milliseconds.
+func Ms(d time.Duration) *int64 {
+	v := d.Milliseconds()
+	return &v
 }
 
 // None is the arguments of an op that takes none, and the result of one that says nothing.

@@ -84,6 +84,7 @@ const (
 	OpMediaPause    = "media.pause"
 	OpMediaResume   = "media.resume"
 	OpMediaStop     = "media.stop"
+	OpMediaStatus   = "media.status"
 )
 
 // Events the daemon sends.
@@ -93,6 +94,7 @@ const (
 	EventSettings      = "settings"
 	EventSettingsTest  = "settings.test"
 	EventEntityCommand = "entity.command"
+	EventMediaState    = "media.state"
 )
 
 // Error codes, a fixed set.

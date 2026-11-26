@@ -32,6 +32,8 @@ type fakeDevice struct {
 	entities  map[string]any
 	media     []string
 	settings  map[string]any
+	status    addonapi.MediaState
+	plays     int
 
 	failEntity error
 	timerDelay time.Duration
@@ -121,11 +123,25 @@ func (d *fakeDevice) SetEntity(id string, e addonapi.Entity, state any) error {
 	d.entities[e.ID] = state
 	return nil
 }
-func (d *fakeDevice) Media(id, op string, p addonapi.MediaPlay) error {
+func (d *fakeDevice) Media(id, op string, p addonapi.MediaPlay) (string, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.media = append(d.media, op+" "+p.Kind+" "+p.URL)
-	return nil
+	if op != addonapi.OpMediaPlay {
+		return "", nil
+	}
+	d.plays++
+	media := fmt.Sprint(d.plays)
+	d.status = addonapi.MediaState{Media: media, Kind: p.Kind, State: addonapi.MediaBuffering}
+	return media, nil
+}
+func (d *fakeDevice) MediaStatus(string) addonapi.MediaState {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.status.State == "" {
+		return addonapi.MediaState{State: addonapi.MediaIdle}
+	}
+	return d.status
 }
 
 func (d *fakeDevice) awakeNow() (bool, int) {
@@ -388,6 +404,7 @@ func TestCapabilityDenied(t *testing.T) {
 		addonapi.OpEntitySet:    addonapi.EntitySet{ID: "step", State: "x"},
 		addonapi.OpEventFire:    addonapi.Fire{Name: "x"},
 		addonapi.OpMediaPlay:    addonapi.MediaPlay{URL: "http://x/a.mp4", Kind: "video"},
+		addonapi.OpMediaStatus:  addonapi.None{},
 		addonapi.OpCommandReply: addonapi.CommandReply{Call: 1},
 	} {
 		if err := c.Call(ctx(t), op, a, nil); code(err) != addonapi.CodeDenied {

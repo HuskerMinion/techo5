@@ -2,8 +2,6 @@ package addonhost
 
 import (
 	"context"
-	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -14,11 +12,9 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/feature/media"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/remind"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
-	"github.com/HuskerMinion/techo5/echod/internal/feature/video"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
-	"github.com/HuskerMinion/techo5/echod/internal/lib/netguard"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
@@ -26,9 +22,15 @@ import (
 type device struct {
 	host *Host
 
+	// play is the players an add-on's media plays on: the device's own (devicePlayers) unless a test
+	// gives its own.
+	play   players
+	listen sync.Once // the players' hooks, listened to from an add-on's first media.play
+
 	mu    sync.Mutex
-	video map[string]uint64       // the video each add-on started, by add-on
-	audio map[string]*media.Title // the track each add-on started, by add-on
+	seq   uint64             // media ids, which media.state carries
+	video map[string]*played // the video each add-on started last, by add-on
+	audio map[string]*played // the track each add-on started last, by add-on
 }
 
 // AddonEvent is the event an add-on's event.fire puts on Home Assistant's bus.
@@ -215,80 +217,4 @@ func (d *device) SetEntity(id string, e addonapi.Entity, state any) error {
 		return addonapi.Errorf(addonapi.CodeUnavailable, "the add-on's entities are not in Home Assistant yet")
 	}
 	return ents.set(e.ID, state)
-}
-
-// Media plays the add-on's video or audio, and pauses, resumes or stops only what it started: what
-// somebody else put on since is not the add-on's to touch.
-func (d *device) Media(id, op string, p addonapi.MediaPlay) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.video == nil {
-		d.video, d.audio = map[string]uint64{}, map[string]*media.Title{}
-	}
-	if op == addonapi.OpMediaPlay {
-		name := id
-		if n, ok := d.host.names()[id]; ok {
-			name = n
-		}
-		switch p.Kind {
-		case addonapi.MediaVideo:
-			vid, err := video.Play(video.Request{URL: p.URL, Title: p.Title, Origin: video.FromAddon})
-			if err != nil {
-				return asAPIError(addonapi.CodeUnavailable, err)
-			}
-			d.video[id] = vid
-		default:
-			// The address is held to what a video's is (no control characters, http or https, a host),
-			// and one that names the device or loopback by number is refused here; a name is refused as it
-			// is dialed (media.PlayNamed, guarded).
-			u, err := video.CheckURL(p.URL)
-			if err != nil {
-				return addonapi.Errorf(addonapi.CodeBadRequest, "%v", err)
-			}
-			if ip := net.ParseIP(strings.Trim(u.Hostname(), "[]")); ip != nil && netguard.Refused(ip) {
-				return addonapi.Errorf(addonapi.CodeBadRequest, "media is not played from the device itself")
-			}
-			t := &media.Title{Title: p.Title, Source: name}
-			media.Get().PlayNamed(p.URL, t)
-			d.audio[id] = t
-		}
-		return nil
-	}
-	if vid, ok := d.video[id]; ok {
-		if st := video.Current(); st.Active() && st.ID == vid {
-			switch op {
-			case addonapi.OpMediaPause:
-				video.Pause()
-			case addonapi.OpMediaResume:
-				video.Resume()
-			case addonapi.OpMediaStop:
-				video.StopID(vid)
-				delete(d.video, id)
-			}
-			return nil
-		}
-		delete(d.video, id)
-	}
-	if t, ok := d.audio[id]; ok {
-		p := media.Get()
-		if p.Loaded() == t {
-			switch op {
-			case addonapi.OpMediaPause:
-				p.Pause()
-			case addonapi.OpMediaResume:
-				p.Resume()
-			case addonapi.OpMediaStop:
-				p.Stop()
-				delete(d.audio, id)
-			}
-			return nil
-		}
-		delete(d.audio, id)
-	}
-	return addonapi.Errorf(addonapi.CodeBadRequest, "nothing the add-on started is playing")
-}
-
-// forget drops what a removed add-on was playing, and stops it.
-func (d *device) forget(id string) {
-	_ = d.Media(id, addonapi.OpMediaStop, addonapi.MediaPlay{})
 }
