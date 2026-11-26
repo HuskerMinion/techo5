@@ -1624,8 +1624,9 @@ doesn't change it, and the remote API can read it but not change it.
 With the wake word first, a ringing alarm or timer stops when what's heard is a stop and nothing
 else: "stop", "turn off the timer", "stop the alarm, please", or the same in the screen's languages
 and in Portuguese, Russian and Hebrew ("Stopp", "Wecker aus", "apaga la alarma", "arrête l'alarme",
-"выключи будильник"). A sentence with anything more in it ("stop the music") goes to Home Assistant
-as any other.
+"выключи будильник"). The ring ending is the answer: the request ends there, quietly, and Home
+Assistant's reply to it isn't played, even when the stop word heard the "stop" and ended the ring
+first. A sentence with anything more in it ("stop the music") goes to Home Assistant as any other.
 
 **What was said, in Home Assistant.** The **Last wake word**, **Last heard** and **Last reply**
 sensors say which wake word started the last request, what the device heard and what it answered,

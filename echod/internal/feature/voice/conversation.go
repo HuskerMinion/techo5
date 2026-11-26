@@ -245,6 +245,12 @@ type conversation struct {
 	// not followed by listening again: the listening screen would cover the page asked for.
 	lookHere bool
 
+	// overRing says an alarm or timer was ringing when this turn opened: the wake word was said at it,
+	// and silenced it (Voice.open, answerHeard). It is kept for the turn, because the ring can end
+	// before the transcript comes (the stop word heard in the same "stop", #754), and a stop said to a
+	// ring is answered by the ring ending, whenever that was.
+	overRing bool
+
 	// closing says what was heard was only a way of ending the conversation ("thank you", "that's
 	// all"), so the reply to it is the last thing said: no follow-up listens after it (#510).
 	// closingExact is that it was the phrase alone, with no filler before it or name after it (#532).
@@ -689,6 +695,22 @@ func (c *conversation) turnEvent(e event) {
 		}
 		c.turn.Heard(e.text)
 
+		// A stop said to a ring is answered by the ring ending, here or by the stop word a moment
+		// before (#754): Home Assistant has no ring of the device's to stop, and "Stop" sent on to it
+		// is a stop for media, answered "Sorry, no device is playing". The turn ends quietly, as one
+		// woken by mistake does, and the rest of Home Assistant's run is not taken up. Only in a turn
+		// opened over a ring: a "stop" said with nothing ringing is Home Assistant's to answer.
+		if c.overRing && c.phase != phaseIdle && stopsRing(e.text) {
+			slog.Info("heard a stop in a turn opened over a ring, answered by the ring ending", "slot", c.slot+1)
+			c.clearPending()
+			c.idle("stopped the ring", activity.Answered)
+			if !c.stopsAtOnce() {
+				c.draining = true
+				c.grace = time.NewTimer(drainFor)
+			}
+			return
+		}
+
 		// A wake word followed by only what speech-to-text writes for noise was a wake by mistake. It
 		// ends here, before the answer to "Thank you." is spoken to an empty room. A follow-up is left
 		// alone: "yeah" and "okay" are answers there.
@@ -1111,6 +1133,8 @@ func (c *conversation) start(n nextTurn) (started bool) {
 		c.opened = time.Now()
 	}
 	c.lookHere = false
+	// A silenced ring still counts as sounding (ring.Silence), so a wake word said at one is seen here.
+	c.overRing = ring.IsSounding()
 	c.closing, c.closingExact = false, false
 	// Counted from the wake word: a turn it opens starts again, a follow-up is one more in a row.
 	if n.followUp {

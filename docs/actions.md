@@ -556,8 +556,11 @@ The device stops a ring by itself as well, without these: while an alarm or time
 word silences it, and a sentence that only asks to stop ("stop", "stop the alarm", "turn it off")
 ends it. A sentence that asks to snooze ("snooze", "snooze for ten minutes", "snooze the alarm
 another 5 minutes") snoozes it, for that long or for the device's snooze length, from 1 to 30
-minutes; a ringing timer cannot be put off, so it stops. The automations are what make Home Assistant
-answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding.
+minutes; a ringing timer cannot be put off, so it stops. A stop said after a wake word that was said
+at the ring is answered by the ring ending, with nothing spoken, even when the stop word ended it
+first: Home Assistant's answer to that request isn't played. The automations are what make Home
+Assistant answer "Stopped." or "Snoozed until 7:42 AM." rather than not understanding, for a ring that
+starts while a request is open and for a snooze.
 
 "Stop the timer" is also Home Assistant's own sentence for canceling a timer, and an automation that
 catches a sentence takes it from Home Assistant. So with nothing ringing, the first automation cancels

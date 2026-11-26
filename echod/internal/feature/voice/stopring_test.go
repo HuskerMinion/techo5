@@ -1,6 +1,11 @@
 package voice
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/ring"
+)
 
 func TestWhatStopsARing(t *testing.T) {
 	for _, s := range []string{"Stop.", "stop the alarm", "Stop alarm", "turn off the timer", "Turn it off, please.", "stop ringing", "OK stop", "Stop time.", "turn the time off", "stop the timers"} {
@@ -86,5 +91,72 @@ func TestStopWordsDoNotMixLanguages(t *testing.T) {
 		if stopsRing(s) {
 			t.Errorf("%q should not stop a ring", s)
 		}
+	}
+}
+
+// A wake word said at a ring opens a turn, and a stop in it is the whole of the answer: the turn ends
+// here, and Home Assistant's reply to "Stop" (a stop for media, "Sorry, no device is playing") is not
+// taken up. That holds when the stop word ended the ring before the transcript came (#754). A sentence
+// that asks for more, or a "stop" in a turn opened with nothing ringing, goes on to Home Assistant.
+func TestAStopInATurnOpenedOverARingIsAnsweredHere(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		ringing  bool // a ring sounds when the turn opens
+		endsSoon bool // the stop word ends it before the transcript comes
+		heard    string
+		answered bool
+	}{
+		{"the stop word ended the ring first", true, true, " Stop", true},
+		{"the ring still sounding", true, false, "stop the alarm", true},
+		{"in another language", true, true, "Stopp, bitte.", true},
+		{"a sentence that asks for more", true, true, "stop the music", false},
+		{"nothing ringing", false, false, " Stop", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWatcher(t, config.OnHA{})
+			var done func()
+			if c.ringing {
+				ringing.Store(true)
+				done = ring.Sounding()
+				ring.Silence()
+				t.Cleanup(func() {
+					ringing.Store(false)
+					if done != nil {
+						done()
+					}
+				})
+			}
+			w.handle(event{kind: evStart, slot: 0, woke: true, at: w.at})
+			if w.phase != phaseListening {
+				t.Fatalf("the turn did not open: phase %s", w.phase)
+			}
+			if c.endsSoon {
+				// The stop word, heard while the turn listens, ends the ring (Voice.Stop).
+				ring.End()
+				done()
+				done = nil
+			}
+			w.handle(event{kind: evHeard, text: c.heard})
+
+			if !c.answered {
+				if w.phase == phaseIdle {
+					t.Fatalf("%q was not left to Home Assistant", c.heard)
+				}
+				return
+			}
+			if w.phase != phaseIdle {
+				t.Fatalf("after %q the turn is %s, want ended here", c.heard, w.phase)
+			}
+			if ringing.Load() {
+				t.Error("the ring was not stopped")
+			}
+			if !w.draining {
+				t.Error("the rest of Home Assistant's run would be taken up")
+			}
+			w.handle(event{kind: evReplyText, text: "Sorry, no device is playing"})
+			if w.shown.Reply != "" {
+				t.Errorf("the ended turn took up the reply %q", w.shown.Reply)
+			}
+		})
 	}
 }
