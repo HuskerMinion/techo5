@@ -264,6 +264,10 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 		speaker := speakerEntity()
 		f.mu.Lock()
 		chosen := f.chosen
+		var seq uint64
+		if chosen == station && watch {
+			seq = f.askSeq() // in order with the check, so a later tap's watch always counts after it
+		}
 		f.mu.Unlock()
 		if chosen != station {
 			return
@@ -300,7 +304,7 @@ func (f *Feature) callFavorite(h config.Radio, station string, watch bool) {
 		// The call has no answer: Home Assistant that refuses it says so only in its own log. So what
 		// comes of it is watched for instead (hint.go), from the call rather than from the tap, since
 		// naming the player can take seconds of its own.
-		f.watchStart(h.Service, station, wait, asked)
+		f.watchStart(h.Service, station, seq, wait, asked)
 	})
 }
 
