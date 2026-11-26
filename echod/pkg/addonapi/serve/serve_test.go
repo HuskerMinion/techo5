@@ -32,6 +32,9 @@ type fakeDevice struct {
 	entities  map[string]any
 	media     []string
 	settings  map[string]any
+
+	failEntity error
+	timerDelay time.Duration
 }
 
 func newFakeDevice() *fakeDevice {
@@ -76,6 +79,10 @@ func (d *fakeDevice) PlaySound(id, name string, w *addonapi.WAV) error {
 }
 func (d *fakeDevice) StartTimer(id, name string, dur time.Duration) (string, error) {
 	d.mu.Lock()
+	wait := d.timerDelay
+	d.mu.Unlock()
+	time.Sleep(wait) // a device that takes a moment, so two connections overlap
+	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.next++
 	tid := fmt.Sprintf("local:%d", d.next)
@@ -108,6 +115,9 @@ func (d *fakeDevice) Fire(id, name string, data map[string]string) error {
 func (d *fakeDevice) SetEntity(id string, e addonapi.Entity, state any) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.failEntity != nil {
+		return d.failEntity
+	}
 	d.entities[e.ID] = state
 	return nil
 }
@@ -237,7 +247,9 @@ func eventually(t *testing.T, what string, ok func() bool) {
 func TestSocketFolder(t *testing.T) {
 	r := newRig(t, everything)
 	fi, err := os.Stat(filepath.Dir(r.path))
-	if err != nil || fi.Mode().Perm() != 0o700 {
+	// The folder is root's, searchable and nothing more: the add-on can reach its socket and put
+	// nothing beside it.
+	if err != nil || fi.Mode().Perm() != 0o711 {
 		t.Fatalf("the folder: %v %v", fi.Mode(), err)
 	}
 	fi, err = os.Stat(r.path)
@@ -281,12 +293,8 @@ func (r *rig) raw() *raw {
 	return &raw{t: r.t, nc: nc}
 }
 
-func (w *raw) send(s string) {
-	w.t.Helper()
-	if err := addonapi.WriteFrame(w.nc, []byte(s)); err != nil {
-		w.t.Fatal(err)
-	}
-}
+// send writes a message; a daemon that has hung up shows in what read returns.
+func (w *raw) send(s string) { _ = addonapi.WriteFrame(w.nc, []byte(s)) }
 
 // read is the next message, or "" once the daemon has hung up.
 func (w *raw) read() string {
@@ -586,12 +594,18 @@ func wavBytes(rate, samples int) []byte {
 
 func TestTimers(t *testing.T) {
 	r := newRig(t, everything)
+	r.freeze()
 	c := r.dial()
 	for range addonapi.MaxTimers {
 		if _, err := c.StartTimer(ctx(t), "eggs", time.Minute); err != nil {
 			t.Fatal(err)
 		}
 	}
+	// Past the burst, a start or a cancel waits for its token.
+	if _, err := c.StartTimer(ctx(t), "one more", time.Minute); code(err) != addonapi.CodeRateLimited {
+		t.Errorf("a ninth start at once: %v", err)
+	}
+	r.advance(time.Hour)
 	if _, err := c.StartTimer(ctx(t), "one more", time.Minute); code(err) != addonapi.CodeBusy {
 		t.Errorf("a ninth timer: %v", err)
 	}
@@ -602,9 +616,11 @@ func TestTimers(t *testing.T) {
 	if err := c.CancelTimer(ctx(t), list[0].ID); err != nil {
 		t.Error(err)
 	}
+	r.advance(addonapi.TimerOpEvery)
 	if err := c.CancelTimer(ctx(t), "local:somebody-else"); code(err) != addonapi.CodeBadRequest {
 		t.Errorf("a timer not its own: %v", err)
 	}
+	r.advance(time.Hour)
 	for _, d := range []time.Duration{0, -time.Second, addonapi.MaxTimer + time.Second} {
 		if _, err := c.StartTimer(ctx(t), "x", d); code(err) != addonapi.CodeBadRequest {
 			t.Errorf("a timer of %v: %v", d, err)
@@ -684,13 +700,32 @@ func TestEntities(t *testing.T) {
 		}
 	}
 	limited := 0
-	for range addonapi.EntitySetsPerSecond + 2 {
-		if code(c.SetEntity(ctx(t), "step", "x")) == addonapi.CodeRateLimited {
+	for i := range addonapi.EntitySetsPerSecond + 2 {
+		if code(c.SetEntity(ctx(t), "step", fmt.Sprint("step ", i))) == addonapi.CodeRateLimited {
 			limited++
 		}
 	}
 	if limited != 3 { // the first set took one
 		t.Errorf("%d limited", limited)
+	}
+	// A state it has already costs nothing, and is not sent on.
+	r.advance(time.Second)
+	if err := c.SetEntity(ctx(t), "step", "step 1"); err != nil {
+		t.Fatal(err)
+	}
+	r.d.mu.Lock()
+	r.d.entities["step"] = "untouched"
+	r.d.mu.Unlock()
+	for range 10 {
+		if err := c.SetEntity(ctx(t), "step", "step 1"); err != nil {
+			t.Fatalf("the same state again: %v", err)
+		}
+	}
+	r.d.mu.Lock()
+	got := r.d.entities["step"]
+	r.d.mu.Unlock()
+	if got != "untouched" {
+		t.Errorf("the same state was sent on: %v", got)
 	}
 }
 

@@ -31,8 +31,16 @@ const (
 	// a settings test's.
 	MaxAnswer     = 1024
 	MaxTestAnswer = 200
-	// EntitySetsPerSecond is how often one entity's state may be set.
+	// EntitySetsPerSecond is how often one entity's state may be set, and StatesPerSecond how often
+	// any of an add-on's may, all together. A state an entity already has is not counted.
 	EntitySetsPerSecond = 5
+	StatesPerSecond     = 5
+	// TimerOpBurst and TimerOpEvery bound timer.start and timer.cancel together: that many at once,
+	// then one every TimerOpEvery.
+	TimerOpBurst = 8
+	TimerOpEvery = 10 * time.Second
+	// MediaPlayEvery is how often an add-on may start media.
+	MediaPlayEvery = 2 * time.Second
 	// MaxURL and MaxTitle bound a media.play.
 	MaxURL   = 2048
 	MaxTitle = 100

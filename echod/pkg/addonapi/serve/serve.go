@@ -12,6 +12,7 @@ package serve
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -123,6 +124,8 @@ type Server struct {
 	mu     sync.Mutex
 	addons map[string]*addon
 	holds  int // keep-awake holds alive, every add-on's
+
+	logs logLimit
 }
 
 // New is a server with the device given, sockets in dir.
@@ -153,11 +156,23 @@ type addon struct {
 
 	soundAt time.Time
 	events  bucket
-	sets    map[string]*bucket
+	states  bucket             // every entity's sets together
+	sets    map[string]*bucket // each entity's
+	shown   map[string]string  // each entity's last state, as JSON, so one set again is not sent on
+	timerOp bucket             // timer.start and timer.cancel together
+	plays   bucket             // media.play
+	timerMu sync.Mutex         // held across the count and the start, so connections cannot pass MaxTimers together
 
 	holds    map[string]*hold
-	calls    map[uint64]chan addonapi.CommandReply
+	calls    map[uint64]*pending
 	nextCall uint64
+}
+
+// pending is a call waiting for the add-on's reply: a command's, or a settings test's, which is
+// answered by its own op and held to its own length.
+type pending struct {
+	ch   chan addonapi.CommandReply
+	test bool
 }
 
 // ErrRoot is a grant for an add-on that runs as root, which the API never serves: a root shell
@@ -177,23 +192,23 @@ func (s *Server) Open(g Grant) (string, error) {
 	_ = os.Chmod(s.Dir, 0o755)
 	dir := filepath.Join(s.Dir, g.ID)
 	_ = os.RemoveAll(dir)
-	if err := os.Mkdir(dir, 0o700); err != nil {
+	// The folder stays root's, 0711: the add-on can reach its socket through it and can put nothing in
+	// it, so it cannot fill /run, which is RAM and has no quota of its own.
+	if err := os.Mkdir(dir, 0o711); err != nil {
 		return "", err
 	}
+	_ = os.Chmod(dir, 0o711)
 	path := filepath.Join(dir, SocketName)
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		_ = os.RemoveAll(dir)
 		return "", err
 	}
-	// The folder, mode 0700, is the add-on's user's, and so is the socket in it: nobody else but root
-	// can reach it, and root is refused at the door.
+	// The socket is the add-on's user's alone, mode 0600: nobody else but root can connect to it, and
+	// root is refused at the door.
 	err = os.Chmod(path, 0o600)
 	if err == nil {
 		err = s.Chown(path, int(g.UID))
-	}
-	if err == nil {
-		err = s.Chown(dir, int(g.UID))
 	}
 	if err != nil {
 		ln.Close()
@@ -202,8 +217,11 @@ func (s *Server) Open(g Grant) (string, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &addon{grant: g, ln: ln, dir: dir, conns: map[*conn]bool{}, ctx: ctx, cancel: cancel,
-		events: bucket{rate: addonapi.EventsPerSecond, burst: addonapi.EventsPerSecond},
-		sets:   map[string]*bucket{}, holds: map[string]*hold{}, calls: map[uint64]chan addonapi.CommandReply{}}
+		events:  bucket{rate: addonapi.EventsPerSecond, burst: addonapi.EventsPerSecond},
+		states:  bucket{rate: addonapi.StatesPerSecond, burst: addonapi.StatesPerSecond},
+		timerOp: bucket{rate: 1 / addonapi.TimerOpEvery.Seconds(), burst: addonapi.TimerOpBurst},
+		plays:   bucket{rate: 1 / addonapi.MediaPlayEvery.Seconds(), burst: 1},
+		sets:    map[string]*bucket{}, shown: map[string]string{}, holds: map[string]*hold{}, calls: map[uint64]*pending{}}
 	s.mu.Lock()
 	if s.addons == nil {
 		s.addons = map[string]*addon{}
@@ -286,12 +304,18 @@ func (s *Server) accept(a *addon) {
 			return // closed
 		}
 		if why := s.admit(a, nc); why != "" {
-			slog.Warn("addonapi: a connection was refused", "addon", a.grant.ID, "why", why)
 			nc.Close()
+			if why != quietly {
+				s.warn(a.grant.ID, "refused", "addonapi: a connection was refused", "why", why)
+			}
 			continue
 		}
 	}
 }
+
+// quietly is admit's answer for a connection refused without a word: one from an add-on that is
+// disconnected for a minute, or already has all its connections, which said so once already.
+const quietly = "\x00"
 
 // admit decides about one connection, and serves it when it may stay: "" or why not.
 func (s *Server) admit(a *addon, nc net.Conn) string {
@@ -312,10 +336,10 @@ func (s *Server) admit(a *addon, nc net.Conn) string {
 		return "the add-on has stopped"
 	}
 	if s.Now().Before(a.banned) {
-		return "it is disconnected for a minute, for going past its limits"
+		return quietly
 	}
 	if len(a.conns) >= addonapi.MaxConns {
-		return fmt.Sprintf("it has %d connections already", addonapi.MaxConns)
+		return quietly
 	}
 	a.nextID++
 	c := &conn{s: s, a: a, nc: nc, id: a.nextID, out: make(chan []byte, outQueue),
@@ -349,7 +373,7 @@ func (s *Server) strike(a *addon) {
 	}
 	s.mu.Unlock()
 	if ban {
-		slog.Warn("addonapi: an add-on kept going past its limits and is disconnected for a minute", "addon", a.grant.ID)
+		s.warn(a.grant.ID, "banned", "addonapi: an add-on kept going past its limits and is disconnected for a minute")
 		for _, c := range conns {
 			c.close()
 		}
@@ -403,7 +427,7 @@ func (c *conn) send(v any) {
 	case <-c.gone:
 	case c.out <- b:
 	default:
-		slog.Warn("addonapi: an add-on is not reading what is sent to it; disconnected", "addon", c.a.grant.ID)
+		c.s.warn(c.a.grant.ID, "unread", "addonapi: an add-on is not reading what is sent to it; disconnected")
 		c.close()
 	}
 }
@@ -435,9 +459,13 @@ func (c *conn) reader() {
 			return
 		}
 		_ = c.nc.SetReadDeadline(time.Now().Add(bodyWithin))
+		// The request's token is taken here, before anything of it is read or parsed: a flood of
+		// messages that never parse costs the add-on its rate as much as one of good ones.
+		allowed := c.tokens.take(c.s.Now())
 		if n > addonapi.MaxMessage {
 			if n > skipMost {
-				slog.Warn("addonapi: an add-on sent a message far past the limit; disconnected", "addon", c.a.grant.ID, "bytes", n)
+				c.s.warn(c.a.grant.ID, "huge", "addonapi: an add-on sent a message far past the limit; disconnected", "bytes", n)
+				c.s.strike(c.a)
 				return
 			}
 			if _, err := io.CopyN(io.Discard, c.nc, int64(n)); err != nil {
@@ -453,14 +481,20 @@ func (c *conn) reader() {
 			return
 		}
 		_ = c.nc.SetReadDeadline(time.Time{})
-		var req addonapi.Request
-		if err := addonapi.Unmarshal(b, &req); err != nil {
-			c.refuse(0, addonapi.Errorf(addonapi.CodeBadRequest, "the message does not read: %v", err))
+		if !allowed {
+			// Its id alone is read, so the add-on can tell which request was refused: a plain decode of
+			// one field, which costs no more than the message is long.
+			var head struct {
+				ID uint64 `json:"id"`
+			}
+			_ = json.Unmarshal(b, &head)
+			c.refuse(head.ID, addonapi.Errorf(addonapi.CodeRateLimited, "at most %d requests a second", addonapi.Rate))
 			c.s.strike(c.a)
 			continue
 		}
-		if !c.tokens.take(c.s.Now()) {
-			c.refuse(req.ID, addonapi.Errorf(addonapi.CodeRateLimited, "at most %d requests a second", addonapi.Rate))
+		var req addonapi.Request
+		if err := addonapi.Unmarshal(b, &req); err != nil {
+			c.refuse(0, addonapi.Errorf(addonapi.CodeBadRequest, "the message does not read: %v", err))
 			c.s.strike(c.a)
 			continue
 		}
@@ -486,8 +520,10 @@ func (c *conn) worker() {
 			if err != nil {
 				var e *addonapi.Error
 				if !errors.As(err, &e) {
-					slog.Warn("addonapi: a request failed", "addon", c.a.grant.ID, "op", req.Op, "err", err)
-					e = addonapi.Errorf(addonapi.CodeInternal, "%v", err)
+					// The device's own words stay in its log, and the add-on is told only that it failed:
+					// an error can carry a path, an address or a name the add-on has no business with.
+					c.s.warn(c.a.grant.ID, "failed "+req.Op, "addonapi: a request failed", "op", req.Op, "err", err)
+					e = addonapi.Errorf(addonapi.CodeInternal, "the device could not do it")
 				}
 				c.refuse(req.ID, e)
 				continue

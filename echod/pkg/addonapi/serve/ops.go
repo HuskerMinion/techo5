@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -93,7 +92,7 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		if utf8.RuneCountInString(r.Text) > addonapi.MaxAnswer {
 			return nil, addonapi.Errorf(addonapi.CodeTooLarge, "an answer is at most %d characters", addonapi.MaxAnswer)
 		}
-		if !s.answer(c.a, r.Call, r) {
+		if !s.answer(c.a, r.Call, false, r) {
 			return nil, bad("no command is waiting for call %d", r.Call)
 		}
 		return nil, nil
@@ -106,7 +105,7 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		if utf8.RuneCountInString(r.Text) > addonapi.MaxTestAnswer {
 			return nil, addonapi.Errorf(addonapi.CodeTooLarge, "a test's answer is at most %d characters", addonapi.MaxTestAnswer)
 		}
-		if !s.answer(c.a, r.Call, addonapi.CommandReply{Call: r.Call, OK: r.OK, Text: r.Text}) {
+		if !s.answer(c.a, r.Call, true, addonapi.CommandReply{Call: r.Call, OK: r.OK, Text: r.Text}) {
 			return nil, bad("no test is waiting for call %d", r.Call)
 		}
 		return nil, nil
@@ -166,7 +165,13 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 			return nil, bad("a timer runs for more than nothing and at most %v", addonapi.MaxTimer)
 		case utf8.RuneCountInString(t.Name) > addonapi.MaxLabel || strings.ContainsFunc(t.Name, control):
 			return nil, bad("a timer's name is at most %d characters, without control characters", addonapi.MaxLabel)
-		case len(s.Device.Timers(g.ID)) >= addonapi.MaxTimers:
+		}
+		if err := s.timerToken(c.a); err != nil {
+			return nil, err
+		}
+		c.a.timerMu.Lock()
+		defer c.a.timerMu.Unlock()
+		if len(s.Device.Timers(g.ID)) >= addonapi.MaxTimers {
 			return nil, addonapi.Errorf(addonapi.CodeBusy, "an add-on has at most %d timers at once", addonapi.MaxTimers)
 		}
 		id, err := s.Device.StartTimer(g.ID, strings.TrimSpace(t.Name), d)
@@ -178,6 +183,9 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 	case addonapi.OpTimerCancel:
 		var t addonapi.TimerRef
 		if err := args(req, &t); err != nil {
+			return nil, err
+		}
+		if err := s.timerToken(c.a); err != nil {
 			return nil, err
 		}
 		if !s.Device.CancelTimer(g.ID, t.ID) {
@@ -230,19 +238,34 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		if err := ent.CheckState(e.State); err != nil {
 			return nil, bad("%v", err)
 		}
+		// A state it already has is not sent on, and costs nothing of the add-on's limits.
+		state := string(mustJSON(e.State))
 		s.mu.Lock()
+		if c.a.shown[e.ID] == state {
+			s.mu.Unlock()
+			return nil, nil
+		}
 		b := c.a.sets[e.ID]
 		if b == nil {
 			b = &bucket{rate: addonapi.EntitySetsPerSecond, burst: addonapi.EntitySetsPerSecond}
 			c.a.sets[e.ID] = b
 		}
-		ok = b.take(s.Now())
+		now := s.Now()
+		one := b.take(now)
+		all := one && c.a.states.take(now)
 		s.mu.Unlock()
-		if !ok {
+		if !all {
 			s.strike(c.a)
-			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "one entity is set at most %d times a second", addonapi.EntitySetsPerSecond)
+			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "an entity is set at most %d times a second, and all of them together %d",
+				addonapi.EntitySetsPerSecond, addonapi.StatesPerSecond)
 		}
-		return nil, s.Device.SetEntity(g.ID, ent, e.State)
+		if err := s.Device.SetEntity(g.ID, ent, e.State); err != nil {
+			return nil, err
+		}
+		s.mu.Lock()
+		c.a.shown[e.ID] = state
+		s.mu.Unlock()
+		return nil, nil
 
 	case addonapi.OpMediaPlay:
 		var m addonapi.MediaPlay
@@ -260,11 +283,23 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		case s.Device.Quiet():
 			return nil, addonapi.Errorf(addonapi.CodeBusy, "it is quiet hours on this device")
 		}
+		s.mu.Lock()
+		ok := c.a.plays.take(s.Now())
+		s.mu.Unlock()
+		if !ok {
+			s.strike(c.a)
+			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "media.play at most once every %v", addonapi.MediaPlayEvery)
+		}
 		return nil, s.Device.Media(g.ID, req.Op, m)
 
 	case addonapi.OpMediaPause, addonapi.OpMediaResume, addonapi.OpMediaStop:
 		if err := args(req, &addonapi.None{}); err != nil {
 			return nil, err
+		}
+		// Carrying on is making a sound again, which quiet hours do not allow; pausing and stopping are
+		// not.
+		if req.Op == addonapi.OpMediaResume && s.Device.Quiet() {
+			return nil, addonapi.Errorf(addonapi.CodeBusy, "it is quiet hours on this device")
 		}
 		return nil, s.Device.Media(g.ID, req.Op, addonapi.MediaPlay{})
 	}
@@ -319,7 +354,7 @@ func (s *Server) sayAll(a *addon) {
 			continue
 		}
 		if err := s.Device.Say(a.ctx, a.grant.ID, text); err != nil && a.ctx.Err() == nil {
-			slog.Warn("addonapi: words of an add-on's were not said", "addon", a.grant.ID, "err", err)
+			s.warn(a.grant.ID, "unsaid", "addonapi: words of an add-on's were not said", "err", err)
 		}
 	}
 }
@@ -410,6 +445,14 @@ func (s *Server) hold(c *conn, renew bool, h addonapi.AwakeHold) (any, error) {
 	a := c.a
 	until := s.Now().Add(d)
 	s.mu.Lock()
+	// A connection closing now releases its holds under this lock (releaseConn), after it has marked
+	// itself gone: one taken here once it is gone would be released by nobody, so none is.
+	select {
+	case <-c.gone:
+		s.mu.Unlock()
+		return nil, addonapi.Errorf(addonapi.CodeUnavailable, "the connection has closed")
+	default:
+	}
 	if a.ctx.Err() != nil {
 		s.mu.Unlock()
 		return nil, addonapi.Errorf(addonapi.CodeUnavailable, "the add-on has stopped")
@@ -488,13 +531,13 @@ func (s *Server) releaseAll(a *addon) {
 		all = append(all, h)
 	}
 	calls := a.calls
-	a.calls = map[uint64]chan addonapi.CommandReply{}
+	a.calls = map[uint64]*pending{}
 	s.mu.Unlock()
 	for _, h := range all {
 		s.release(a, h)
 	}
-	for _, ch := range calls {
-		close(ch)
+	for _, p := range calls {
+		close(p.ch)
 	}
 }
 
@@ -505,16 +548,35 @@ func (s *Server) Awake() bool {
 	return s.holds > 0
 }
 
-// answer hands a reply to the call waiting for it.
-func (s *Server) answer(a *addon, call uint64, r addonapi.CommandReply) bool {
+// answer hands a reply to the call waiting for it, when it is a call of that kind: a command's reply
+// cannot answer a settings test, which is held to a shorter answer, nor the other way round.
+func (s *Server) answer(a *addon, call uint64, test bool, r addonapi.CommandReply) bool {
 	s.mu.Lock()
-	ch, ok := a.calls[call]
-	delete(a.calls, call)
+	p, ok := a.calls[call]
+	ok = ok && p.test == test
+	if ok {
+		delete(a.calls, call)
+	}
 	s.mu.Unlock()
 	if ok {
-		ch <- r
+		p.ch <- r
 	}
 	return ok
+}
+
+// timerToken takes one of the add-on's timer.start and timer.cancel tokens: each writes nothing to
+// the flash now, but a timer that rings is a sound and a line on the screen, and churning them is
+// never what an add-on means to do.
+func (s *Server) timerToken(a *addon) error {
+	s.mu.Lock()
+	ok := a.timerOp.take(s.Now())
+	s.mu.Unlock()
+	if !ok {
+		s.strike(a)
+		return addonapi.Errorf(addonapi.CodeRateLimited, "timers are started and canceled %d at once, then one every %v",
+			addonapi.TimerOpBurst, addonapi.TimerOpEvery)
+	}
+	return nil
 }
 
 // The daemon's half: what Home Assistant, the setup page and the device send an add-on.
@@ -543,7 +605,7 @@ func (s *Server) first(id string) (*addon, *conn) {
 
 // ask sends an event to the add-on's first connection and waits for its reply, as a command or a test
 // does, until ctx ends.
-func (s *Server) ask(ctx context.Context, id, event string, data func(call uint64) any) (addonapi.CommandReply, error) {
+func (s *Server) ask(ctx context.Context, id, event string, test bool, data func(call uint64) any) (addonapi.CommandReply, error) {
 	a, c := s.first(id)
 	if c == nil {
 		return addonapi.CommandReply{}, errNotRunning(id)
@@ -552,7 +614,7 @@ func (s *Server) ask(ctx context.Context, id, event string, data func(call uint6
 	s.mu.Lock()
 	a.nextCall++
 	call := a.nextCall
-	a.calls[call] = ch
+	a.calls[call] = &pending{ch: ch, test: test}
 	s.mu.Unlock()
 	c.send(addonapi.Event{Event: event, Data: mustJSON(data(call))})
 	select {
@@ -603,7 +665,7 @@ func (s *Server) Command(ctx context.Context, id, name string, args map[string]a
 		c.send(addonapi.Event{Event: addonapi.EventCommand, Data: mustJSON(addonapi.CommandEvent{Command: name, Args: args, From: from})})
 		return "", nil
 	}
-	r, err := s.ask(ctx, id, addonapi.EventCommand, func(call uint64) any {
+	r, err := s.ask(ctx, id, addonapi.EventCommand, false, func(call uint64) any {
 		return addonapi.CommandEvent{Call: call, Command: name, Args: args, From: from}
 	})
 	if err != nil {
@@ -628,7 +690,7 @@ func (s *Server) Test(ctx context.Context, id string, values map[string]any) (bo
 	if !g.Has(addonapi.CapSettings) || g.Settings == nil || !g.Settings.Test {
 		return false, "", addonapi.Errorf(addonapi.CodeDenied, "the add-on %s has no settings test", id)
 	}
-	r, err := s.ask(ctx, id, addonapi.EventSettingsTest, func(call uint64) any {
+	r, err := s.ask(ctx, id, addonapi.EventSettingsTest, true, func(call uint64) any {
 		return addonapi.SettingsTest{Call: call, Values: values}
 	})
 	if err != nil {
