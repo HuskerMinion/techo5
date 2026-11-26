@@ -67,6 +67,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/wifi"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
@@ -2847,7 +2848,8 @@ func (d *Display) frame() (next time.Duration) {
 	updateVisible := d.updateShown(now)
 	d.mu.Unlock()
 	busy := updateVisible || view.Phase != "idle" || call.Phase != phone.Idle || ring.any() || reminding || sheetUp || pinIsOpen() ||
-		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active()
+		d.wakeLight(now) > 0 || d.popupUp() != nil || asksAtDevice() || wifiUp || camUp || video.Get().State().Active() ||
+		keepawake.Held()
 	if d.coverTick(on) { // the night may have lit the panel under a closed cover
 		d.mu.Lock()
 		on = d.on

@@ -69,6 +69,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/bootreason"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/keepawake"
 	"github.com/HuskerMinion/techo5/echod/internal/service"
 )
 
@@ -1592,7 +1593,7 @@ func (d *Display) frame() (next time.Duration) {
 	_, reminding := remind.Get().Showing()
 	vs := video.Get().State()
 	busy := view.Phase != "idle" || sheetOpen || ringingNow(now).any() || phone.Get().Busy() || pinIsOpen() ||
-		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active()
+		sunriseProgress(now) > 0 || asksAtDevice() || reminding || vs.Active() || keepawake.Held()
 	if d.awayTick(now, on, busy, view.Phase != "idle", nightNow(now)) {
 		d.mu.Lock()
 		on = d.on
