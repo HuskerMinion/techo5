@@ -65,8 +65,9 @@ type imageStore struct {
 	gen, epoch uint64
 	// retry is the timer that has the display lay the add-on's scenes out again when an address they
 	// name may be fetched again, and retryAt when it fires.
-	retry   *time.Timer
-	retryAt time.Time
+	retry    *time.Timer
+	retryAt  time.Time
+	retryGen uint64 // which timer is retry, so one stopped too late does nothing
 }
 
 func (st *imageStore) init() {
@@ -325,17 +326,25 @@ func (s *Server) retryLocked(a *addon, at time.Time) {
 	}
 	epoch := st.epoch
 	st.retryAt = at
-	st.retry = time.AfterFunc(max(at.Sub(s.Now()), 0), func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if st.epoch != epoch || s.addons[a.grant.ID] != a {
-			return
-		}
-		st.retry, st.retryAt = nil, time.Time{}
-		// Laid out again, the scenes ask for what they show, and what is due is fetched.
-		st.gen++
-		s.imagesChangedLocked(a)
-	})
+	st.retryGen++
+	gen := st.retryGen
+	st.retry = time.AfterFunc(max(at.Sub(s.Now()), 0), func() { s.retryFired(a, gen, epoch) })
+}
+
+// retryFired is the retry timer of generation gen firing: the add-on's scenes are laid out again, so what is due is
+// fetched. Only the timer still armed does it: one stopped for a sooner one may have fired already and
+// be waiting for the lock, and must not forget the one armed after it.
+func (s *Server) retryFired(a *addon, gen, epoch uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := &a.images
+	if st.epoch != epoch || s.addons[a.grant.ID] != a || st.retryGen != gen {
+		return
+	}
+	st.retry, st.retryAt = nil, time.Time{}
+	// Laid out again, the scenes ask for what they show, and what is due is fetched.
+	st.gen++
+	s.imagesChangedLocked(a)
 }
 
 // fetchImage fetches one address and keeps what came, when it is an image within the limits and there

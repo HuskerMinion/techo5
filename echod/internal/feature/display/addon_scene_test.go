@@ -52,6 +52,14 @@ func (h *fakeHost) set(id, on string, root addonapi.Block, at time.Time) {
 	h.scenes[id+"/"+on] = hostScene{Root: root, Rev: rev, At: at, Set: rev}
 }
 
+// patch is the add-on patching its scene: a new revision of the same scene.set.
+func (h *fakeHost) patch(id, on string, root addonapi.Block, at time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	cur := h.scenes[id+"/"+on]
+	h.scenes[id+"/"+on] = hostScene{Root: root, Rev: cur.Rev + 1, At: at, Set: cur.Set}
+}
+
 func (h *fakeHost) Shown(id, on string, shown bool) {
 	h.note("shown " + id + " " + on + " " + map[bool]string{true: "on", false: "off"}[shown])
 }

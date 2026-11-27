@@ -131,7 +131,7 @@ func TestAddonCardChangesAtMostSoOften(t *testing.T) {
 	if first == nil {
 		t.Fatal("no card")
 	}
-	h.set("meals", addonapi.OnCard, addonapi.Text("Next: chop"), time.Now())
+	h.patch("meals", addonapi.OnCard, addonapi.Text("Next: chop"), time.Now())
 	if got := d.addonCardNow(h, false); got.sc.Rev != first.sc.Rev {
 		t.Error("a change a moment after the card was drawn was drawn at once")
 	}
@@ -147,7 +147,7 @@ func TestAddonCardChangesAtMostSoOften(t *testing.T) {
 		t.Error("the change was not drawn once a second had passed")
 	}
 	// At night, five seconds.
-	h.set("meals", addonapi.OnCard, addonapi.Text("Next: stir"), time.Now())
+	h.patch("meals", addonapi.OnCard, addonapi.Text("Next: stir"), time.Now())
 	d.mu.Lock()
 	d.addon.card.at = d.addon.card.at.Add(-2 * addonCardEvery)
 	d.mu.Unlock()
@@ -174,6 +174,24 @@ func TestAddonCardChangesAtMostSoOften(t *testing.T) {
 	}
 }
 
+// A card cleared and set again shows at once, rather than the card before it, whose taps the server no
+// longer takes; set over and over, it is drawn no more than once an interval that way.
+func TestAddonCardSetAgainShowsAtOnce(t *testing.T) {
+	h := sampleHost(t, cookingPage())
+	useHost(t, h)
+	d := &Display{poke: make(chan struct{}, 1)}
+	first := d.addonCardNow(h, false)
+	h.set("meals", addonapi.OnCard, addonapi.Text("A new card"), time.Now())
+	got := d.addonCardNow(h, false)
+	if got.sc.Set == first.sc.Set {
+		t.Error("a card set again a moment after was held behind the one before it")
+	}
+	h.set("meals", addonapi.OnCard, addonapi.Text("And another"), time.Now())
+	if again := d.addonCardNow(h, false); again.sc.Set != got.sc.Set {
+		t.Error("a card set over and over was drawn each time")
+	}
+}
+
 // A new scene starts its lists at their tops; a patch leaves them where they were scrolled to.
 func TestAddonScrollsAreTheScenes(t *testing.T) {
 	h := sampleHost(t, listPage())
@@ -185,11 +203,7 @@ func TestAddonScrollsAreTheScenes(t *testing.T) {
 	d.addon.scrolls[0] = 120
 	d.mu.Unlock()
 	// A patch: the same scene.
-	h.mu.Lock()
-	sc := h.scenes["meals/page"]
-	sc.Rev++
-	h.scenes["meals/page"] = sc
-	h.mu.Unlock()
+	h.patch("meals", addonapi.OnPage, listPage(), time.Now())
 	if v := d.addonPageNow(h, "meals", "Meals"); v.scrolls[0] != 120 {
 		t.Errorf("a patch scrolled the list to %d", v.scrolls[0])
 	}

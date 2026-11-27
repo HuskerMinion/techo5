@@ -668,3 +668,26 @@ func TestTheDisplayIsToldOfAnAddonGone(t *testing.T) {
 	c.Close()
 	eventually(t, "the display told", func() bool { return k.count("dropped meals") == 1 })
 }
+
+// A page the display keeps up while the add-on's last connection drops and it connects again is in view
+// as soon as it sets its page again: a tap reaches it, and it is told it is shown.
+func TestAPageUpAcrossAReconnect(t *testing.T) {
+	r, _, c := screenRig(t)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Shown("meals", addonapi.OnPage, true)
+	c.Close()
+	eventually(t, "the page to go", func() bool { _, ok := r.s.Scene("meals", addonapi.OnPage); return !ok })
+	c = r.dial()
+	ev := c.WatchScreen()
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	if e := nextScreen(t, ev); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: true}) {
+		t.Errorf("after the reconnect, %+v, not the page shown", e)
+	}
+	if !touch(r, "meals", addonapi.OnPage, "next") {
+		t.Error("the page set again after a reconnect takes no tap")
+	}
+}

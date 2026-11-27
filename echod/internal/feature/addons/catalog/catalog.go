@@ -651,13 +651,13 @@ func (v Version) validIcon() error {
 // Publishable holds a catalog to what is checked before it is signed, beyond what every device checks
 // as it reads one (Parse): each version's icon is one this build's icon font has (ValidIcon), so no
 // device of this build draws an empty mark; and each add-on's name has no control character, nor one
-// that is not seen or reorders the words around it (addonapi.Hidden), as it is drawn on the screen
+// that is not seen or reorders the words around it (addonapi.HasHidden), as it is drawn on the screen
 // beside the add-on's page and card. A device does not refuse a catalog for either, which would leave
 // it with no catalog at all over one entry: it draws the initials for an icon it lacks, and the name
 // without what it should not hold.
 func (c Catalog) Publishable() error {
 	for _, a := range c.Addons {
-		if strings.ContainsFunc(a.Name, addonapi.Hidden) {
+		if addonapi.HasHidden(a.Name) {
 			return fmt.Errorf("catalog: %s's name %q holds a control character, or one that is not seen or reorders the words around it", a.ID, a.Name)
 		}
 		for _, v := range a.Versions {

@@ -423,7 +423,10 @@ func (s *Server) screenDrop(a *addon) {
 	s.mu.Lock()
 	sc := &a.screen
 	page, card := sc.page != nil, sc.card != nil
-	sc.page, sc.card, sc.pageShown, sc.cardShown, sc.pageTold = nil, nil, false, false, false
+	// What the display shows (pageShown, cardShown) is the display's to say, and stays: a page left up
+	// while the add-on reconnects is in view again the moment it sets one. What the add-on was told
+	// goes with it, so it is told again.
+	sc.page, sc.card, sc.pageTold = nil, nil, false
 	sc.pageTaps, sc.cardTaps = tapRevs{}, tapRevs{}
 	// Its images with them: they are there for its scenes, and it puts them again after hello.
 	a.images.clear()

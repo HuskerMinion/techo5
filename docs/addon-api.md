@@ -459,11 +459,12 @@ drawing, so a page is drawn at once with the places of images still to come left
     {"type": "button", "id": "next", "label": "Next", "icon": "mdi:arrow-right"}]}]}
 ```
 
-**No PIN pad.** A scene, page or card, with ten or more buttons or chips one after another whose labels
-are each a single digit, in any script, is refused (`bad_request`, saying so): that is a PIN pad, and
-the PIN pad is the device's own. Rows, columns, spacers, dividers and empty words between the keys do
-not end a run; anything else that is seen does, so a calculator's keys, its operators among the
-digits, are taken. Labels are otherwise free text.
+**No PIN pad.** A scene, page or card, with ten or more buttons or chips anywhere in it whose labels
+are each a single digit, in any script, is refused (`bad_request`, saying so): that is a PIN pad (the
+device's own has 1 to 9, then back, 0 and OK), and the PIN pad is the device's own. A keycap ("1️⃣") counts
+as its digit: variation selectors and the enclosing keycap are not counted. So a calculator's ten digit
+keys are refused too; a number pad an add-on needs is a list or chips of other labels ("10", "+1").
+Labels are otherwise free text.
 
 **The card** holds only `column`, `row`, `text` (not `huge`, at most 3 lines and 200 characters),
 `chip`, `progress`, one `image` and `spacer`: at most 12 blocks, 3 deep. Nothing on it scrolls or is a
@@ -478,8 +479,8 @@ keep their place behind it.
 | A scene, as JSON | 64 KB, after a patch as well as when set (and a message is 64 KB too) |
 | Blocks | 500 on a page, 12 on a card, every one counted |
 | Depth | 12 on a page, the root being 1, a child one more, a list's item two more than its list; 3 on a card |
-| Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters (C0, DEL, C1) but a text's line breaks, none that reorder text (U+202A to U+202E, U+2066 to U+2069, U+061C), none that are not seen (U+200B to U+200F, U+FEFF), no line or paragraph separator (U+2028, U+2029), and at most 4 combining marks on a character |
-| Digit keys | fewer than 10 buttons or chips one after another labeled with one digit each (a PIN pad's keys, which is the device's own) |
+| Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters (C0, DEL, C1) but a text's line breaks, none that reorder text (U+202A to U+202E, U+2066 to U+2069, U+061C), no format characters (Unicode's Cf: the zero-width characters, U+2060 to U+2064, the soft hyphen, U+180E, U+FEFF, the tag characters), but a zero-width non-joiner or joiner (U+200C, U+200D) between two characters that are seen, as Persian and emoji sequences need; no line or paragraph separator (U+2028, U+2029), and at most 4 combining marks on a character |
+| Digit keys | fewer than 10 buttons or chips in a scene labeled with one digit each (a PIN pad's keys, which is the device's own) |
 | Lines | `max_lines` at most 20 (3 on a card) |
 | Images | 32 on a page, 1 on a card; 256 KB and 1280 by 800 pixels each; an address at most 2048 characters |
 | Images kept | 8 MB an add-on, those put and those fetched together, each counted as its pixels at four bytes (or its bytes, when more); 64 put at once |

@@ -50,6 +50,7 @@ type addonShown struct {
 type addonCardKept struct {
 	view  *addonCardView
 	at    time.Time
+	newAt time.Time // when a new scene.set was last drawn at once
 	every time.Duration
 	timer *time.Timer
 }
@@ -442,6 +443,11 @@ func (d *Display) addonCardNow(h screenHost, night bool) *addonCardView {
 		return nil
 	case prev != nil && prev.id == best.id && prev.sc.Rev == best.sc.Rev && prev.sc.Images == best.sc.Images:
 		return best // nothing changed
+	case prev != nil && prev.id == best.id && prev.sc.Set != best.sc.Set && now.Sub(c.newAt) >= every:
+		// A new scene.set (after card.clear, say), whose taps the server takes once it is drawn: shown
+		// at once, as the card held would take none. At most once an interval, so an add-on setting its
+		// card over and over is drawn no more than twice as often as one patching it.
+		c.newAt = now
 	case prev != nil && !prevGone && now.Sub(c.at) < every:
 		d.addonCardLaterLocked(every - now.Sub(c.at))
 		return prev

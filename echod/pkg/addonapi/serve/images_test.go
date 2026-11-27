@@ -470,3 +470,27 @@ func TestNotBeforeIsHeld(t *testing.T) {
 		t.Error("the newest was forgotten")
 	}
 }
+
+// A retry timer stopped for a sooner one, but already firing, does not forget the one armed after it.
+func TestAStaleRetryTimerDoesNothing(t *testing.T) {
+	r, _, c := screenRig(t)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	r.s.mu.Lock()
+	a := r.s.addons["meals"]
+	now := r.s.Now()
+	r.s.retryLocked(a, now.Add(time.Hour))
+	old, epoch := a.images.retryGen, a.images.epoch
+	r.s.retryLocked(a, now.Add(30*time.Minute)) // sooner: the first is stopped, a second armed
+	armed := a.images.retry
+	gen := a.images.gen
+	r.s.mu.Unlock()
+	r.s.retryFired(a, old, epoch) // the first, which fired before it was stopped
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	if a.images.retry != armed || a.images.retry == nil || a.images.gen != gen {
+		t.Errorf("the stale timer forgot the armed one (%v) or laid the page out (%d, was %d)", a.images.retry, a.images.gen, gen)
+	}
+	a.images.retry.Stop()
+}

@@ -632,8 +632,8 @@ changed, and why:
   drawn far over the lines around it. The card's content is drawn inside its box only: its layout is
   made for the tallest card and moved down, and could reach below a shorter one.
 - **No PIN pad**, as the maintainer decided: ten or more buttons or chips in a row labeled with a digit
-  each are refused, with an error that says why. Labels stay free text otherwise; a calculator, its
-  operators among its digits, is taken.
+  each are refused, with an error that says why. Labels stay free text otherwise. (After a second look,
+  below, ten anywhere in a scene are refused, a calculator's digits with them.)
 - **The catalog's icon and name.** A device refused the whole catalog for an icon its font lacked, so a
   catalog signed against a newer font would leave an older device with none. The strict check is now
   `mkcatalog`'s (`Catalog.Publishable`), and a device draws the initials for an icon it lacks. An
@@ -652,3 +652,25 @@ changed, and why:
 
 Storage, per day: still nothing. The new state (what the display last said, revisions of patched
 blocks, the "not before" list, decode budgets) is in RAM, bounded, and nothing new is logged.
+
+A second look at those fixes found five more, each fixed with a test that fails without it:
+
+- **A page up across a reconnect.** Dropping an add-on's scenes as its last connection closed also
+  forgot that the display showed its page; the display, which had said so, said nothing new, so the page
+  set after the reconnect took no taps and its add-on was never told it was shown. What the display
+  shows now stays (it is the display's to say); only what the add-on was told goes, so it is told again.
+- **The PIN pad by count, not by run.** The device's own pad (1 to 9, back, 0, OK) passed, as back ended
+  the run at nine, and keycap labels ("1️⃣") were not digits. Now ten single-digit buttons or chips
+  anywhere in a scene are refused, a keycap's variation selector and enclosing keycap set aside. A
+  calculator's digits are refused with them: the rule is meant to be simple to state and to keep.
+- **Format characters by class.** Refusing U+200B to U+200F by range refused the zero-width non-joiner
+  Persian needs and the joiner of emoji sequences, and let through U+2060 to U+2064, the soft hyphen,
+  U+180E and the tag characters. Words now refuse every format character (Cf), the controls and the
+  separators, but take a non-joiner or joiner between two characters that are seen.
+- **A card set again shows at once.** After card.clear and a new scene.set, the display held the card
+  before it for up to a second (five at night), while the server, rightly, took none of its taps. A new
+  scene.set now shows at once, at most once an interval, so setting a card over and over is drawn no
+  more than twice as often as patching it.
+- **The retry timer.** A timer stopped for a sooner one, but already firing and waiting for the lock,
+  cleared the newer one's place, leaving two live. Each timer now has a generation, and only the one
+  armed acts.

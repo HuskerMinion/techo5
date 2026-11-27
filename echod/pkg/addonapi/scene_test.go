@@ -70,55 +70,63 @@ func TestSceneValid(t *testing.T) {
 func TestSceneRefusals(t *testing.T) {
 	one := 1.0
 	for what, b := range map[string]Block{
-		"no type":                 {Children: []Block{Text("x")}},
-		"an unknown type":         {Type: "webview"},
-		"a field not its type's":  {Type: BlockButton, ID: "a", Label: "A", Text: "words"},
-		"an accent on a column":   {Type: BlockColumn, Accent: "accent"},
-		"an accent not a role":    Card("green", Text("x")),
-		"a button with no id":     Column(Block{Type: BlockButton, Label: "Go"}),
-		"a chip with no id":       Column(Block{Type: BlockChip, Label: "Go"}),
-		"a bad id":                Column(Button("Next", "Next", "")),
-		"an id with a dash":       Column(Button("go-on", "Next", "")),
-		"a duplicate id":          Column(Button("next", "Next", ""), Block{Type: BlockText, ID: "next", Text: "x"}),
-		"a weight outside a row":  Card("", Block{Type: BlockText, Text: "x", Weight: 1}),
-		"a weight too great":      Row(Block{Type: BlockSpacer, Weight: MaxWeight + 1}),
-		"a button with nothing":   Button("a", "", ""),
-		"an icon not mdi":         Button("a", "", "fa:check"),
-		"a control character":     Text("a\x07b"),
-		"a bidi override":         Text("abc\u202edef"),
-		"a bidi isolate":          Text("abc\u2066def"),
-		"a C1 control":            Text("a\u0085b"),
-		"DEL":                     Text("a\x7fb"),
-		"a zero-width space":      Text("pay\u200bpal"),
-		"a zero-width joiner":     Text("a\u200db"),
-		"a byte order mark":       Text("\ufeffhello"),
-		"a line separator":        Text("one\u2028two"),
-		"a paragraph separator":   Text("one\u2029two"),
-		"a hidden label":          Button("a", "O\u200bK", ""),
-		"a hidden heading":        List(Section{Heading: "A\u202eB", Items: []Block{Text("x")}}),
-		"a stack of marks":        Text("e" + strings.Repeat("\u0301", MaxMarks+1)),
-		"a break in a label":      Button("a", "two\nlines", ""),
-		"a size not one":          {Type: BlockText, Text: "x", Size: "giant"},
-		"too many lines":          {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
-		"a progress past 1":       {Type: BlockProgress, Value: func() *float64 { v := 1.5; return &v }()},
-		"a progress of both":      {Type: BlockProgress, Value: &one, Timer: "local:abc"},
-		"a progress of neither":   {Type: BlockProgress},
-		"another's timer":         Countdown("local:theirs"),
-		"a list of nothing":       {Type: BlockList},
-		"a list in a list":        List(Section{Items: []Block{List(Section{Items: []Block{Text("x")}})}}),
-		"a list deep in a list":   List(Section{Items: []Block{Column(List(Section{Items: []Block{Text("x")}}))}}),
-		"an image of both":        {Type: BlockImage, URL: "http://192.168.1.2/a.png", Data: []byte{1}},
-		"an image of neither":     {Type: BlockImage},
-		"an image by ftp":         Image("ftp://192.168.1.2/a.png"),
-		"an image from outside":   Image("http://8.8.8.8/a.png"),
-		"an image from loopback":  Image("http://127.0.0.1:8080/a.png"),
-		"an image link-local":     Image("http://[fe80::1]/a.png"),
-		"an image with a user":    Image("http://me:pw@192.168.1.2/a.png"),
-		"an image not an image":   ImageData([]byte("GIF89a......")),
-		"a fit not one":           {Type: BlockImage, URL: "http://ha.local/a.png", Fit: "stretch"},
-		"an image put and by url": {Type: BlockImage, URL: "http://192.168.1.2/a.png", Name: "photo"},
-		"an image put, bad name":  ImageNamed("Photo 1"),
-		"a name on a text":        {Type: BlockText, Text: "x", Name: "photo"},
+		"no type":                  {Children: []Block{Text("x")}},
+		"an unknown type":          {Type: "webview"},
+		"a field not its type's":   {Type: BlockButton, ID: "a", Label: "A", Text: "words"},
+		"an accent on a column":    {Type: BlockColumn, Accent: "accent"},
+		"an accent not a role":     Card("green", Text("x")),
+		"a button with no id":      Column(Block{Type: BlockButton, Label: "Go"}),
+		"a chip with no id":        Column(Block{Type: BlockChip, Label: "Go"}),
+		"a bad id":                 Column(Button("Next", "Next", "")),
+		"an id with a dash":        Column(Button("go-on", "Next", "")),
+		"a duplicate id":           Column(Button("next", "Next", ""), Block{Type: BlockText, ID: "next", Text: "x"}),
+		"a weight outside a row":   Card("", Block{Type: BlockText, Text: "x", Weight: 1}),
+		"a weight too great":       Row(Block{Type: BlockSpacer, Weight: MaxWeight + 1}),
+		"a button with nothing":    Button("a", "", ""),
+		"an icon not mdi":          Button("a", "", "fa:check"),
+		"a control character":      Text("a\x07b"),
+		"a bidi override":          Text("abc\u202edef"),
+		"a bidi isolate":           Text("abc\u2066def"),
+		"a C1 control":             Text("a\u0085b"),
+		"DEL":                      Text("a\x7fb"),
+		"a zero-width space":       Text("pay\u200bpal"),
+		"a lone zero-width joiner": Text("\u200dab"),
+		"a joiner by a space":      Text("a \u200cb"),
+		"a word joiner":            Text("a\u2060b"),
+		"an invisible operator":    Text("f\u2061x"),
+		"an invisible plus":        Text("1\u20642"),
+		"a soft hyphen":            Text("pay\u00adpal"),
+		"a Mongolian separator":    Text("a\u180eb"),
+		"a tag character":          Text("a\U000e0041b"),
+		"a language tag":           Text("\U000e0001ab"),
+		"a byte order mark":        Text("\ufeffhello"),
+		"a line separator":         Text("one\u2028two"),
+		"a paragraph separator":    Text("one\u2029two"),
+		"a hidden label":           Button("a", "O\u200bK", ""),
+		"a hidden heading":         List(Section{Heading: "A\u202eB", Items: []Block{Text("x")}}),
+		"a stack of marks":         Text("e" + strings.Repeat("\u0301", MaxMarks+1)),
+		"a break in a label":       Button("a", "two\nlines", ""),
+		"a size not one":           {Type: BlockText, Text: "x", Size: "giant"},
+		"too many lines":           {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
+		"a progress past 1":        {Type: BlockProgress, Value: func() *float64 { v := 1.5; return &v }()},
+		"a progress of both":       {Type: BlockProgress, Value: &one, Timer: "local:abc"},
+		"a progress of neither":    {Type: BlockProgress},
+		"another's timer":          Countdown("local:theirs"),
+		"a list of nothing":        {Type: BlockList},
+		"a list in a list":         List(Section{Items: []Block{List(Section{Items: []Block{Text("x")}})}}),
+		"a list deep in a list":    List(Section{Items: []Block{Column(List(Section{Items: []Block{Text("x")}}))}}),
+		"an image of both":         {Type: BlockImage, URL: "http://192.168.1.2/a.png", Data: []byte{1}},
+		"an image of neither":      {Type: BlockImage},
+		"an image by ftp":          Image("ftp://192.168.1.2/a.png"),
+		"an image from outside":    Image("http://8.8.8.8/a.png"),
+		"an image from loopback":   Image("http://127.0.0.1:8080/a.png"),
+		"an image link-local":      Image("http://[fe80::1]/a.png"),
+		"an image with a user":     Image("http://me:pw@192.168.1.2/a.png"),
+		"an image not an image":    ImageData([]byte("GIF89a......")),
+		"a fit not one":            {Type: BlockImage, URL: "http://ha.local/a.png", Fit: "stretch"},
+		"an image put and by url":  {Type: BlockImage, URL: "http://192.168.1.2/a.png", Name: "photo"},
+		"an image put, bad name":   ImageNamed("Photo 1"),
+		"a name on a text":         {Type: BlockText, Text: "x", Name: "photo"},
 	} {
 		refuses(t, what, OnPage, b, CodeBadRequest)
 	}
@@ -351,6 +359,8 @@ func TestWordsAsWritten(t *testing.T) {
 		"Devanagari":             "\u0928\u092e\u0938\u094d\u0924\u0947",
 		"Arabic":                 "\u0645\u0631\u062d\u0628\u0627",
 		"a line break":           "Step 2\nStir",
+		"Persian with a ZWNJ":    "\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645",
+		"an emoji sequence":      "\U0001f469\u200d\U0001f4bb and \u2764\ufe0f\u200d\U0001f525",
 	} {
 		if err := ValidScene(OnPage, Text(text), nil); err != nil {
 			t.Errorf("%s: %v", what, err)
@@ -391,15 +401,17 @@ func TestNoPINPad(t *testing.T) {
 	if err := ValidScene(OnPage, Row(keys[:MaxDigitRun-1]...), nil); err != nil {
 		t.Errorf("nine digit keys: %v", err)
 	}
+	// The device's own pad, back and OK among its digits; with words among them; spread over the page.
+	dev := Column(Row(keys[0:3]...), Row(keys[3:6]...), Row(keys[6:9]...), Row(Button("back", "", "mdi:backspace"), keys[9], Button("ok", "OK", "")))
+	refuses(t, "the device's own PIN pad", OnPage, dev, CodeBadRequest)
 	broken := append(append(append([]Block{}, keys[:5]...), Text("and")), keys[5:]...)
-	if err := ValidScene(OnPage, Row(broken...), nil); err != nil {
-		t.Errorf("digit keys with words among them: %v", err)
+	refuses(t, "digit keys with words among them", OnPage, Row(broken...), CodeBadRequest)
+	refuses(t, "digit keys spread over a page", OnPage, Column(Row(keys[:5]...), Text("Pick a number"), List(Section{Heading: "More", Items: []Block{Row(keys[5:]...)}})), CodeBadRequest)
+	var caps []Block
+	for i := range 10 {
+		caps = append(caps, Button(fmt.Sprintf("cap%d", i), fmt.Sprintf("%d\ufe0f\u20e3", i), ""))
 	}
-	calc := Column(Row(key("7"), key("8"), key("9"), Button("div", "÷", "")), Row(key("4"), key("5"), key("6"), Button("mul", "×", "")),
-		Row(key("1"), key("2"), key("3"), Button("sub", "−", "")), Row(key("0"), Button("dot", ".", ""), Button("eq", "=", "")))
-	if err := ValidScene(OnPage, calc, nil); err != nil {
-		t.Errorf("a calculator's keys: %v", err)
-	}
+	refuses(t, "a pad of keycaps", OnPage, Row(caps...), CodeBadRequest)
 	if err := ValidScene(OnPage, Row(Button("ten", "10", ""), key("1"), key("2")), nil); err != nil {
 		t.Errorf("a few numbered buttons: %v", err)
 	}
