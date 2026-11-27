@@ -352,8 +352,7 @@ func athenaInit(k *athenaKernel) {
 	slog.Info("athena: converter set up", "controls", len(k.controls), "failed", failed, "software_mute", cut)
 	if skipped {
 		if off, err := athenaCodecRead(); err == nil && off {
-			slog.Warn("athena: the converter's channels are off, from the daemon's software mute: " +
-				"lift it from Home Assistant or the screen to hear the microphones here")
+			slog.Warn("athena: the converter's channels are off; the daemon's mute holds them")
 		}
 	}
 }
@@ -365,15 +364,16 @@ var athenaChannels sync.Mutex
 // athenaChannelValue is what a channel enable gets when the capture opens, and whether it is written at
 // all. The software mute's own switches: a microphone opened while it is on opens with its channels off,
 // so not one frame of the room reaches the bus (privacy, platform_athena.go). Only the daemon, which
-// holds the mute (privacy.MuteHeldHere), switches them on. Any other process (the CLI's tools) has only
-// its own copy of the mute and would switch them on behind the daemon's back, so there they are only
-// ever switched off, and otherwise left as they are.
+// holds the mute (privacy.MuteHeldHere), writes them at all. Any other process (the CLI's tools) has
+// only its own copy of the mute, which means nothing: written from it, the switches could go on behind
+// a software mute the daemon holds, or off under a daemon whose microphones are live, with nothing to
+// say why. There they are left as they are (athenaInit warns when they are off).
 func athenaChannelValue(want uint32, cut, here bool) (v uint32, write bool) {
-	if cut {
-		return 0, true
-	}
 	if !here {
 		return 0, false
+	}
+	if cut {
+		return 0, true
 	}
 	return want, true
 }
