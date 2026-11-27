@@ -68,8 +68,8 @@ func SoftwareCut() bool { return softwareCut.Load() }
 func Seed(muted bool) { seedSoftwareCut(muted) }
 
 // heldHere is whether this process is the daemon, the one that holds the mute. Another process (the
-// CLI's tools) has only its own copy of a software mute the daemon holds, so it must not switch the
-// converter's channels on from it (hardware/mic's athenaInit).
+// CLI's tools) has only its own copy of a software mute the daemon holds, so it must not write the
+// converter's channels from it (hardware/mic's athenaInit).
 var heldHere atomic.Bool
 
 // HoldTheMute marks this process as the daemon. The run command calls it before anything starts.

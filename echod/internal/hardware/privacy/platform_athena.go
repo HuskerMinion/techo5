@@ -5,6 +5,7 @@ package privacy
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -91,6 +92,8 @@ func (athenaMute) Lag() time.Duration { return toggleLag }
 // Unmuting while the latch is set is the button's alone.
 func (athenaMute) Set(muted bool) error {
 	if muted {
+		athenaSoft.Lock()
+		defer athenaSoft.Unlock()
 		athenaLifted.Store(false)
 		softwareCut.Store(true)
 		return codecCut(true)
@@ -124,8 +127,37 @@ func (athenaMute) SoftwareMuted() bool { return softwareCut.Load() }
 // LiftedByButton reports, once, that the button's release took the software mute with it.
 func (athenaMute) LiftedByButton() bool { return athenaLifted.Swap(false) }
 
+// athenaSoft is held across both halves of every move of the software mute, its flag and the
+// converter's channels: Set from Home Assistant or the screen, and the button's lift (athenaFollow), which
+// runs on the latch watch's own goroutine. Without it the button could lower the flag, Home Assistant
+// mute (flag up, channels off), and the button's second half then switch the channels back on under
+// the software mute. It is taken before hardware/mic's channel lock (codecCut), never after it.
+var athenaSoft sync.Mutex
+
 // athenaRelease takes the software mute off: the frames first, then the converter's channels.
 func athenaRelease() error {
+	athenaSoft.Lock()
+	defer athenaSoft.Unlock()
+	return athenaReleaseLocked()
+}
+
+// athenaLift is the button's release: it takes the software mute off with the latch if it is on, and
+// marks the lift for the screen. lifted is false when there was nothing to lift. The check and the
+// release are one move, so a mute from Home Assistant lands either before it (and is lifted) or after
+// it (and stays).
+func athenaLift() (lifted bool, err error) {
+	athenaSoft.Lock()
+	defer athenaSoft.Unlock()
+	if !softwareCut.Load() {
+		return false, nil
+	}
+	err = athenaReleaseLocked()
+	athenaLifted.Store(true)
+	return true, err
+}
+
+// athenaReleaseLocked is athenaRelease with athenaSoft held.
+func athenaReleaseLocked() error {
 	// The flag before the channels: a capture opening in between (hardware/mic's athenaInit) reads the
 	// flag to decide the channels, and one that read it still set after the channels went on would
 	// switch them off again under microphones that are meant to be live.
@@ -177,12 +209,14 @@ func athenaFollow(read func() (input.Event, error), fn func()) {
 			continue
 		}
 		latched := e.Value != 0
-		if !latched && softwareCut.Load() {
-			if err := athenaRelease(); err != nil {
+		if !latched {
+			lifted, err := athenaLift()
+			if err != nil {
 				slog.Error("privacy: lifting the software mute with the button failed", "err", err)
 			}
-			athenaLifted.Store(true)
-			slog.Info("privacy: the mute button lifted the software mute with the latch")
+			if lifted {
+				slog.Info("privacy: the mute button lifted the software mute with the latch")
+			}
 		}
 		// The switch and the button's key come from the same node, each debounced on its own, so the
 		// key can arrive just after the switch. A little time lets a press be seen as down first, and

@@ -5,6 +5,8 @@ package privacy
 import (
 	"errors"
 	"io"
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/input"
@@ -207,5 +209,37 @@ func TestMuteHeldHere(t *testing.T) {
 	HoldTheMute()
 	if !MuteHeldHere() {
 		t.Fatal("HoldTheMute did not take")
+	}
+}
+
+// The button's lift and a mute from Home Assistant at the same time: whichever lands last, the flag and
+// the converter's channels agree. Without athenaSoft the button could lower the flag, Home Assistant
+// mute, and the button's own half then switch the channels on under the software mute.
+func TestAthenaLiftRacesAMute(t *testing.T) {
+	newAthenaFake(t)
+	var mu sync.Mutex
+	off := false // the converter's channels, as last written
+	SetCodec(func(cut bool) error {
+		runtime.Gosched() // widen the gap between the two halves of a move
+		mu.Lock()
+		off = cut
+		mu.Unlock()
+		return nil
+	}, func() (bool, error) { mu.Lock(); defer mu.Unlock(); return off, nil })
+	m := athenaMute{}
+	release := []input.Event{{Type: input.EvSw, Code: swMuteDevice, Value: 0}}
+	for i := 0; i < 2000; i++ {
+		_ = m.Set(true)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); athenaFollow(reader(release, nil), func() {}) }()
+		go func() { defer wg.Done(); _ = m.Set(true) }()
+		wg.Wait()
+		mu.Lock()
+		got := off
+		mu.Unlock()
+		if SoftwareCut() != got {
+			t.Fatalf("round %d: software mute %v, converter channels off %v", i, SoftwareCut(), got)
+		}
 	}
 }
