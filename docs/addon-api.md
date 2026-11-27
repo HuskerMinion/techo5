@@ -339,7 +339,8 @@ Show along the top, with the way out (×) at its end; on a Spot a band across th
 with the way out at the foot. What the scene holds is laid out inside the room left, and what does not
 fit is cut at its edge, never drawn over the bar or the way out. On the page:
 
-- a tap on a button, a chip or a list item with an id sends `touch`, for what the finger was on: a tap
+- a tap on a button, a chip or a list item with an id sends `touch`, and on a stepper's − or + or a
+  toggle `change`, for what the finger was on: a tap
   the device read off a drawing of the page from before a change to that block (a new `scene.set`, or a
   patch of it, of something in it or of something it is in) is not sent, as the page under the finger is
   no longer the one drawn;
@@ -411,14 +412,36 @@ unknown key is.
 | Block | Fields | Notes |
 | --- | --- | --- |
 | `column`, `row` | `children`, `spacing` | top to bottom, start to end |
-| `list` | `sections`: each `{"heading": "…", "items": [blocks]}` | scrolls, which is the daemon's; no list inside a list |
+| `list` | `sections`: each `{"heading": "…", "items": [blocks]}` | scrolls, which is the daemon's; no list inside a list; a `row` that is an item may have a picture or an icon at its start (below) |
 | `card` | `children`, `spacing`, `accent` | `accent` is one of the theme's: `accent`, `dim`, `rules` |
 | `text` | `text`, `size`, `bold`, `align`, `max_lines` | `size`: `small`, `body` (the default), `title`, `huge`; `align`: `start`, `center`, `end`; line breaks kept |
 | `image` | `url`, `name` or `data`, `fit` | one of the three; `fit`: `contain` (the default) or `cover` |
 | `button` | `label`, `icon`, an `id` | a tap sends `touch` |
-| `chip` | `label`, `icon`, `selected`, an `id` | a tap sends `touch`; `selected` for a row of tabs |
+| `chip` | `label`, `icon`, `selected`, an `id` | a tap sends `touch`; `selected` for a row of tabs, the add-on's to set |
+| `stepper` | `label`, `value`, `min`, `max`, `step`, `unit`, an `id` | a number from `min` to `max` in steps of `step` (1 if none), drawn as − value unit +; a tap on − or + sends `change` |
+| `toggle` | `label`, `on`, an `id` | an on and off switch beside its label; a tap sends `change` |
 | `progress` | `value` or `timer` | `value` from 0 to 1, or `timer`, one of the add-on's own timers by `timer.start`'s id, counted down with the clock's |
 | `divider`, `spacer` | | |
+
+**Steppers and toggles** take a number or a choice without keys. A stepper's `value`, `min` and `max`
+are required, and `step` is 1 unless given; each is finite, at most 1e9 either way and of at most 2
+decimal places, `min` is less than `max`, `value` lies between them, `step` is more than 0, and the range
+holds at most 1000 steps; its `unit` is words of at most 16 characters ("people", "min"). − and + are
+round buttons of a button's size, the one at the end of the range drawn faint and doing nothing. A tap
+on − or + moves the number one step, held to the range, and a tap anywhere on a toggle flips it: the
+device shows the new number or state at once and sends `change` (below). The add-on may patch the block
+to set it otherwise (to refuse 13 servings, say), and what it patches is what shows; a new `scene.set`
+shows what it sets. Both are pressable, so neither is drawn on the card over the night clock, and
+neither counts as a digit key, whatever its label.
+
+**Picked chips.** A chip's `selected` draws it as the theme's picked chip (the accent, as the device's
+own tabs are), never a color of its own. A tap does not pick it: it sends `touch`, and the add-on patches
+the chips of the group, picked and not, so a row of tabs or a single choice is the add-on's to keep.
+
+**A list row's picture or icon.** A `row` that is a list's item may have, at its start, a small square
+picture, by `name` (one put with `image.put`) or `url` (by an image's rules, counted among the page's
+images and its 8 MB), or an `icon` (`mdi:…`; one the device's font does not have is drawn as nothing);
+not both. The row is tapped by its `id` as before. A row anywhere else has neither.
 
 `spacing` is `none`, `small`, `normal` (the default) or `large`. Any child of a row or a column may have
 a `weight`, from 1 to 12: its share of the room the children without one leave. A button or a chip has
@@ -467,9 +490,9 @@ keys are refused too; a number pad an add-on needs is a list or chips of other l
 Labels are otherwise free text.
 
 **The card** holds only `column`, `row`, `text` (not `huge`, at most 3 lines and 200 characters),
-`chip`, `progress`, one `image` and `spacer`: at most 12 blocks, 3 deep. Nothing on it scrolls or is a
+`chip`, `progress`, `stepper`, `toggle`, one `image` and `spacer`: at most 12 blocks, 3 deep. Nothing on it scrolls or is a
 button; it is a glance at the clock, and the page is where the add-on is used. A tap on one of its chips
-sends `touch`; a swipe puts the card away. Of several add-ons' cards the newest shows, and the others
+sends `touch`, and on a stepper's − or + or a toggle `change`; a swipe puts the card away. Of several add-ons' cards the newest shows, and the others
 keep their place behind it.
 
 ### Limits
@@ -556,6 +579,15 @@ card set after it until the device has drawn that one.
 `{"id": "next", "on": "page"}`: a tap on one of the add-on's buttons or chips, or on a list's item with
 an id, on its page or its card. Only for what is in view.
 
+#### change
+
+`{"id": "servings", "on": "page", "value": 5}` or `{"id": "warm", "on": "card", "value": true}`: a tap
+that changed one of the add-on's steppers (the number it made it, held to its range and places) or
+toggles (its new state) on its page or its card. One shape for both: `value` is a number for a stepper
+and true or false for a toggle. Only for what is in view, and only off a drawing of the block as it is
+now, as for `touch`. A tap on a stepper or a toggle is a tap on the add-on's block, so, as any such tap,
+it counts as a person asking (`screen.open`); the add-on's patch after it does not.
+
 #### swipe, back
 
 `{"direction": "left"}` or `"right"`: a swipe across the page in view. `back` (no data): the back
@@ -634,7 +666,7 @@ and bytes; `scene page` or `scene card` prints one as it is now. The fake has no
 show, so `screen.open` brings the page up at once, when it may (within 5 seconds of a command or a
 tap, as on a device), and every card shows as it is set. From the keyboard, `tile` (a tap on the
 add-on's tile, which brings its page up), `touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
-say; the add-on is told of its page, and nothing of its card), `dismiss` (the card swiped away) and
+say; the add-on is told of its page, and nothing of its card), `change ID VALUE [page|card]` (a tap on a stepper, VALUE the number it makes it, or on a toggle, on or off), `dismiss` (the card swiped away) and
 `close` (the name bar's way out) do what the owner would. `tile` before the add-on has set its page
 brings the waiting page up, and the page is in view as soon as it is set, as on a device.
 
@@ -656,5 +688,5 @@ In Go, `Client.StartMedia` answers the media's id, `Client.MediaStatus` asks `me
 `Client.WatchMedia` has `media.state` events arrive decoded on a channel of their own instead of on
 `Events`. `Client.SetScene`, `PatchScene`, `OpenScreen`, `CloseScreen`, `ClearCard`, `PutImage` and `DropImage` are the screen's
 ops, `Client.WatchScreen` has its events arrive decoded on a channel of their own, and `Column`, `Row`,
-`Card`, `List`, `Text`, `Title`, `Button`, `Chip`, `Progress`, `Countdown`, `Image`, `ImageNamed`, `ImageData`,
-`Divider` and `Spacer` build blocks. `SetScene` checks a scene as the device does before sending it.
+`Card`, `List`, `Text`, `Title`, `Button`, `Chip`, `Stepper`, `Toggle`, `Progress`, `Countdown`, `Image`, `ImageNamed`,
+`ImageData`, `Divider` and `Spacer` build blocks; a `change` event's `Number` and `Bool` read its value. `SetScene` checks a scene as the device does before sending it.

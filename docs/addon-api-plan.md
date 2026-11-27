@@ -305,8 +305,10 @@ How Meals maps:
   Mealie); "start cooking", "next", "back", "go to step 3" and "start the timer" as commands, each
   answering the step text for Home Assistant to read; step timers on the device; a sensor with the
   current step. Useful by voice alone, with the step said aloud.
-- **Stage 2:** the Shopping, Plan and Cooking views as one page with three tabs inside it, photos by
-  URL, the step and its timer as a card over the clock, keep-awake while cooking.
+- **Stage 2:** the Shopping, Plan and Cooking views as one page with three tabs inside it (chips it
+  marks `selected`), photos by URL, the recipes as list rows with their photo at the start, the servings
+  as a `stepper`, "check off as I go" as a `toggle`, the step and its timer as a card over the clock,
+  keep-awake while cooking.
 - **Stage 3:** not needed; it might use voice state to pause a step's read-out while someone talks.
 
 ## Open questions for the user
@@ -674,3 +676,40 @@ A second look at those fixes found five more, each fixed with a test that fails 
 - **The retry timer.** A timer stopped for a sooner one, but already firing and waiting for the lock,
   cleared the newer one's place, leaving two live. Each timer now has a generation, and only the one
   armed acts.
+
+## Stage 2 as built (more blocks)
+
+The maintainer asked for blocks that let many kinds of add-ons, not Meals alone, take a number or a
+choice and show a list of things with their pictures, without digit keys and without anything that
+could pass for the device's own questions. [addon-api.md](addon-api.md) says the behavior.
+
+- **`stepper`**: a number from `min` to `max` in steps of `step`, its label and unit beside it, drawn as
+  − value unit + with − and + round buttons of a button's size, faint at the ends. Checked strictly:
+  finite numbers, at most 1e9 and 2 decimal places, `min` < `max`, the value within, a step above 0, at
+  most 1000 steps (so a slider's worth of steps cannot be a list of a million numbers). The servings
+  of a recipe without ten digit keys, which the PIN pad rule refuses.
+- **`toggle`**: a label and an on and off switch, the accent's fill when on, a tap anywhere on it
+  flipping it.
+- **One event, `change`** `{id, on, value}`, for both: a number for a stepper (held to its range and
+  places by the daemon, whatever the display sent), a bool for a toggle. One event rather than a value
+  in `touch`, as `touch` means "this was pressed" and the add-on decides what follows, where `change`
+  means "the owner set this to that" and the device has already shown it. It counts as a person asking,
+  as every tap on an add-on's block does; a patch after it does not.
+- **Shown at once.** The device shows the tap's number or state before the add-on answers, kept only
+  while the add-on's scene still says what it said before the tap (and is the same `scene.set`): the
+  add-on's patch, to agree or to set it otherwise, takes over, and a new scene drops it. Taps on − and +
+  pass the same revision check as every tap, so a tap off a drawing older than a patch of the stepper is
+  not sent.
+- **`selected` chips are the add-on's.** The field was there; it is now documented as the add-on's to
+  set (a tap sends `touch`, the add-on patches the group), drawn as the theme's picked chip, so no two
+  chips can be an accept and decline pair.
+- **A list row's picture or icon**: `name` or `url` (an image's rules and budget, counted among the
+  page's images) or `icon` (an unknown one draws nothing) on a `row` that is a list's item, a square of a
+  button's size at its start. Only there: a picture or an icon on a row anywhere else is refused, so it
+  cannot be made into a mark beside a button.
+- **Not on the night card**, as both are pressable, and neither counts toward the PIN pad rule, which
+  counts single-digit buttons and chips only.
+- **The fake daemon** draws them, and `change ID VALUE [page|card]` taps one.
+
+Storage: nothing. What the screen shows ahead of the add-on is in RAM, one entry for each block tapped,
+dropped as the add-on's scene moves on.
