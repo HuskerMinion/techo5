@@ -13,7 +13,7 @@ type Observation struct {
 	TDOA    float64
 }
 
-// Fit finds the positions of n microphones that best explain the observations, centred on their
+// Fit finds the positions of n microphones that best explain the observations, centered on their
 // centroid.
 //
 // A far source's arrival difference is linear in the pair's offset: TDOA = -(pA - pB)·u / c. So each

@@ -116,7 +116,7 @@ func main() {
 	if err != nil {
 		fail("%v", err)
 	}
-	fmt.Printf("\nfitted positions (mm, centred; bearing in degrees clockwise from segment 0), residual %.1f µs:\n", res*1e6)
+	fmt.Printf("\nfitted positions (mm, centered; bearing in degrees clockwise from segment 0), residual %.1f µs:\n", res*1e6)
 	for m, p := range g {
 		fmt.Printf("  ch%d  x %6.2f  y %6.2f   r %5.2f mm at %6.1f°\n", mics[m], p.X*1000, p.Y*1000,
 			p.Len()*1000, array.Degrees(p.Bearing()))

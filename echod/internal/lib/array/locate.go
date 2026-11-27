@@ -97,7 +97,7 @@ func (l *Locator) Forget() {
 	l.held = 0
 }
 
-// Power is the steered response at each bearing, each normalised to 1 for a perfect match.
+// Power is the steered response at each bearing, each normalized to 1 for a perfect match.
 func (l *Locator) Power() []float64 {
 	out := make([]float64, l.bearings)
 	if l.held <= 0 {
@@ -132,7 +132,7 @@ func (l *Locator) Bearing() (bearing, confidence float64) {
 	}
 	mean /= float64(len(pw))
 
-	// Between the grid's points, from the parabola through the peak and its neighbours.
+	// Between the grid's points, from the parabola through the peak and its neighbors.
 	n := len(pw)
 	a, c, z := pw[(best+n-1)%n], pw[best], pw[(best+1)%n]
 	shift := 0.0

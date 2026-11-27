@@ -2,7 +2,7 @@
 // source reaches each microphone, how two microphones' cross spectrum points at a direction, and the
 // steered response that turns those into a bearing.
 //
-// Positions are in metres in the plane of the top face, seen from above. Bearings are radians
+// Positions are in meters in the plane of the top face, seen from above. Bearings are radians
 // clockwise from LED segment 0, so a bearing is a place on the ring and the ring can show it as it is.
 // Toward is the unit vector of a bearing in the same frame, which is all that makes "clockwise" true:
 // positions and bearings only have to agree with each other.
@@ -13,7 +13,7 @@ import "math"
 // SpeedOfSound in air at room temperature, m/s.
 const SpeedOfSound = 343.0
 
-// Vec is a position or direction in the plane, in metres.
+// Vec is a position or direction in the plane, in meters.
 type Vec struct{ X, Y float64 }
 
 func (a Vec) Sub(b Vec) Vec       { return Vec{a.X - b.X, a.Y - b.Y} }

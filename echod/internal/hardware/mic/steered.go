@@ -127,7 +127,7 @@ type finderTuning struct {
 }
 
 // defaultTuning is the one that did best on speech recorded on the unit from six directions round it
-// (2026-11-23, one room, a metre or two out): within 30 degrees 99% of the time once the talker had
+// (2026-11-23, one room, a meter or two out): within 30 degrees 99% of the time once the talker had
 // started, against 94% for the locator taken at its word, and the weakest direction from 69% to 96%.
 // The price is turning: 0.9 s to follow a new talker (median, 1.5 s at worst), against 0.3.
 var defaultTuning = finderTuning{decay: locateDecay, conf: confident, onset: true, vote: 0.99}

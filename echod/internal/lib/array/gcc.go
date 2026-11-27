@@ -49,7 +49,7 @@ func (s *Spectra) Into(block []float32, out []complex64) {
 
 // PHAT adds A's spectrum times B's conjugate to acc, each bin brought to unit magnitude: the phase
 // transform, which keeps when each frequency arrives and throws away how loud it is, so the room's
-// colour and the source's spectrum do not decide the answer. weight scales the whole frame, for a
+// color and the source's spectrum do not decide the answer. weight scales the whole frame, for a
 // caller that trusts some frames more than others.
 func PHAT(acc []complex128, a, b []complex64, weight float64) {
 	for k := range acc {

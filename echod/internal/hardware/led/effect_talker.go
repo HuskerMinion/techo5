@@ -83,8 +83,8 @@ func toward(p Palette) Frame {
 // less did not read as pointing on the unit (2026-11-23: a 45 degree turn over a ring at three
 // quarters looked like a lighter patch, not an arc): from the blue the ring is set to by default, a deep blue ring and a
 // cyan arc, as Amazon's. Hue does the work rather than brightness, because the Dot 5's fabric spreads
-// every module over its neighbours and evens brightness out (2026-11-23: a white ring with one module at
-// full and the rest at a sixteenth looked even). A color with too little hue to turn (white, greys)
+// every module over its neighbors and evens brightness out (2026-11-23: a white ring with one module at
+// full and the rest at a sixteenth looked even). A color with too little hue to turn (white, grays)
 // takes the default blue pair, since there is nothing in it to make an arc from.
 func listeningColors(p Palette) (ring, arc Color) {
 	const (
