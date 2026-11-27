@@ -3,11 +3,17 @@
 package mic
 
 import (
+	"fmt"
+	"log/slog"
+	"math"
+	"os"
+
 	"github.com/HuskerMinion/techo5/echod/internal/lib/alsa"
 )
 
 // The Echo Dot 5th gen (cannoli) capture path: the converter's own stream on the speaker's card, without
-// the HiFi5 DSP. The microphones go into a TI TLV320ADC5140 (i2c 4-004c), which the MT8519's AFE reads on
+// the HiFi5 DSP. The microphones go into a TI TLV320ADC5140 (i2c 4-004c), or an AKM AK5704 on some
+// boards (cannoliAKMKernel), which the MT8519's AFE reads on
 // eTDM1 (four slots at 96 kHz, 32 bits: the DVT device tree's etdm1-in-fix-*). ETDM1 Capture lands on the
 // AFE's inputs I42..I45 (mt8519-afe-pcm.c in the 6.5.5.5 GPL tree), and the interconnect takes them to
 // O26..O29, the first four channels of the UL9 memory interface: mt-snd-card's capture device 9,
@@ -108,8 +114,54 @@ var cannoliKernel = athenaKernel{
 	refPeriods: 8,
 }
 
+// AK5704 boards: same microphones, another converter (i2c 4-0010). cannoli_hwfixup brings up the one
+// that answers and links the card to it. Its slots 3, 2, 1 carry the TI's channels 1, 2, 3, so ch0..ch2
+// are the same microphones on both boards; slot 0 is unwired.
+const cannoliAKMDriver = "/sys/bus/i2c/drivers/ak5704/4-0010"
+
+var cannoliAKMControls = []athenaControl{
+	{"AK5704 Pull-down Disable bits PSW0N", 1},
+	{"AK5704 Pull-down Disable bits PSW1N", 1},
+	{"AK5704 Pull-down Disable bits PSW2N", 1},
+	{"AK5704 Clock Mode Select", 2}, // MKCI PLL Mode
+	{"AK5704 SDTO Data Length", 2},  // 32-bit Linear
+	{"AK5704 TDM Mode Select", 1},   // TDM128
+	{"AK5704 ADC1A Enable", 1},
+	{"AK5704 ADC1B Enable", 1},
+	{"AK5704 ADC2A Enable", 1},
+	{"AK5704 ADC2B Enable", 1},
+	{"AK5704 SDTO1 MUX", 0}, // ADC1
+	{"AK5704 SDTO2 MUX", 0}, // ADC2
+	{"O26 I45 Switch", 1},
+	{"O27 I44 Switch", 1},
+	{"O28 I43 Switch", 1},
+	{"O29 I42 Switch", 1},
+}
+
+// cannoliAKMKernel is cannoliKernel with the AK5704's controls; akmGain sets its gain.
+var cannoliAKMKernel = func() athenaKernel {
+	k := cannoliKernel
+	k.controls = cannoliAKMControls
+	k.gainControl = ""
+	return k
+}()
+
+// cannoliAKM is whether the AK5704's driver is bound.
+func cannoliAKM() bool {
+	_, err := os.Stat(cannoliAKMDriver)
+	return err == nil
+}
+
+// cannoliBoard is the capture for the converter fitted.
+func cannoliBoard() *athenaKernel {
+	if cannoliAKM() {
+		return &cannoliAKMKernel
+	}
+	return &cannoliKernel
+}
+
 // boardKernel is the Dot 5's capture, which athenaRunning hands the paired capture.
-var boardKernel = &cannoliKernel
+var boardKernel = cannoliBoard()
 
 // MediaService is the init service that holds the capture on Fire OS: Amazon's mixer daemon.
 const MediaService = "mixer"
@@ -126,9 +178,40 @@ func resetsOnMute() bool { return false }
 // openDevice is the paired capture on the speaker's card.
 func openDevice() (capture, error) { return openAthena() }
 
-// setBoardGain sets the TLV320ADC5140's analog gain per microphone (athenaGain), on the card the
-// converter is linked to, the speaker's (captureDevice gives Card).
+// setBoardGain sets the converter's gain per microphone (athenaGain on the TLV320ADC5140, akmGain on the
+// AK5704), on the card the converter is linked to, the speaker's (captureDevice gives Card).
 func setBoardGain(m *alsa.Mixer, db int) bool {
+	if athenaRunning() == &cannoliAKMKernel {
+		akmGain(m, db)
+		return true
+	}
 	athenaGain(m, db)
 	return true
+}
+
+// akmSteps splits db into the AK5704's amplifier (3 dB steps, 0..15) and digital volume (0.375 dB
+// steps, 145 = 0 dB). At the same setting it reads the speech band within 1 dB of an Echo 2nd gen
+// beside it.
+func akmSteps(db int) (amp, digital uint32) {
+	total := float64(db)
+	a := min(max(math.Floor(total/3), 0), 15)
+	d := min(max(145+math.Round((total-3*a)/0.375), 0), 255)
+	return uint32(a), uint32(d)
+}
+
+// akmGain sets the AK5704's four inputs to db (akmSteps).
+func akmGain(m *alsa.Mixer, db int) {
+	amp, digital := akmSteps(db)
+	for _, in := range []string{"1A", "1B", "2A", "2B"} {
+		for _, c := range []struct {
+			name string
+			v    uint32
+		}{{"AK5704 MIC Amp Gain " + in, amp}, {"AK5704 Input Digital Volume " + in, digital}} {
+			if !athenaWrite(m, c.name, c.v) {
+				slog.Error("setting the microphone gain failed", "control", c.name)
+				return
+			}
+		}
+	}
+	slog.Info("microphone gain", "db", db, "converter", "ak5704", "amp_db", fmt.Sprint(3*amp), "digital", digital)
 }
