@@ -95,6 +95,32 @@ New files, copied into the tree:
   `Capture_1` (the four microphones, UL1).
 - `athena_defconfig`: the full kernel configuration.
 
+## Microphones
+
+The four microphones sit on a small board screwed to the inside of the top of the rear shell, under
+the button strip. Two of them hear through the two holes in the strip; the other two sit about 22 mm
+further back under the fabric, with no hole you can see. Amazon's own picture of the unit points
+"Four mics" at the two holes.
+
+![The four microphones of athena, seen from above](../../../../docs/images/athena-microphones.svg)
+
+Which converter channel (hw:0,2, `Capture_1`) is which microphone, on TECHO5's kernel, found on a
+unit with taps on the top and claps from three sides (2026-11-22):
+
+| Channel | Where (seen from the front) |
+|---|---|
+| ch0 | back left, under the fabric |
+| ch1 | back right, under the fabric |
+| ch2 | front right: the hole between vol − and vol + |
+| ch3 | front left: the hole between mute and vol − |
+
+A tap on a hole drives its channel into clipping and leaves the others more than 30 dB lower. A clap
+from the front reaches ch2 and ch3 about 65 µs (one sample at 16 kHz) before ch0 and ch1; one from
+the left reaches ch3 first and ch1 last, one from the right the other way round. That puts the four
+on a rectangle about 20 mm wide and 22 mm deep, centered on the board, as the board photos show.
+Amazon's kernel sets the converter's slots itself (`athenaControls` in
+`echod/internal/hardware/mic/athena.go`), so its order has not been checked against this.
+
 ## Display panels
 
 athena units ship with several panels. Only the ILI9881C on BOE glass

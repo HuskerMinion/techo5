@@ -3,6 +3,9 @@ package subband
 import (
 	"math"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/fft"
@@ -150,5 +153,104 @@ func TestOddFrameSizesKeepEverySample(t *testing.T) {
 func TestLoadWithoutCoefficients(t *testing.T) {
 	if _, err := Load(t.TempDir()); err == nil {
 		t.Fatal("an empty directory loaded")
+	}
+}
+
+// writeFrontEnd lays out a Fire OS 6 front end's two files under dir, every coefficient zero, and an
+// AFE.cfg naming the hardware when hardware is not empty.
+func writeFrontEnd(t *testing.T, dir, hardware string) {
+	t.Helper()
+	zeros := func(name string, n int) {
+		var b strings.Builder
+		b.WriteString("// const float FD_FBF_W_TBL[FD_FBF_W_TBL_LEN]\n")
+		for range n {
+			b.WriteString("0.000000000000, \n")
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	zeros("coefs_FilterBank_AnalysisSynthesis_768cvxGLow.cfg", 768)
+	zeros("coefs_FBFV2_LowLatency_8beams.cfg", 128*8*4*4*2)
+	if hardware == "" {
+		return
+	}
+	afe := `// Comments are accepted in JSON configuration files.
+{
+    "Hardware Definition":
+        {
+            "Name"                  : "` + hardware + `",
+            "Num Mics"              : 4
+        },
+    "Algorithm Definition": { "Other": { "Name": "not this one" } }
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "AFE.cfg"), []byte(afe), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The 2nd gen Echo Show 8 ships the Dot's Fire OS 6 file names with weights for its own array, so
+// which geometry reads them is decided by the name AFE.cfg gives the hardware, not by the files.
+func TestLoadPicksTheFrontEndByHardwareName(t *testing.T) {
+	for _, tc := range []struct {
+		hardware string
+		want     string
+		inputs   int
+	}{
+		{"Athena", "Athena FilterBank_768cvxGLow + FBFV2 8 beams", 4},
+		{"Biscuit", "FilterBank_768cvxGLow + FBFV2 8 beams", 4},
+		{"", "FilterBank_768cvxGLow + FBFV2 8 beams", 4},
+	} {
+		t.Run(tc.hardware, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFrontEnd(t, dir, tc.hardware)
+			w, err := Load(dir)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if w.Name() != tc.want {
+				t.Errorf("loaded %q, want %q", w.Name(), tc.want)
+			}
+			if w.Inputs() != tc.inputs || w.g.Channels() != tc.inputs {
+				t.Errorf("%d inputs over %d channels, want %d of %d", w.Inputs(), w.g.Channels(),
+					tc.inputs, tc.inputs)
+			}
+		})
+	}
+}
+
+// athena's four channels all reach its beamformer, each once, so a frame of four microphones is enough
+// and none of them is read twice.
+func TestAthenaUsesEveryMicrophoneOnce(t *testing.T) {
+	var g geometry
+	for _, k := range known {
+		if k.hardware == "Athena" {
+			g = k
+		}
+	}
+	if g.hardware == "" {
+		t.Fatal("no athena geometry")
+	}
+	seen := map[int]bool{}
+	for _, m := range g.mics {
+		if m < 0 || m >= 4 || seen[m] {
+			t.Fatalf("mics %v: each of 0..3 once", g.mics)
+		}
+		seen[m] = true
+	}
+	if len(seen) != 4 {
+		t.Fatalf("mics %v: each of 0..3 once", g.mics)
+	}
+}
+
+func TestHardwareNameIsTheHardwareDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	if got := hardwareName(filepath.Join(dir, "AFE.cfg")); got != "" {
+		t.Errorf("no file: %q", got)
+	}
+	writeFrontEnd(t, dir, "Athena")
+	if got := hardwareName(filepath.Join(dir, "AFE.cfg")); got != "Athena" {
+		t.Errorf("got %q, want Athena", got)
 	}
 }
