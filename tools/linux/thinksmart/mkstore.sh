@@ -3,7 +3,7 @@
 # root is also the boot environment: the kernel mounts it as the root and runs its /sbin/init.
 # Made from tools/linux/skylight/mkstore.sh; the board, its init and the firmware differ.
 #
-#   mkstore.sh -r <rootfs.tar.gz> -k <authorized_keys>|none -F <firmware.tar>
+#   mkstore.sh -r <rootfs.tar.gz> -k <authorized_keys>|none [-F <firmware.tar>]
 #              -o <store.img> [-U <uuid>] [-S <MiB>] [-W <wpa_supplicant.conf>] [-i <inputs>]
 #              [-w <workdir>] [-f <fbprobe>] [-s <slot a state>] [-L <label>]
 #
@@ -16,9 +16,17 @@
 #   /bin, /lib, /usr ...  Alpine armv7 + dropbear, wpa_supplicant 2.9, iw, e2fsprogs, udhcpd:
 #                         the rescue environment, which never changes with an update
 #   /bin/busybox.static   PID 1's interpreter
-#   /lib/firmware         -F: a tar file of firmware/ (from a unit running Linux): the unit's, not a
-#                         slot's, bound into the slot that boots. The audio DSP's firmware is the
-#                         unit's own, read from its modem partition at boot, and is not in the image.
+#   /lib/firmware         the unit's, not a slot's, bound into the slot that boots. Without -F: only
+#                         what anyone may pass on, from Alpine's packages: the GPU's microcode
+#                         (linux-firmware-qcom: a530_pm4, a530_pfp, a530v3_gpmu) and the Wi-Fi
+#                         regulatory database (wireless-regdb). Everything else is the unit's own:
+#                         the audio DSP's and the video decoder's are linked from its modem
+#                         partition at boot, and Wi-Fi, Bluetooth, the GPU's zap shader and the
+#                         speaker's DSP table are made from its partitions then
+#                         (thinksmart-firmware). An image for anyone is made this way.
+#                         -F: a tar file of firmware/ instead (from a unit running Linux): what it
+#                         holds is used, and thinksmart-firmware makes only what it lacks. For
+#                         a unit whose Android partitions are gone (repartitioned by hand).
 #                         The kernel has no modules (kernel/build.sh): it comes with the rootfs
 #                         (deploy-rootfs.sh KERNEL_IMAGE), and its first copy is mkimage.sh's.
 #   /root/.ssh/authorized_keys   <authorized_keys>: the rescue's SSH keys, and the slot's bench keys
@@ -62,8 +70,8 @@ while [ $# -gt 0 ]; do
 	*) echo "mkstore: unknown argument $1" >&2; exit 1;;
 	esac
 done
-[ -n "$ROOTFS" ] && [ -n "$KEYS" ] && [ -n "$OUT" ] && [ -n "$FIRMWARE" ] || {
-	echo "usage: mkstore.sh -r rootfs.tar.gz -k authorized_keys|none -F firmware.tar -o store.img [-U uuid] [-S MiB] [-i inputs] [-w workdir] [-f fbprobe] [-s 'good'|'trial 3']" >&2; exit 1; }
+[ -n "$ROOTFS" ] && [ -n "$KEYS" ] && [ -n "$OUT" ] || {
+	echo "usage: mkstore.sh -r rootfs.tar.gz -k authorized_keys|none [-F firmware.tar] -o store.img [-U uuid] [-S MiB] [-i inputs] [-w workdir] [-f fbprobe] [-s 'good'|'trial 3']" >&2; exit 1; }
 case "$STATE" in good|"trial "[0-9]) ;; *) echo "mkstore: slot state must be good or 'trial N'" >&2; exit 1;; esac
 say() { echo "mkstore: $*"; }
 
@@ -79,7 +87,7 @@ if [ -z "$INNER" ]; then
 	map=--map-auto; command -v newuidmap >/dev/null || map=
 	# Files owned by root (and by the slot's service users) without sudo.
 	exec unshare -Ur $map bash "$0" --inner -r "$ROOTFS" -k "$KEYS" -o "$OUT" -i "$INPUTS" -w "$WORK" \
-		${FBPROBE:+-f "$FBPROBE"} -s "$STATE" -L "$LABEL" -F "$FIRMWARE" ${UUID:+-U "$UUID"} ${SIZE:+-S "$SIZE"} ${WIFI:+-W "$WIFI"}
+		${FBPROBE:+-f "$FBPROBE"} -s "$STATE" -L "$LABEL" ${FIRMWARE:+-F "$FIRMWARE"} ${UUID:+-U "$UUID"} ${SIZE:+-S "$SIZE"} ${WIFI:+-W "$WIFI"}
 fi
 
 R=$WORK/root
@@ -109,6 +117,7 @@ install -d "$R/usr/local/sbin" "$R/usr/local/bin" "$R/etc/profile.d"
 lf "$LINUX/slotctl" "$R/usr/local/sbin/slotctl" 755
 lf "$LINUX/bootctl" "$R/usr/local/sbin/bootctl" 755
 lf "$HERE/lk2nd-ab" "$R/usr/local/sbin/lk2nd-ab" 755
+lf "$HERE/thinksmart-firmware" "$R/usr/local/sbin/thinksmart-firmware" 755
 # The A/B record is a file on system1 (lk2nd-ab), mounted at /boot here and /store/boot in a slot.
 install -d "$R/boot"
 printf '%s\n' "# The A/B record: a file on system1 (tools/linux/thinksmart/lk2nd-ab)." "BOOTCTL_MISC=/boot/techo5-ab" > "$R/etc/bootctl.conf"
@@ -160,9 +169,37 @@ ln -f "$R/slots/a/usr/share/techo5/kernel/boot-thinksmart.img" "$R/slots/a/boot/
 install -m 755 "$R/slots/a/usr/local/bin/rebootto" "$R/usr/local/bin/rebootto"
 # The firmware (tools/linux/thinksmart/README.md says where it comes from): the store's, bound into
 # whichever slot boots. The modem partition's firmware is linked in under msm-firmware-loader at boot.
-say "firmware from $(basename "$FIRMWARE")"
 rm -rf "$R/lib/modules" "$R/lib/firmware"
-tar -xf "$FIRMWARE" -C "$R/lib" --no-same-owner
+if [ -n "$FIRMWARE" ]; then
+	say "firmware from $(basename "$FIRMWARE")"
+	tar -xf "$FIRMWARE" -C "$R/lib" --no-same-owner
+else
+	say "firmware: the GPU's microcode and the regulatory database, from Alpine's packages"
+	install -d "$R/lib/firmware/qcom" "$WORK/fw"
+	"$APK" --root "$R" --arch armv7 --no-cache fetch -o "$WORK/fw" linux-firmware-qcom wireless-regdb >/dev/null
+	for a in "$WORK"/fw/*.apk; do
+		tar -xzf "$a" -C "$WORK/fw" --wildcards --no-same-owner --warning=no-unknown-keyword \
+			'*/firmware/qcom/a530_pm4.fw*' '*/firmware/qcom/a530_pfp.fw*' '*/firmware/qcom/a530v3_gpmu.fw2*' \
+			'*/firmware/regulatory.db*' 2>/dev/null || true
+	done
+	for f in qcom/a530_pm4.fw qcom/a530_pfp.fw qcom/a530v3_gpmu.fw2 regulatory.db regulatory.db.p7s; do
+		# The file itself, or compressed: regulatory.db must not find regulatory.db.p7s.
+		src=$(find "$WORK/fw" \( -path "*/firmware/$f" -o -path "*/firmware/$f.zst" -o -path "*/firmware/$f.xz" \) | head -1)
+		[ -n "$src" ] || { echo "mkstore: $f is not in Alpine's linux-firmware-qcom or wireless-regdb" >&2; exit 1; }
+		case $src in
+		*.zst) zstd -dq -o "$R/lib/firmware/$f" "$src";;
+		*.xz) xz -dc "$src" > "$R/lib/firmware/$f";;
+		*) cp "$src" "$R/lib/firmware/$f";;
+		esac
+		chmod 644 "$R/lib/firmware/$f"
+	done
+	rm -rf "$WORK/fw"
+	# Their licenses go with them (firmware-licenses/README.md): Qualcomm's for the GPU's microcode,
+	# ISC for the regulatory database.
+	for f in qcom/LICENSE.qcom qcom/NOTICE.qcom LICENSE.wireless-regdb; do
+		install -m 644 "$HERE/firmware-licenses/${f##*/}" "$R/lib/firmware/$f"
+	done
+fi
 install -d "$R/lib/firmware/msm-firmware-loader"
 # techo5-data is made at the first boot (the store's /sbin/init).
 : > "$R/format-data"

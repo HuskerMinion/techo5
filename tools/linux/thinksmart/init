@@ -115,8 +115,21 @@ store_ro() { sync; mount -o remount,ro / 2>/dev/null || crumb "store: remount ro
 
 # --- techo5-data. A new image leaves the partition unformatted and says so with /format-data in the
 # store: it is made here, once, and the marker goes. Without the marker a partition that does not
-# mount is left alone, since it may hold a unit's state that only needs a repair.
+# mount is left alone, since it may hold a unit's state that only needs a repair. The installer
+# (tools/install-thinksmart.py) leaves a tar archive at the start of the partition, which is read
+# before it is formatted: settings/ (name, psk, firstrun, adopt-on-first-start, wpa_supplicant.conf,
+# as tools/linux/skylight/install/install.sh writes them) and firmware/ (the speaker's DSP table,
+# taken from the unit's stock kernel).
+INSTALLED=
 if [ -n "$DATA_DEV" ] && [ -e /format-data ] && ! mount -t ext4 -o ro $DATA_DEV /userdata 2>/dev/null; then
+	if [ "$(dd if=$DATA_DEV bs=1 skip=257 count=5 2>/dev/null)" = ustar ]; then
+		mkdir -p /tmp/install
+		if head -c 1048576 $DATA_DEV | tar -x -C /tmp/install 2>/tmp/install.err; then
+			INSTALLED=1
+		else
+			crumb "techo5-data: the installer's archive did not unpack: $(tail -1 /tmp/install.err)"
+		fi
+	fi
 	if mkfs.ext4 -q -F -L techo5-data -m 0 $DATA_DEV > /tmp/mkfs-data.log 2>&1; then
 		crumb "techo5-data: formatted (a new image)"
 	else
@@ -142,6 +155,23 @@ fi
 echo "=== boot, kernel $(uname -r), uptime $(cut -d' ' -f1 /proc/uptime)" > "$CRUMBS" 2>/dev/null
 
 [ -n "${WIFI_SEEDED:-}" ] && crumb "wifi: the bench image's network copied to this unit"
+if [ -n "$INSTALLED" ]; then
+	I=/tmp/install
+	S=/data/misc/techo5
+	mkdir -p $S $LOGDIR/firmware
+	ok=1
+	[ -f $I/settings/name ] && { cp $I/settings/name $S/name && chmod 644 $S/name || ok=; }
+	[ -f $I/settings/psk ] && { cp $I/settings/psk $S/psk && chmod 600 $S/psk || ok=; }
+	[ -f $I/settings/firstrun ] && { : > $S/firstrun || ok=; }
+	[ -f $I/settings/adopt-on-first-start ] && { rm -f $S/psk && : > $S/adopt-on-first-start || ok=; }
+	[ -f $I/settings/wpa_supplicant.conf ] && { (umask 077; cp $I/settings/wpa_supplicant.conf $LOGDIR/) || ok=; }
+	for f in $I/firmware/*; do
+		[ -f "$f" ] && { cp "$f" $LOGDIR/firmware/ || ok=; }
+	done
+	rm -rf $I
+	if [ -n "$ok" ]; then crumb "install: the installer's settings and firmware copied to this unit"
+	else crumb "install: copying the installer's settings failed"; fi
+fi
 
 # --- Firmware. The audio DSP's (adsp.*), and the video decoder's, are in the unit's modem
 # partition, as Android left them; the rest is in the store's /lib/firmware, from the kernel's
@@ -163,8 +193,19 @@ if [ -d $FWDIR ] && modem=$(part modem); then
 				for f in $FWDIR/target/venus.*; do ln -s "$f" "$FWDIR/target/qcom/$v/${f##*/}"; done
 			done
 		fi
-		printf %s $FWDIR/target > /sys/module/firmware_class/parameters/path
 		crumb "firmware: $(ls $FWDIR/target | wc -l) files from the modem partition"
+		# What the unit's own partitions hold for Wi-Fi, Bluetooth, the GPU and the speaker, made
+		# into what the drivers ask for, where the store's tree does not have it already
+		# (/usr/local/sbin/thinksmart-firmware). Android's vendor partition holds the GPU's zap
+		# shader, on a unit the installer left it on.
+		vendor=
+		if v=$(part vendor) && mkdir -p $FWDIR/mnt/vendor &&
+			mount -t ext4 -o ro,nodev,noexec,nosuid,noload "$v" $FWDIR/mnt/vendor 2>/dev/null; then
+			vendor=$FWDIR/mnt/vendor
+		fi
+		sh /usr/local/sbin/thinksmart-firmware $FWDIR/target $FWDIR/mnt/modem $vendor 2>&1 |
+			while read -r l; do crumb "firmware: $l"; done
+		printf %s $FWDIR/target > /sys/module/firmware_class/parameters/path
 	else
 		crumb "firmware: the modem partition did not mount: $(cat /tmp/modem.err)"
 	fi

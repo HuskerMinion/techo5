@@ -376,6 +376,27 @@ Linux kernel for the Lenovo ThinkSmart View, tools/linux/thinksmart/kernel
   tree, is TECHO5's own, GPL-2.0-only OR BSD-3-Clause like the file it changes; patches/0006, the
   video decoder's interrupt, is TECHO5's own, GPL-2.0-only like the file it changes.
 
+Firmware in the Lenovo ThinkSmart View's image, tools/linux/thinksmart/mkstore.sh
+  The store image carries, from Alpine's packages, two pieces of firmware anyone may pass on, each with
+  its license text beside it in the image (tools/linux/thinksmart/firmware-licenses):
+  - the Adreno GPU's microcode, lib/firmware/qcom/a530_pm4.fw, a530_pfp.fw and a530v3_gpmu.fw2, from
+    linux-firmware (https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git),
+    Copyright Qualcomm Technologies, Inc., redistributable under Qualcomm's license as linux-firmware's
+    WHENCE says: lib/firmware/qcom/LICENSE.qcom and lib/firmware/qcom/NOTICE.qcom;
+  - the Wi-Fi regulatory database, lib/firmware/regulatory.db and regulatory.db.p7s, from wireless-regdb
+    (https://git.kernel.org/pub/scm/linux/kernel/git/wens/wireless-regdb.git), ISC License, Copyright
+    (c) 2008 Luis R. Rodriguez, Johannes Berg and Michael Green: lib/firmware/LICENSE.wireless-regdb.
+  No other firmware ships: the unit's own is made from its partitions at boot.
+
+lk2nd for the Lenovo ThinkSmart View, tools/linux/thinksmart/lk2nd
+  lk2nd (https://github.com/msm8916-mainline/lk2nd, tag 23.1, commit e9c8b21), built unchanged by
+  build.sh with its own options SIGN_BOOTIMG=1 and LK2ND_QCDTBS="" as its notes for this board say;
+  little kernel's MIT License and lk2nd's BSD-3-Clause, as its source files say. The signature is
+  made with the AOSP test key in lk2nd's own tree (lk2nd/certs), which the board's stock bootloader
+  accepts; it vouches for nothing. A release that publishes the image
+  (techo5-lk2nd-thinksmart-<version>.img) publishes it as built from that tag, whose source is
+  lk2nd's repository.
+
 Light sensor, echod/internal/hardware/ambient/em3071x.go
   The Everlight EM3071X's register addresses and the value that switches it on are the ones Rockchip's
   GPL-2.0 driver uses (drivers/input/sensors/lsensor/ls_em3071x.c in Rockchip's kernel). They are
