@@ -238,6 +238,10 @@ show/addon-blocks-show5.png
 show/addon-blocks-show8.png
 show/addon-controls-show5.png
 show/addon-controls-show8.png
+show/addon-overflow-show5.png
+show/addon-overflow-show8.png
+show/addon-card-crowded-show5.png
+show/addon-card-crowded-show8.png
 show/addon-card-night-show5.png
 show/addon-card-night-show8.png
 show/addon-card-Paper-show5.png
@@ -267,6 +271,8 @@ show/addon-waiting-show5.png
 show/addon-waiting-show8.png
 spot/addon-blocks.png
 spot/addon-controls.png
+spot/addon-overflow.png
+spot/addon-card-crowded.png
 spot/addon-card-night.png
 spot/addon-card.png
 spot/addon-cards.png

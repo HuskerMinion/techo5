@@ -67,6 +67,13 @@ func TestAddonPreviews(t *testing.T) {
 		}
 		h.set("meals", addonapi.OnPage, controlsPage(), addonNow)
 		frame("addon-controls", scene{addonPage: addonPageOf(h, "meals")})
+		// More than a column or a card has room for: what does not fit whole is left out, never drawn
+		// over its neighbors or cut through.
+		h.set("meals", addonapi.OnPage, overflowPage(), addonNow)
+		frame("addon-overflow", scene{addonPage: addonPageOf(h, "meals")})
+		h.set("meals", addonapi.OnCard, crowdedCard(), addonNow)
+		frame("addon-card-crowded", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})
+		h.set("meals", addonapi.OnCard, cardScene(), addonNow)
 		frame("addon-waiting", scene{addonPage: &addonPageView{id: "plex", name: "Plex Remote"}})
 		frame("addon-tab", scene{showDrawer: true, drawerTab: drawerAddons, weather: hassSunny()})
 		frame("addon-card", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})

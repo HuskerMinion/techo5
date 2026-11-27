@@ -74,6 +74,11 @@ func TestSpotAddonPreviews(t *testing.T) {
 	controls.Children = []addonapi.Block{controls.Children[1], controls.Children[2], controls.Children[4]}
 	h.set("meals", addonapi.OnPage, controls, spotAddonNow)
 	spotFrame(t, dir, "addon-controls", roundScene{addonPage: addonPageOf(h, "meals")})
+	h.set("meals", addonapi.OnPage, overflowPage(), spotAddonNow)
+	spotFrame(t, dir, "addon-overflow", roundScene{addonPage: addonPageOf(h, "meals"), timers: sampleTimers()})
+	h.set("meals", addonapi.OnCard, crowdedCard(), spotAddonNow)
+	spotFrame(t, dir, "addon-card-crowded", roundScene{addonCard: addonCardOf(h, "meals"), timers: sampleTimers()})
+	h.set("meals", addonapi.OnCard, cardScene(), spotAddonNow)
 	h.set("meals", addonapi.OnPage, listPage(), spotAddonNow)
 	_, r := spotFrame(t, dir, "addon-list", roundScene{addonPage: addonPageOf(h, "meals")})
 	r.zmu.Lock()

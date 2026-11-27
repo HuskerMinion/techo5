@@ -336,8 +336,15 @@ images.
 Spot the ring menu (a long press) has an **Add-ons** item: with one such add-on it opens its page, with
 more a dial of them, each marked by its mark (below). The page fills the screen under the name bar: on a
 Show along the top, with the way out (×) at its end; on a Spot a band across the top of the circle,
-with the way out at the foot. What the scene holds is laid out inside the room left, and what does not
-fit is cut at its edge, never drawn over the bar or the way out. On the page:
+with the way out at the foot. What the scene holds is laid out inside the room left, each block inside
+the room its column, row or card gives it. Where there is too little, a column's gaps narrow and its
+pictures shrink (to a third at the least); what still does not fit whole is left out, words, buttons,
+chips, steppers and toggles alike, never drawn over the block beside or below it, over the bar or the
+way out, nor cut through its middle, and nothing left out takes a finger. Only a picture, or a card's
+ground, is cut cleanly at the edge instead. A list scrolls, so it is the place for more than fits: in a
+column with too little room it is seen in the room it has. The card is laid out the same way, as tall as
+what it keeps, at most a third of the screen: a card of more than that shows what fits whole (its chip
+row is left out, say, rather than half drawn). On the page:
 
 - a tap on a button, a chip or a list item with an id sends `touch`, and on a stepper's − or + or a
   toggle `change`, for what the finger was on: a tap

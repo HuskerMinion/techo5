@@ -254,3 +254,44 @@ func TestAddonTapCarriesItsRevision(t *testing.T) {
 		t.Errorf("the layout of revision %d says %d", sc.Rev, lay.rev)
 	}
 }
+
+// What does not fit whole in a column, a row or a card is left out, never drawn over the block below it
+// or cut through: no two of a page's blocks outside its lists overlap, each is inside its room, and a
+// card's blocks are all inside the card's height. Gaps narrow and pictures shrink first.
+func TestAddonOverflowIsLeftOut(t *testing.T) {
+	h := sampleHost(t, overflowPage())
+	useHost(t, h)
+	for _, size := range []image.Point{{960, 480}, {1280, 800}} {
+		img := image.NewRGBA(image.Rectangle{Max: size})
+		p := &paint{dst: img, w: size.X, h: size.Y, sNum: size.X, sDen: 960}
+		_, _, content := p.addonPageRooms()
+		sc, _ := h.Scene("meals", addonapi.OnPage)
+		imgs := func(b *addonapi.Block) ([]byte, string, bool) { return h.Image("meals", b) }
+		lay := p.layoutScene(&sc.Root, content, false, imgs)
+		var leaves []image.Rectangle
+		for _, b := range lay.boxes {
+			if b.list > 0 || b.step != 0 || b.b == nil || b.b.Type == addonapi.BlockCard {
+				continue
+			}
+			r := b.r
+			if b.b.Type == addonapi.BlockImage {
+				r = r.Intersect(b.clip)
+			}
+			if !r.In(content) {
+				t.Errorf("%v: a %s at %v, outside the page's room %v", size, b.b.Type, r, content)
+			}
+			for _, o := range leaves {
+				if o.Overlaps(r) {
+					t.Errorf("%v: a %s at %v over another block at %v", size, b.b.Type, r, o)
+				}
+			}
+			leaves = append(leaves, r)
+		}
+		card := p.layoutScene(func() *addonapi.Block { c := crowdedCard(); return &c }(), image.Rect(60, 500, size.X-60, 500+size.Y/5), true, nil)
+		for _, b := range card.boxes {
+			if b.r.Max.Y > 500+card.height {
+				t.Errorf("%v: a card's %s ends at %d, past the card's %d", size, b.b.Type, b.r.Max.Y, 500+card.height)
+			}
+		}
+	}
+}

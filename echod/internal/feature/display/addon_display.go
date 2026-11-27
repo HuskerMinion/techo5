@@ -189,7 +189,7 @@ type addonPageView struct {
 	id, name string
 	icon     string // its mark, from its catalog entry; "" for its initials
 	sc       hostScene
-	has      bool // false: the add-on has set no page yet, and the page says it is waited for
+	has      bool   // false: the add-on has set no page yet, and the page says it is waited for
 	local    uint64 // the generation of the steppers' and toggles' values shown ahead of the add-on, in sc
 	scrolls  [maxSceneLists]int
 	images   sceneImages
@@ -216,9 +216,9 @@ type addonLayKey struct {
 	id              string
 	rev, img, local uint64
 	room            image.Rectangle
-	font     fontKey
-	card     bool
-	night    bool
+	font            fontKey
+	card            bool
+	night           bool
 }
 
 // laid is the layout of sc in room, made again only when something it was made for changed.

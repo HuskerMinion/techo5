@@ -713,3 +713,29 @@ could pass for the device's own questions. [addon-api.md](addon-api.md) says the
 
 Storage: nothing. What the screen shows ahead of the add-on is in RAM, one entry for each block tapped,
 dropped as the add-on's scene moves on.
+
+## Stage 2 as built (what does not fit)
+
+Rendering a test add-on with the fake daemon found two faults in the layout:
+
+- **A card's chip cut in half.** A card of words, a timer's bar and a row of chips held more than a card's
+  third of a Show 8, and the chips were drawn cut at its foot.
+- **A column drawn over the blocks below it.** In a row of weighted columns, a column of a picture, a
+  bar, a toggle and a stepper was laid out at its full height in less room, and drawn over the status line
+  and the Back button below it. The docs said it was cut; only the scene's outer edge was.
+
+Now every block is laid out in the room its column, row or card gives it. Where there is too little, the
+column's gaps narrow first and its pictures shrink (to a third at the least); a block that still does not
+fit whole is left out: not drawn, and taking no finger. A picture, and a card's ground, are cut cleanly at
+the room's edge instead, as they can be; a list keeps its room and scrolls, so a list's last row is cut by
+the list's view and its faded edge, as before. A card is as tall as what it keeps.
+
+Leaving out rather than scrolling a column: a column that scrolls inside a page that does not, beside a
+list that does, is two scrolls a finger has to tell apart, and a list is already the way to more than
+fits. Leaving out rather than refusing the scene: what fits depends on the screen (a Show 5, a Show 8, a
+Spot) and on the owner's text size, which an add-on cannot know when it sets a scene; the fake daemon's
+PNGs at each size show an author what is left out. The Show 5 cards' bars moved up a few pixels, as a
+column's gaps now narrow where it is short of room; goldens of both cases are added on each screen.
+
+One thing seen and left for later: by day the clock does not move up for the card, as it does for the
+Next up card, so a card shorter than the clock's date line cuts across the date.

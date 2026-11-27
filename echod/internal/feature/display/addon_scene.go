@@ -136,6 +136,7 @@ type sceneBox struct {
 	head  bool            // a list's section heading
 	rule  bool            // a rule between a list's items
 	label image.Rectangle // a progress tied to a timer: where its time is written; a stepper's number
+	clip  image.Rectangle // the room it was laid out in, which nothing of it is drawn outside
 	lead  bool            // a list row's icon at its start
 }
 
@@ -180,7 +181,14 @@ type sceneLayouter struct {
 	out    *sceneLayout
 	list   int // the list being laid out, 1 and up
 	imageH int // the tallest an image is laid out by itself
+	// clip is the room the block being laid out has, its column's, its row's, the scene's: what does not
+	// fit whole in it is left out (add), never drawn over its neighbors or cut through its words. Inside a
+	// list, which scrolls, it is unbounded.
+	clip image.Rectangle
 }
+
+// unbounded is a clip that leaves nothing out: a list's content, which scrolls.
+var unbounded = image.Rect(-1<<20, -1<<20, 1<<20, 1<<20)
 
 // layoutScene lays a scene out in room: a page's whole content, or a card's width (its height is what it
 // holds, at most room's).
@@ -194,7 +202,17 @@ func (p *paint) layoutScene(root *addonapi.Block, room image.Rectangle, card boo
 	if card || (root.Type != addonapi.BlockColumn && root.Type != addonapi.BlockList) {
 		h = min(l.size(root, room.Dx()).Y, room.Dy())
 	}
-	l.place(root, image.Rect(room.Min.X, room.Min.Y, room.Max.X, room.Min.Y+h))
+	r := image.Rect(room.Min.X, room.Min.Y, room.Max.X, room.Min.Y+h)
+	l.clip = r
+	l.place(root, r)
+	if card {
+		// A card is as tall as what it kept: what did not fit whole was left out, and leaves no room.
+		h = 0
+		for _, b := range l.out.boxes {
+			h = max(h, b.r.Max.Y-room.Min.Y)
+		}
+		h = min(h, room.Dy())
+	}
 	l.out.height, l.out.room = h, room
 	return l.out
 }
@@ -527,9 +545,30 @@ func (l *sceneLayouter) rowWidths(b *addonapi.Block, w int) ([]int, int) {
 }
 
 // add is a box laid out.
+//
+// A block that does not fit whole in the room it was given (l.clip) is left out, words, buttons, chips,
+// steppers and toggles alike, so nothing is drawn over the block below it or cut through its middle, and
+// nothing half seen takes a finger. A picture, and a card's ground, are cut cleanly at the room's edge
+// instead, as they can be.
 func (l *sceneLayouter) add(box sceneBox) {
 	box.list = l.list
+	box.clip = l.clip
+	if !box.r.In(l.clip) && !box.r.Empty() {
+		surface := box.b != nil && (box.b.Type == addonapi.BlockImage || box.b.Type == addonapi.BlockCard) && box.tap == ""
+		if !surface || !box.r.Overlaps(l.clip) {
+			return
+		}
+	}
 	l.out.boxes = append(l.out.boxes, box)
+}
+
+// within lays out what f lays out in r, inside the room it has so far: a column's, a row's or a card's
+// blocks are held to it.
+func (l *sceneLayouter) within(r image.Rectangle, f func()) {
+	was := l.clip
+	l.clip = l.clip.Intersect(r)
+	f()
+	l.clip = was
 }
 
 // place lays a block out in r.
@@ -595,9 +634,9 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 	case addonapi.BlockCard:
 		l.add(sceneBox{b: b, r: r})
 		inner := image.Rect(r.Min.X+m.pad+m.stripe, r.Min.Y+m.pad, r.Max.X-m.pad, r.Max.Y-m.pad)
-		l.placeColumn(b.Children, b.Spacing, inner)
+		l.within(inner, func() { l.placeColumn(b.Children, b.Spacing, inner) })
 	case addonapi.BlockColumn:
-		l.placeColumn(b.Children, b.Spacing, r)
+		l.within(r, func() { l.placeColumn(b.Children, b.Spacing, r) })
 	case addonapi.BlockRow:
 		if lead := l.leadW(b); lead > 0 {
 			// A list row's picture or icon, a small square at its start, and the rest after it.
@@ -612,7 +651,7 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 			}
 			r.Min.X += lead
 		}
-		l.placeRow(b, r)
+		l.within(r, func() { l.placeRow(b, r) })
 	case addonapi.BlockList:
 		l.placeList(b, r)
 	}
@@ -644,6 +683,32 @@ func (l *sceneLayouter) placeColumn(children []addonapi.Block, spacing string, r
 		fixed += heights[i]
 	}
 	fixed += gap * max(len(children)-1, 0)
+	if over := fixed - r.Dy(); over > 0 && len(children) > 1 {
+		// Too little room: the gaps narrow first, and then the pictures shrink (to a third at the
+		// least), before anything is left out (add).
+		n := len(children) - 1
+		cut := min(gap, (over+n-1)/n)
+		gap -= cut
+		fixed -= cut * n
+	}
+	if over := fixed - r.Dy(); over > 0 {
+		pics := 0
+		for i := range children {
+			if c := &children[i]; c.Type == addonapi.BlockImage && weightOf(c) == 0 {
+				pics += heights[i]
+			}
+		}
+		if pics > 0 {
+			keep := max(pics-over, pics/3)
+			for i := range children {
+				if c := &children[i]; c.Type == addonapi.BlockImage && weightOf(c) == 0 {
+					was := heights[i]
+					heights[i] = was * keep / pics
+					fixed -= was - heights[i]
+				}
+			}
+		}
+	}
 	if weights > 0 {
 		left := max(r.Dy()-fixed, 0)
 		for i := range children {
@@ -695,10 +760,11 @@ func (l *sceneLayouter) placeRow(b *addonapi.Block, r image.Rectangle) {
 // placeList lays a list out: its view is r, and its content, each section's heading and its items with a
 // rule between, is laid out from the view's top, to be scrolled by the daemon.
 func (l *sceneLayouter) placeList(b *addonapi.Block, r image.Rectangle) {
-	l.out.lists = append(l.out.lists, sceneList{view: r})
-	was := l.list
-	l.list = len(l.out.lists)
-	defer func() { l.list = was }()
+	// A list in a column with too little room for it is seen only in the room it has, and scrolls.
+	l.out.lists = append(l.out.lists, sceneList{view: r.Intersect(l.clip)})
+	was, wasClip := l.list, l.clip
+	l.list, l.clip = len(l.out.lists), unbounded
+	defer func() { l.list, l.clip = was, wasClip }()
 	m := l.m
 	y := 0
 	head := l.face(addonapi.SizeSmall, true)
@@ -830,6 +896,9 @@ func (p *paint) drawScene(s *sceneLayout, scrolls []int, off image.Point, pal sc
 			continue
 		}
 		view := room
+		if c := s.boxes[i].clip; s.boxes[i].list == 0 && !c.Empty() {
+			view = view.Intersect(c.Add(off))
+		}
 		if l := s.boxes[i].list; l > 0 {
 			// Drawn on the screen as seen through the list's view: nothing of it past the view's edges.
 			view = s.lists[l-1].view.Add(off).Intersect(room)

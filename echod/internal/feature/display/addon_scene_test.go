@@ -238,6 +238,43 @@ func controlsPage() addonapi.Block {
 		rows)
 }
 
+// overflowPage is a page whose left column holds more than its row's room: a picture, a timer's bar, a
+// toggle and a stepper beside a list, over a status line and the way on, as an add-on might well send.
+func overflowPage() addonapi.Block {
+	left := addonapi.Column(addonapi.ImageNamed("dish"), addonapi.Block{Type: addonapi.BlockProgress, Timer: "local:onions"},
+		addonapi.Toggle("warm", "Keep warm", true), addonapi.Stepper("servings", "Servings", 5, 1, 12, 1, ""))
+	left.Weight = 2
+	var items []addonapi.Block
+	for i := 1; i <= 5; i++ {
+		r := addonapi.Block{Type: addonapi.BlockRow, ID: fmt.Sprintf("item_%d", i), Children: []addonapi.Block{addonapi.Text(fmt.Sprintf("Item %d", i))}}
+		if i%2 == 0 {
+			r.Icon = "mdi:food-apple"
+		} else {
+			r.Name = "thumb"
+		}
+		items = append(items, r)
+	}
+	list := addonapi.List(addonapi.Section{Heading: "Tap an item", Items: items})
+	list.Weight = 3
+	middle := addonapi.Row(left, list)
+	middle.Weight = 1
+	status := addonapi.Block{Type: addonapi.BlockText, ID: "status", Text: "Last: touch item_2 on page", Size: addonapi.SizeSmall}
+	on := addonapi.Spacer()
+	on.Weight = 1
+	return addonapi.Column(addonapi.Title("Screen demo"),
+		addonapi.Row(addonapi.Chip("one", "Chip one", ""), addonapi.Chip("two", "Chip two", ""),
+			addonapi.Block{Type: addonapi.BlockChip, ID: "three", Label: "Chip three", Selected: true}),
+		middle, status,
+		addonapi.Row(addonapi.Button("back", "Back", "mdi:arrow-left"), on, addonapi.Button("next", "Next", "mdi:arrow-right")))
+}
+
+// crowdedCard is a card of words, a timer's bar and a chip row, more than a card's third of the screen
+// holds on a Show 8.
+func crowdedCard() addonapi.Block {
+	return addonapi.Column(addonapi.Text("Hello card"), addonapi.Block{Type: addonapi.BlockProgress, Timer: "local:onions"},
+		addonapi.Row(addonapi.Chip("chip", "Card chip", "mdi:gesture-tap")))
+}
+
 // sampleHost is a host with Meals running, its page and card set, and its images put.
 func sampleHost(t *testing.T, page addonapi.Block) *fakeHost {
 	t.Helper()
