@@ -280,3 +280,40 @@ type EntityCommand struct {
 	State any    `json:"state,omitempty"`
 	Press bool   `json:"press,omitempty"`
 }
+
+// Stage 2: the screen. Scenes and their blocks are in scene.go.
+
+// SceneSet is scene.set: the whole scene for the add-on's page or its card (OnPage, OnCard).
+type SceneSet struct {
+	On    string `json:"on"`
+	Scene Block  `json:"scene"`
+}
+
+// ScenePatch is scene.patch: the block of this id in the page's or the card's scene replaced by Block,
+// which keeps the id, so a timer's chip or a ticked item does not send the whole page again.
+type ScenePatch struct {
+	On    string `json:"on"`
+	ID    string `json:"id"`
+	Block Block  `json:"block"`
+}
+
+// TouchEvent is a tap on one of the add-on's buttons or chips, by its id, on its page or its card.
+type TouchEvent struct {
+	ID string `json:"id"`
+	On string `json:"on"`
+}
+
+// SwipeEvent is a swipe left or right across the add-on's page (SwipeLeft, SwipeRight). A swipe on the
+// card is the daemon's: it puts the card away.
+type SwipeEvent struct {
+	Direction string `json:"direction"`
+}
+
+// ScreenStateEvent is the add-on's page or card coming into view or going out of it (Shown), so an
+// add-on knows when what it shows is seen. Dismissed is a card the owner swiped away: it is gone, and
+// comes back only with the next scene.set for the card.
+type ScreenStateEvent struct {
+	On        string `json:"on"`
+	Shown     bool   `json:"shown"`
+	Dismissed bool   `json:"dismissed,omitempty"`
+}

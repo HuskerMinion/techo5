@@ -29,6 +29,8 @@ type Client struct {
 
 	// media, once WatchMedia has made it, is where media.state events go instead of events.
 	media chan MediaState
+	// screen, once WatchScreen has made it, is where touch, swipe, back and screen.state go.
+	screen chan ScreenEvent
 }
 
 // ErrClosed is a request on a connection that has ended.
@@ -101,6 +103,9 @@ func (c *Client) read() {
 		if c.media != nil {
 			close(c.media)
 		}
+		if c.screen != nil {
+			close(c.screen)
+		}
 		c.mu.Unlock()
 		close(c.events)
 		close(c.done)
@@ -117,12 +122,18 @@ func (c *Client) read() {
 		}
 		if f.Event != "" {
 			c.mu.Lock()
-			media := c.media
+			media, screen := c.media, c.screen
 			c.mu.Unlock()
 			if media != nil && f.Event == EventMediaState {
 				var st MediaState
 				if err := json.Unmarshal(f.Data, &st); err == nil {
 					media <- st
+					continue
+				}
+			}
+			if screen != nil {
+				if ev, ok := screenEvent(f.Event, f.Data); ok {
+					screen <- ev
 					continue
 				}
 			}
@@ -340,3 +351,130 @@ func (c *Client) StopMedia(ctx context.Context) error {
 
 // Decode reads an event's data into v (a CommandEvent for a command, say).
 func (e Event) Decode(v any) error { return json.Unmarshal(e.Data, v) }
+
+// The screen (stage 2), with the screen capability.
+
+// SetScene sets the whole scene of the add-on's page or card (OnPage, OnCard). It is checked here
+// first as the device checks it (ValidScene), so a scene the device would refuse is refused without
+// sending it; the device checks again, and also that a progress's timer is the add-on's. The device
+// draws the latest scene at most SceneUpdatesPerSecond times a second, so setting it faster costs
+// nothing but the requests.
+func (c *Client) SetScene(ctx context.Context, on string, root Block) error {
+	if err := ValidScene(on, root, nil); err != nil {
+		return err
+	}
+	return c.Call(ctx, OpSceneSet, SceneSet{On: on, Scene: root}, nil)
+}
+
+// PatchScene replaces the block with this id in the page's or the card's scene, keeping the id.
+func (c *Client) PatchScene(ctx context.Context, on, id string, with Block) error {
+	return c.Call(ctx, OpScenePatch, ScenePatch{On: on, ID: id, Block: with}, nil)
+}
+
+// OpenScreen asks for the add-on's page to be brought up. It waits behind whatever is more pressing on
+// the device, and screen.state says when it is in view.
+func (c *Client) OpenScreen(ctx context.Context) error {
+	return c.Call(ctx, OpScreenOpen, None{}, nil)
+}
+
+// CloseScreen asks for the add-on's page to be put away.
+func (c *Client) CloseScreen(ctx context.Context) error {
+	return c.Call(ctx, OpScreenClose, None{}, nil)
+}
+
+// ClearCard takes the add-on's card away from over the clock.
+func (c *Client) ClearCard(ctx context.Context) error {
+	return c.Call(ctx, OpCardClear, None{}, nil)
+}
+
+// ScreenEvent is one of the screen's events, decoded: Event says which, and the field of that name is
+// set (Touch for touch, Swipe for swipe, State for screen.state; back carries nothing).
+type ScreenEvent struct {
+	Event string
+	Touch TouchEvent
+	Swipe SwipeEvent
+	State ScreenStateEvent
+}
+
+// screenEvent decodes a screen event, when it is one.
+func screenEvent(name string, data json.RawMessage) (ScreenEvent, bool) {
+	ev := ScreenEvent{Event: name}
+	var err error
+	switch name {
+	case EventTouch:
+		err = json.Unmarshal(data, &ev.Touch)
+	case EventSwipe:
+		err = json.Unmarshal(data, &ev.Swipe)
+	case EventScreenState:
+		err = json.Unmarshal(data, &ev.State)
+	case EventBack:
+	default:
+		return ev, false
+	}
+	return ev, err == nil
+}
+
+// WatchScreen has touch, swipe, back and screen.state events arrive on the channel it returns rather
+// than on Events, decoded; it is closed when the connection ends. As with WatchMedia, an add-on that
+// leaves it unread holds up everything the daemon sends and is disconnected once the daemon's queue for
+// it is full. Asked again, it returns the same channel.
+func (c *Client) WatchScreen() <-chan ScreenEvent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.screen == nil {
+		c.screen = make(chan ScreenEvent, 16)
+		if c.err != nil {
+			close(c.screen)
+		}
+	}
+	return c.screen
+}
+
+// Building blocks, for a scene written in Go. Each is a Block with its type set; set the rest of its
+// fields as wanted (an id to patch it by, a weight in a row).
+
+// Column is children top to bottom.
+func Column(children ...Block) Block { return Block{Type: BlockColumn, Children: children} }
+
+// Row is children start to end.
+func Row(children ...Block) Block { return Block{Type: BlockRow, Children: children} }
+
+// Card is children on a card, marked with one of the theme's Accents, or none with "".
+func Card(accent string, children ...Block) Block {
+	return Block{Type: BlockCard, Accent: accent, Children: children}
+}
+
+// List is sections that scroll.
+func List(sections ...Section) Block { return Block{Type: BlockList, Sections: sections} }
+
+// Text is words in the body size.
+func Text(words string) Block { return Block{Type: BlockText, Text: words} }
+
+// Title is words in the title size.
+func Title(words string) Block { return Block{Type: BlockText, Text: words, Size: SizeTitle} }
+
+// Button is a button with an id, a label and an icon ("mdi:play", or "" for none).
+func Button(id, label, icon string) Block {
+	return Block{Type: BlockButton, ID: id, Label: label, Icon: icon}
+}
+
+// Chip is a chip with an id, a label and an icon ("" for none).
+func Chip(id, label, icon string) Block {
+	return Block{Type: BlockChip, ID: id, Label: label, Icon: icon}
+}
+
+// Progress is a bar at value, from 0 to 1.
+func Progress(value float64) Block { return Block{Type: BlockProgress, Value: &value} }
+
+// Countdown is a bar tied to one of the add-on's timers, by timer.start's id.
+func Countdown(timer string) Block { return Block{Type: BlockProgress, Timer: timer} }
+
+// Image is an image fetched from an http(s) address on the LAN or Home Assistant.
+func Image(url string) Block { return Block{Type: BlockImage, URL: url} }
+
+// ImageData is an image of these bytes, a JPEG or a PNG.
+func ImageData(b []byte) Block { return Block{Type: BlockImage, Data: b} }
+
+// Divider is a rule between blocks; Spacer is room.
+func Divider() Block { return Block{Type: BlockDivider} }
+func Spacer() Block  { return Block{Type: BlockSpacer} }

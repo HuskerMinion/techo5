@@ -50,10 +50,14 @@ func TestStrict(t *testing.T) {
 			t.Errorf("%s was read", name)
 		}
 	}
-	deep := strings.Repeat("[", 20) + strings.Repeat("]", 20)
 	var v any
+	deep := strings.Repeat("[", MaxNesting+1) + strings.Repeat("]", MaxNesting+1)
 	if err := Unmarshal([]byte(deep), &v); err == nil {
-		t.Error("nesting 20 deep was read")
+		t.Errorf("nesting %d deep was read", MaxNesting+1)
+	}
+	deep = strings.Repeat("[", MaxNesting) + strings.Repeat("]", MaxNesting)
+	if err := Unmarshal([]byte(deep), &v); err != nil {
+		t.Errorf("nesting %d deep, the most, was refused: %v", MaxNesting, err)
 	}
 }
 

@@ -82,7 +82,7 @@ func TestABadAPIVersionRefusesTheCatalog(t *testing.T) {
 		"no requires":       func(v *Version) { v.Requires = nil },
 		"level 2":           func(v *Version) { v.API = 2 },
 		"no level":          func(v *Version) { v.API = 0 },
-		"unknown cap":       func(v *Version) { v.Capabilities = append(v.Capabilities, "screen") },
+		"unknown cap":       func(v *Version) { v.Capabilities = append(v.Capabilities, "ha.call") },
 		"cap twice":         func(v *Version) { v.Capabilities = append(v.Capabilities, "speak") },
 		"no caps":           func(v *Version) { v.Capabilities = nil; v.Commands = nil; v.Entities = nil },
 		"commands, no cap":  func(v *Version) { v.Capabilities = []string{"speak", "entities"} },
@@ -101,6 +101,53 @@ func TestABadAPIVersionRefusesTheCatalog(t *testing.T) {
 		if _, err := ParseKnown(b); err == nil {
 			t.Errorf("%s: taken", name)
 		}
+	}
+}
+
+// The screen is stage 2: a version with the screen capability requires screen1, so a device before it
+// skips the version, and names no Dot, which has no screen to draw it on.
+func TestAScreenVersion(t *testing.T) {
+	screen := func(v *Version) {
+		v.Capabilities = append(v.Capabilities, "screen")
+		v.Requires = append(v.Requires, "screen1")
+		v.MinTECHO5["spot"] = "v1.7.0"
+	}
+	c := valid()
+	a := meals()
+	screen(&a.Versions[0])
+	c.Addons = append(c.Addons, a)
+	b, _ := json.Marshal(c)
+	if _, err := ParseKnown(b); err != nil {
+		t.Fatalf("a screen version: %v", err)
+	}
+	for name, change := range map[string]func(v *Version){
+		"no screen1": func(v *Version) { v.Requires = []string{"api1"} },
+		"screen1, no screen": func(v *Version) {
+			v.Capabilities = slices.DeleteFunc(v.Capabilities, func(c string) bool { return c == "screen" })
+		},
+		"the dot":              func(v *Version) { v.MinTECHO5["dot"] = "v1.7.0" },
+		"screen1 without api1": func(v *Version) { v.Requires = []string{"screen1"} },
+	} {
+		c := valid()
+		a := meals()
+		screen(&a.Versions[0])
+		change(&a.Versions[0])
+		c.Addons = append(c.Addons, a)
+		b, _ := json.Marshal(c)
+		if _, err := ParseKnown(b); err == nil {
+			t.Errorf("%s: taken", name)
+		}
+	}
+	// A device before stage 2 skips it, rather than refusing the catalog.
+	was := Features
+	Features = []string{"files", "api1"}
+	defer func() { Features = was }()
+	got, err := Parse(b)
+	if err != nil {
+		t.Fatalf("refused where screen1 is unknown: %v", err)
+	}
+	if a, _ := got.Find("meals"); !a.NeedsNewer() {
+		t.Errorf("read where screen1 is unknown as %+v", a)
 	}
 }
 

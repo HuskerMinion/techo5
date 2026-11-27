@@ -1,0 +1,321 @@
+package addonapi
+
+import (
+	"bytes"
+	"encoding/json"
+	"image"
+	"image/png"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// pngOf is a PNG of w by h pixels.
+func pngOf(t *testing.T, w, h int) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := png.Encode(&b, image.NewGray(image.Rect(0, 0, w, h))); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// meals is a page with one of every block, as the Meals add-on's cooking view might be.
+func meals(t *testing.T) Block {
+	half := 0.5
+	return Column(
+		Row(Chip("shopping", "Shopping", ""), Chip("plan", "Plan", "mdi:calendar"), Block{Type: BlockChip, ID: "cooking", Label: "Cooking", Selected: true}),
+		Block{Type: BlockText, ID: "step", Text: "Step 2 of 5\nStir the onions", Size: SizeTitle, Bold: true, Align: "center", MaxLines: 3},
+		Card("accent", Text("Next: add the rice"), Block{Type: BlockProgress, Value: &half}),
+		Block{Type: BlockRow, Spacing: "large", Children: []Block{
+			{Type: BlockImage, URL: "http://192.168.1.20:9000/api/media/recipes/1/images/min-original.webp", Fit: "cover", Weight: 2},
+			{Type: BlockImage, Data: pngOf(t, 64, 48), Weight: 1},
+			{Type: BlockSpacer, Weight: 1},
+		}},
+		Divider(),
+		List(Section{Heading: "Ingredients", Items: []Block{Text("1 onion"), Row(Text("2 cups rice"), Button("rice_done", "", "mdi:check"))}},
+			Section{Items: []Block{Text("Salt")}}),
+		Row(Button("back", "Back", "mdi:arrow-left"), Spacer(), Button("next", "Next", "mdi:arrow-right")),
+		Countdown("local:abc"),
+	)
+}
+
+func refuses(t *testing.T, what, on string, b Block, code string) {
+	t.Helper()
+	err := ValidScene(on, b, func(id string) bool { return id == "local:abc" })
+	if err == nil {
+		t.Errorf("%s was taken", what)
+		return
+	}
+	if CodeOf(err) != code {
+		t.Errorf("%s: %s, not %s (%v)", what, CodeOf(err), code, err)
+	}
+}
+
+func TestSceneValid(t *testing.T) {
+	if err := ValidScene(OnPage, meals(t), func(id string) bool { return id == "local:abc" }); err != nil {
+		t.Fatalf("a page of every block: %v", err)
+	}
+	card := Row(ImageData(pngOf(t, 32, 32)), Column(Block{Type: BlockText, Text: "Stir", Size: SizeTitle, MaxLines: 2}, Countdown("local:abc")), Chip("timer", "4:12", "mdi:timer"))
+	if err := ValidScene(OnCard, card, nil); err != nil {
+		t.Fatalf("a card: %v", err)
+	}
+	if err := ValidScene("clock", card, nil); CodeOf(err) != CodeBadRequest {
+		t.Errorf("a scene for nowhere: %v", err)
+	}
+}
+
+func TestSceneRefusals(t *testing.T) {
+	one := 1.0
+	for what, b := range map[string]Block{
+		"no type":                {Children: []Block{Text("x")}},
+		"an unknown type":        {Type: "webview"},
+		"a field not its type's": {Type: BlockButton, ID: "a", Label: "A", Text: "words"},
+		"an accent on a column":  {Type: BlockColumn, Accent: "accent"},
+		"an accent not a role":   Card("green", Text("x")),
+		"a button with no id":    Column(Block{Type: BlockButton, Label: "Go"}),
+		"a chip with no id":      Column(Block{Type: BlockChip, Label: "Go"}),
+		"a bad id":               Column(Button("Next", "Next", "")),
+		"an id with a dash":      Column(Button("go-on", "Next", "")),
+		"a duplicate id":         Column(Button("next", "Next", ""), Block{Type: BlockText, ID: "next", Text: "x"}),
+		"a weight outside a row": Card("", Block{Type: BlockText, Text: "x", Weight: 1}),
+		"a weight too great":     Row(Block{Type: BlockSpacer, Weight: MaxWeight + 1}),
+		"a button with nothing":  Button("a", "", ""),
+		"an icon not mdi":        Button("a", "", "fa:check"),
+		"a control character":    Text("a\x07b"),
+		"a bidi override":        Text("abc‮def"),
+		"a break in a label":     Button("a", "two\nlines", ""),
+		"a size not one":         {Type: BlockText, Text: "x", Size: "giant"},
+		"too many lines":         {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
+		"a progress past 1":      {Type: BlockProgress, Value: func() *float64 { v := 1.5; return &v }()},
+		"a progress of both":     {Type: BlockProgress, Value: &one, Timer: "local:abc"},
+		"a progress of neither":  {Type: BlockProgress},
+		"another's timer":        Countdown("local:theirs"),
+		"a list of nothing":      {Type: BlockList},
+		"a list in a list":       List(Section{Items: []Block{List(Section{Items: []Block{Text("x")}})}}),
+		"a list deep in a list":  List(Section{Items: []Block{Column(List(Section{Items: []Block{Text("x")}}))}}),
+		"an image of both":       {Type: BlockImage, URL: "http://192.168.1.2/a.png", Data: []byte{1}},
+		"an image of neither":    {Type: BlockImage},
+		"an image by ftp":        Image("ftp://192.168.1.2/a.png"),
+		"an image from outside":  Image("http://8.8.8.8/a.png"),
+		"an image from loopback": Image("http://127.0.0.1:8080/a.png"),
+		"an image link-local":    Image("http://[fe80::1]/a.png"),
+		"an image with a user":   Image("http://me:pw@192.168.1.2/a.png"),
+		"an image not an image":  ImageData([]byte("GIF89a......")),
+		"a fit not one":          {Type: BlockImage, URL: "http://ha.local/a.png", Fit: "stretch"},
+	} {
+		refuses(t, what, OnPage, b, CodeBadRequest)
+	}
+	for what, b := range map[string]Block{
+		"words too long":      Text(strings.Repeat("a", MaxText+1)),
+		"a label too long":    Button("a", strings.Repeat("a", MaxBlockLabel+1), ""),
+		"an image too wide":   ImageData(pngOf(t, MaxImageLong+1, 10)),
+		"an image too tall":   ImageData(pngOf(t, MaxImageShort+1, MaxImageShort+1)),
+		"an image too heavy":  ImageData(append(pngOf(t, 8, 8), make([]byte, MaxImage)...)),
+		"an address too long": Image("http://ha.local/" + strings.Repeat("a", MaxURL)),
+	} {
+		refuses(t, what, OnPage, b, CodeTooLarge)
+	}
+	// Either way up.
+	if err := ValidScene(OnPage, ImageData(pngOf(t, MaxImageShort, MaxImageLong)), nil); err != nil {
+		t.Errorf("a portrait image within the limits: %v", err)
+	}
+	// A name is checked when it is fetched, against what it resolves to.
+	if err := ValidScene(OnPage, Image("https://homeassistant.local:8123/local/a.jpg"), nil); err != nil {
+		t.Errorf("an image by name: %v", err)
+	}
+	if err := ValidScene(OnPage, Image("http://100.64.0.10/a.jpg"), nil); err != nil {
+		t.Errorf("an image over Tailscale: %v", err)
+	}
+}
+
+// deep is a column that nests n blocks deep.
+func deep(n int) Block {
+	b := Text("bottom")
+	for range n - 1 {
+		b = Column(b)
+	}
+	return b
+}
+
+func TestSceneLimits(t *testing.T) {
+	if err := ValidScene(OnPage, deep(MaxSceneDepth), nil); err != nil {
+		t.Errorf("%d deep: %v", MaxSceneDepth, err)
+	}
+	refuses(t, "too deep", OnPage, deep(MaxSceneDepth+1), CodeTooLarge)
+	// A list's item is two deeper than the list.
+	inList := List(Section{Items: []Block{deep(MaxSceneDepth - 2)}})
+	if err := ValidScene(OnPage, inList, nil); err != nil {
+		t.Errorf("a list's item at the deepest: %v", err)
+	}
+	refuses(t, "too deep in a list", OnPage, List(Section{Items: []Block{deep(MaxSceneDepth - 1)}}), CodeTooLarge)
+
+	many := Column()
+	for range MaxBlocks - 1 {
+		many.Children = append(many.Children, Divider())
+	}
+	if err := ValidScene(OnPage, many, nil); err != nil {
+		t.Errorf("%d blocks: %v", MaxBlocks, err)
+	}
+	many.Children = append(many.Children, Divider())
+	refuses(t, "too many blocks", OnPage, many, CodeTooLarge)
+
+	big := Column()
+	for range MaxScene/MaxText + 1 {
+		big.Children = append(big.Children, Text(strings.Repeat("a", MaxText)))
+	}
+	refuses(t, "too big", OnPage, big, CodeTooLarge)
+
+	images := Column()
+	for range MaxImages + 1 {
+		images.Children = append(images.Children, Image("http://ha.local/a.png"))
+	}
+	refuses(t, "too many images", OnPage, images, CodeTooLarge)
+}
+
+// The deepest scene there may be still reads within the message's nesting.
+func TestSceneFitsTheNesting(t *testing.T) {
+	inList := List(Section{Items: []Block{deep(MaxSceneDepth - 2)}})
+	for _, b := range []Block{deep(MaxSceneDepth), inList} {
+		if err := ValidScene(OnPage, b, nil); err != nil {
+			t.Fatal(err)
+		}
+		msg, err := Marshal(Request{ID: 1, Op: OpSceneSet, Args: mustMarshal(t, SceneSet{On: OnPage, Scene: b})})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var req Request
+		if err := Unmarshal(msg, &req); err != nil {
+			t.Fatalf("a scene at the deepest does not read: %v", err)
+		}
+		var set SceneSet
+		if err := Unmarshal(req.Args, &set); err != nil {
+			t.Fatalf("its arguments do not read: %v", err)
+		}
+	}
+}
+
+func mustMarshal(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	b, err := Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestCardRefusals(t *testing.T) {
+	img := ImageData(pngOf(t, 16, 16))
+	for what, b := range map[string]Block{
+		"a button":   Row(Text("x"), Button("go", "Go", "")),
+		"a list":     List(Section{Items: []Block{Text("x")}}),
+		"a card":     Card("", Text("x")),
+		"a divider":  Column(Text("x"), Divider()),
+		"two images": Row(img, img),
+		"huge words": {Type: BlockText, Text: "12:00", Size: SizeHuge},
+		"many lines": {Type: BlockText, Text: "x", MaxLines: MaxCardLines + 1},
+		"too deep":   Row(Column(Row(Text("x")))),
+		"long words": Text(strings.Repeat("a", MaxCardText+1)),
+		"many blocks": Row(Text("1"), Text("2"), Text("3"), Text("4"), Text("5"), Text("6"), Text("7"), Text("8"),
+			Text("9"), Text("10"), Text("11"), Text("12")),
+	} {
+		err := ValidScene(OnCard, b, nil)
+		if err == nil {
+			t.Errorf("a card of %s was taken", what)
+		}
+		// Each would be fine on the page.
+		if what != "two images" && what != "many lines" && what != "long words" && what != "huge words" {
+			if err := ValidScene(OnPage, b, nil); err != nil && what != "too deep" {
+				t.Errorf("%s on the page: %v", what, err)
+			}
+		}
+	}
+}
+
+// Nothing in a scene can name a color, a position or a size in pixels, or hide the name bar: a page
+// must never pass for one of the questions the device asks (Cast's Accept or Decline, the PIN pad, a
+// call), whose colors and place are the daemon's. Block's fields are held to this list, so one cannot
+// be added without this test, and its reason, being looked at.
+func TestNothingImitatesTheSystem(t *testing.T) {
+	want := []string{"type", "id", "weight", "children", "spacing", "sections", "accent", "text", "size", "bold",
+		"align", "max_lines", "url", "data", "fit", "label", "icon", "selected", "value", "timer"}
+	var got []string
+	bt := reflect.TypeOf(Block{})
+	for i := range bt.NumField() {
+		name, _, _ := strings.Cut(bt.Field(i).Tag.Get("json"), ",")
+		got = append(got, name)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Block's fields are %v; a new one must say why it cannot imitate the device's own screens, here", got)
+	}
+	// Every field is some block's, and only by blockFields.
+	for _, f := range want[3:] {
+		found := false
+		for _, fs := range blockFields {
+			found = found || slices.Contains(fs, f)
+		}
+		if !found {
+			t.Errorf("%s is no block's", f)
+		}
+	}
+	for _, a := range Accents {
+		for _, bad := range []string{"green", "red", "accept", "decline", "answer", "#"} {
+			if strings.Contains(a, bad) {
+				t.Errorf("the accent %q could make an accept or decline pair", a)
+			}
+		}
+	}
+	// A button, which is what a question's answer would be, has no color at all.
+	refuses(t, "a button with an accent", OnPage, Block{Type: BlockButton, ID: "yes", Label: "Accept", Accent: "accent"}, CodeBadRequest)
+	// And what an author might try is not read at all.
+	for _, msg := range []string{
+		`{"on":"page","scene":{"type":"button","id":"yes","label":"Accept","color":"#2e7d32"}}`,
+		`{"on":"page","scene":{"type":"column","background":"#c62828"}}`,
+		`{"on":"page","hide_name_bar":true,"scene":{"type":"column"}}`,
+		`{"on":"page","fullscreen":true,"scene":{"type":"column"}}`,
+		`{"on":"page","scene":{"type":"column","x":0,"y":0,"width":960,"height":480}}`,
+		`{"on":"system","scene":{"type":"column"}}`,
+	} {
+		var s SceneSet
+		err := Unmarshal([]byte(msg), &s)
+		if err == nil {
+			err = ValidScene(s.On, s.Scene, nil)
+		}
+		if err == nil {
+			t.Errorf("%s was taken", msg)
+		}
+	}
+}
+
+func TestPatched(t *testing.T) {
+	page := meals(t)
+	out, ok, err := page.Patched("step", Text("Step 3 of 5"))
+	if err != nil || !ok {
+		t.Fatalf("patch: %v %v", ok, err)
+	}
+	if b, _ := out.Find("step"); b.Text != "Step 3 of 5" || b.ID != "step" {
+		t.Errorf("the patched block is %+v", b)
+	}
+	// The scene it was made from is untouched, so the one being drawn never changes under the display.
+	if b, _ := page.Find("step"); !strings.HasPrefix(b.Text, "Step 2") {
+		t.Errorf("the original changed: %q", b.Text)
+	}
+	if _, ok, _ := page.Patched("nothing", Text("x")); ok {
+		t.Error("a patch of no block was found")
+	}
+	if _, _, err := page.Patched("step", Block{Type: BlockText, ID: "other", Text: "x"}); CodeOf(err) != CodeBadRequest {
+		t.Errorf("a patch that changes the id: %v", err)
+	}
+	// Inside a list, too.
+	out, ok, _ = page.Patched("rice_done", Button("rice_done", "", "mdi:check-bold"))
+	if b, _ := out.Find("rice_done"); !ok || b.Icon != "mdi:check-bold" {
+		t.Error("a patch inside a list")
+	}
+	if !out.TapTarget("rice_done") || out.TapTarget("step") || out.TapTarget("nothing") {
+		t.Error("TapTarget")
+	}
+	if got := page.Timers(); !slices.Equal(got, []string{"local:abc"}) {
+		t.Errorf("timers %v", got)
+	}
+}

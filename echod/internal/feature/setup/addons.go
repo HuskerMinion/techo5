@@ -104,6 +104,7 @@ var capabilityLines = map[string]string{
 	addonapi.CapSettings:  "Has settings of its own on this page.",
 	addonapi.CapEntities:  "Adds entities to Home Assistant: %s.",
 	addonapi.CapMedia:     "Plays video and audio from the network on this device.",
+	addonapi.CapScreen:    "Shows a page of its own under the Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed.",
 }
 
 // capabilityLine is a capability's line, for a version that lists commands and entities as given.

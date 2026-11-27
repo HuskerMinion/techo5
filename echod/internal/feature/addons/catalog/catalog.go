@@ -48,10 +48,11 @@ const (
 )
 
 // Features are what a format 2 version can require that this build knows: "files", the extra files a
-// version brings (Version.Files), and "api1", the add-on API's first level (Version.API, pkg/addonapi).
-// A version that requires anything else is for a newer TECHO5, and is skipped. Each feature here is a
-// field a version may use only when it requires the feature.
-var Features = []string{"files", "api1"}
+// version brings (Version.Files), "api1", the add-on API's first level (Version.API, pkg/addonapi), and
+// "screen1", its screen (the screen capability). A version that requires anything else is for a newer
+// TECHO5, and is skipped. Each feature here is a field a version may use only when it requires the
+// feature: a device before stage 2 does not know the screen capability, and would refuse the catalog.
+var Features = []string{"files", addonapi.LevelAPI1, addonapi.LevelScreen1}
 
 // Catalog is the whole file.
 type Catalog struct {
@@ -565,6 +566,11 @@ func (v Version) valid(id string, format int) error {
 	if err := v.validAPI(); err != nil {
 		return fmt.Errorf("catalog: %s: %w", what, err)
 	}
+	// A Dot has no screen to draw a page or a card on: a version that uses one is not for it, and its
+	// owner would be asked to agree to a line that means nothing there.
+	if _, dot := v.MinTECHO5["dot"]; dot && slices.Contains(v.Capabilities, addonapi.CapScreen) {
+		return fmt.Errorf("catalog: %s uses the screen capability, and names the dot, which has no screen", what)
+	}
 	switch {
 	case v.MemoryMB <= 0:
 		return fmt.Errorf("catalog: %s gives no memory use", what)
@@ -581,7 +587,10 @@ func (v Version) uses() []string {
 		f = append(f, "files")
 	}
 	if v.API > 0 || len(v.Capabilities) > 0 || len(v.Commands) > 0 || len(v.Entities) > 0 {
-		f = append(f, "api1")
+		f = append(f, addonapi.LevelAPI1)
+	}
+	if slices.Contains(v.Capabilities, addonapi.CapScreen) {
+		f = append(f, addonapi.LevelScreen1)
 	}
 	return f
 }

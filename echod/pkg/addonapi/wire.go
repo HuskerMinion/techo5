@@ -22,8 +22,17 @@ import (
 	"regexp"
 )
 
-// Version is the API level this package speaks: stage 1, "api1" in the catalog's requires.
+// Version is the API level this package speaks, as addon.json's "api" and hello say it. Stage 2's
+// screen adds ops and events to level 1 rather than changing any, so it is still 1: what an add-on may
+// use of it is its capabilities, and the catalog's requires names "screen1" for a version with the
+// screen capability, so a device that has no screen ops skips that version.
 const Version = 1
+
+// Levels are the catalog's names for what this package speaks: stage 1, and stage 2's screen.
+const (
+	LevelAPI1    = "api1"
+	LevelScreen1 = "screen1"
+)
 
 // EnvSocket names the environment variable the daemon gives an add-on the socket's path in.
 const EnvSocket = "TECHO5_ADDON_API"
@@ -43,9 +52,12 @@ const (
 	MaxOutstanding = 64
 	// MaxKeys is the most keys one object in a message may have.
 	MaxKeys = 256
+	// MaxNesting is how deeply objects and arrays may nest in a message. A scene nests two for each
+	// level of blocks (a block and its children), so it is twice MaxSceneDepth and a little over.
+	MaxNesting = 32
 )
 
-// Capabilities an add-on can be granted in stage 1. Each is a line on the consent screen, pinned by
+// Capabilities an add-on can be granted. Each is a line on the consent screen, pinned by
 // the catalog, and checked on every request that needs it.
 const (
 	CapCommands  = "commands"
@@ -57,11 +69,14 @@ const (
 	CapSettings  = "settings"
 	CapEntities  = "entities"
 	CapMedia     = "media"
+	// CapScreen is stage 2's ("screen1"): a page of the add-on's own under the Add-ons tab, and a small
+	// card over the clock.
+	CapScreen = "screen"
 )
 
 // Capabilities is every capability this level knows, in the order the consent screen lists them.
 var Capabilities = []string{CapCommands, CapEvents, CapSpeak, CapSound, CapTimers, CapKeepAwake, CapSettings,
-	CapEntities, CapMedia}
+	CapEntities, CapMedia, CapScreen}
 
 // Ops an add-on can ask for.
 const (
@@ -85,6 +100,13 @@ const (
 	OpMediaResume   = "media.resume"
 	OpMediaStop     = "media.stop"
 	OpMediaStatus   = "media.status"
+
+	// Stage 2, with the screen capability.
+	OpSceneSet    = "scene.set"
+	OpScenePatch  = "scene.patch"
+	OpScreenOpen  = "screen.open"
+	OpScreenClose = "screen.close"
+	OpCardClear   = "card.clear"
 )
 
 // Events the daemon sends.
@@ -95,6 +117,12 @@ const (
 	EventSettingsTest  = "settings.test"
 	EventEntityCommand = "entity.command"
 	EventMediaState    = "media.state"
+
+	// Stage 2, with the screen capability.
+	EventTouch       = "touch"
+	EventSwipe       = "swipe"
+	EventBack        = "back"
+	EventScreenState = "screen.state"
 )
 
 // Error codes, a fixed set.
@@ -276,8 +304,9 @@ func checkKeys(b []byte) error {
 		}
 		switch t {
 		case json.Delim('{'), json.Delim('['):
-			// Deep nesting is no use to anything in the protocol, and costs the reader for nothing.
-			if depth++; depth > 16 {
+			// Nesting deeper than a scene needs is no use to anything in the protocol, and costs the
+			// reader for nothing.
+			if depth++; depth > MaxNesting {
 				return errors.New("nested too deeply")
 			}
 			stack = append(stack, &frame{object: t == json.Delim('{'), keys: map[string]bool{}, key: true})

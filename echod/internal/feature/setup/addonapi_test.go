@@ -26,6 +26,7 @@ func TestEveryCapabilityHasItsConsentLine(t *testing.T) {
 		"settings":  "Has settings of its own on this page.",
 		"entities":  "Adds entities to Home Assistant: sensor.step.",
 		"media":     "Plays video and audio from the network on this device.",
+		"screen":    "Shows a page of its own under the Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed.",
 	}
 	l := plexListing(true, "", false)
 	l.Version.API, l.Version.Capabilities = 1, addonapi.Capabilities
