@@ -110,6 +110,13 @@ func (l *leveler) leastNow() float32 { return math.Float32frombits(l.least.Load(
 
 // best is the most any reading in the last d stood over the floor, in dB.
 func (s *standout) best(d time.Duration) float64 {
+	top, _ := s.over(d)
+	return top
+}
+
+// over is the most any reading in the last d stood over the floor and the average of the readings that
+// stood over it at all, both in dB.
+func (s *standout) over(d time.Duration) (top, mean float64) {
 	want := int(d / (standoutBlock * FrameSamples * time.Second / Rate))
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -118,11 +125,20 @@ func (s *standout) best(d time.Duration) float64 {
 		have = len(s.blocks)
 	}
 	want = min(max(want, 1), have)
-	var top float32
+	var sum float64
+	n := 0
 	for i := 1; i <= want; i++ {
-		top = max(top, s.blocks[(s.at-i+len(s.blocks))%len(s.blocks)])
+		v := float64(s.blocks[(s.at-i+len(s.blocks))%len(s.blocks)])
+		top = max(top, v)
+		if v > 0 {
+			sum += v
+			n++
+		}
 	}
-	return float64(top)
+	if n > 0 {
+		mean = sum / float64(n)
+	}
+	return top, mean
 }
 
 // SetStandout starts or stops measuring how far speech stands out from the room. It takes a moment to
@@ -145,4 +161,16 @@ func (s *Source) Standout(d time.Duration) float64 {
 		return 0
 	}
 	return s.standout.best(d)
+}
+
+// StandoutMean is how far, on average, the word in the last d stood out from this device's room, in dB
+// over its own floor, so mic gain and room noise do not count; NaN while it is not being measured, so a
+// claim says it has no mean rather than a mean of 0. It is steadier than Standout, which one lucky block
+// can move.
+func (s *Source) StandoutMean(d time.Duration) float64 {
+	if !s.standout.on.Load() {
+		return math.NaN()
+	}
+	_, mean := s.standout.over(d)
+	return mean
 }

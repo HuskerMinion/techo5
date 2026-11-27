@@ -56,7 +56,7 @@ func TestAFaintWinCarriesItsClarity(t *testing.T) {
 func TestAConfirmedWakeSaysWhetherItWasClaimed(t *testing.T) {
 	h := newHouse(t)
 	var answer, claimed *bool
-	h.n.Confirmed(0, h.now, 11, nil, func(a, c bool) { answer, claimed = &a, &c })
+	h.n.Confirmed(0, h.now, 11, 11, nil, func(a, c bool) { answer, claimed = &a, &c })
 	h.wait(300 * time.Millisecond)
 	if answer == nil || !*answer || !*claimed {
 		t.Fatalf("won: answer %v, claimed %v; want both", answer, claimed)
@@ -65,7 +65,7 @@ func TestAConfirmedWakeSaysWhetherItWasClaimed(t *testing.T) {
 	h = newHouse(t)
 	h.n.enabled = false
 	answer, claimed = nil, nil
-	h.n.Confirmed(0, h.now, 11, nil, func(a, c bool) { answer, claimed = &a, &c })
+	h.n.Confirmed(0, h.now, 11, 11, nil, func(a, c bool) { answer, claimed = &a, &c })
 	if answer == nil || !*answer || *claimed {
 		t.Fatalf("off: answer %v, claimed %v; want an answer and no claim", answer, claimed)
 	}

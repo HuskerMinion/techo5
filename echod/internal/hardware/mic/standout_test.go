@@ -117,3 +117,34 @@ func TestStandoutRelearnsTheFloor(t *testing.T) {
 		t.Errorf("the reader carried %d frames over into the new block, want just this one", s.standout.n)
 	}
 }
+
+// The mean is against each device's own floor: a mic with four times the gain hears the same word the
+// same, and a nearer, louder voice stands further out. The room is turned up so its floor is its own,
+// not the least the converter allows.
+func TestTheMeanIgnoresMicGain(t *testing.T) {
+	mean := func(gain, voice float64) float64 {
+		var s standout
+		s.on.Store(true)
+		r := rand.New(rand.NewPCG(1, 2))
+		least := quietest(20)
+		for range 100 {
+			f := roomFrame(r)
+			for i := range f {
+				f[i] = int16(float64(f[i]) * gain)
+			}
+			s.add(f, least)
+		}
+		for i := range 25 {
+			s.add(toneFrame(i, voice*gain), least)
+		}
+		_, m := s.over(time.Second)
+		return m
+	}
+	quiet, hot := mean(4, 500), mean(16, 500)
+	if math.Abs(quiet-hot) > 1 {
+		t.Errorf("four times the gain moves the mean from %.1f to %.1f dB, want within 1", quiet, hot)
+	}
+	if near := mean(4, 1500); near <= quiet+3 {
+		t.Errorf("a voice three times louder has a mean of %.1f dB, want well over %.1f", near, quiet)
+	}
+}

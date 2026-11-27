@@ -19,7 +19,7 @@ type contest struct {
 func withContest(t *testing.T) *contest {
 	t.Helper()
 	ct := &contest{decide: make(chan func(bool, bool), 1)}
-	SetConfirmedContest(func(slot int, at time.Time, clarity float64, settled func(bool), decide func(bool, bool)) {
+	SetConfirmedContest(func(slot int, at time.Time, clarity, _ float64, settled func(bool), decide func(bool, bool)) {
 		ct.slot, ct.at, ct.clarity = slot, at, clarity
 		ct.decide <- decide
 	})
@@ -172,7 +172,7 @@ func TestAFaintWakeIsNotClaimedAgain(t *testing.T) {
 func withAsking(t *testing.T) *[]bool {
 	t.Helper()
 	var settled []bool
-	SetAskingClaim(func(int, float64) func(bool) {
+	SetAskingClaim(func(int, float64, float64) func(bool) {
 		return func(confirmed bool) { settled = append(settled, confirmed) }
 	})
 	t.Cleanup(func() { askingClaim.Store(nil) })
@@ -221,7 +221,7 @@ func TestAHeardCandidateWithNoDecisionTakesItsClaimBack(t *testing.T) {
 func TestAnEarlyUnsureClaimIsTheQuestionsOwn(t *testing.T) {
 	var made int
 	var settled []bool
-	SetAskingClaim(func(int, float64) func(bool) {
+	SetAskingClaim(func(int, float64, float64) func(bool) {
 		made++
 		return func(confirmed bool) { settled = append(settled, confirmed) }
 	})

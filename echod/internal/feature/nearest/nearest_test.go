@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -231,11 +232,79 @@ func TestAnOldClaimDoesNotCount(t *testing.T) {
 }
 
 func TestATieGoesToTheNameThatSortsFirst(t *testing.T) {
-	if !better(claim{From: "Den", Score: 20}, claim{From: "Office", Score: 20}) {
+	if !better(claim{From: "Den", Score: 20}, claim{From: "Office", Score: 20}, false) {
 		t.Error("Den should win a tie with Office")
 	}
-	if better(claim{From: "Office", Score: 20}, claim{From: "Den", Score: 20}) {
+	if better(claim{From: "Office", Score: 20}, claim{From: "Den", Score: 20}, false) {
 		t.Error("Office should lose a tie with Den")
+	}
+}
+
+// Measured claims compare the score rounded to the dB, then the mean standout, then the exact score, then the name.
+func TestTheMeanBreaksANearTie(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	order := []claim{
+		{From: "e", Score: 20, Mean: f(1)},   // ahead once rounded to the dB beats a higher mean
+		{From: "d", Score: 9.6, Mean: f(8)},  // rounded to the same dB, the mean decides
+		{From: "c", Score: 10.4, Mean: f(5)}, // then the exact score
+		{From: "a", Score: 10, Mean: f(5)},   // then the name
+		{From: "b", Score: 10, Mean: f(5)},
+	}
+	for i := range order {
+		for j := range order {
+			if got, want := better(order[i], order[j], true), i < j; got != want {
+				t.Fatalf("better(%s, %s) = %v, want %v", order[i].From, order[j].From, got, want)
+			}
+		}
+	}
+}
+
+// An older device compares score, then name. Whenever one claim in the contest lacks the mean, a
+// newer device must pick the same winner.
+func TestOldAndNewDecidersAgree(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	old := func(a, b claim) bool {
+		if a.Score != b.Score {
+			return a.Score > b.Score
+		}
+		return a.From < b.From
+	}
+	winner := func(claims []claim, cmp func(a, b claim) bool) string {
+		best := claims[0]
+		for _, c := range claims[1:] {
+			if cmp(c, best) {
+				best = c
+			}
+		}
+		return best.From
+	}
+	contests := [][]claim{
+		{{From: "old", Score: 10.4}, {From: "new", Score: 9.6, Mean: f(80)}},
+		{{From: "old", Score: 10}, {From: "new", Score: 10, Mean: f(80)}},
+		{{From: "z-old", Score: 10}, {From: "a-new", Score: 10, Mean: f(1)}, {From: "b-new", Score: 10, Mean: f(90)}},
+	}
+	for _, claims := range contests {
+		measured := true
+		for _, c := range claims {
+			measured = measured && c.Mean != nil
+		}
+		if o, n := winner(claims, old), winner(claims, func(a, b claim) bool { return better(a, b, measured) }); o != n {
+			t.Fatalf("old decider picks %s, new picks %s, for %+v", o, n, claims)
+		}
+	}
+}
+
+func TestAnOlderClaimHasNoMeasurementsOnTheWire(t *testing.T) {
+	b, err := json.Marshal(claim{From: "A", Turn: "t", Score: 3})
+	if err != nil || strings.Contains(string(b), "mean") {
+		t.Fatalf("an unmeasured claim sends measurements: %s, %v", b, err)
+	}
+	n := &Nearest{mean: func() float64 { return 40 }}
+	if n.measured(false) != nil {
+		t.Fatal("a word that is not a wake word should not be measured")
+	}
+	if e := n.measured(true); e == nil || *e != 40 {
+		t.Fatal("a wake word should be measured")
 	}
 }
 
@@ -637,4 +706,106 @@ func TestARepeatFiringOfTheSameWordsOpensNoSecondTurn(t *testing.T) {
 		t.Error("a claim long after the word was told it was answered here, turn or not")
 	}
 
+}
+
+// Every device runs bestSince over the claims it heard from the others, and exactly one of them finds
+// nobody better: in a near-tie everyone measured, and in one where a claim has no mean (an older
+// device, or a wake Home Assistant confirmed).
+func TestEachDeviceSeesTheSameWinner(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	contests := map[string][]claim{
+		"measured near-tie": {
+			{From: "a", Word: "nora", Score: 10.4, Mean: f(5)},
+			{From: "b", Word: "nora", Score: 9.6, Mean: f(8)},
+			{From: "c", Word: "nora", Score: 3, Mean: f(9)},
+		},
+		"one unmeasured": {
+			{From: "a", Word: "nora", Score: 10.4, Mean: f(5)},
+			{From: "b", Word: "nora", Score: 9.6, Mean: f(8)},
+			{From: "old", Word: "nora", Score: 3},
+		},
+	}
+	want := map[string]string{"measured near-tie": "b", "one unmeasured": "a"}
+	for name, claims := range contests {
+		var winners []string
+		for i, mine := range claims {
+			n := &Nearest{}
+			for j, c := range claims {
+				if j != i {
+					n.others = append(n.others, arrived{claim: c, at: at})
+				}
+			}
+			if _, beaten := n.bestSince(at.Add(-time.Second), mine); !beaten {
+				winners = append(winners, mine.From)
+			}
+		}
+		if len(winners) != 1 || winners[0] != want[name] {
+			t.Errorf("%s: devices that think they won: %v, want only %s", name, winners, want[name])
+		}
+	}
+}
+
+// A confirmed claim arrives after one device has decided and before another does. With its mean, every
+// device compares the same way, so exactly one of them answers.
+func TestALateConfirmedClaimDoesNotSplitTheOrder(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	a := claim{From: "A", Word: "nora", Score: 10.4, Mean: f(5)}
+	b := claim{From: "B", Word: "nora", Score: 9.6, Mean: f(8)}
+	u := claim{From: "U", Word: "nora", Score: 9.8, Mean: f(6)}
+	views := map[string]struct {
+		mine   claim
+		others []claim
+	}{
+		"A, before U's claim": {a, []claim{b}},
+		"B, after it":         {b, []claim{a, u}},
+		"U":                   {u, []claim{a, b}},
+	}
+	var winners []string
+	for name, v := range views {
+		n := &Nearest{}
+		for _, c := range v.others {
+			n.others = append(n.others, arrived{claim: c, at: at})
+		}
+		if _, beaten := n.bestSince(at.Add(-time.Second), v.mine); !beaten {
+			winners = append(winners, name)
+		}
+	}
+	if len(winners) != 1 || winners[0] != "B, after it" {
+		t.Fatalf("devices that answer: %v, want only B", winners)
+	}
+}
+
+// U runs an older release: its unsure claim comes early with no mean, its confirmed one late. A decides
+// before the confirmed claim arrives and B after, but both have seen the unsure one, so both weigh the
+// word by score alone, as U does, and only A answers.
+func TestAnOlderDevicesUnsureClaimKeepsTheOrder(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	a := claim{From: "A", Word: "nora", Score: 10.4, Mean: f(5)}
+	b := claim{From: "B", Word: "nora", Score: 9.6, Mean: f(8)}
+	unsure := claim{From: "U", Word: unsurePrefix + "nora", Score: 9.8}
+	u := claim{From: "U", Word: "nora", Score: 9.8}
+	views := map[string]struct {
+		mine   claim
+		others []claim
+	}{
+		"A, before U's confirmed claim": {a, []claim{unsure, b}},
+		"B, after it":                   {b, []claim{unsure, a, u}},
+		"U":                             {u, []claim{a, b}},
+	}
+	var winners []string
+	for name, v := range views {
+		n := &Nearest{}
+		for _, c := range v.others {
+			n.others = append(n.others, arrived{claim: c, at: at})
+		}
+		if _, beaten := n.bestSince(at.Add(-time.Second), v.mine); !beaten {
+			winners = append(winners, name)
+		}
+	}
+	if len(winners) != 1 || winners[0] != "A, before U's confirmed claim" {
+		t.Fatalf("devices that answer: %v, want only A", winners)
+	}
 }

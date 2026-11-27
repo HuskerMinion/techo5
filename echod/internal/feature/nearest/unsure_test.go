@@ -1,6 +1,7 @@
 package nearest
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ func TestAskingTellsTheOthersAndTakesItBack(t *testing.T) {
 	h := newHouse(t)
 	var told []claim
 	h.n.tell = func(_ []announce.Peer, c claim) { told = append(told, c) }
-	settled := h.n.Asking(0, 9)
+	settled := h.n.Asking(0, 9, math.NaN())
 	if settled == nil || len(told) != 1 || told[0].Word != unsurePrefix+"okay_nabu" || told[0].Score != 9 || told[0].Withdrawn {
 		t.Fatalf("told %+v, want one unsure claim at the clarity", told)
 	}
@@ -110,12 +111,12 @@ func TestAskingTellsTheOthersAndTakesItBack(t *testing.T) {
 		t.Fatalf("told %+v, want the claim withdrawn", told)
 	}
 	told = nil
-	h.n.Asking(0, 9)(true)
+	h.n.Asking(0, 9, math.NaN())(true)
 	if len(told) != 1 {
 		t.Fatalf("told %+v after home assistant heard it, want no withdrawal", told)
 	}
 	h.n.enabled = false
-	if h.n.Asking(0, 9) != nil {
+	if h.n.Asking(0, 9, math.NaN()) != nil {
 		t.Error("an unsure claim with nearest device answers off")
 	}
 }
@@ -131,5 +132,17 @@ func TestFreshUnsureClaimsDoNotHoldForever(t *testing.T) {
 	}
 	if len(h.opened) != 1 {
 		t.Fatalf("opened %d turns after 4 s of fresh unsure claims, want it answered once", len(h.opened))
+	}
+}
+
+// The unsure claim carries the mean, and none when nothing measured it.
+func TestAskingSendsTheMean(t *testing.T) {
+	h := newHouse(t)
+	var told []claim
+	h.n.tell = func(_ []announce.Peer, c claim) { told = append(told, c) }
+	h.n.Asking(0, 9, 6)
+	h.n.Asking(0, 9, math.NaN())
+	if len(told) != 2 || told[0].Mean == nil || *told[0].Mean != 6 || told[1].Mean != nil {
+		t.Fatalf("told %+v, want mean 6 and then none", told)
 	}
 }
