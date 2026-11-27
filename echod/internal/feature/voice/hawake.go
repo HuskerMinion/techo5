@@ -282,6 +282,7 @@ func (c *conversation) watchEvent(e event) bool {
 	case evRunStart:
 		// Whatever comes now is this run's: a run let go of before it closed has nothing more to say.
 		c.staleRun = false
+		c.runTail, c.lateRun = false, false
 		c.runURL = e.url
 		return true
 

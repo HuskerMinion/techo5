@@ -341,6 +341,14 @@ type conversation struct {
 	// starts, a RUN_END or an error is the old run's.
 	staleRun bool
 
+	// runTail is a turn that ended thinking or replying, whose run can still be sending: a reply
+	// interrupted by the wake word goes on streaming for a moment, past its RUN_END. lateRun is a turn
+	// opened after one, on Home Assistant, whose own RUN_START has not come yet: until it does, what
+	// arrives is the run before's. Taken for the new turn's, a chunk of the old reply had it replying
+	// before anything was said, which ended its audio, so Home Assistant heard nothing and the turn
+	// closed, the ring dark, within 30 ms of opening.
+	runTail, lateRun bool
+
 	// nextConfirm is the soonest another wake may be asked about, and confirmGap the wait after this
 	// one: it grows with every wake Home Assistant did not hear, so a steady sound near the word is
 	// not asked about every couple of seconds, and starts again from a wake that was real.
@@ -614,6 +622,18 @@ func (c *conversation) handle(e event) {
 	c.consider()
 }
 
+// ofRun is whether an event is one Home Assistant sends for a run: one that arrives for a turn before its
+// own run has started (lateRun) is the run before's. Not an error, which the new run may send before it
+// starts at all (another device answered first).
+func ofRun(k eventKind) bool {
+	switch k {
+	case evHeard, evSpeaking, evReplyText, evReplyURL, evEarlyReply, evContinue,
+		evStreamStart, evStreamAudio, evStreamEnd, evRunEnd:
+		return true
+	}
+	return false
+}
+
 // dropQuestion takes an announced question off the screen when no turn is there to answer it.
 func (c *conversation) dropQuestion() {
 	if c.phase == phaseIdle && c.shown.Phase == phaseReplying.String() {
@@ -623,6 +643,10 @@ func (c *conversation) dropQuestion() {
 }
 
 func (c *conversation) turnEvent(e event) {
+	if c.lateRun && c.phase != phaseIdle && ofRun(e.kind) {
+		slog.Debug("an event of the run before this turn's, dropped", "kind", e.kind, "phase", c.phase)
+		return
+	}
 	switch e.kind {
 	case evScored:
 		c.scored(e.slot, e.peak, e.at)
@@ -1222,6 +1246,9 @@ func (c *conversation) start(n nextTurn) (started bool) {
 				c.send("start", func() error { return rt.startFrom(gen) })
 			}
 		} else {
+			if _, ok := be.(ha); ok && c.runTail {
+				c.lateRun = true
+			}
 			c.send("start", func() error { return be.Start(asked) })
 		}
 	}
@@ -1451,6 +1478,9 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	c.turn.Ends(how)
 	c.turn = nil
 
+	if was == phaseThinking || was == phaseReplying {
+		c.runTail = true
+	}
 	c.enter(phaseIdle)
 	c.claim.Clear()
 	c.player.Sounding(false)

@@ -159,3 +159,47 @@ func TestAReplyTakenOverAndStoppedBeforeTheUrlsAudioIsToldAsEnded(t *testing.T) 
 	c.handle(event{kind: evCancel})
 	replyEnded(t, *got, "canceled")
 }
+
+// A streamed reply interrupted by the wake word goes on arriving for a moment, and its run's RUN_END can
+// come after the next turn has opened. Until that turn's own run starts, none of it is the new turn's:
+// on the Echo Dot 5th gen a chunk of the old reply had the new turn replying before anything was said,
+// and it closed, the ring dark, within 30 ms of opening.
+func TestTheInterruptedRunsLastEventsAreNotTheNextTurns(t *testing.T) {
+	got := told(t)
+	c := streamedReply(t, got)
+	c.ha.ready = func() bool { return true }
+	c.ha.start = func(string) error { return nil }
+
+	c.handle(event{kind: evStart, slot: 0, woke: true, at: time.Now()})
+	if c.phase != phaseIdle || c.pending == nil {
+		t.Fatalf("the interrupt left the turn %s with pending %v, want idle with the next turn held back", c.phase, c.pending)
+	}
+	// The stopped run closing is what the held-back turn waits for.
+	c.handle(event{kind: evRunEnd})
+	if c.phase != phaseListening {
+		t.Fatalf("the next turn is %s after the old run closed, want listening", c.phase)
+	}
+	if !c.lateRun {
+		t.Fatal("the next turn does not wait for its own run's start")
+	}
+
+	// What the old run still sends: the rest of its reply, its end, and its RUN_END again.
+	c.handle(event{kind: evStreamAudio, audio: make([]byte, 1024)})
+	c.handle(event{kind: evStreamEnd})
+	c.handle(event{kind: evRunEnd})
+	settle(c, 50*time.Millisecond)
+	if c.phase != phaseListening {
+		t.Fatalf("the old run's last events left the new turn %s, want it still listening", c.phase)
+	}
+
+	// Its own run starting, what follows is the new turn's again.
+	c.handle(event{kind: evRunStart})
+	if c.lateRun {
+		t.Fatal("still dropping events after the turn's own run started")
+	}
+	c.handle(event{kind: evReplyText, text: "It's one."})
+	c.handle(event{kind: evStreamAudio, audio: make([]byte, 1024)})
+	if c.phase != phaseReplying {
+		t.Fatalf("the new run's reply left the turn %s, want replying", c.phase)
+	}
+}
