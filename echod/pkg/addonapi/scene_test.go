@@ -423,8 +423,9 @@ func TestNoPINPad(t *testing.T) {
 }
 
 // Nine digit keys and a tenth drawn like a digit are a PIN pad all the same: a letter O or l, a digit
-// in brackets, a fullwidth or circled one. Nine short keys in three columns are a keypad whatever they
-// say. Words, fewer keys, or rows of other widths are taken.
+// in brackets, a fullwidth or circled one. Nine short keys in three columns, six or more of them
+// digit-like, are a keypad too. Grids of letters, a game, emoji, arrows or icons, words, fewer keys, or
+// rows of other widths are taken.
 func TestNoPINPadOfLookalikes(t *testing.T) {
 	refusesPad := func(t *testing.T, what, on string, b Block) {
 		t.Helper()
@@ -460,10 +461,42 @@ func TestNoPINPadOfLookalikes(t *testing.T) {
 		}
 		return out
 	}
-	g := letters("A", "B", "C", "D", "E", "F", "G", "H", "IJ")
-	refusesPad(t, "a keypad of letters", OnPage, Column(Row(g[0:3]...), Row(g[3:6]...), Row(Spacer(), g[6], g[7], g[8])))
-	refusesPad(t, "a keypad of letters in a card", OnPage, Card("", Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)))
-	refusesPad(t, "a keypad in a list", OnPage, List(Section{Items: []Block{Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)}}))
+	// A keypad of mostly digits is a PIN pad, short of ten digits and wherever its rows are.
+	g := letters("1", "2", "3", "4", "5", "\uff16", "A", "B", "C")
+	refusesPad(t, "a keypad of six digits and three letters", OnPage, Column(Row(g[0:3]...), Row(g[3:6]...), Row(Spacer(), g[6], g[7], g[8])))
+	refusesPad(t, "a keypad of digits in a card", OnPage, Card("", Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)))
+	refusesPad(t, "a keypad of digits in a list", OnPage, List(Section{Items: []Block{Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)}}))
+	refusesPad(t, "a keypad's rows apart", OnPage, Column(Row(g[0:3]...), Text("and"), Row(g[3:6]...), Text("then"), Row(g[6:9]...)))
+	refusesPad(t, "nine digits in three rows", OnPage, Column(Row(nine[0:3]...), Row(nine[3:6]...), Row(nine[6:9]...)))
+	o := letters("O", "l", "I", "o", "D", "Q", "A", "B", "C")
+	refusesPad(t, "a keypad of look-alikes", OnPage, Column(Row(o[0:3]...), Row(o[3:6]...), Row(o[6:9]...)))
+
+	// What else is laid out in threes is taken: letters, a game, emoji, arrows and icons.
+	for name, labels := range map[string][]string{
+		"letters":     {"A", "B", "C", "D", "E", "F", "G", "H", "IJ"},
+		"tic-tac-toe": {"X", "O", "X", "O", "X", "O", "X", "O", "X"},
+		"emoji":       {"\U0001F941", "\U0001F3BA", "\U0001F514", "\U0001F44F", "\U0001F389", "\U0001F3B8", "\U0001F4EF", "\U0001F3B9", "\U0001F918"},
+		"five digits": {"1", "2", "3", "4", "5", "A", "B", "C", "E"},
+	} {
+		k := letters(labels...)
+		if err := ValidScene(OnPage, Column(Row(k[0:3]...), Row(k[3:6]...), Row(k[6:9]...)), nil); err != nil {
+			t.Errorf("a grid of %s: %v", name, err)
+		}
+	}
+	icon := func(id, i string) Block { return Button(id, "", i) }
+	dpad := Column(Row(icon("a", "mdi:blank"), Button("up", "\u2191", ""), icon("b", "mdi:blank")),
+		Row(Button("left", "\u2190", ""), Button("ok", "OK", ""), Button("right", "\u2192", "")),
+		Row(icon("c", "mdi:blank"), Button("down", "\u2193", ""), icon("d", "mdi:blank")))
+	if err := ValidScene(OnPage, dpad, nil); err != nil {
+		t.Errorf("a D-pad: %v", err)
+	}
+	var remote []Block
+	for i, ic := range []string{"mdi:power", "mdi:home", "mdi:menu", "mdi:rewind", "mdi:play", "mdi:fast-forward", "mdi:volume-minus", "mdi:volume-off", "mdi:volume-plus"} {
+		remote = append(remote, icon(fmt.Sprintf("r%d", i), ic))
+	}
+	if err := ValidScene(OnPage, Column(Row(remote[0:3]...), Row(remote[3:6]...), Row(remote[6:9]...)), nil); err != nil {
+		t.Errorf("a remote of icons: %v", err)
+	}
 
 	// Two rows of three, rows of four, or keys with words, are no keypad.
 	if err := ValidScene(OnPage, Column(Row(g[0:3]...), Row(g[3:6]...)), nil); err != nil {

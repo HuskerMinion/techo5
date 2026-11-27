@@ -154,10 +154,13 @@ const (
 	// it is refused for: ten of them, 0 to 9, are a PIN pad, which is the device's own and must not be
 	// passed for on a page or a card.
 	MaxDigitRun = 10
-	// MaxKeypadRows is the fewest rows of three keys (buttons or chips of one or two characters) in one
-	// column, card or list section that a scene is refused for: three of them, nine keys in three
-	// columns, are a keypad laid out as the device's PIN pad is, whatever the keys say.
-	MaxKeypadRows = 3
+	// MaxKeypadRows and MinKeypadDigits: a scene is refused for MaxKeypadRows rows of three keys
+	// (buttons or chips of one or two characters) in one column, card or list section, at least
+	// MinKeypadDigits of whose keys read as digits (digitLike). Nine keys in three columns, mostly
+	// digits, are a keypad laid out as the device's PIN pad is; a remote's, a D-pad's or a game's grid,
+	// whose keys are icons, arrows or letters, is not.
+	MaxKeypadRows   = 3
+	MinKeypadDigits = 6
 	// MaxStepperSteps is the most steps a stepper's range may hold ((max - min) / step), MaxStepperDecimals
 	// the most decimal places its numbers may have, MaxStepperMagnitude the largest any may be either way,
 	// and MaxUnit the most characters its unit may have.
@@ -608,8 +611,9 @@ func isBidiControl(r rune) bool {
 //   - fewer than MaxDigitRun buttons and chips, wherever they are, whose labels each read as one digit
 //     (digitLike): a digit in any script, a keycap ("1️⃣"), one in brackets ("(0)", "[1]"), or a letter
 //     or mark drawn like one ("O" for 0, "l" for 1);
-//   - no keypad: MaxKeypadRows rows of three keys each, in one column, card or list section, every
-//     key a button or chip labeled with one or two characters (keyLabel), whatever the characters.
+//   - no keypad of digits: MaxKeypadRows rows of three keys each, in one column, card or list section,
+//     every key a button or chip labeled with one or two characters (keyLabel), with MinKeypadDigits or
+//     more of the keys digit-like. Icon-only keys (no label) are not keys.
 func digitKeys(root *Block) error {
 	n := 0
 	var walk func(b *Block) error
@@ -617,8 +621,8 @@ func digitKeys(root *Block) error {
 		if (b.Type == BlockButton || b.Type == BlockChip) && digitLike(b.Label) {
 			n++
 		}
-		if keypadRows(b.Children) >= MaxKeypadRows {
-			return badScene("a scene may not have %d rows of three buttons or chips with one or two characters each: that is a PIN pad, which is the device's own", MaxKeypadRows)
+		if digitKeypad(b.Children) {
+			return badScene("a scene may not have %d rows of three buttons or chips, %d or more of them digits or drawn like digits: that is a PIN pad, which is the device's own", MaxKeypadRows, MinKeypadDigits)
 		}
 		for i := range b.Children {
 			if err := walk(&b.Children[i]); err != nil {
@@ -627,8 +631,8 @@ func digitKeys(root *Block) error {
 		}
 		for s := range b.Sections {
 			items := b.Sections[s].Items
-			if keypadRows(items) >= MaxKeypadRows {
-				return badScene("a scene may not have %d rows of three buttons or chips with one or two characters each: that is a PIN pad, which is the device's own", MaxKeypadRows)
+			if digitKeypad(items) {
+				return badScene("a scene may not have %d rows of three buttons or chips, %d or more of them digits or drawn like digits: that is a PIN pad, which is the device's own", MaxKeypadRows, MinKeypadDigits)
 			}
 			for i := range items {
 				if err := walk(&items[i]); err != nil {
@@ -647,21 +651,26 @@ func digitKeys(root *Block) error {
 	return nil
 }
 
-// keypadRows is how many of blocks are a keypad's row: a row of three keys, spacers aside, each a
-// button or chip with a label of one or two characters.
-func keypadRows(blocks []Block) int {
-	rows := 0
+// digitKeypad is whether blocks hold a keypad of digits: MaxKeypadRows or more rows of three keys,
+// spacers and icon-only keys aside, each a button or chip with a label of one or two characters, and
+// MinKeypadDigits or more of those keys digit-like. The rows need not be next to each other.
+func digitKeypad(blocks []Block) bool {
+	rows, digits := 0, 0
 	for i := range blocks {
 		if blocks[i].Type != BlockRow {
 			continue
 		}
-		keys := 0
+		keys, inRow := 0, 0
 		for _, k := range blocks[i].Children {
+			isKey := k.Type == BlockButton || k.Type == BlockChip
 			switch {
-			case k.Type == BlockSpacer:
+			case k.Type == BlockSpacer, isKey && len(bareLabel(k.Label)) == 0:
 				continue
-			case (k.Type == BlockButton || k.Type == BlockChip) && keyLabel(k.Label):
+			case isKey && keyLabel(k.Label):
 				keys++
+				if digitLike(k.Label) {
+					inRow++
+				}
 			default:
 				keys = -1
 			}
@@ -671,9 +680,10 @@ func keypadRows(blocks []Block) int {
 		}
 		if keys == 3 {
 			rows++
+			digits += inRow
 		}
 	}
-	return rows
+	return rows >= MaxKeypadRows && digits >= MinKeypadDigits
 }
 
 // bareLabel is a label without what is not drawn as a character of its own: spaces, variation
