@@ -22,7 +22,8 @@ import (
 var sleepOptions = []int{15, 30, 45, 60, 90, 120}
 
 type sleeper struct {
-	sel *esphome.Select
+	sel    *esphome.Select
+	player *Player // nil uses Get()
 
 	mu    sync.Mutex
 	until time.Time
@@ -114,7 +115,12 @@ func (s *sleeper) fire(stop chan struct{}) {
 		return
 	}
 	slog.Info("sleep timer: stopping what is playing")
-	Get().Stop()
+	p := s.player
+	if p == nil {
+		p = Get()
+	}
+	p.Transport(TransportStop)
+	p.Stop()
 	s.sel.Set(sleepOff)
 }
 
