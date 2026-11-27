@@ -188,6 +188,8 @@ cp -r "$ROOT/tools/linux/licenses/." "$STAGE/overlay/usr/share/licenses/"
 [ -e "$STAGE/bin/techo5-librespot" ] || rm -rf "$STAGE/overlay/usr/share/licenses/librespot"
 [ -e "$STAGE/bin/techo5-gpu" ] || rm -rf "$STAGE/overlay/usr/share/licenses/mesa"
 [ -e "$STAGE/bin/techo5-jpeg" ] || rm -rf "$STAGE/overlay/usr/share/licenses/libjpeg-turbo"
+# TECHO5's own NOTICE: the open-source code, fonts, models and programs the image carries and their licenses.
+mkdir -p "$STAGE/overlay/usr/share/licenses/techo5" && cp "$ROOT/NOTICE" "$STAGE/overlay/usr/share/licenses/techo5/NOTICE"
 cp "$INPUTS"/alpine-minirootfs-*-armv7.tar.gz "$STAGE/inputs/"
 [ -n "$VENDOR_TGZ" ] && cp "$VENDOR_TGZ" "$STAGE/inputs/vendor.tar.gz"
 cp "$INPUTS"/apks312/wpa_supplicant-2.9-*.apk "$INPUTS"/apks312/libssl1.1-*.apk "$INPUTS"/apks312/libcrypto1.1-*.apk "$STAGE/inputs/apks312/"
