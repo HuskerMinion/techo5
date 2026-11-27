@@ -279,6 +279,50 @@ func TestTheFakeTakesScenes(t *testing.T) {
 	}
 }
 
+// The fake's tile opens a page the add-on has not set yet, which is in view the moment it is set, as on a
+// device; its card says nothing of being shown, only of being swiped away; and its way out puts the page
+// away.
+func TestTheFakePageWaitedFor(t *testing.T) {
+	c, keys, out, done := fakeWith(t, `"screen"`, "show")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ev := c.WatchScreen()
+	_, _ = io.WriteString(keys, "tile\n")
+	waitFor(t, out, "brings the page up")
+	if err := c.SetScene(ctx, addonapi.OnCard, addonapi.Row(addonapi.Text("Stir"), addonapi.Chip("timer", "4:00", ""))); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetScene(ctx, addonapi.OnPage, addonapi.Column(addonapi.Button("next", "Next", ""))); err != nil {
+		t.Fatal(err)
+	}
+	next := func() addonapi.ScreenEvent {
+		t.Helper()
+		select {
+		case e := <-ev:
+			return e
+		case <-time.After(5 * time.Second):
+			t.Fatal("no screen event")
+		}
+		return addonapi.ScreenEvent{}
+	}
+	if e := next(); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: true}) {
+		t.Errorf("the first event is %+v, not the page in view", e)
+	}
+	_, _ = io.WriteString(keys, "dismiss\n")
+	if e := next(); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnCard, Dismissed: true}) {
+		t.Errorf("then %+v, not the card swiped away", e)
+	}
+	_, _ = io.WriteString(keys, "close\n")
+	waitFor(t, out, "puts the page away")
+	if e := next(); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: false}) {
+		t.Errorf("then %+v, not the page put away", e)
+	}
+	_, _ = io.WriteString(keys, "quit\n")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A dot has no screen, and refuses the screen's ops as a device does.
 func TestTheFakeDotHasNoScreen(t *testing.T) {
 	c, keys, _, done := fakeWith(t, `"screen"`, "dot")

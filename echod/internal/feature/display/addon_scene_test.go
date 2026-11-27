@@ -24,6 +24,7 @@ type fakeHost struct {
 	scenes map[string]hostScene // by id and where: "meals/page"
 	images map[string][]byte    // by name
 	calls  []string
+	revs   []uint64 // the revisions taps were sent with
 }
 
 func (h *fakeHost) note(s string) { h.mu.Lock(); h.calls = append(h.calls, s); h.mu.Unlock() }
@@ -48,17 +49,21 @@ func (h *fakeHost) set(id, on string, root addonapi.Block, at time.Time) {
 		h.scenes = map[string]hostScene{}
 	}
 	rev := h.scenes[id+"/"+on].Rev + 1
-	h.scenes[id+"/"+on] = hostScene{Root: root, Rev: rev, At: at}
+	h.scenes[id+"/"+on] = hostScene{Root: root, Rev: rev, At: at, Set: rev}
 }
 
 func (h *fakeHost) Shown(id, on string, shown bool) {
 	h.note("shown " + id + " " + on + " " + map[bool]string{true: "on", false: "off"}[shown])
 }
 
-func (h *fakeHost) Touch(id, on, block string) bool {
+func (h *fakeHost) Touch(id, on, block string, rev uint64) bool {
 	h.note("touch " + id + " " + on + " " + block)
+	h.mu.Lock()
+	h.revs = append(h.revs, rev)
+	h.mu.Unlock()
 	return true
 }
+func (h *fakeHost) Left(id string) { h.note("left " + id) }
 func (h *fakeHost) Swipe(id, direction string) bool {
 	h.note("swipe " + id + " " + direction)
 	return true
@@ -67,14 +72,14 @@ func (h *fakeHost) Back(id string) bool   { h.note("back " + id); return true }
 func (h *fakeHost) DismissCard(id string) { h.note("dismiss " + id) }
 func (h *fakeHost) Asked(id string)       { h.note("asked " + id) }
 
-func (h *fakeHost) Image(_ string, b *addonapi.Block) ([]byte, string, bool) {
+func (h *fakeHost) Image(id string, b *addonapi.Block) ([]byte, string, bool) {
 	if len(b.Data) > 0 {
-		return b.Data, "d", true
+		return b.Data, id + "/d", true
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	data, ok := h.images[b.Name]
-	return data, "n:" + b.Name, ok
+	return data, id + "/n:" + b.Name, ok
 }
 
 func (h *fakeHost) said(s string) bool {

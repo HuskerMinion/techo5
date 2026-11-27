@@ -443,8 +443,10 @@ const help = `the keyboard's commands:
   touch ID [page|card]  tap the button, chip or list item of this id on the page (or the card) in view
   swipe left|right      swipe across the page in view
   back                  the back gesture on the page in view
-  shown page|card on|off the page or the card comes into view, or goes (a ring covering it, say)
-  dismiss               swipe the card away
+  shown page|card on|off the page or the card comes into view, or goes (a ring covering it, say); the add-on
+                        is told of its page, and of its card nothing
+  dismiss               swipe the card away (the add-on is told dismissed)
+  close                 the name bar's way out: the page goes
   scene [page|card]     print the page's (or the card's) scene as it is now
   quit                  stop serving`
 
@@ -525,7 +527,7 @@ func (d *fake) keyboard(in io.Reader, m catalog.Manifest) error {
 			}
 		case "media":
 			d.mediaKeys(rest)
-		case "tile", "touch", "swipe", "back", "shown", "dismiss", "scene":
+		case "tile", "touch", "swipe", "back", "shown", "dismiss", "close", "scene":
 			d.screenKeys(verb, rest)
 		case "stop":
 			d.mu.Lock()

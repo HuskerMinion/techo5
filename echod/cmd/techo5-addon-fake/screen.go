@@ -36,6 +36,12 @@ func (f fakeScreen) Close(id string) {
 	f.d.srv.Shown(id, addonapi.OnPage, false)
 }
 
+// Dropped is everything of the add-on's gone with its last connection: the device lets go of its
+// pictures; the fake has none to let go.
+func (f fakeScreen) Dropped(string) {
+	f.d.say("the add-on's scenes and images are gone with its connection")
+}
+
 func (f fakeScreen) changed(id, on string) {
 	sc, ok := f.d.srv.Scene(id, on)
 	if !ok {
@@ -130,13 +136,15 @@ func (d *fake) screenKeys(verb, rest string) {
 	switch verb {
 	case "tile":
 		// As a device's Add-ons tab: the tap opens the page, and asks something of the add-on, so it
-		// may bring its page up itself for a moment after.
+		// may bring its page up itself for a moment after. Opened before the add-on has set one, the
+		// page is in view the moment it does, as on a device.
 		d.say("a tap on the add-on's tile")
 		d.srv.Asked(d.id)
 		fakeScreen{d}.Open(d.id)
 	case "touch":
 		on := arg(1, addonapi.OnPage)
-		if len(args) == 0 || !d.srv.Touch(d.id, on, args[0]) {
+		sc, _ := d.srv.Scene(d.id, on) // the fake's finger is on the scene as it is now
+		if len(args) == 0 || !d.srv.Touch(d.id, on, args[0], sc.Rev) {
 			d.say("touch takes the id of a button or a chip on the %s in view: touch ID [page|card]", on)
 		}
 	case "swipe":
@@ -156,6 +164,10 @@ func (d *fake) screenKeys(verb, rest string) {
 		d.srv.Shown(d.id, on, state == "on")
 	case "dismiss":
 		d.srv.DismissCard(d.id)
+	case "close":
+		// The name bar's way out: the page goes, and what an earlier tap allowed is used up.
+		d.srv.Left(d.id)
+		fakeScreen{d}.Close(d.id)
 	case "scene":
 		on := arg(0, addonapi.OnPage)
 		sc, ok := d.srv.Scene(d.id, on)

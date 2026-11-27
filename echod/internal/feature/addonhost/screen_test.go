@@ -23,6 +23,7 @@ func (d *display) PageChanged(id string) { d.note("page " + id) }
 func (d *display) CardChanged(id string) { d.note("card " + id) }
 func (d *display) Open(id string)        { d.note("open " + id) }
 func (d *display) Close(id string)       { d.note("close " + id) }
+func (d *display) Dropped(id string)     { d.note("dropped " + id) }
 func (d *display) has(s string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -86,6 +87,13 @@ func TestAddonScreen(t *testing.T) {
 	if tiles := r.h.ScreenTiles(); len(tiles) != 1 || tiles[0].Icon != "mdi:chef-hat" {
 		t.Errorf("tiles with an icon %+v", tiles)
 	}
+	// The catalog's name is drawn with nothing in it that hides or reorders words.
+	names := r.h.names
+	r.h.names = func() map[string]string { return map[string]string{"meals": "Me\u202eals\u200b"} }
+	if tiles := r.h.ScreenTiles(); len(tiles) != 1 || tiles[0].Name != "Meals" {
+		t.Errorf("a name with hidden characters is drawn as %q", tiles[0].Name)
+	}
+	r.h.names = names
 	eventuallyTrue(t, "the display to be told", func() bool { return d.has("page meals") })
 	if sc, ok := r.h.Scene("meals", addonapi.OnPage); !ok || sc.Root.Children[0].Text != "Stir the onions" {
 		t.Errorf("the page %+v", sc)
@@ -93,7 +101,8 @@ func TestAddonScreen(t *testing.T) {
 	ev := c.WatchScreen()
 	r.h.Shown("meals", addonapi.OnPage, true)
 	<-ev
-	if !r.h.Touch("meals", addonapi.OnPage, "next") {
+	sc, _ := r.h.Scene("meals", addonapi.OnPage)
+	if !r.h.Touch("meals", addonapi.OnPage, "next", sc.Rev) {
 		t.Fatal("a tap on Next")
 	}
 	if e := <-ev; e.Touch.ID != "next" {

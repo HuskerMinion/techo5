@@ -331,9 +331,10 @@ type SwipeEvent struct {
 	Direction string `json:"direction"`
 }
 
-// ScreenStateEvent is the add-on's page or card coming into view or going out of it (Shown), so an
-// add-on knows when what it shows is seen. Dismissed is a card the owner swiped away: it is gone, and
-// comes back only with the next scene.set for the card.
+// ScreenStateEvent is the add-on's page coming into view or going out of it (Shown), so an add-on knows
+// when its page is seen, or its card swiped away by the owner (On is OnCard, Dismissed true): it is
+// gone, and comes back only with the next scene.set for the card. Of the card nothing else is said, as
+// when it is in view would tell an add-on when somebody is looking at the clock.
 type ScreenStateEvent struct {
 	On        string `json:"on"`
 	Shown     bool   `json:"shown"`

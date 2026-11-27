@@ -2,6 +2,7 @@ package addonhost
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
@@ -54,7 +55,9 @@ func (h *Host) ScreenTiles() []ScreenTile {
 	names, icons := h.names(), h.icons()
 	var out []ScreenTile
 	for _, id := range h.srv.Screens() {
-		name := names[id]
+		// The catalog's name, drawn on the screen: whatever mkcatalog let through, nothing in it that
+		// hides or reorders the words around it.
+		name := strings.TrimSpace(addonapi.StripHidden(names[id]))
 		if name == "" {
 			name = id
 		}
@@ -72,14 +75,19 @@ func (h *Host) Scene(id, on string) (Scene, bool) { return h.srv.Scene(id, on) }
 // the camera, first-run) covers it, so no touch reaches an add-on then.
 func (h *Host) Shown(id, on string, shown bool) { h.srv.Shown(id, on, shown) }
 
-// Touch is a tap on one of the add-on's buttons or chips in view, by its id: false when it is not one.
-func (h *Host) Touch(id, on, block string) bool { return h.srv.Touch(id, on, block) }
+// Touch is a tap on one of the add-on's buttons or chips in view, by its id, as found in the layout of
+// the scene's revision rev (Scene.Rev): false when it is not one, or when the block changed since.
+func (h *Host) Touch(id, on, block string, rev uint64) bool { return h.srv.Touch(id, on, block, rev) }
 
 // Swipe is a swipe left or right (addonapi.SwipeLeft, SwipeRight) across the add-on's page in view.
 func (h *Host) Swipe(id, direction string) bool { return h.srv.Swipe(id, direction) }
 
 // Back is the back gesture on the add-on's page in view.
 func (h *Host) Back(id string) bool { return h.srv.Back(id) }
+
+// Left is the owner putting the add-on's page away by the name bar's way out: the add-on may not bring
+// it straight back on what an earlier tap allowed.
+func (h *Host) Left(id string) { h.srv.Left(id) }
 
 // DismissCard is the owner swiping the add-on's card away.
 func (h *Host) DismissCard(id string) { h.srv.DismissCard(id) }

@@ -76,6 +76,13 @@ func (r *renderer) addonCardReserve(s scene) int {
 	return r.h - box.Max.Y + r.addonCardHeight(s.addonCard, box, inner, &r.addon, s.redClockFace()) + r.s(nightInfoGap)
 }
 
+// addonCardHeight is how tall v's card is in box, laid out in inner, over the night clock or not.
+func (p *paint) addonCardHeight(v *addonCardView, box, inner image.Rectangle, drawn *addonDrawn, night bool) int {
+	lay := p.laidAt(&drawn.card, v.id, v.sc, inner, true, night, v.images)
+	m := p.sceneMetrics()
+	return min(box.Dy(), lay.height+2*m.pad+lineH(sceneFace(p.faceKey(), m.text[0], true))+m.gap[1])
+}
+
 // addonClear forgets where the add-on's page and card were drawn, for a frame that draws neither.
 func (r *renderer) addonClear(s scene) {
 	r.addonForget(&r.addon, s.addonPage == nil, s.addonCard == nil)
@@ -130,7 +137,7 @@ func (d *Display) addonCardScene(s *scene, clock bool) {
 	if !night && !day {
 		return
 	}
-	best := addonNewestCard(h)
+	best := d.addonCardNow(h, night)
 	if best == nil {
 		return
 	}
@@ -138,7 +145,7 @@ func (d *Display) addonCardScene(s *scene, clock bool) {
 	// It takes the foot: the Next up card and the chips wait under it until it goes.
 	s.nextUp, s.glance = nil, nil
 	d.mu.Lock()
-	d.addon.frameCard = best.id
+	d.addon.frameCard = addonShown{best.id, best.sc.Set}
 	d.mu.Unlock()
 }
 
@@ -150,7 +157,7 @@ func (d *Display) addonCovered(s *scene) {
 	}
 	s.addonPage = nil
 	d.mu.Lock()
-	d.addon.framePage = ""
+	d.addon.framePage = addonShown{}
 	d.mu.Unlock()
 }
 

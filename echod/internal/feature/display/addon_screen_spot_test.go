@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
@@ -159,7 +161,17 @@ func TestSpotAddonPageFingers(t *testing.T) {
 	if !d.menuOpen || d.menuMode != modeAddons {
 		t.Fatalf("the Add-ons item with two add-ons: menu %v mode %v", d.menuOpen, d.menuMode)
 	}
-	d.actAddons(addonItem(0))
+	// The dial's items are the add-ons by id: one starting between the dial being drawn and the choice
+	// moves the others along the list, and the choice still opens the add-on chosen.
+	items := addonItems()
+	if len(items) != 2 || items[0].id != addonItem("meals") || items[1].id != addonItem("plex") {
+		t.Fatalf("the dial %v", items)
+	}
+	h.mu.Lock()
+	h.tiles = append([]addonhost.ScreenTile{{ID: "abacus", Name: "Abacus"}}, h.tiles...)
+	h.mu.Unlock()
+	forgetTiles()
+	d.actAddons(items[0].id)
 	if d.addon.page != "meals" || d.menuOpen || !h.said("asked meals") {
 		t.Fatalf("an add-on chosen on the dial: page %q, menu %v, %v", d.addon.page, d.menuOpen, h.calls)
 	}
@@ -186,7 +198,34 @@ func TestSpotAddonPageFingers(t *testing.T) {
 		t.Errorf("a tap and back: %v", h.calls)
 	}
 	d.gesture(touch.Gesture{Kind: touch.Tap, X: center, Y: closeAt.Min.Y + 8})
-	if d.addon.page != "" {
-		t.Error("the way out left the page up")
+	if d.addon.page != "" || !h.said("left meals") {
+		t.Errorf("the way out left the page up, or did not say so: %v", h.calls)
+	}
+}
+
+// The volume turned over the page leaves the page in view under it, dimmed; a call takes it, whatever
+// the call's phase.
+func TestSpotAddonPageUnderTheVolumeAndACall(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	h := sampleHost(t, spotCooking())
+	useHost(t, h)
+	img := image.NewRGBA(image.Rect(0, 0, side, side))
+	d := &Display{on: true, poke: make(chan struct{}, 1), r: newRoundRenderer(img)}
+	d.openAddon("meals", "Meals")
+	s := roundScene{now: spotAddonNow, phase: "idle", showVolume: true, volume: 5, maxVolume: 10}
+	d.addonSceneSpot(&s)
+	if s.addonPage == nil {
+		t.Fatal("the volume took the page out of view")
+	}
+	s.addonPage.pics = picturesNow
+	d.r.draw(s)
+	if !d.addonPageShowing() {
+		t.Error("the page under the volume takes no finger")
+	}
+	s = roundScene{now: spotAddonNow, phase: "idle"}
+	s.call.Phase = phone.Dialing
+	d.addonSceneSpot(&s)
+	if s.addonPage != nil {
+		t.Error("the page was drawn over a call")
 	}
 }

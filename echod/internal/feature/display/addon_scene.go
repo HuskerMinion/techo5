@@ -4,6 +4,7 @@ package display
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -156,6 +157,10 @@ type sceneLayout struct {
 	// laid out, which nothing of it is drawn outside.
 	height int
 	room   image.Rectangle
+	// rev is the scene's revision it was laid out from (serve.Scene.Rev), which a tap found in it is
+	// sent with, so a tap on a layout older than a change to what it hit is not sent for what is there
+	// now.
+	rev uint64
 }
 
 // sceneImages answers an image block's bytes and their key (addonhost.Host.Image); false while there are
@@ -940,23 +945,35 @@ func addonHasIcon(icon string) bool {
 	return ok
 }
 
-// addonPicKey is an image as it is kept: its bytes' key, at a size, filled or fitted.
+// addonPicKey is an image as it is kept: its bytes' key, which begins with its add-on's id
+// (serve.imageKey), at a size, filled or fitted.
 type addonPicKey struct {
 	key   string
 	w, h  int
 	cover bool
 }
 
+// addon is the add-on whose image it is.
+func (k addonPicKey) addon() string {
+	id, _, _ := strings.Cut(k.key, "/")
+	return id
+}
+
 // addonPictures keeps add-ons' images decoded and scaled to the size they are drawn at, made one at a
 // time on a goroutine of their own: a frame draws what is kept, and never waits for one. What is kept is
 // held to addonPicsBytes all together, the least recently drawn going first; an add-on's own 8 MB is
-// the server's to hold (its bytes), this is the screen's copy of what it shows.
+// the server's to hold (its bytes), this is the screen's copy of what it shows. Each add-on's pictures
+// are its own (their keys begin with its id), go when it does (drop), and are made at most
+// addonPicBurst at once and addonPicsPerSecond a second after that, so an add-on that keeps changing
+// its pictures cannot keep a core decoding.
 type addonPictures struct {
 	mu      sync.Mutex
 	kept    map[addonPicKey]*addonPic
 	bytes   int
 	asked   map[addonPicKey]bool
 	failed  map[addonPicKey]time.Time
+	budgets map[string]*addonPicBudget // by add-on
+	later   *time.Timer                // a frame drawn when a picture held back may be made
 	work    chan addonPicJob
 	changed func() // a picture is ready: draw again
 }
@@ -971,12 +988,26 @@ type addonPicJob struct {
 	data []byte
 }
 
+// addonPicBudget is how many pictures an add-on may have made now: up to addonPicBurst, one more every
+// second / addonPicsPerSecond.
+type addonPicBudget struct {
+	left float64
+	at   time.Time
+}
+
 const (
 	// addonPicsBytes is the most the screen keeps of add-ons' images, decoded and scaled: two pages'
 	// worth of photos on a Show 8.
 	addonPicsBytes = 12 << 20
-	// addonPicRetry is how long an image that would not decode is left before it is tried again.
-	addonPicRetry = time.Minute
+	// addonPicRetry is how long an image that would not decode is left before it is tried again, and
+	// addonPicsFailed how many of those are remembered, the oldest forgotten first.
+	addonPicRetry   = time.Minute
+	addonPicsFailed = 256
+	// addonPicBurst and addonPicsPerSecond bound an add-on's decoding: that many pictures at once (a
+	// page of thumbnails), then that many a second. One that waits is asked for again by the frame drawn
+	// when it may be made.
+	addonPicBurst      = 8
+	addonPicsPerSecond = 2
 )
 
 // addonPics are the screen's add-on images.
@@ -997,29 +1028,115 @@ func (a *addonPictures) picture(p scenePic, w, h int) *image.RGBA {
 	if a.asked[k] {
 		return nil
 	}
-	if at, ok := a.failed[k]; ok && time.Since(at) < addonPicRetry {
-		return nil
+	if at, ok := a.failed[k]; ok {
+		if time.Since(at) < addonPicRetry {
+			return nil
+		}
+		delete(a.failed, k)
 	}
 	if a.work == nil {
 		a.kept, a.asked, a.failed = map[addonPicKey]*addonPic{}, map[addonPicKey]bool{}, map[addonPicKey]time.Time{}
+		a.budgets = map[string]*addonPicBudget{}
 		a.work = make(chan addonPicJob, 32)
 		go a.worker()
+	}
+	if !a.takeLocked(k.addon()) {
+		return nil
 	}
 	select {
 	case a.work <- addonPicJob{k, p.data}:
 		a.asked[k] = true
-	default: // asked for again by the next frame
+	default: // asked for again by the next frame, and not counted
+		a.budgets[k.addon()].left++
 	}
 	return nil
+}
+
+// takeLocked spends one of the add-on's pictures to make, and says whether there was one; with none
+// left, a frame is drawn when there is. a.mu is held.
+func (a *addonPictures) takeLocked(id string) bool {
+	now := time.Now()
+	b := a.budgets[id]
+	if b == nil {
+		b = &addonPicBudget{left: addonPicBurst, at: now}
+		a.budgets[id] = b
+	}
+	b.left = min(addonPicBurst, b.left+now.Sub(b.at).Seconds()*addonPicsPerSecond)
+	b.at = now
+	if b.left >= 1 {
+		b.left--
+		return true
+	}
+	if a.later == nil && a.changed != nil {
+		changed := a.changed
+		a.later = time.AfterFunc(time.Duration((1-b.left)/addonPicsPerSecond*float64(time.Second)), func() {
+			a.mu.Lock()
+			a.later = nil
+			a.mu.Unlock()
+			changed()
+		})
+	}
+	return false
+}
+
+// drop lets go of everything of the add-on's: its pictures, those on their way (which are not kept when
+// they are made), and those that would not decode.
+func (a *addonPictures) drop(id string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for k, p := range a.kept {
+		if k.addon() == id {
+			a.bytes -= len(p.img.Pix)
+			delete(a.kept, k)
+		}
+	}
+	for k := range a.asked {
+		if k.addon() == id {
+			delete(a.asked, k)
+		}
+	}
+	for k := range a.failed {
+		if k.addon() == id {
+			delete(a.failed, k)
+		}
+	}
+	delete(a.budgets, id)
+}
+
+// failLocked notes a picture that would not decode, forgetting those whose time is up and, past
+// addonPicsFailed, the oldest. a.mu is held.
+func (a *addonPictures) failLocked(k addonPicKey) {
+	if len(a.failed) >= addonPicsFailed {
+		for x, at := range a.failed {
+			if time.Since(at) >= addonPicRetry {
+				delete(a.failed, x)
+			}
+		}
+		for len(a.failed) >= addonPicsFailed {
+			var oldest addonPicKey
+			var first time.Time
+			for x, at := range a.failed {
+				if first.IsZero() || at.Before(first) {
+					oldest, first = x, at
+				}
+			}
+			delete(a.failed, oldest)
+		}
+	}
+	a.failed[k] = time.Now()
 }
 
 func (a *addonPictures) worker() {
 	for j := range a.work {
 		img, err := scaledPicture(j.data, j.k.w, j.k.h, j.k.cover)
 		a.mu.Lock()
+		if !a.asked[j.k] {
+			a.mu.Unlock()
+			continue // its add-on went meanwhile (drop)
+		}
 		delete(a.asked, j.k)
 		if err != nil {
-			a.failed[j.k] = time.Now()
+			a.failLocked(j.k)
 			a.mu.Unlock()
 			continue
 		}
@@ -1044,6 +1161,9 @@ func (a *addonPictures) worker() {
 	}
 }
 
+// errPictureSize is an image whose pixels are not what its header said, past the API's limits.
+var errPictureSize = errors.New("an add-on's image is larger than its header said")
+
 // scaledPicture decodes an add-on's image and scales it to w by h: all of it, its shape kept, or filling
 // it and cut at the edges (cover). Its header is held to the API's limits before anything is decoded,
 // and its pixels to what the header said.
@@ -1055,8 +1175,8 @@ func scaledPicture(data []byte, w, h int, cover bool) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	if addonapi.ImageSize(src.Bounds().Dx(), src.Bounds().Dy()) != nil {
-		return nil, err
+	if err := addonapi.ImageSize(src.Bounds().Dx(), src.Bounds().Dy()); err != nil {
+		return nil, fmt.Errorf("%w: %w", errPictureSize, err)
 	}
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
 	sr := src.Bounds()

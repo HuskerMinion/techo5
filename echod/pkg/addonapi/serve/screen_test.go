@@ -27,6 +27,13 @@ func (k *sink) PageChanged(id string) { k.note("page " + id) }
 func (k *sink) CardChanged(id string) { k.note("card " + id) }
 func (k *sink) Open(id string)        { k.note("open " + id) }
 func (k *sink) Close(id string)       { k.note("close " + id) }
+func (k *sink) Dropped(id string)     { k.note("dropped " + id) }
+
+// touch is a tap on a block of what the display drew of the add-on's scene as it is now.
+func touch(r *rig, id, on, block string) bool {
+	sc, _ := r.s.Scene(id, on)
+	return r.s.Touch(id, on, block, sc.Rev)
+}
 
 func (k *sink) count(call string) int {
 	k.mu.Lock()
@@ -287,7 +294,7 @@ func TestScenesAreTheAddonsOwn(t *testing.T) {
 		t.Error("the other add-on has a page")
 	}
 	r.s.Shown("meals", addonapi.OnPage, true)
-	if r.s.Touch("plex", addonapi.OnPage, "next") {
+	if touch(r, "plex", addonapi.OnPage, "next") {
 		t.Error("a tap on one add-on's button went to another")
 	}
 	if got := r.s.Screens(); !slices.Equal(got, []string{"meals", "plex"}) {
@@ -319,7 +326,7 @@ func TestScreenEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Nothing reaches the add-on of a page that is not in view.
-	if r.s.Touch("meals", addonapi.OnPage, "next") || r.s.Swipe("meals", addonapi.SwipeLeft) || r.s.Back("meals") {
+	if touch(r, "meals", addonapi.OnPage, "next") || r.s.Swipe("meals", addonapi.SwipeLeft) || r.s.Back("meals") {
 		t.Error("a page out of view was touched")
 	}
 	r.s.Asked("meals") // a tap on its tile, say
@@ -334,13 +341,13 @@ func TestScreenEvents(t *testing.T) {
 	if e := nextScreen(t, ev); e.Event != addonapi.EventScreenState || e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: true}) {
 		t.Errorf("shown: %+v", e)
 	}
-	if !r.s.Touch("meals", addonapi.OnPage, "next") {
+	if !touch(r, "meals", addonapi.OnPage, "next") {
 		t.Fatal("a tap on a button in view")
 	}
 	if e := nextScreen(t, ev); e.Event != addonapi.EventTouch || e.Touch != (addonapi.TouchEvent{ID: "next", On: addonapi.OnPage}) {
 		t.Errorf("touch: %+v", e)
 	}
-	if r.s.Touch("meals", addonapi.OnPage, "step") || r.s.Touch("meals", addonapi.OnPage, "nothing") || r.s.Touch("meals", addonapi.OnCard, "next") {
+	if touch(r, "meals", addonapi.OnPage, "step") || touch(r, "meals", addonapi.OnPage, "nothing") || touch(r, "meals", addonapi.OnCard, "next") {
 		t.Error("a tap on what is not a button or chip in view was sent")
 	}
 	if !r.s.Swipe("meals", addonapi.SwipeLeft) || r.s.Swipe("meals", "up") {
@@ -363,13 +370,12 @@ func TestScreenEvents(t *testing.T) {
 		t.Errorf("hidden: %+v", e)
 	}
 
-	// The card: shown, tapped, swiped away.
+	// The card: shown (which the add-on is not told), tapped, swiped away.
 	if err := c.SetScene(ctx(t), addonapi.OnCard, addonapi.Row(addonapi.Text("Stir"), addonapi.Chip("timer", "4:00", "mdi:timer"))); err != nil {
 		t.Fatal(err)
 	}
 	r.s.Shown("meals", addonapi.OnCard, true)
-	nextScreen(t, ev)
-	if !r.s.Touch("meals", addonapi.OnCard, "timer") {
+	if !touch(r, "meals", addonapi.OnCard, "timer") {
 		t.Error("a tap on the card's chip")
 	}
 	if e := nextScreen(t, ev); e.Touch.On != addonapi.OnCard {
@@ -393,12 +399,13 @@ func TestScreenOpenIsLimited(t *testing.T) {
 	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
 		t.Fatal(err)
 	}
-	r.s.Asked("meals")
 	for i := range addonapi.ScreenOpenBurst {
+		r.s.Asked("meals")
 		if err := c.OpenScreen(ctx(t)); err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 	}
+	r.s.Asked("meals")
 	if err := c.OpenScreen(ctx(t)); code(err) != addonapi.CodeRateLimited {
 		t.Errorf("an open past the burst: %v", err)
 	}
@@ -446,9 +453,8 @@ func TestScenesGoWithTheAddon(t *testing.T) {
 		_, card := r.s.Scene("meals", addonapi.OnCard)
 		return !page && !card
 	})
-	if k.count("close meals") != 1 {
-		t.Error("the display was not told to close the page")
-	}
+	// Told outside the server's lock, just after the scenes go.
+	eventually(t, "the display told to close the page", func() bool { return k.count("close meals") == 1 })
 
 	c = r.dial()
 	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
@@ -497,8 +503,168 @@ func TestScreenSaysNothing(t *testing.T) {
 		_ = c.PatchScene(ctx(t), addonapi.OnPage, "nothing", addonapi.Text("x"))
 	}
 	r.s.Shown("meals", addonapi.OnPage, true)
-	r.s.Touch("meals", addonapi.OnPage, "next")
+	touch(r, "meals", addonapi.OnPage, "next")
 	if n := l.count("addonapi"); n != 0 {
 		t.Errorf("the log has %d lines about scenes", n)
 	}
+}
+
+// A page brought up before the add-on has set one (its tile tapped as it starts, say) is in view the
+// moment the page comes: the add-on is told, and its buttons take taps, with nothing more from the
+// display, which drew the waiting page and has nothing new to say.
+func TestAPageWaitedForIsInViewWhenItComes(t *testing.T) {
+	r, _, c := screenRig(t)
+	ev := c.WatchScreen()
+	r.s.Shown("meals", addonapi.OnPage, true)
+	if touch(r, "meals", addonapi.OnPage, "next") {
+		t.Fatal("a tap on a page not set yet")
+	}
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	if e := nextScreen(t, ev); e.Event != addonapi.EventScreenState || e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: true}) {
+		t.Errorf("the page came while it was waited for: %+v", e)
+	}
+	if !touch(r, "meals", addonapi.OnPage, "next") {
+		t.Error("the page that came while it was waited for takes no tap")
+	}
+	if e := nextScreen(t, ev); e.Event != addonapi.EventTouch {
+		t.Errorf("touch: %+v", e)
+	}
+	// Set again, it is not said again.
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Shown("meals", addonapi.OnPage, false)
+	if e := nextScreen(t, ev); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: false}) {
+		t.Errorf("after a second set, the next event is %+v, not the page going", e)
+	}
+}
+
+// The card says nothing to the add-on of when it is in view, which would tell it when the room is looked
+// at; only that the owner swiped it away.
+func TestTheCardSaysNothingOfBeingSeen(t *testing.T) {
+	r, _, c := screenRig(t)
+	ev := c.WatchScreen()
+	if err := c.SetScene(ctx(t), addonapi.OnCard, addonapi.Row(addonapi.Text("Stir"), addonapi.Chip("timer", "4:00", ""))); err != nil {
+		t.Fatal(err)
+	}
+	for _, on := range []bool{true, false, true} {
+		r.s.Shown("meals", addonapi.OnCard, on)
+	}
+	r.s.DismissCard("meals")
+	if e := nextScreen(t, ev); e.State != (addonapi.ScreenStateEvent{On: addonapi.OnCard, Dismissed: true}) {
+		t.Errorf("the first event about the card is %+v, not its dismissal", e)
+	}
+}
+
+// A tap is sent for what the finger was on: one read off a layout from before a new scene, or before a
+// patch of the block, of something in it or of something it is in, is not sent for what is there now. A
+// patch elsewhere leaves it be.
+func TestATapIsForTheSceneItWasOn(t *testing.T) {
+	r, _, c := screenRig(t)
+	list := addonapi.List(addonapi.Section{Items: []addonapi.Block{
+		{Type: addonapi.BlockRow, ID: "soup", Children: []addonapi.Block{{Type: addonapi.BlockText, ID: "soup_name", Text: "Soup"}}},
+		{Type: addonapi.BlockRow, ID: "stew", Children: []addonapi.Block{addonapi.Text("Stew")}},
+	}})
+	if err := c.SetScene(ctx(t), addonapi.OnPage, addonapi.Column(page, list)); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Shown("meals", addonapi.OnPage, true)
+	first, _ := r.s.Scene("meals", addonapi.OnPage)
+	if err := c.PatchScene(ctx(t), addonapi.OnPage, "step", addonapi.Text("Step 2")); err != nil {
+		t.Fatal(err)
+	}
+	if !r.s.Touch("meals", addonapi.OnPage, "next", first.Rev) {
+		t.Error("a tap on a button a patch elsewhere left as it was")
+	}
+	if err := c.PatchScene(ctx(t), addonapi.OnPage, "next", addonapi.Button("next", "Delete everything", "")); err != nil {
+		t.Fatal(err)
+	}
+	if r.s.Touch("meals", addonapi.OnPage, "next", first.Rev) {
+		t.Error("a tap read off the layout before the button was patched was sent")
+	}
+	now, _ := r.s.Scene("meals", addonapi.OnPage)
+	if !r.s.Touch("meals", addonapi.OnPage, "next", now.Rev) || r.s.Touch("meals", addonapi.OnPage, "next", now.Rev+1) {
+		t.Error("a tap on the button as it is now, or from a layout yet to come")
+	}
+	if err := c.PatchScene(ctx(t), addonapi.OnPage, "soup_name", addonapi.Text("Poison")); err != nil {
+		t.Fatal(err)
+	}
+	if r.s.Touch("meals", addonapi.OnPage, "soup", now.Rev) || !r.s.Touch("meals", addonapi.OnPage, "stew", now.Rev) {
+		t.Error("an item whose words were patched took a tap off the old layout, or one beside it did not")
+	}
+	latest, _ := r.s.Scene("meals", addonapi.OnPage)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	if r.s.Touch("meals", addonapi.OnPage, "back", latest.Rev) {
+		t.Error("a tap off the layout of the scene before was sent for a new one")
+	}
+	set, _ := r.s.Scene("meals", addonapi.OnPage)
+	if set.Set != set.Rev || latest.Set != first.Set || latest.Rev == first.Rev {
+		t.Errorf("Set: %d/%d, %d/%d, %d/%d", first.Set, first.Rev, latest.Set, latest.Rev, set.Set, set.Rev)
+	}
+}
+
+// One person's action brings the page up once; and the owner leaving it, by the way out or the back
+// gesture, uses up what an earlier tap allowed.
+func TestAnOpenIsOncePerAsking(t *testing.T) {
+	r, _, c := screenRig(t)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Asked("meals")
+	if err := c.OpenScreen(ctx(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.OpenScreen(ctx(t)); code(err) != addonapi.CodeBusy {
+		t.Errorf("a second open on one asking: %v", err)
+	}
+	r.s.Asked("meals")
+	r.s.Left("meals")
+	if err := c.OpenScreen(ctx(t)); code(err) != addonapi.CodeBusy {
+		t.Errorf("an open just after the owner put the page away: %v", err)
+	}
+	r.s.Shown("meals", addonapi.OnPage, true)
+	if !touch(r, "meals", addonapi.OnPage, "next") || !r.s.Back("meals") {
+		t.Fatal("the tap and the back gesture")
+	}
+	if err := c.OpenScreen(ctx(t)); code(err) != addonapi.CodeBusy {
+		t.Errorf("an open just after the back gesture: %v", err)
+	}
+}
+
+// card.clear takes the card out of view at once: a card set after it takes no tap until the display has
+// drawn it and said so.
+func TestCardClearIsOutOfView(t *testing.T) {
+	r, _, c := screenRig(t)
+	card := addonapi.Row(addonapi.Text("Stir"), addonapi.Chip("timer", "4:00", ""))
+	if err := c.SetScene(ctx(t), addonapi.OnCard, card); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Shown("meals", addonapi.OnCard, true)
+	if err := c.ClearCard(ctx(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetScene(ctx(t), addonapi.OnCard, card); err != nil {
+		t.Fatal(err)
+	}
+	if touch(r, "meals", addonapi.OnCard, "timer") {
+		t.Error("a card set after card.clear took a tap before it was drawn")
+	}
+	r.s.Shown("meals", addonapi.OnCard, true)
+	if !touch(r, "meals", addonapi.OnCard, "timer") {
+		t.Error("the card in view")
+	}
+}
+
+// The display is told when everything of an add-on's is gone, so it lets go of its pictures.
+func TestTheDisplayIsToldOfAnAddonGone(t *testing.T) {
+	_, k, c := screenRig(t)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	eventually(t, "the display told", func() bool { return k.count("dropped meals") == 1 })
 }

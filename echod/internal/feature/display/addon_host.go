@@ -19,7 +19,8 @@ type screenHost interface {
 	ScreenTiles() []addonhost.ScreenTile
 	Scene(id, on string) (addonhost.Scene, bool)
 	Shown(id, on string, shown bool)
-	Touch(id, on, block string) bool
+	Touch(id, on, block string, rev uint64) bool
+	Left(id string)
 	Swipe(id, direction string) bool
 	Back(id string) bool
 	DismissCard(id string)

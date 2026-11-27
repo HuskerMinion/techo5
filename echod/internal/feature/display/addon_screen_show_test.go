@@ -306,7 +306,7 @@ func TestAddonCardFingers(t *testing.T) {
 	for y := 0; y < show8High; y += 3 {
 		for x := 0; x < show8Wide; x += 3 {
 			c := img.RGBAAt(x, y)
-			if c.G > nightRed.R || c.B > nightRed.R || c.R > 255 {
+			if c.G > nightRed.R || c.B > nightRed.R || c.R > nightRed.R {
 				t.Fatalf("a pixel at %d,%d is %v, brighter or bluer than the night's red", x, y, c)
 			}
 		}

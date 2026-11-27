@@ -26,11 +26,42 @@ type addonUI struct {
 	name    string    // its name, for its name bar
 	touched time.Time // when it was opened or last touched
 	scrolls [maxSceneLists]int
+	// scrollSet is the scene (serve.Scene.Set) the scrolls are of: a new scene.set starts its lists at
+	// their tops, as its lists are others.
+	scrollSet uint64
 	// shownPage and shownCard are what the add-ons were last told is in view; framePage and frameCard
-	// what this frame shows, settled as it ends (addonSettle).
-	shownPage, shownCard string
-	framePage, frameCard string
+	// what this frame shows, settled as it ends (addonSettle). A card is the add-on's id and the scene
+	// it was set as, so a card cleared and set again between two frames is said to be in view again.
+	shownPage, shownCard addonShown
+	framePage, frameCard addonShown
+	// card is the card over the clock as last taken (addonCardNow), held to a change every
+	// addonCardEvery, or addonCardNightEvery over the night clock.
+	card addonCardKept
 }
+
+// addonShown is an add-on's page or card in view, and the scene.set it shows.
+type addonShown struct {
+	id  string
+	set uint64
+}
+
+// addonCardKept is the card a frame last drew, when it was taken, how often it may change, and the
+// frame asked for when it may change next.
+type addonCardKept struct {
+	view  *addonCardView
+	at    time.Time
+	every time.Duration
+	timer *time.Timer
+}
+
+// addonCardEvery and addonCardNightEvery are how often the card over the clock may be drawn anew, at
+// most, by day and over the night clock: an add-on patching its card ten times a second (a changing
+// picture, say) would keep a core drawing the clock all night. The page, which somebody is looking at,
+// keeps the server's ten a second.
+const (
+	addonCardEvery      = time.Second
+	addonCardNightEvery = 5 * time.Second
+)
 
 // maxSceneLists is how many lists of a page keep a scroll of their own; past them a list is not
 // scrolled.
@@ -86,6 +117,8 @@ func (r *paint) laidAt(kept *addonLaid, id string, sc hostScene, room image.Rect
 			root = withoutPressable(root)
 		}
 		kept.key, kept.lay = k, r.layoutScene(&root, room, card, imgs)
+		// A tap found in this layout is a tap on this revision of the scene (serve.Server.Touch).
+		kept.lay.rev = sc.Rev
 	}
 	return kept.lay
 }
@@ -218,8 +251,53 @@ func timersIn(list []timer.Countdown) sceneTimers {
 // it was told and wakes the frame, which reads the rest.
 type addonSink struct{ d *Display }
 
-func (k addonSink) PageChanged(string) { k.d.wake() }
-func (k addonSink) CardChanged(string) { k.d.wake() }
+// PageChanged draws again when the page is the one up (or waited for); another's page is not drawn.
+func (k addonSink) PageChanged(id string) {
+	k.d.mu.Lock()
+	up := k.d.addon.page == id
+	k.d.mu.Unlock()
+	if up {
+		k.d.wake()
+	}
+}
+
+// CardChanged draws again when the card may change now, and otherwise when it may (addonCardNow): told
+// ten times a second, the clock is drawn once a second for the card, once in five over the night clock.
+func (k addonSink) CardChanged(string) {
+	d := k.d
+	d.mu.Lock()
+	c := &d.addon.card
+	wait := c.every - time.Since(c.at)
+	if wait > 0 {
+		d.addonCardLaterLocked(wait)
+		d.mu.Unlock()
+		return
+	}
+	d.mu.Unlock()
+	d.wake()
+}
+
+// Dropped lets go of the add-on's pictures, decoded for its page and card, as everything else of its is
+// gone.
+func (k addonSink) Dropped(id string) {
+	addonPics.drop(id)
+	k.d.wake()
+}
+
+// addonCardLaterLocked has a frame drawn after wait, when the card may change: one at a time. d.mu is
+// held.
+func (d *Display) addonCardLaterLocked(wait time.Duration) {
+	c := &d.addon.card
+	if c.timer != nil {
+		return
+	}
+	c.timer = time.AfterFunc(wait, func() {
+		d.mu.Lock()
+		d.addon.card.timer = nil
+		d.mu.Unlock()
+		d.wake()
+	})
+}
 
 // Open is the add-on bringing its page up, which the server allows only in answer to somebody (a command,
 // a tap). It waits behind whatever is more pressing, as the deck does; at night it lifts the night light,
@@ -273,11 +351,16 @@ func (k addonSink) Close(id string) {
 	}
 }
 
-// closeAddon puts the page away, by the name bar's way out.
+// closeAddon puts the page away, by the name bar's way out: the add-on may not bring it straight back
+// on what an earlier tap allowed.
 func (d *Display) closeAddon() {
 	d.mu.Lock()
+	id := d.addon.page
 	d.addon.page = ""
 	d.mu.Unlock()
+	if h := addonHost(); h != nil && id != "" {
+		h.Left(id)
+	}
 	d.wake()
 }
 
@@ -286,7 +369,7 @@ func (d *Display) closeAddon() {
 // draw nothing of them).
 func (d *Display) addonFrameBegin() {
 	d.mu.Lock()
-	d.addon.framePage, d.addon.frameCard = "", ""
+	d.addon.framePage, d.addon.frameCard = addonShown{}, addonShown{}
 	d.mu.Unlock()
 }
 
@@ -300,20 +383,20 @@ func (d *Display) addonSettle() {
 	wasPage, wasCard := d.addon.shownPage, d.addon.shownCard
 	d.addon.shownPage, d.addon.shownCard = page, card
 	d.mu.Unlock()
-	if wasPage != page {
-		if wasPage != "" {
-			h.Shown(wasPage, addonapi.OnPage, false)
+	if wasPage.id != page.id {
+		if wasPage.id != "" {
+			h.Shown(wasPage.id, addonapi.OnPage, false)
 		}
-		if page != "" {
-			h.Shown(page, addonapi.OnPage, true)
+		if page.id != "" {
+			h.Shown(page.id, addonapi.OnPage, true)
 		}
 	}
 	if wasCard != card {
-		if wasCard != "" {
-			h.Shown(wasCard, addonapi.OnCard, false)
+		if wasCard.id != "" {
+			h.Shown(wasCard.id, addonapi.OnCard, false)
 		}
-		if card != "" {
-			h.Shown(card, addonapi.OnCard, true)
+		if card.id != "" {
+			h.Shown(card.id, addonapi.OnCard, true)
 		}
 	}
 }
@@ -328,6 +411,43 @@ func (d *Display) addonStart() {
 	addonPics.changed = d.wake
 	addonPics.mu.Unlock()
 	addonhost.Get().SetScreen(addonSink{d})
+}
+
+// addonCardNow is the card a frame draws over the clock (night: the night clock): the newest
+// (addonNewestCard), but changed at most every addonCardEvery (addonCardNightEvery at night). A change
+// that comes sooner waits, and a frame is drawn for it when it may; a card that went goes at once.
+func (d *Display) addonCardNow(h screenHost, night bool) *addonCardView {
+	every := addonCardEvery
+	if night {
+		every = addonCardNightEvery
+	}
+	best := addonNewestCard(h)
+	var prevGone bool
+	d.mu.Lock()
+	prev := d.addon.card.view
+	d.mu.Unlock()
+	if prev != nil {
+		// The card held is still there to hold: one that went is not drawn a moment longer.
+		_, has := h.Scene(prev.id, addonapi.OnCard)
+		prevGone = !has
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	c := &d.addon.card
+	c.every = every
+	now := time.Now()
+	switch {
+	case best == nil:
+		c.view = nil
+		return nil
+	case prev != nil && prev.id == best.id && prev.sc.Rev == best.sc.Rev && prev.sc.Images == best.sc.Images:
+		return best // nothing changed
+	case prev != nil && !prevGone && now.Sub(c.at) < every:
+		d.addonCardLaterLocked(every - now.Sub(c.at))
+		return prev
+	}
+	c.view, c.at = best, now
+	return best
 }
 
 // addonNewestCard is the newest of the running add-ons' cards: of several, the one set last shows, and
@@ -350,8 +470,12 @@ func addonNewestCard(h screenHost) *addonCardView {
 func (d *Display) addonPageNow(h screenHost, id, name string) *addonPageView {
 	sc, has := h.Scene(id, addonapi.OnPage)
 	d.mu.Lock()
+	if has && sc.Set != d.addon.scrollSet {
+		// A new scene: its lists are others, and start at their tops.
+		d.addon.scrolls, d.addon.scrollSet = [maxSceneLists]int{}, sc.Set
+	}
 	scrolls := d.addon.scrolls
-	d.addon.framePage = id
+	d.addon.framePage = addonShown{id: id}
 	d.mu.Unlock()
 	return &addonPageView{id: id, name: name, icon: addonIcon(id), sc: sc, has: has, scrolls: scrolls,
 		images: func(b *addonapi.Block) ([]byte, string, bool) { return h.Image(id, b) }, pics: addonPics.picture}
@@ -436,8 +560,16 @@ func (p *paint) addonCardIn(v *addonCardView, box, inner image.Rectangle, drawn 
 		}
 		p.text(label, p.fit(label, upper(v.name), room), x, base, nameInk)
 		// What it holds from just under its name: the layout was made for the tallest card, and is
-		// moved down to where this one's content starts.
+		// moved down to where this one's content starts, and drawn inside the card's box only, so
+		// nothing of it (a stack of accents, a line past the layout's room) reaches past the card.
+		screen := p.dst
+		in := box.Intersect(screen.Rect)
+		if in.Empty() {
+			return
+		}
+		p.dst = screen.SubImage(in).(*image.RGBA)
 		p.drawScene(lay, nil, off, pal, timers, v.pics)
+		p.dst = screen
 	}
 	if night {
 		p.toned(buf, box.Inset(-p.s(20)), paintCard)
@@ -450,13 +582,6 @@ func (p *paint) addonCardIn(v *addonCardView, box, inner image.Rectangle, drawn 
 		drawn.cardAt.id = ""
 	}
 	p.zmu.Unlock()
-}
-
-// addonCardHeight is how tall v's card is in box, laid out in inner, over the night clock or not.
-func (p *paint) addonCardHeight(v *addonCardView, box, inner image.Rectangle, drawn *addonDrawn, night bool) int {
-	lay := p.laidAt(&drawn.card, v.id, v.sc, inner, true, night, v.images)
-	m := p.sceneMetrics()
-	return min(box.Dy(), lay.height+2*m.pad+lineH(sceneFace(p.faceKey(), m.text[0], true))+m.gap[1])
 }
 
 // toned paints with paint onto a black layer over b and takes what it drew into the night's tone onto
@@ -513,7 +638,7 @@ func (d *Display) addonGesture(g touch.Gesture) {
 			return
 		}
 		if id := at.lay.tapAt(pt, r.s(4), at.scrolls[:], image.Point{}); id != "" {
-			h.Touch(at.id, addonapi.OnPage, id)
+			h.Touch(at.id, addonapi.OnPage, id, at.lay.rev)
 		}
 	case touch.SwipeUp, touch.SwipeDown:
 		if at.lay == nil {
@@ -561,7 +686,7 @@ func (d *Display) addonCardGesture(g touch.Gesture) bool {
 	case touch.Tap:
 		if at.lay != nil {
 			if id := at.lay.tapAt(pt, r.s(4), nil, at.off); id != "" {
-				h.Touch(at.id, addonapi.OnCard, id)
+				h.Touch(at.id, addonapi.OnCard, id, at.lay.rev)
 				d.wake()
 				return true
 			}

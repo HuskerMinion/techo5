@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 )
 
@@ -28,23 +29,33 @@ const modeAddons menuMode = 100
 // addonItemColor is the add-ons' color on the ring.
 var addonItemColor = color.RGBA{150, 200, 90, 255}
 
-// addonItem is add-on i's item on the add-ons dial, and addonOf the add-on an item is, or -1.
-func addonItem(i int) itemID { return itemID(fmt.Sprintf("addon:%d", i)) }
+// addonItem is an add-on's item on the add-ons dial, by its id, and addonOf the add-on an item is. By id,
+// not by its place on the dial: the list of add-ons is asked for again every few seconds, and one
+// starting or stopping between the dial being drawn and a choice would move the others along, so a place
+// could open another add-on than the one chosen.
+func addonItem(id string) itemID { return itemID("addon:" + id) }
 
-func addonOf(id itemID) int {
-	var i int
-	if _, err := fmt.Sscanf(string(id), "addon:%d", &i); err != nil {
-		return -1
+func addonOf(item itemID) (string, bool) {
+	id, ok := strings.CutPrefix(string(item), "addon:")
+	return id, ok && id != ""
+}
+
+// addonTile is the running add-on of that id with a page, if it runs.
+func addonTile(id string) (addonhost.ScreenTile, bool) {
+	for _, t := range addonTiles() {
+		if t.ID == id {
+			return t, true
+		}
 	}
-	return i
+	return addonhost.ScreenTile{}, false
 }
 
 // addonItems is the add-ons dial: one item for each running add-on with a page.
 func addonItems() []menuItem {
 	tiles := addonTiles()
 	out := make([]menuItem, len(tiles))
-	for i := range tiles {
-		out[i] = menuItem{addonItem(i), addonItemColor}
+	for i, t := range tiles {
+		out[i] = menuItem{addonItem(t.ID), addonItemColor}
 	}
 	return out
 }
@@ -69,9 +80,9 @@ func addonItemName(id itemID) (string, bool) {
 	if id == itemAddons {
 		return tr("drawer_addons"), true
 	}
-	if i := addonOf(id); i >= 0 {
-		if tiles := addonTiles(); i < len(tiles) {
-			return tiles[i].Name, true
+	if a, ok := addonOf(id); ok {
+		if t, ok := addonTile(a); ok {
+			return t.Name, true
 		}
 		return tr("drawer_addons"), true
 	}
@@ -80,7 +91,8 @@ func addonItemName(id itemID) (string, bool) {
 
 func addonItemHint(id itemID) (string, bool) {
 	if id != itemAddons {
-		return "", addonOf(id) >= 0
+		_, ok := addonOf(id)
+		return "", ok
 	}
 	var names []string
 	for _, t := range addonTiles() {
@@ -97,16 +109,16 @@ func (r *roundRenderer) addonIcon(id itemID, x, y, u, w float64, c color.RGBA) b
 		r.mdiIconIn("mdi:puzzle-outline", image.Rect(int(x)-side/2, int(y)-side/2, int(x)+side/2, int(y)+side/2), side, c)
 		return true
 	}
-	i := addonOf(id)
-	if i < 0 {
+	a, ok := addonOf(id)
+	if !ok {
 		return false
 	}
 	name, _ := addonItemName(id)
 	r.ringAt(x, y, u-w/2, u+w/2, 0, 6.2832, c)
-	if tiles := addonTiles(); i < len(tiles) && addonHasIcon(tiles[i].Icon) {
+	if t, ok := addonTile(a); ok && addonHasIcon(t.Icon) {
 		// The icon its catalog entry gives it, in the ring, as a camera's initials are.
 		side := int(1.3 * u)
-		r.mdiIconIn(tiles[i].Icon, image.Rect(int(x)-side/2, int(y)-side/2, int(x)+side/2, int(y)+side/2), side, c)
+		r.mdiIconIn(t.Icon, image.Rect(int(x)-side/2, int(y)-side/2, int(x)+side/2, int(y)+side/2), side, c)
 		return true
 	}
 	face := r.label
@@ -125,15 +137,17 @@ func (d *Display) actAddons(id itemID) bool {
 	switch {
 	case id == itemAddons && len(tiles) == 1:
 		d.addonTileTap(tiles[0].ID)
-	case id == itemAddons:
-		d.locked(func() { d.openMenu(modeAddons, addonItem(0)) })
+	case id == itemAddons && len(tiles) > 1:
+		d.locked(func() { d.openMenu(modeAddons, addonItem(tiles[0].ID)) })
 		d.wake()
-	case addonOf(id) >= 0:
-		if i := addonOf(id); i < len(tiles) {
-			d.addonTileTap(tiles[i].ID)
-		}
+	case id == itemAddons:
 	default:
-		return false
+		a, ok := addonOf(id)
+		if !ok {
+			return false
+		}
+		// The add-on chosen, by its id; one that stopped meanwhile opens nothing.
+		d.addonTileTap(a)
 	}
 	return true
 }
@@ -187,6 +201,12 @@ func (r *roundRenderer) addonPageSpot(s roundScene) {
 		r.text(f, msg, center-r.width(f, msg)/2, center, dim)
 	}
 	r.addonBar(v.name, v.icon, bar, closeAt, pal)
+	if s.showVolume {
+		// The volume being turned, over the page: the page dimmed under it, so its number reads, and
+		// still in view.
+		r.dim(184)
+		r.volume(s)
+	}
 	r.zmu.Lock()
 	r.addon.pageAt.id, r.addon.pageAt.lay, r.addon.pageAt.scrolls, r.addon.pageAt.close = v.id, lay, v.scrolls, closeAt
 	r.zmu.Unlock()
@@ -214,9 +234,12 @@ func (d *Display) addonSceneSpot(s *roundScene) {
 	if h == nil {
 		return
 	}
-	over := s.phase != "idle" || s.ringing.any() || s.pin.open || s.setupAsking || s.showVideoAsk || s.firstRunUp ||
-		s.announceRecording || s.showNotification || s.showReminder || s.showAnnouncement || s.showAlert || s.sheetOpen ||
-		s.menuOpen || s.showCamera || s.btPairing || s.showVideo || s.showVolume || s.nightClockFace()
+	// The volume is not among them: it is drawn over the page, dimmed for it, and the page stays in view
+	// under it (addonPageSpot), as on the Show. A call is, whatever its phase: the call's screens are the
+	// device's.
+	over := s.phase != "idle" || s.call.Phase != phone.Idle || s.ringing.any() || s.pin.open || s.setupAsking || s.showVideoAsk ||
+		s.firstRunUp || s.announceRecording || s.showNotification || s.showReminder || s.showAnnouncement || s.showAlert ||
+		s.sheetOpen || s.menuOpen || s.showCamera || s.btPairing || s.showVideo || s.nightClockFace()
 	d.mu.Lock()
 	id, name, touched := d.addon.page, d.addon.name, d.addon.touched
 	d.mu.Unlock()
@@ -241,10 +264,10 @@ func (d *Display) addonCardSceneSpot(s *roundScene) {
 	if !night && !day {
 		return
 	}
-	if best := addonNewestCard(h); best != nil {
+	if best := d.addonCardNow(h, night); best != nil {
 		s.addonCard = best
 		d.mu.Lock()
-		d.addon.frameCard = best.id
+		d.addon.frameCard = addonShown{best.id, best.sc.Set}
 		d.mu.Unlock()
 	}
 }

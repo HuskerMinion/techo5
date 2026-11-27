@@ -37,6 +37,10 @@ type Screen interface {
 	Open(id string)
 	// Close is the add-on asking for its page to be put away (screen.close), or its page gone with it.
 	Close(id string)
+	// Dropped is everything of the add-on's gone, as its last connection closed or it stopped: its
+	// scenes and its images. The display lets go of what it made of them (its decoded pictures), which
+	// it would otherwise keep until they are pushed out.
+	Dropped(id string)
 }
 
 // NopScreen is a screen that draws nothing: a build whose display has no add-on screen yet, or a test.
@@ -47,6 +51,7 @@ func (NopScreen) PageChanged(string) {}
 func (NopScreen) CardChanged(string) {}
 func (NopScreen) Open(string)        {}
 func (NopScreen) Close(string)       {}
+func (NopScreen) Dropped(string)     {}
 
 // Scene is an add-on's page or card as the display draws it. Root is the server's and is never changed
 // once given out (a patch makes a new tree), so the display may hold it while it draws; it must not
@@ -57,6 +62,9 @@ type Scene struct {
 	// cards, the newest is the one with the latest At.
 	Rev uint64
 	At  time.Time
+	// Set is the Rev of the scene.set this scene comes from, which its patches keep: a new Set is a new
+	// scene, whose lists start at their tops.
+	Set uint64
 	// Images goes up whenever the add-on's images change (one put, dropped or fetched), so the display
 	// lays the scene out again, with Server.Image, when either this or Rev is not what it laid out.
 	Images uint64
@@ -64,9 +72,17 @@ type Scene struct {
 
 // screenState is one add-on's page and card, under the server's mu.
 type screenState struct {
-	page, card           *Scene
-	rev                  uint64
+	page, card *Scene
+	rev        uint64
+	// pageShown and cardShown are what the display last said of each (Shown), whether or not there is a
+	// scene yet: a page brought up before the add-on set one is in view the moment it does. In view is
+	// that and a scene. pageTold is what the add-on was last told of its page (screen.state); of its card
+	// it is told nothing but that the owner swiped it away.
 	pageShown, cardShown bool
+	pageTold             bool
+	// pageTaps and cardTaps are when each tappable block last changed, so a tap the display read off a
+	// layout older than that is not sent for what is there now.
+	pageTaps, cardTaps tapRevs
 
 	dirtyPage, dirtyCard bool
 	drawnAt              time.Time   // when the display was last told
@@ -74,8 +90,92 @@ type screenState struct {
 
 	opens bucket // screen.open
 	// askedAt is the last time a person asked something of the add-on (Asked): screen.open is allowed
-	// for addonapi.ScreenOpenWindow after it.
+	// for addonapi.ScreenOpenWindow after it, once. A successful open uses it up, and so does the owner
+	// leaving the page (the way out, the back gesture), so one person's action brings the page up once
+	// and a page the owner just put away is not brought straight back.
 	askedAt time.Time
+}
+
+// tapRevs says, for a scene, from which revision on a tap on each of its blocks is a tap on what is
+// there now: set is the scene.set's revision, and changed the revision of the last patch of a block
+// (of it, of something in it, or of something it is in), by id.
+type tapRevs struct {
+	set     uint64
+	changed map[string]uint64
+}
+
+// reset is a new scene, set at rev.
+func (t *tapRevs) reset(rev uint64) { t.set, t.changed = rev, nil }
+
+// patched notes a patch at rev of the block id in root (the patched scene): every block with an id in it
+// and around it changed. Ids patched away are forgotten once there are more than the scene can hold.
+func (t *tapRevs) patched(root *addonapi.Block, id string, rev uint64) {
+	if t.changed == nil {
+		t.changed = map[string]uint64{}
+	}
+	for _, x := range touchedBy(root, id) {
+		t.changed[x] = rev
+	}
+	if len(t.changed) > 2*addonapi.MaxBlocks {
+		for x := range t.changed {
+			if _, ok := root.Find(x); !ok {
+				delete(t.changed, x)
+			}
+		}
+	}
+}
+
+// current is whether a tap on block, read off the layout of revision rev, is a tap on what is there now.
+func (t *tapRevs) current(block string, rev, now uint64) bool {
+	return rev >= t.set && rev <= now && rev >= t.changed[block]
+}
+
+// touchedBy is the ids of the blocks a patch of id changes: it, everything in it, and everything it is in.
+func touchedBy(root *addonapi.Block, id string) []string {
+	var out []string
+	var all func(b *addonapi.Block)
+	all = func(b *addonapi.Block) {
+		if b.ID != "" {
+			out = append(out, b.ID)
+		}
+		for i := range b.Children {
+			all(&b.Children[i])
+		}
+		for s := range b.Sections {
+			for i := range b.Sections[s].Items {
+				all(&b.Sections[s].Items[i])
+			}
+		}
+	}
+	var path []string
+	var find func(b *addonapi.Block) bool
+	find = func(b *addonapi.Block) bool {
+		if b.ID == id {
+			all(b)
+			return true
+		}
+		if b.ID != "" {
+			path = append(path, b.ID)
+		}
+		for i := range b.Children {
+			if find(&b.Children[i]) {
+				return true
+			}
+		}
+		for s := range b.Sections {
+			for i := range b.Sections[s].Items {
+				if find(&b.Sections[s].Items[i]) {
+					return true
+				}
+			}
+		}
+		if b.ID != "" {
+			path = path[:len(path)-1]
+		}
+		return false
+	}
+	find(root)
+	return append(out, path...)
 }
 
 // sceneEvery is how often the display is told of an add-on's scenes, at most: addonapi's, as a
@@ -112,7 +212,7 @@ func (s *Server) screenOp(c *conn, req addonapi.Request) (any, error) {
 		if err := addonapi.ValidScene(set.On, set.Scene, s.ownTimer(a.grant.ID)); err != nil {
 			return nil, err
 		}
-		s.keepScene(a, set.On, set.Scene)
+		s.keepScene(a, set.On, set.Scene, "")
 		return nil, nil
 
 	case addonapi.OpScenePatch:
@@ -154,7 +254,7 @@ func (s *Server) screenOp(c *conn, req addonapi.Request) (any, error) {
 				return nil, bad("a progress names %q, which is not one of the add-on's timers", t)
 			}
 		}
-		s.keepSceneLocked(a, p.On, out)
+		s.keepSceneLocked(a, p.On, out, p.ID)
 		return nil, nil
 
 	case addonapi.OpScreenOpen:
@@ -166,6 +266,10 @@ func (s *Server) screenOp(c *conn, req addonapi.Request) (any, error) {
 		has := a.screen.page != nil
 		asked := !a.screen.askedAt.IsZero() && now.Sub(a.screen.askedAt) <= addonapi.ScreenOpenWindow
 		ok := has && asked && a.screen.opens.take(now)
+		if ok {
+			// Used up: one person's action brings the page up once.
+			a.screen.askedAt = time.Time{}
+		}
 		s.mu.Unlock()
 		switch {
 		case !has:
@@ -197,7 +301,8 @@ func (s *Server) screenOp(c *conn, req addonapi.Request) (any, error) {
 		defer a.sceneMu.Unlock()
 		s.mu.Lock()
 		if a.screen.card != nil {
-			a.screen.card = nil
+			// Out of view at once, so no tap reaches it; the display says when the next is in view.
+			a.screen.card, a.screen.cardShown = nil, false
 			s.screenDirtyLocked(a, false)
 		}
 		s.mu.Unlock()
@@ -222,27 +327,57 @@ func (s *Server) ownTimer(id string) func(string) bool {
 }
 
 // keepScene keeps a scene the add-on set, under its scene lock.
-func (s *Server) keepScene(a *addon, on string, root addonapi.Block) {
+func (s *Server) keepScene(a *addon, on string, root addonapi.Block, patched string) {
 	a.sceneMu.Lock()
 	defer a.sceneMu.Unlock()
-	s.keepSceneLocked(a, on, root)
+	s.keepSceneLocked(a, on, root, patched)
 }
 
 // keepSceneLocked keeps a scene, which nothing else holds, and has the display told: a.sceneMu is held.
-func (s *Server) keepSceneLocked(a *addon, on string, root addonapi.Block) {
+// patched is the id of the block a patch replaced, "" for a scene.set. A page that comes while the
+// display shows its add-on's page waiting for one is in view at once, and the add-on is told.
+func (s *Server) keepSceneLocked(a *addon, on string, root addonapi.Block, patched string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.addons[a.grant.ID] != a {
+		s.mu.Unlock()
 		return // stopped meanwhile: kept, it would outlive the add-on
 	}
-	a.screen.rev++
-	sc := &Scene{Root: root, Rev: a.screen.rev, At: s.Now()}
+	st := &a.screen
+	st.rev++
+	sc := &Scene{Root: root, Rev: st.rev, At: s.Now(), Set: st.rev}
+	cur, taps := &st.page, &st.pageTaps
 	if on == addonapi.OnCard {
-		a.screen.card = sc
-	} else {
-		a.screen.page = sc
+		cur, taps = &st.card, &st.cardTaps
 	}
+	if patched != "" && *cur != nil {
+		sc.Set = (*cur).Set
+		taps.patched(&sc.Root, patched, st.rev)
+	} else {
+		taps.reset(st.rev)
+	}
+	*cur = sc
 	s.screenDirtyLocked(a, on == addonapi.OnPage)
+	tell := s.pageToldLocked(a)
+	s.mu.Unlock()
+	s.tellPage(a.grant.ID, tell)
+}
+
+// pageToldLocked brings what the add-on was told of its page in line with whether it is in view, and
+// says what to tell it: nil for nothing. s.mu is held.
+func (s *Server) pageToldLocked(a *addon) *bool {
+	in := a.screen.pageShown && a.screen.page != nil
+	if in == a.screen.pageTold {
+		return nil
+	}
+	a.screen.pageTold = in
+	return &in
+}
+
+// tellPage tells the add-on its page came into view or went out of it, when there is something to tell.
+func (s *Server) tellPage(id string, shown *bool) {
+	if shown != nil {
+		s.Emit(id, addonapi.EventScreenState, addonapi.ScreenStateEvent{On: addonapi.OnPage, Shown: *shown})
+	}
 }
 
 // screenDirtyLocked notes that the add-on's page or card changed, and has the display told of it when
@@ -288,7 +423,8 @@ func (s *Server) screenDrop(a *addon) {
 	s.mu.Lock()
 	sc := &a.screen
 	page, card := sc.page != nil, sc.card != nil
-	sc.page, sc.card, sc.pageShown, sc.cardShown = nil, nil, false, false
+	sc.page, sc.card, sc.pageShown, sc.cardShown, sc.pageTold = nil, nil, false, false, false
+	sc.pageTaps, sc.cardTaps = tapRevs{}, tapRevs{}
 	// Its images with them: they are there for its scenes, and it puts them again after hello.
 	a.images.clear()
 	sc.dirtyPage, sc.dirtyCard = false, false
@@ -308,6 +444,7 @@ func (s *Server) screenDrop(a *addon) {
 	if card {
 		sink.CardChanged(a.grant.ID)
 	}
+	sink.Dropped(a.grant.ID)
 }
 
 // The display's half: what it reads, and what the owner did.
@@ -348,28 +485,30 @@ func (s *Server) Screens() []string {
 	return out
 }
 
-// Shown is the display saying the add-on's page or card came into view or went out of it, which the
-// add-on is told (screen.state) when it changes. Touches, swipes and the back gesture reach an add-on
-// only for what is in view: the display marks a page or a card hidden whenever a screen the device
-// reserves covers it.
+// Shown is the display saying the add-on's page or card came into view or went out of it. Touches,
+// swipes and the back gesture reach an add-on only for what is in view: the display marks a page or a
+// card hidden whenever a screen the device reserves covers it. It is kept whether or not the add-on has
+// set the scene yet, so a page brought up while it is still waited for is in view as soon as it comes.
+// The add-on is told when its page comes into view or goes (screen.state); of its card, which is a
+// glance over the clock that comes and goes with the clock, it is told nothing but that the owner swiped
+// it away (DismissCard), so an add-on cannot learn from its card when the room is looked at.
 func (s *Server) Shown(id, on string, shown bool) {
+	if !addonapi.ValidTarget(on) {
+		return
+	}
 	s.mu.Lock()
 	a := s.addons[id]
-	changed := false
+	var tell *bool
 	if a != nil {
-		sc := &a.screen
-		cur, has := &sc.pageShown, sc.page != nil
 		if on == addonapi.OnCard {
-			cur, has = &sc.cardShown, sc.card != nil
-		}
-		if *cur != shown && (has || !shown) && addonapi.ValidTarget(on) {
-			*cur, changed = shown, true
+			a.screen.cardShown = shown
+		} else {
+			a.screen.pageShown = shown
+			tell = s.pageToldLocked(a)
 		}
 	}
 	s.mu.Unlock()
-	if changed {
-		s.Emit(id, addonapi.EventScreenState, addonapi.ScreenStateEvent{On: on, Shown: shown})
-	}
+	s.tellPage(id, tell)
 }
 
 // DismissCard is the owner swiping the add-on's card away: it goes, and the add-on is told, until it
@@ -401,13 +540,28 @@ func (s *Server) shownWith(id, on string) (*Scene, bool) {
 	return a.screen.page, a.screen.page != nil && a.screen.pageShown
 }
 
-// Touch is a tap on a block of the add-on's page or card: the add-on is told, when the block is one of
-// its buttons or chips, or a list item with an id, in what is in view, and Touch says whether it was. A
-// tap is a person asking something of the add-on, so it may bring its page up for a moment after
-// (screen.open).
-func (s *Server) Touch(id, on, block string) bool {
+// Touch is a tap on a block of the add-on's page or card, as the display found it in the layout of the
+// scene's revision rev: the add-on is told, when the block is one of its buttons or chips, or a list item
+// with an id, in what is in view, and unchanged since rev (a new scene, or a patch of the block, of
+// something in it or of something it is in, came after the layout the finger was on), and Touch says
+// whether it was. A tap is a person asking something of the add-on, so it may bring its page up for a
+// moment after (screen.open).
+func (s *Server) Touch(id, on, block string, rev uint64) bool {
 	sc, ok := s.shownWith(id, on)
 	if !ok || !sc.Root.TapTarget(block) {
+		return false
+	}
+	s.mu.Lock()
+	current := false
+	if a := s.addons[id]; a != nil {
+		taps := &a.screen.pageTaps
+		if on == addonapi.OnCard {
+			taps = &a.screen.cardTaps
+		}
+		current = taps.current(block, rev, sc.Rev)
+	}
+	s.mu.Unlock()
+	if !current {
 		return false
 	}
 	s.Asked(id)
@@ -440,11 +594,24 @@ func (s *Server) Swipe(id, direction string) bool {
 
 // Back is the back gesture on the add-on's page while it is in view. What it does is the add-on's (a
 // step back within its page, or screen.close); the name bar's own way out is the daemon's and always
-// leaves.
+// leaves. Somebody going back is not asking for the page: what an earlier tap allowed (screen.open) is
+// used up.
 func (s *Server) Back(id string) bool {
 	if _, ok := s.shownWith(id, addonapi.OnPage); !ok {
 		return false
 	}
+	s.Left(id)
 	s.Emit(id, addonapi.EventBack, addonapi.None{})
 	return true
+}
+
+// Left is the owner putting the add-on's page away by the name bar's way out: what an earlier tap or
+// command allowed (screen.open) is used up, so the add-on cannot bring straight back a page somebody just
+// put away.
+func (s *Server) Left(id string) {
+	s.mu.Lock()
+	if a := s.addons[id]; a != nil {
+		a.screen.askedAt = time.Time{}
+	}
+	s.mu.Unlock()
 }

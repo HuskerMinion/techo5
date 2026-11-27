@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"strings"
@@ -51,7 +52,7 @@ func TestScreenOpenNeedsAPerson(t *testing.T) {
 
 	// A tap on one of its buttons in view.
 	r.s.Shown("meals", addonapi.OnPage, true)
-	if !r.s.Touch("meals", addonapi.OnPage, "next") {
+	if !touch(r, "meals", addonapi.OnPage, "next") {
 		t.Fatal("the tap")
 	}
 	if err := c.OpenScreen(ctx(t)); err != nil {
@@ -65,7 +66,7 @@ func TestScreenOpenNeedsAPerson(t *testing.T) {
 	}
 	// A tap that reached nothing of it asks nothing.
 	r.advance(time.Minute)
-	if r.s.Touch("meals", addonapi.OnPage, "step") {
+	if touch(r, "meals", addonapi.OnPage, "step") {
 		t.Fatal("a tap on words was sent")
 	}
 	if err := c.OpenScreen(ctx(t)); code(err) != addonapi.CodeBusy {
@@ -89,7 +90,7 @@ func TestListItemsAreTapped(t *testing.T) {
 	r.s.Shown("meals", addonapi.OnPage, true)
 	nextScreen(t, ev)
 	for _, id := range []string{"soup", "plain", "fav"} {
-		if !r.s.Touch("meals", addonapi.OnPage, id) {
+		if !touch(r, "meals", addonapi.OnPage, id) {
 			t.Errorf("a tap on %s", id)
 			continue
 		}
@@ -97,7 +98,7 @@ func TestListItemsAreTapped(t *testing.T) {
 			t.Errorf("tap on %s: %+v", id, e)
 		}
 	}
-	if r.s.Touch("meals", addonapi.OnPage, "words") || r.s.Touch("meals", addonapi.OnPage, "") {
+	if touch(r, "meals", addonapi.OnPage, "words") || touch(r, "meals", addonapi.OnPage, "") {
 		t.Error("a tap on words outside a list, or on no id, was sent")
 	}
 }
@@ -152,7 +153,7 @@ func TestImagePutAndTheBudget(t *testing.T) {
 	eventually(t, "the page", func() bool { return k.count("page meals") == 1 })
 	sc, _ := r.s.Scene("meals", addonapi.OnPage)
 	data, key, ok := r.s.Image("meals", &sc.Root.Children[0])
-	if !ok || len(data) != len(photo) || !strings.HasPrefix(key, "n:") {
+	if !ok || len(data) != len(photo) || !strings.HasPrefix(key, "meals/n:") {
 		t.Fatalf("the image by name: %d %q %v", len(data), key, ok)
 	}
 	if _, err := c.PutImage(ctx(t), "a", small); err != nil {
@@ -206,6 +207,9 @@ func TestOnlyAnImagePutIsLong(t *testing.T) {
 // once until it fails, and then not again for imageRetry; they count toward the budget, and are let go,
 // the least recently drawn first, to make room for a put.
 func TestImagesByAddress(t *testing.T) {
+	was := keptFor
+	keptFor = 300 * time.Millisecond
+	t.Cleanup(func() { keptFor = was })
 	r, k, c := screenRig(t)
 	var mu sync.Mutex
 	served := map[string][]byte{}
@@ -272,15 +276,32 @@ func TestImagesByAddress(t *testing.T) {
 		t.Errorf("fetched images count %d, want %d", used, 2*cost)
 	}
 
-	// Puts make room by letting the fetched ones go, the one asked for least recently first.
-	img(1)
-	for _, name := range []string{"p", "q", "s"} {
+	// The fetched images the page shows are not let go for a put: that would leave holes in the page.
+	for _, name := range []string{"p", "q"} {
 		if _, err := c.PutImage(ctx(t), name, photo); err != nil {
 			t.Fatalf("put %s: %v", name, err)
 		}
 	}
-	if !img(1) || r.s.ImageUsed("meals") != 4*cost {
-		t.Errorf("the fetched image drawn last went first, or the room is wrong: %d", r.s.ImageUsed("meals"))
+	if _, err := c.PutImage(ctx(t), "s", photo); code(err) != addonapi.CodeTooLarge {
+		t.Errorf("a put that would let go an image the page shows: %v", err)
+	}
+	// Puts make room by letting the fetched ones go that nothing shows now, the one asked for least
+	// recently first, once the display has not asked for them for a moment.
+	if err := c.SetScene(ctx(t), addonapi.OnPage, addonapi.Column(addonapi.Image("http://192.168.1.20/b.png"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutImage(ctx(t), "s", photo); code(err) != addonapi.CodeTooLarge {
+		t.Errorf("a put that would let go an image the display asked for a moment ago: %v", err)
+	}
+	time.Sleep(keptFor + 50*time.Millisecond)
+	if err := c.SetScene(ctx(t), addonapi.OnPage, addonapi.Column(addonapi.Text("no pictures"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutImage(ctx(t), "s", photo); err != nil {
+		t.Fatalf("a put that lets go an image nothing shows: %v", err)
+	}
+	if r.s.ImageUsed("meals") != 4*cost {
+		t.Errorf("the room is wrong: %d", r.s.ImageUsed("meals"))
 	}
 	if _, err := c.PutImage(ctx(t), "u", photo); err != nil {
 		t.Fatalf("a put that needs the last fetched image's room: %v", err)
@@ -322,4 +343,130 @@ func noisePNG(t *testing.T, w, h int) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
+}
+
+// An image's key names the add-on as well as its bytes: one add-on's never stands for another's, and the
+// same bytes put again, or fetched again, are the same key, so the display decodes them once.
+func TestImageKeys(t *testing.T) {
+	r, _, c := screenRig(t)
+	icon := pngBytes(t, 8, 8)
+	b := addonapi.ImageData(icon)
+	_, mine, _ := r.s.Image("meals", &b)
+	_, theirs, _ := r.s.Image("plex", &b)
+	if mine == theirs || !strings.HasPrefix(mine, "meals/d:") || len(mine) != len("meals/d:")+64 {
+		t.Errorf("inline keys %q and %q", mine, theirs)
+	}
+	if _, err := c.PutImage(ctx(t), "a", icon); err != nil {
+		t.Fatal(err)
+	}
+	named := addonapi.ImageNamed("a")
+	_, k1, _ := r.s.Image("meals", &named)
+	if _, err := c.PutImage(ctx(t), "a", icon); err != nil {
+		t.Fatal(err)
+	}
+	_, k2, _ := r.s.Image("meals", &named)
+	if k1 != k2 || !strings.HasPrefix(k1, "meals/n:") {
+		t.Errorf("the same bytes put again: %q %q", k1, k2)
+	}
+}
+
+// A page whose images by address are more than the add-on's 8 MB does not have them let go and fetched
+// again round and round: those it shows stay, the one with no room is not kept and not fetched again for
+// a minute, and a refetch of the same bytes is the same key.
+func TestImagesThatDoNotFitDoNotThrash(t *testing.T) {
+	r, _, c := screenRig(t)
+	photo := pngBytes(t, 1280, 700) // 3.5 MB decoded, so two fit and a third does not
+	var mu sync.Mutex
+	fetches := map[string]int{}
+	r.s.FetchImage = func(ctx context.Context, u string) ([]byte, error) {
+		mu.Lock()
+		fetches[u]++
+		mu.Unlock()
+		return photo, nil
+	}
+	urls := []string{"http://192.168.1.20/a.png", "http://192.168.1.20/b.png", "http://192.168.1.20/c.png"}
+	scene := addonapi.Column(addonapi.Image(urls[0]), addonapi.Image(urls[1]), addonapi.Image(urls[2]))
+	if err := c.SetScene(ctx(t), addonapi.OnPage, scene); err != nil {
+		t.Fatal(err)
+	}
+	// The display, laying the page out each time it is told, as it does.
+	layout := func() int {
+		cur, _ := r.s.Scene("meals", addonapi.OnPage)
+		n := 0
+		for i := range cur.Root.Children {
+			if _, _, ok := r.s.Image("meals", &cur.Root.Children[i]); ok {
+				n++
+			}
+		}
+		return n
+	}
+	for end := time.Now().Add(time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
+		layout()
+	}
+	mu.Lock()
+	total := 0
+	for _, n := range fetches {
+		total += n
+	}
+	mu.Unlock()
+	if total != 3 {
+		t.Errorf("%d fetches for three images in a second of layouts: %v", total, fetches)
+	}
+	if n := layout(); n != 2 {
+		t.Errorf("%d of the images are there, not the two that fit", n)
+	}
+}
+
+// A fetch that fails lays the page out again, so the images waiting behind it are asked for, and once its
+// minute is up the page is laid out again so it is tried again.
+func TestAFailedFetchMakesWay(t *testing.T) {
+	was := imageRetry
+	imageRetry = 200 * time.Millisecond
+	t.Cleanup(func() { imageRetry = was })
+	r, k, c := screenRig(t)
+	var mu sync.Mutex
+	asked := map[string]int{}
+	r.s.FetchImage = func(ctx context.Context, u string) ([]byte, error) {
+		mu.Lock()
+		asked[u]++
+		mu.Unlock()
+		return nil, errors.New("404")
+	}
+	scene := addonapi.Column(addonapi.Image("http://192.168.1.20/a.png"), addonapi.Image("http://192.168.1.20/b.png"),
+		addonapi.Image("http://192.168.1.20/c.png"))
+	if err := c.SetScene(ctx(t), addonapi.OnPage, scene); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the page", func() bool { return k.count("page meals") == 1 })
+	layout := func() {
+		cur, _ := r.s.Scene("meals", addonapi.OnPage)
+		for i := range cur.Root.Children {
+			r.s.Image("meals", &cur.Root.Children[i])
+		}
+	}
+	layout() // two start; the third waits for a place
+	eventually(t, "the display told the two failed", func() bool { return k.count("page meals") >= 2 && len(r.s.fetching("meals")) == 0 })
+	layout()
+	eventually(t, "the third asked for", func() bool { mu.Lock(); defer mu.Unlock(); return asked["http://192.168.1.20/c.png"] == 1 })
+	told := k.count("page meals")
+	eventually(t, "the page laid out again once the minute is up", func() bool { return k.count("page meals") > told })
+	time.Sleep(imageRetry)
+	layout()
+	eventually(t, "a failed one tried again", func() bool { mu.Lock(); defer mu.Unlock(); return asked["http://192.168.1.20/a.png"] == 2 })
+}
+
+// What an add-on's store remembers not to fetch yet is held to maxNotBefore, whatever it names.
+func TestNotBeforeIsHeld(t *testing.T) {
+	var st imageStore
+	st.init()
+	now := time.Now()
+	for i := range 3 * maxNotBefore {
+		st.wait(fmt.Sprintf("http://192.168.1.20/%d.png", i), now.Add(time.Duration(i)*time.Second), now)
+	}
+	if len(st.notBefore) > maxNotBefore {
+		t.Errorf("%d addresses remembered", len(st.notBefore))
+	}
+	if _, ok := st.notBefore[fmt.Sprintf("http://192.168.1.20/%d.png", 3*maxNotBefore-1)]; !ok {
+		t.Error("the newest was forgotten")
+	}
 }

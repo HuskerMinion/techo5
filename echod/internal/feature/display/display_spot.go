@@ -1908,7 +1908,7 @@ func (d *Display) frame() (next time.Duration) {
 	if s.showVideo && s.addonPage != nil {
 		s.addonPage = nil
 		d.mu.Lock()
-		d.addon.framePage = ""
+		d.addon.framePage = addonShown{}
 		d.mu.Unlock()
 	}
 	d.addonCardSceneSpot(&s)
