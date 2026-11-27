@@ -109,7 +109,7 @@ func TestDumpFallsBackToMemory(t *testing.T) {
 	memAvailable = func() (int64, error) { return ramReserve + 1000, nil }
 
 	// More than any test machine has free on its disk.
-	dir, room, err := prepareDumpDir(1 << 60)
+	dir, _, err := prepareDumpDir(1 << 60)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestDumpFallsBackToMemory(t *testing.T) {
 		// The disk always has more room than the 1000 bytes the memory leaves.
 		t.Errorf("folder %s, want the one with the most room, %s", dir, flash)
 	}
-	dir, room, err = prepareDumpDir(1)
+	dir, room, err := prepareDumpDir(1)
 	if err != nil || dir != flash || room <= 0 {
 		t.Errorf("a small dump: %s %d %v, want flash", dir, room, err)
 	}
