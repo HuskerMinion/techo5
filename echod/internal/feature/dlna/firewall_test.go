@@ -20,9 +20,13 @@ func TestTheFirewallLetsSSDPAndIGMPIn(t *testing.T) {
 	if drop < 0 {
 		t.Fatal("no DROP at the end of the Wi-Fi chain")
 	}
-	for _, rule := range []string{"iptables-legacy -A $CHAIN -p udp --dport 1900 -j ACCEPT", "iptables-legacy -A $CHAIN -p igmp -j ACCEPT"} {
+	for _, rule := range []string{"iptables-legacy -A $CHAIN -p udp --dport 1900 -j ACCEPT", "iptables-legacy -A $CHAIN -p 2 -j ACCEPT"} {
 		if at := strings.Index(script, rule); at < 0 || at > drop {
 			t.Errorf("%q is not in the Wi-Fi chain before its DROP", rule)
 		}
+	}
+	// By number: a protocol name looked up and not found would fail the rule, and the chain with it.
+	if strings.Contains(script, "-p igmp") {
+		t.Error("IGMP is named, not numbered")
 	}
 }
