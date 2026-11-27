@@ -2,6 +2,7 @@ package media
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"io"
 	"math"
@@ -176,5 +177,99 @@ func TestAStreamCarriesOnPastABadStretch(t *testing.T) {
 	got, _ := io.ReadAll(src)
 	if len(got) < len(full)*3/4 {
 		t.Errorf("a broken stretch in the middle cut the stream to %d of %d bytes", len(got), len(full))
+	}
+}
+
+// toneMP3 is a second and a half of a 440 Hz tone, MPEG-1 Layer III at 48 kHz and 64 kbit/s, made with
+// ffmpeg for these tests.
+func toneMP3(t *testing.T) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "tone.mp3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// loudFrames is how many frames of pcm are not near silence.
+func loudFrames(pcm []byte) int {
+	loud := 0
+	for i := 0; i+3 < len(pcm); i += 4 {
+		if v := int16(binary.LittleEndian.Uint16(pcm[i:])); v > 1000 || v < -1000 {
+			loud++
+		}
+	}
+	return loud
+}
+
+// A station that starts its stream part way into a frame plays from the next frame, wherever the cut
+// falls (#777): the bytes before it can look like a Layer I or II header, or like a Layer III one with
+// side information the decoder cannot use, and none of that may end the station.
+func TestAStreamThatStartsMidFramePlays(t *testing.T) {
+	mp3 := toneMP3(t)
+	n, ok := mp3FrameLen(mp3)
+	if !ok {
+		t.Fatal("the sample does not start with a Layer III header")
+	}
+	for off := 1; off < 2*n+4; off += 5 { // a cut every few bytes across two frames
+		src, err := pcmSource(bufio.NewReaderSize(bytes.NewReader(mp3[off:]), chunk), "audio/mpeg")
+		if err != nil {
+			t.Fatalf("a stream starting %d bytes into the sample: %v", off, err)
+		}
+		pcm, err := io.ReadAll(src)
+		if err != nil {
+			t.Fatalf("a stream starting %d bytes into the sample: %v", off, err)
+		}
+		if frames := len(pcm) / 4; frames < speaker.Rate || loudFrames(pcm) < frames/2 {
+			t.Fatalf("a stream starting %d bytes into the sample gave %d frames, %d of them loud", off, frames, loudFrames(pcm))
+		}
+	}
+}
+
+// Junk that holds headers - a Layer I one, a Layer II one, a Layer III one with no frame after it -
+// is stepped over to the first frame that another follows.
+func TestFalseHeadersBeforeTheFirstFrameAreSkipped(t *testing.T) {
+	junk := []byte{0x12, 0x34, 0xFF, 0xFF, 0x90, 0x00, 0x55, 0xFF, 0xFD, 0x90, 0x00, 0xAA}
+	junk = append(junk, 0xFF, 0xFB, 0x90, 0x64, 0x00, 0x7F, 0xFF, 0xF0) // Layer III, 128 kbit/s at 44.1 kHz
+	junk = append(junk, make([]byte, 300)...)
+	src, err := served(t, append(junk, toneMP3(t)...), "audio/mpeg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pcm, err := io.ReadAll(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if frames := len(pcm) / 4; frames < speaker.Rate || loudFrames(pcm) < frames/2 {
+		t.Errorf("after junk the sample gave %d frames, %d of them loud", frames, loudFrames(pcm))
+	}
+}
+
+// Frame lengths come out as the standard has them, and what the decoder cannot play is no frame.
+func TestMP3FrameLengths(t *testing.T) {
+	for _, c := range []struct {
+		h    []byte
+		want int
+	}{
+		{[]byte{0xFF, 0xFB, 0x90, 0x64}, 417}, // MPEG-1, 128 kbit/s, 44.1 kHz
+		{[]byte{0xFF, 0xFB, 0x92, 0x64}, 418}, // the same, padded
+		{[]byte{0xFF, 0xFB, 0xB4, 0x64}, 576}, // MPEG-1, 192 kbit/s, 48 kHz
+		{[]byte{0xFF, 0xF3, 0x84, 0x64}, 192}, // MPEG-2, 64 kbit/s, 24 kHz
+		{[]byte{0xFF, 0xFD, 0x90, 0x64}, -1},  // Layer II
+		{[]byte{0xFF, 0xFF, 0x90, 0x64}, -1},  // Layer I
+		{[]byte{0xFF, 0xE3, 0x90, 0x64}, -1},  // MPEG-2.5, which go-mp3 does not decode
+		{[]byte{0xFF, 0xFB, 0x00, 0x64}, -1},  // free format
+		{[]byte{0xFF, 0xFB, 0xF0, 0x64}, -1},  // bit rate 15
+		{[]byte{0xFF, 0xFB, 0x9C, 0x64}, -1},  // reserved sample rate
+		{[]byte{0xFF, 0xFB, 0x90, 0x66}, -1},  // reserved emphasis
+		{[]byte{0x7F, 0xFB, 0x90, 0x64}, -1},  // no sync
+	} {
+		n, ok := mp3FrameLen(c.h)
+		if !ok {
+			n = -1
+		}
+		if n != c.want {
+			t.Errorf("% x: %d, want %d", c.h, n, c.want)
+		}
 	}
 }

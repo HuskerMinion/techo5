@@ -138,7 +138,7 @@ const syncMost = 256 << 10
 // scanLimit is the stream as the decoder reads it, failing once the decoder has read syncMost bytes
 // without the count being reset: reset once a frame has been decoded.
 type scanLimit struct {
-	r    io.Reader
+	r    *bufio.Reader
 	read int
 }
 
@@ -149,6 +149,99 @@ func (s *scanLimit) Read(p []byte) (int, error) {
 	n, err := s.r.Read(p[:min(len(p), syncMost-s.read)])
 	s.read += n
 	return n, err
+}
+
+// skip discards n bytes, counted as read.
+func (s *scanLimit) skip(n int) {
+	d, _ := s.r.Discard(n)
+	s.read += d
+}
+
+// align steps over whatever comes before the next frame: a station can start its stream part way into
+// one (#777), and a bad stretch ends part way into one. The decoder takes the first four bytes that
+// look like a header, of any layer, and fails on a Layer I or II one, or on side information that is
+// really the middle of a frame. So a frame is taken only where a Layer III header is followed, one
+// frame length on, by another of the same kind. Near the end of the stream, with no room for a second
+// header, the first one is taken alone. Nothing found within syncMost is the stream's end, as the
+// decoder's own scanning would be.
+func (s *scanLimit) align() error {
+	// A few kilobytes are looked at, not the whole buffer: what is waited for here is the start of the
+	// sound, and a station at 64 kbit/s takes four seconds to send 32 KB.
+	want := min(4096, s.r.Size())
+	for s.read < syncMost {
+		b, err := s.r.Peek(want)
+		end := err != nil // all there will be is in b
+		if len(b) < 4 {
+			return nil // the decoder reports the end
+		}
+		at, more := -1, 0
+		for i := 0; i+4 <= len(b) && at < 0 && more == 0; i++ {
+			n, ok := mp3FrameLen(b[i:])
+			switch {
+			case !ok:
+			case i+n+4 <= len(b):
+				if sameKind(b[i:], b[i+n:]) {
+					at = i
+				}
+			case end:
+				at = i // the last frame: taken alone
+			case i+n+4 <= s.r.Size():
+				more = i + n + 4 // the second header is not in yet
+			case i > 0:
+				s.skip(i) // nor room for it: this header to the front, and look again
+				more = want
+			default:
+				at = i // a buffer too small to hold two frames: taken alone
+			}
+		}
+		switch {
+		case at >= 0:
+			s.skip(at)
+			return nil
+		case more > 0:
+			want = more
+		case end:
+			return nil
+		default:
+			s.skip(len(b) - 3)
+		}
+	}
+	return errors.New("no MP3 frame found in the stream")
+}
+
+// Layer III bit rates in kbit/s by index, for MPEG-1 and for MPEG-2, and sample rates by index.
+var (
+	mp3Kbps  = [2][15]int{{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320}, {0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}}
+	mp3Rates = [2][3]int{{44100, 48000, 32000}, {22050, 24000, 16000}}
+)
+
+// mp3FrameLen is the length of the frame whose header starts h, when h is a Layer III header the
+// decoder can play: MPEG-1 or 2 (go-mp3 has no 2.5), a bit rate it knows (not free format) and a
+// sample rate and emphasis that are not reserved.
+func mp3FrameLen(h []byte) (int, bool) {
+	if h[0] != 0xFF || h[1]&0xE0 != 0xE0 || (h[1]>>1)&0x03 != 0x01 {
+		return 0, false
+	}
+	var v int // 0 MPEG-1, 1 MPEG-2
+	switch (h[1] >> 3) & 0x03 {
+	case 3:
+	case 2:
+		v = 1
+	default:
+		return 0, false
+	}
+	br, sr, pad := int(h[2]>>4), int(h[2]>>2)&0x03, int(h[2]>>1)&0x01
+	if br == 0 || br == 15 || sr == 3 || h[3]&0x03 == 2 {
+		return 0, false
+	}
+	return (144>>v)*1000*mp3Kbps[v][br]/mp3Rates[v][sr] + pad, true
+}
+
+// sameKind is whether the header at b follows the one at a in one stream: a Layer III header of the
+// same version and sample rate.
+func sameKind(a, b []byte) bool {
+	_, ok := mp3FrameLen(b)
+	return ok && a[1]&0xFE == b[1]&0xFE && a[2]&0x0C == b[2]&0x0C
 }
 
 // mp3Samples reads an MP3 stream as 16-bit stereo at speaker.Rate: what the WAV path hands on.
@@ -166,7 +259,7 @@ type mp3Samples struct {
 // byte now and then; a stream that keeps failing is not one to keep trying.
 const mostResyncs = 20
 
-func newMP3Samples(r io.Reader) (*mp3Samples, error) {
+func newMP3Samples(r *bufio.Reader) (*mp3Samples, error) {
 	src := &scanLimit{r: r}
 	d, err := newDecoder(src)
 	if err != nil {
@@ -176,15 +269,28 @@ func newMP3Samples(r io.Reader) (*mp3Samples, error) {
 	return &mp3Samples{src: src, d: d, rs: resampler{from: d.SampleRate(), to: speaker.Rate}, in: make([]byte, 4608)}, nil
 }
 
+// newDecoder is a decoder from the next frame of src on. A first frame that fails to decode (its
+// bits reach back into frames before the start, or the check in align was fooled) costs that frame
+// and the next is tried, a few times.
 func newDecoder(src *scanLimit) (*mp3.Decoder, error) {
-	d, err := mp3.NewDecoder(src)
-	if err != nil {
-		return nil, fmt.Errorf("mp3: %w", err)
+	var err error
+	for range 4 {
+		if err = src.align(); err != nil {
+			return nil, err
+		}
+		var d *mp3.Decoder
+		d, err = mp3.NewDecoder(src)
+		if err == nil {
+			if d.SampleRate() <= 0 {
+				return nil, errors.New("mp3: no sample rate")
+			}
+			return d, nil
+		}
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(err.Error(), "unexpected EOF") {
+			break
+		}
 	}
-	if d.SampleRate() <= 0 {
-		return nil, errors.New("mp3: no sample rate")
-	}
-	return d, nil
+	return nil, fmt.Errorf("mp3: %w", err)
 }
 
 func (m *mp3Samples) Read(p []byte) (int, error) {
