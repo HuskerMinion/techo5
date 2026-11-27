@@ -187,6 +187,60 @@ func TestKeysTypeAndRunAreTheSetupPagesOnly(t *testing.T) {
 	}
 }
 
+// A button of the setup page's own is read without its value (the keys, text or script, which can be a
+// password typed into a session), and the page read and sent back as it came keeps it whole: it is
+// unchanged. A value sent in its place is still a change, refused.
+func TestASetupPageButtonIsReadWithoutItsValueAndKept(t *testing.T) {
+	f, _ := testDeck(t)
+	typed := config.DeckButton{Label: "Sign in", Action: config.DeckPCType, Computer: "Studio", Value: "hunter2"}
+	keys := config.DeckButton{Label: "Quit", Action: config.DeckPCKeys, Computer: "Studio", Value: "cmd+q"}
+	open := config.DeckButton{Label: "Web", Action: config.DeckPCOpen, Computer: "Studio", Value: "Safari"}
+	if err := config.Set().Deck().Page(0, []config.DeckButton{{Label: "Live", Action: config.DeckOBSScene, Scene: "Live"}, runButton, typed, keys, open}); err != nil {
+		t.Fatal(err)
+	}
+	w := call(f, "GET", "/api/v1/deck", "", true)
+	for _, secret := range []string{"hunter2", "cmd+q", "backup.sh"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Errorf("the deck shows %q: %s", secret, w.Body)
+		}
+	}
+	var v deckView
+	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.Pages[0].Buttons[4]; got != open {
+		t.Errorf("an open button read as %+v, want its app shown", got)
+	}
+
+	// Sent back as read, one button relabeled: saved, and the setup page's buttons kept whole.
+	page := v.Pages[0].Buttons
+	page[0].Label = "On air"
+	code, body := putPage(f, "0", page...)
+	if code != http.StatusOK {
+		t.Fatalf("the page sent back as read: %d %s", code, body)
+	}
+	got := config.Get().Deck.Pages[0].Buttons
+	if got[0].Label != "On air" || got[1] != runButton || got[2] != typed || got[3] != keys || got[4] != open {
+		t.Errorf("the page saved as %+v", got)
+	}
+	if strings.Contains(body, "hunter2") {
+		t.Errorf("the answer to the PUT shows the typed text: %s", body)
+	}
+
+	// The real value still counts as unchanged; another is a change, and refused.
+	if code, body := putPage(f, "0", got...); code != http.StatusOK {
+		t.Errorf("the page sent back with the values: %d %s", code, body)
+	}
+	other := append([]config.DeckButton{}, page...)
+	other[2].Value = "other"
+	if code, _ := putPage(f, "0", other...); code != http.StatusBadRequest {
+		t.Errorf("a typed text changed through the API: %d", code)
+	}
+	if got := config.Get().Deck.Pages[0].Buttons; got[2] != typed {
+		t.Errorf("the typed text is now %+v", got[2])
+	}
+}
+
 func TestPagesAreAddedAndRemovedWithinTheLimit(t *testing.T) {
 	f, _ := testDeck(t)
 	for n := 1; n < config.DeckPagesMax; n++ {

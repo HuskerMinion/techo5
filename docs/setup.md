@@ -2834,7 +2834,7 @@ For an app that edits the [Deck](deck.md) away from the setup page. `GET /api/v1
     {"buttons": [
       {"label": "Live", "action": "obs_scene", "scene": "Live"},
       {"label": "Mic", "icon": "microphone-off", "color": "red", "action": "obs_mute", "input": "Mic"},
-      {"label": "Backup", "action": "pc_run", "computer": "Studio", "value": "backup.sh"},
+      {"label": "Backup", "action": "pc_run", "computer": "Studio"},
       {"action": "pc_open", "computer": "Studio", "value": "Safari"},
       {}
     ]}
@@ -2854,7 +2854,9 @@ empty one; a button has `label`, `icon` (a Material Design icon name), `color` (
 own), `action`, and what the action needs: `scene` (`obs_scene`, and `obs_source` with `source`),
 `input` (`obs_mute`), `computer` and `value` (the `pc_` actions). A computer is named only, with whether
 its agent answered the last time it was asked and the apps it lists; never its address or pairing key,
-and OBS's password is never shown, only whether one is set.
+and OBS's password is never shown, only whether one is set. A **Press keys**, **Type text** or **Run
+script** button is shown without its `value` (the keys, the text or the script), which may be a
+password typed into your session; it is still kept as it is when sent back that way.
 
 `PUT /api/v1/deck/pages/<n>` takes the page's buttons as the same JSON array, at most the grid's
 `cols` × `rows`; squares not sent are empty. A button is checked as the setup page checks it (a scene

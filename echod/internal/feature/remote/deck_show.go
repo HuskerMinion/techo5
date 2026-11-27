@@ -45,6 +45,17 @@ func setupOnly(b config.DeckButton) bool {
 	return b.Action == config.DeckPCKeys || b.Action == config.DeckPCType || b.Action == config.DeckPCRun
 }
 
+// shownButton is a button as the API shows it: one that belongs to the setup page alone without its
+// value, the keys it presses, the text it types or the script it runs. None of them is the API's to
+// change, and the keys or text can be a password typed into a signed-in session. Sent back so, blank, in
+// its place, it is kept as it is (deckCheck).
+func shownButton(b config.DeckButton) config.DeckButton {
+	if setupOnly(b) {
+		b.Value = ""
+	}
+	return b
+}
+
 type deckAction struct {
 	ID    config.DeckAction `json:"id"`
 	Label string            `json:"label"`
@@ -93,7 +104,11 @@ func deckNow() deckView {
 	v.Cols, v.Rows = d.Grid()
 	v.Pages = make([]deckPage, 0, len(d.Pages))
 	for _, p := range d.Pages {
-		v.Pages = append(v.Pages, deckPage{Buttons: append([]config.DeckButton{}, p.Buttons...)})
+		buttons := make([]config.DeckButton, 0, len(p.Buttons))
+		for _, b := range p.Buttons {
+			buttons = append(buttons, shownButton(b))
+		}
+		v.Pages = append(v.Pages, deckPage{Buttons: buttons})
 	}
 	states := deckComputers()
 	v.Computers = make([]deckComputer, 0, len(d.Computers))
@@ -207,8 +222,10 @@ func deckCheck(d config.Deck, old, in []config.DeckButton) ([]config.DeckButton,
 		// understand the rest, and an "open" button whose computer is off for now is not lost. It is
 		// compared as sent as well as tidied, so one saved with a field the form would not keep still
 		// counts as unchanged.
+		// One of the setup page's own is shown without its value (shownButton), and is unchanged sent back
+		// that way too.
 		b := tidyButton(sent)
-		if sent == was || b == was {
+		if sent == was || b == was || (setupOnly(was) && (sent == shownButton(was) || b == shownButton(was))) {
 			out[i] = was
 			continue
 		}
