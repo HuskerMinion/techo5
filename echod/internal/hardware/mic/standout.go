@@ -164,11 +164,12 @@ func (s *Source) Standout(d time.Duration) float64 {
 }
 
 // StandoutMean is how far, on average, the word in the last d stood out from this device's room, in dB
-// over its own floor, so mic gain and room noise do not count; zero while it is not being measured. It
-// is steadier than Standout, which one lucky block can move.
+// over its own floor, so mic gain and room noise do not count; NaN while it is not being measured, so a
+// claim says it has no mean rather than a mean of 0. It is steadier than Standout, which one lucky block
+// can move.
 func (s *Source) StandoutMean(d time.Duration) float64 {
 	if !s.standout.on.Load() {
-		return 0
+		return math.NaN()
 	}
 	_, mean := s.standout.over(d)
 	return mean

@@ -428,11 +428,13 @@ func (n *Nearest) Confirmed(slot int, at time.Time, clarity, mean float64, settl
 		func() { decide(false, true) })
 }
 
-// Asking is a wake this device was not sure of, being asked about now (#685), heard with clarity. The
+// Asking is a wake this device was not sure of, being asked about now (#685), heard with clarity and
+// mean, NaN when it was not measured. The claim carries the mean, so a device that sees an older one's
+// unsure claim, which has none, knows early to weigh the word by score alone (bestSince). The
 // others are told with an unsure claim, so one that heard it for sure but less well waits for Home
 // Assistant's answer; settled, run when the question ends, takes the claim back unless Home Assistant
 // heard the word (confirmed), when the claim Confirmed makes stands in for it. Nil when nobody is told.
-func (n *Nearest) Asking(slot int, clarity float64) (settled func(confirmed bool)) {
+func (n *Nearest) Asking(slot int, clarity, mean float64) (settled func(confirmed bool)) {
 	if !n.open() || !n.canAnswer(slot) {
 		return nil
 	}
@@ -442,7 +444,7 @@ func (n *Nearest) Asking(slot int, clarity float64) (settled func(confirmed bool
 	}
 	c := config.Get()
 	u := claim{From: c.Device.Name, Turn: newTurn(), Word: unsurePrefix + n.wakeWord(slot),
-		Score: clarity + float64(c.Nearest.Offset) + n.lead(true)}
+		Score: clarity + float64(c.Nearest.Offset) + n.lead(true), Mean: finite(mean)}
 	n.tell(peers, u)
 	return func(confirmed bool) {
 		if confirmed {
@@ -705,13 +707,17 @@ func (n *Nearest) lead(wake bool) float64 {
 }
 
 // bestSince is the best claim from another device since from, and whether it beats mine. Called with
-// the lock held.
+// the lock held. The word is weighed by score alone (better) if any claim for it in the window has no
+// mean, an unsure one included: a device on an older release sends its confirmed claim late, after some
+// devices have decided, but its unsure claim early, so every device sees it in time and none switches
+// order partway through.
 func (n *Nearest) bestSince(from time.Time, mine claim) (arrived, bool) {
 	var best arrived
 	found := false
 	measured := mine.Mean != nil
+	unsure := unsurePrefix + mine.Word
 	for _, a := range n.others {
-		if !a.at.Before(from) && a.Word == mine.Word {
+		if !a.at.Before(from) && (a.Word == mine.Word || a.Word == unsure) {
 			measured = measured && a.Mean != nil
 		}
 	}

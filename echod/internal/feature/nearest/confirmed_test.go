@@ -1,6 +1,7 @@
 package nearest
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -106,5 +107,19 @@ func TestAConfirmedWakeAnsweredAtOnceTakesBackItsUnsureClaim(t *testing.T) {
 	}
 	if took == nil || *took {
 		t.Fatalf("the unsure claim was not taken back: settled %v", took)
+	}
+}
+
+// A confirmed wake's claim carries the mean measured at the candidate, and none when nothing measured it.
+func TestAConfirmedWakeSendsItsMean(t *testing.T) {
+	h := newHouse(t)
+	h.n.Confirmed(0, h.now, 11, 7, nil, func(bool, bool) {})
+	if len(h.sent) != 1 || h.sent[0].Mean == nil || *h.sent[0].Mean != 7 {
+		t.Fatalf("claims sent: %+v, want one with mean 7", h.sent)
+	}
+	h = newHouse(t)
+	h.n.Confirmed(0, h.now, 11, math.NaN(), nil, func(bool, bool) {})
+	if len(h.sent) != 1 || h.sent[0].Mean != nil {
+		t.Fatalf("claims sent: %+v, want one with no mean", h.sent)
 	}
 }

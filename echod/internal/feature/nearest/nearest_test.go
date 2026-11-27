@@ -244,7 +244,7 @@ func TestATieGoesToTheNameThatSortsFirst(t *testing.T) {
 func TestTheMeanBreaksANearTie(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	order := []claim{
-		{From: "e", Score: 20, Mean: f(1)},   // more than 1 dB ahead beats a higher mean
+		{From: "e", Score: 20, Mean: f(1)},   // ahead once rounded to the dB beats a higher mean
 		{From: "d", Score: 9.6, Mean: f(8)},  // rounded to the same dB, the mean decides
 		{From: "c", Score: 10.4, Mean: f(5)}, // then the exact score
 		{From: "a", Score: 10, Mean: f(5)},   // then the name
@@ -774,5 +774,38 @@ func TestALateConfirmedClaimDoesNotSplitTheOrder(t *testing.T) {
 	}
 	if len(winners) != 1 || winners[0] != "B, after it" {
 		t.Fatalf("devices that answer: %v, want only B", winners)
+	}
+}
+
+// U runs an older release: its unsure claim comes early with no mean, its confirmed one late. A decides
+// before the confirmed claim arrives and B after, but both have seen the unsure one, so both weigh the
+// word by score alone, as U does, and only A answers.
+func TestAnOlderDevicesUnsureClaimKeepsTheOrder(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	at := time.Unix(1000, 0)
+	a := claim{From: "A", Word: "nora", Score: 10.4, Mean: f(5)}
+	b := claim{From: "B", Word: "nora", Score: 9.6, Mean: f(8)}
+	unsure := claim{From: "U", Word: unsurePrefix + "nora", Score: 9.8}
+	u := claim{From: "U", Word: "nora", Score: 9.8}
+	views := map[string]struct {
+		mine   claim
+		others []claim
+	}{
+		"A, before U's confirmed claim": {a, []claim{unsure, b}},
+		"B, after it":                   {b, []claim{unsure, a, u}},
+		"U":                             {u, []claim{a, b}},
+	}
+	var winners []string
+	for name, v := range views {
+		n := &Nearest{}
+		for _, c := range v.others {
+			n.others = append(n.others, arrived{claim: c, at: at})
+		}
+		if _, beaten := n.bestSince(at.Add(-time.Second), v.mine); !beaten {
+			winners = append(winners, name)
+		}
+	}
+	if len(winners) != 1 || winners[0] != "A, before U's confirmed claim" {
+		t.Fatalf("devices that answer: %v, want only A", winners)
 	}
 }

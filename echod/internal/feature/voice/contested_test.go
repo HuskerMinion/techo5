@@ -172,7 +172,7 @@ func TestAFaintWakeIsNotClaimedAgain(t *testing.T) {
 func withAsking(t *testing.T) *[]bool {
 	t.Helper()
 	var settled []bool
-	SetAskingClaim(func(int, float64) func(bool) {
+	SetAskingClaim(func(int, float64, float64) func(bool) {
 		return func(confirmed bool) { settled = append(settled, confirmed) }
 	})
 	t.Cleanup(func() { askingClaim.Store(nil) })
@@ -221,7 +221,7 @@ func TestAHeardCandidateWithNoDecisionTakesItsClaimBack(t *testing.T) {
 func TestAnEarlyUnsureClaimIsTheQuestionsOwn(t *testing.T) {
 	var made int
 	var settled []bool
-	SetAskingClaim(func(int, float64) func(bool) {
+	SetAskingClaim(func(int, float64, float64) func(bool) {
 		made++
 		return func(confirmed bool) { settled = append(settled, confirmed) }
 	})

@@ -3,6 +3,7 @@ package voice
 import (
 	"context"
 	"log/slog"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -126,7 +127,8 @@ type watching struct {
 
 	// peak is what the device's own engine scored the wake that is being confirmed, and clarity and mean
 	// how clearly the microphones heard it stand out then, at its peak and on average, for the
-	// nearest-device decision once Home Assistant has heard it too (#685).
+	// nearest-device decision once Home Assistant has heard it too (#685). mean is NaN when it was not
+	// measured.
 	peak    float64
 	clarity float64
 	mean    float64
@@ -188,10 +190,11 @@ func SetConfirmedContest(f func(slot int, at time.Time, clarity, mean float64, s
 // The unsure claim for a wake being asked about (#685): feature/nearest sets it, and tells the other
 // devices, so one that heard the word for sure but less well waits on Home Assistant's answer. What it
 // returns is run once the question ends, with whether Home Assistant heard the word; nil for no claim.
-var askingClaim atomic.Pointer[func(slot int, clarity float64) func(confirmed bool)]
+// mean is the claim's mean standout, NaN when it was not measured.
+var askingClaim atomic.Pointer[func(slot int, clarity, mean float64) func(confirmed bool)]
 
 // SetAskingClaim is feature/nearest telling the others of a wake being asked about.
-func SetAskingClaim(f func(slot int, clarity float64) func(confirmed bool)) {
+func SetAskingClaim(f func(slot int, clarity, mean float64) func(confirmed bool)) {
 	askingClaim.Store(&f)
 }
 
@@ -218,11 +221,11 @@ func (c *conversation) claimEarly(slot int) {
 	if f == nil || c.early != nil || !c.mayConfirm(slot) {
 		return
 	}
-	clarity, mean := 0.0, 0.0
+	clarity, mean := 0.0, math.NaN()
 	if c.source != nil {
 		clarity, mean = c.source.Standout(claimSpan), c.source.StandoutMean(claimSpan)
 	}
-	if settled := (*f)(slot, clarity); settled != nil {
+	if settled := (*f)(slot, clarity, mean); settled != nil {
 		c.early = &earlyClaim{slot: slot, at: c.now(), clarity: clarity, mean: mean, settled: settled}
 	}
 }
@@ -609,11 +612,12 @@ func (c *conversation) confirm(slot int, peak float64) {
 		c.watch.clarity, c.watch.mean, c.watch.settled = e.clarity, e.mean, e.settled
 		return
 	}
+	c.watch.mean = math.NaN()
 	if c.source != nil {
 		c.watch.clarity, c.watch.mean = c.source.Standout(claimSpan), c.source.StandoutMean(claimSpan)
 	}
 	if f := askingClaim.Load(); f != nil {
-		c.watch.settled = (*f)(slot, c.watch.clarity)
+		c.watch.settled = (*f)(slot, c.watch.clarity, c.watch.mean)
 	}
 }
 
