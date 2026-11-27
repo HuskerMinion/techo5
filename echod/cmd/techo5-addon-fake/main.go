@@ -2,8 +2,9 @@
 // it serves an add-on's socket with the daemon's own server (pkg/addonapi/serve), so the framing, the
 // peer check, the limits and every capability's refusal are the device's, and logs what each request
 // would have done instead of doing it. From the keyboard it sends the add-on what a device would: a
-// command from Home Assistant, a button press, a timer ringing, new settings, a settings test, and what
-// the media it started is doing (media.state).
+// command from Home Assistant, a button press, a timer ringing, new settings, a settings test, what
+// the media it started is doing (media.state), and taps, swipes and the back gesture on its page and
+// card. Its scenes are checked as the device checks them, and said in the log.
 //
 //	techo5-addon-fake -manifest addon.json [-settings values.json] [-socket path] [-- program args...]
 //
@@ -92,6 +93,10 @@ func run(manifest, values, socket, family string, program []string, in io.Reader
 		d.say("request %s %s: %s", req.Op, string(req.Args), result)
 	}
 	d.srv = s
+	// A dot has no screen, and refuses the screen's ops as a device does.
+	if family != "dot" {
+		s.SetScreen(fakeScreen{d: d})
+	}
 	path, err := s.Open(serve.Grant{ID: m.ID, UID: uid, Caps: m.Capabilities, Commands: m.Commands, Entities: m.Entities,
 		Settings: m.Settings, Files: m.Files, BinDir: filepath.Dir(manifest)})
 	if err != nil {
@@ -419,6 +424,12 @@ const help = `the keyboard's commands:
   media STATE [SECONDS] the add-on's media is playing, paused or buffering (at SECONDS in), as media.state says
   media duration SECONDS the add-on's media says how long it is
   media REASON          the add-on's media ends: ended, device (the Stop button), replaced (other media), error
+  touch ID [page|card]  tap the button or chip of this id on the page (or the card) in view
+  swipe left|right      swipe across the page in view
+  back                  the back gesture on the page in view
+  shown page|card on|off the page or the card comes into view, or goes (a ring covering it, say)
+  dismiss               swipe the card away
+  scene [page|card]     print the page's (or the card's) scene as it is now
   quit                  stop serving`
 
 // keyboard reads what to send the add-on, a line at a time.
@@ -498,6 +509,8 @@ func (d *fake) keyboard(in io.Reader, m catalog.Manifest) error {
 			}
 		case "media":
 			d.mediaKeys(rest)
+		case "touch", "swipe", "back", "shown", "dismiss", "scene":
+			d.screenKeys(verb, rest)
 		case "stop":
 			d.mu.Lock()
 			var rung []addonapi.TimerEvent

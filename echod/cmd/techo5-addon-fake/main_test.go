@@ -177,3 +177,102 @@ func TestTheFakeSimulatesMediaState(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// fakeWith runs the fake for a manifest of these capabilities and family, and connects to it.
+func fakeWith(t *testing.T, caps, family string) (*addonapi.Client, *io.PipeWriter, *syncBuffer, chan error) {
+	t.Helper()
+	if os.Getuid() == 0 {
+		t.Skip("the API refuses root")
+	}
+	dir, err := os.MkdirTemp("", "afake")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	man := filepath.Join(dir, "addon.json")
+	if err := os.WriteFile(man, []byte(`{"id":"meals","version":"0.1.0","command":["meals"],"ports":[],"root":false,
+	 "memory_mb":10,"api":1,"capabilities":[`+caps+`]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in, keys := io.Pipe()
+	out := &syncBuffer{}
+	done := make(chan error, 1)
+	go func() { done <- run(man, "", filepath.Join(dir, "run"), family, nil, in, out) }()
+	waitFor(t, out, "export TECHO5_ADDON_API=")
+	path := regexp.MustCompile(`TECHO5_ADDON_API=(\S+)`).FindStringSubmatch(out.String())[1]
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, err := addonapi.Dial(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c, keys, out, done
+}
+
+// The fake takes an add-on's scenes as a device does, says them in its log, brings the page up when
+// asked, and sends taps, swipes and the back gesture from the keyboard.
+func TestTheFakeTakesScenes(t *testing.T) {
+	c, keys, out, done := fakeWith(t, `"screen"`, "show")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ev := c.WatchScreen()
+	page := addonapi.Column(addonapi.Title("Stir"), addonapi.Button("next", "Next", "mdi:arrow-right"))
+	if err := c.SetScene(ctx, addonapi.OnPage, page); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "the page is now 3 blocks")
+	if err := c.Call(ctx, addonapi.OpSceneSet, addonapi.SceneSet{On: addonapi.OnPage, Scene: addonapi.Block{Type: "webview"}}, nil); addonapi.CodeOf(err) != addonapi.CodeBadRequest {
+		t.Errorf("a scene the device would refuse: %v", err)
+	}
+	if err := c.OpenScreen(ctx); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, out, "brings the page up")
+	want := func(name string) addonapi.ScreenEvent {
+		t.Helper()
+		select {
+		case e := <-ev:
+			if e.Event != name {
+				t.Fatalf("%+v, not %s", e, name)
+			}
+			return e
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no %s", name)
+		}
+		return addonapi.ScreenEvent{}
+	}
+	if e := want(addonapi.EventScreenState); !e.State.Shown {
+		t.Errorf("%+v", e)
+	}
+	_, _ = io.WriteString(keys, "touch next\n")
+	if e := want(addonapi.EventTouch); e.Touch.ID != "next" {
+		t.Errorf("%+v", e)
+	}
+	_, _ = io.WriteString(keys, "swipe right\n")
+	if e := want(addonapi.EventSwipe); e.Swipe.Direction != addonapi.SwipeRight {
+		t.Errorf("%+v", e)
+	}
+	_, _ = io.WriteString(keys, "back\n")
+	want(addonapi.EventBack)
+	_, _ = io.WriteString(keys, "scene page\n")
+	waitFor(t, out, `"label":"Next"`)
+	_, _ = io.WriteString(keys, "quit\n")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A dot has no screen, and refuses the screen's ops as a device does.
+func TestTheFakeDotHasNoScreen(t *testing.T) {
+	c, keys, _, done := fakeWith(t, `"screen"`, "dot")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.SetScene(ctx, addonapi.OnPage, addonapi.Text("x")); addonapi.CodeOf(err) != addonapi.CodeUnavailable {
+		t.Errorf("a scene on a dot: %v", err)
+	}
+	_, _ = io.WriteString(keys, "quit\n")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
