@@ -347,13 +347,23 @@ func TestADeclinedAddressIsTurnedAwayWithoutAsking(t *testing.T) {
 	if begins() != 1 {
 		t.Fatalf("asked %d times, want once: a declined phone must not put the question up again", begins())
 	}
-	// Another address is asked as usual, and so is this one once the time is up.
-	connectFrom(t, "127.0.0.3", addr, "pairing-key", Hello{Name: "other"})
+	// Another address is asked as usual, and so is this one once the time is up. The place the last
+	// phone had is given back just after its refusal is sent, so one that comes at once can find it
+	// still taken: that is "busy", and it tries again.
+	untilNotBusy := func(ip, name string) {
+		t.Helper()
+		for end := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+			if _, w := connectFrom(t, ip, addr, "pairing-key", Hello{Name: name}); w.Reason != reasonBusy || time.Now().After(end) {
+				return
+			}
+		}
+	}
+	untilNotBusy("127.0.0.3", "other")
 	if begins() != 2 {
 		t.Fatalf("asked %d times, want another phone asked", begins())
 	}
 	time.Sleep(declineFor)
-	connectFrom(t, "127.0.0.2", addr, "pairing-key", Hello{Name: "guest"})
+	untilNotBusy("127.0.0.2", "guest")
 	if begins() != 3 {
 		t.Fatalf("asked %d times, want the address asked again after declineFor", begins())
 	}
