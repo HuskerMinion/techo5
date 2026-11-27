@@ -82,6 +82,16 @@ SSH), `recovery` (the device restarted itself to get out of a fault, such as no 
 (it was plugged in or the power came back), or `unknown` where the board can't tell. An alert on
 `watchdog` and `panic` catches the restarts nobody asked for.
 
+Three more come from the eMMC, the soldered flash that is the first part of an old Echo to wear out.
+**Flash life used** is the chip's own estimate of how much of its rated life is gone, in steps of ten
+percent: 30 means 20 to 30 percent used, and anything over 100 means past its rated life.
+**Flash spare blocks** is `Normal`, `Warning` (80 percent of the spare blocks used) or `Urgent`
+(90 percent). Both are read once at start, since the chip only reports them when the kernel finds it.
+**Flash data written** is what has been written to the flash since the device started, in MiB,
+updated every ten minutes. It starts again from zero at every boot, and Home Assistant's statistics
+count that as a new cycle, so a statistics graph or card set to a day shows the writes per day. An
+eMMC older than version 5.0 keeps no estimate, so on one of those only Flash data written is offered.
+
 ## Stop every device at once
 
 This script stops whatever every TECHO5 device is doing: a voice request and anything playing. It

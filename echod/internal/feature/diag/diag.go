@@ -56,6 +56,8 @@ type Diag struct {
 	cached *esphome.Sensor
 	free   *esphome.Sensor
 	purge  *esphome.Button
+	// flash is the eMMC's own report of its wear and what has been written to it since boot.
+	flash *flash
 
 	// restart is the daemon restarting on request: the way out of a state nothing else clears, without
 	// pulling the plug.
@@ -155,6 +157,7 @@ func (d *Diag) Entities() []esphome.Entity {
 	if _, ok := bootreason.Last(); ok {
 		out = append(out, d.bootReason)
 	}
+	out = append(out, d.flash.entities()...)
 	// An app on a tablet may not read /proc/stat; a sensor that could never have a value is left out.
 	if _, _, ok := (metrics.Reader{}).CPUTime(); ok {
 		out = append(out, d.cpu)
@@ -526,6 +529,8 @@ func (d *Diag) storage() {
 			update.Restart("restart button")
 		},
 	}
+
+	d.flash = newFlash(metrics.Reader{})
 }
 
 // radio builds what the wireless side reports: the link, what it carries, and what the Bluetooth
@@ -793,6 +798,7 @@ func (d *Diag) Sample() {
 	d.address()
 	d.wireless()
 	d.room()
+	d.flash.sample(time.Now())
 }
 
 // room is what the level the ring can react to is reading, and the room's floor under it.
