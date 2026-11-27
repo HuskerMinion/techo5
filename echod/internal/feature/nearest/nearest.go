@@ -3,7 +3,18 @@
 // Home Assistant keeps whichever device reaches it first and refuses the rest, which is the fastest
 // device rather than the one somebody spoke to. With this on, a device that hears its wake word tells the
 // others how well it heard it, waits a moment to hear from them, and only opens its turn if none of them
-// heard it better. The others go back to listening without a sound.
+// heard it better. The others go back to listening.
+//
+// The wake sound does not wait for that (#727). A device that heard the word for sure and clearly chimes
+// the moment it hears it, as it would with nobody to ask, and then takes part as before: the one that
+// answers opens its turn without a second sound, and the others do nothing more, with no turn, nothing
+// sent to Home Assistant and nothing on the screen or the ring. Two devices that both heard the word
+// both chime, and that is the price of not making everybody wait for the decision; the sound of one
+// that does not answer can be heard near the start of the request the other sends. A wake word that may
+// still not open anything chimes only once it does, as before: one this device was not sure of (asked
+// about), one heard faintly (asked about if it wins), one said over this device's own reply, and one
+// held for a command word. So do a device on an older release and a wake word over a ringing alarm or
+// timer (voice's ChimeNow); a slot that calls a contact makes no wake sound at all.
 //
 // How well is how far the word stood out from the device's own room (hardware/mic's Standout), plus an
 // offset of the device's own for hardware that hears louder or quieter than the rest.
@@ -135,6 +146,10 @@ type pending struct {
 	// held is when this claim began waiting on an unsure one that beat it, zero while it has not.
 	held time.Time
 
+	// chimed is when the wake sound played as the word was heard (#727), zero when it did not: the
+	// turn that opens here then plays none of its own.
+	chimed time.Time
+
 	// lost runs when another device has the word instead (Confirmed): beaten, already answered, or a
 	// newer claim of this device's own took this one's place. Nil for a wake word heard here, which
 	// simply does not open.
@@ -150,9 +165,13 @@ type Nearest struct {
 	// The device, replaced in tests: which wakes open a turn, whether one could, how well this device
 	// heard the word, whether it hears at all, the others, how a claim reaches them, and the clock.
 	// wokeClear is woke for a wake this device won against the others, with how clearly it heard it
-	// (pending.clarity), which the turn's event reports (#727); woke is for one nothing measured.
+	// (pending.clarity), which the turn's event reports (#727), and when its wake sound played if that
+	// was as it was heard (chime), zero if the turn is to play it; woke is for one nothing measured.
 	woke      func(slot int, at time.Time)
-	wokeClear func(slot int, at time.Time, clarity float64)
+	wokeClear func(slot int, at time.Time, clarity float64, chimed time.Time)
+	// chime plays the wake sound for a wake word as it is heard, ahead of the decision, and says when,
+	// zero when it did not (voice's ChimeNow, #727).
+	chime     func(slot int) time.Time
 	wokeNow   func(slot int)
 	faint     func(slot int, at time.Time, clarity float64) // a faint win (won): asked about first, else wokeClear's (#503)
 	busy      func() bool
@@ -218,9 +237,12 @@ func build() *Nearest {
 			Min: config.MinNearestOffset, Max: config.MaxNearestOffset, Step: 1, Unit: "dB",
 			Mode: esphome.NumberBox,
 		},
-		woke:      func(slot int, at time.Time) { voice.Get().WokeAt(slot, at) },
-		wokeNow:   func(slot int) { voice.Get().Woke(slot) },
-		wokeClear: func(slot int, at time.Time, clarity float64) { voice.Get().WokeClear(slot, at, clarity) },
+		woke:    func(slot int, at time.Time) { voice.Get().WokeAt(slot, at) },
+		wokeNow: func(slot int) { voice.Get().Woke(slot) },
+		wokeClear: func(slot int, at time.Time, clarity float64, chimed time.Time) {
+			voice.Get().WokeChimed(slot, at, clarity, chimed)
+		},
+		chime:     func(slot int) time.Time { return voice.Get().ChimeNow(slot) },
 		faint:     func(slot int, at time.Time, clarity float64) { voice.Get().WokeFaint(slot, at, clarity) },
 		busy:      func() bool { return voice.Get().Busy() },
 		cancel:    func() { voice.Get().Cancel() },
@@ -340,16 +362,41 @@ func hearing(peers []announce.Peer) []announce.Peer {
 // Woke is a wake word heard here, in place of voice's Woke. It opens the turn at once unless this device
 // takes part, could answer, and has somebody to ask who could hear it too; otherwise it claims the word, and opens the turn
 // after the window only if no device claimed it better or had already answered it.
+//
+// Claimed, it chimes at once (#727), unless it was said over a turn of this device's own (over), whose
+// claim leads and whose sound would land on the reply, or it was heard faintly (chimeAtOnce).
 func (n *Nearest) Woke(slot int) {
 	over := n.busy()
 	var lost func()
 	if over && n.claimsOver(true) {
 		lost = n.cutOff
 	}
+	var early func(clarity float64) time.Time
+	if !over {
+		early = func(clarity float64) time.Time { return n.chimeAtOnce(slot, clarity) }
+	}
 	n.contend(n.wakeWord(slot), n.now(), true,
 		func() bool { return n.canAnswer(slot) },
-		func(at time.Time, score float64) { n.wonOver(over, slot, at, score) },
-		func() { n.wokeNow(slot) }, lost)
+		func(at time.Time, score float64, chimed time.Time) { n.wonOver(over, slot, at, score, chimed) },
+		func() { n.wokeNow(slot) }, lost, early)
+}
+
+// chimeAtOnce plays the wake sound for a wake word in slot that this device has just claimed, heard with
+// clarity, and says when, zero when it did not (#727). A faint one is not chimed for: if it wins, Home
+// Assistant is asked whether it heard the word too before anything sounds (won), and if it does not,
+// nothing ever does. What the voice feature leaves out is ChimeNow's.
+func (n *Nearest) chimeAtOnce(slot int, clarity float64) time.Time {
+	if n.chime == nil || isFaint(slot, clarity) {
+		return time.Time{}
+	}
+	return n.chime(slot)
+}
+
+// isFaint is whether a wake word in slot, heard with clarity, is asked about before it opens if this
+// device wins it (#503): under Confirm below nearest-device score, for the first wake word only.
+func isFaint(slot int, clarity float64) bool {
+	below := config.Get().Wake.OnHA.FaintBelow()
+	return below > 0 && slot == 0 && clarity < below
 }
 
 // cutOff is a wake word said over this device's own reply that another device heard clearly better
@@ -376,10 +423,14 @@ func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
 	if over && n.claimsOver(true) {
 		lost = func() { gate(n.cutOff) }
 	}
+	// No sound before the gate: the command word may yet be what was said, and then nothing opens. The
+	// turn chimes as it opens, as it always has.
 	n.contend(n.wakeWord(slot), at, true,
 		func() bool { return n.canAnswer(slot) },
-		func(at time.Time, score float64) { gate(func() { n.wonOver(over, slot, at, score) }) },
-		func() { gate(func() { n.woke(slot, at) }) }, lost)
+		func(at time.Time, score float64, _ time.Time) {
+			gate(func() { n.wonOver(over, slot, at, score, time.Time{}) })
+		},
+		func() { gate(func() { n.woke(slot, at) }) }, lost, nil)
 }
 
 // won is a wake word this device won, having heard it with score (pending.clarity). One under Confirm below
@@ -387,24 +438,27 @@ func (n *Nearest) WokeGated(slot int, at time.Time, gate func(open func())) {
 // model as somebody at the device, and far lower on how clearly it stood out here, while a person in
 // another room scores low here too, so it is asked about rather than dropped. Only the first wake word's:
 // Home Assistant is asked about that one alone. A word with nobody to compare with never gets here.
-func (n *Nearest) won(slot int, at time.Time, score float64) {
-	if below := config.Get().Wake.OnHA.FaintBelow(); below > 0 && slot == 0 && score < below {
-		slog.Info("nearest device: heard it faintly, asking home assistant", "score", round(score), "below", below)
+// chimed is when its wake sound played as it was heard, zero if it did not: never for a faint one
+// (chimeAtOnce).
+func (n *Nearest) won(slot int, at time.Time, score float64, chimed time.Time) {
+	if isFaint(slot, score) {
+		slog.Info("nearest device: heard it faintly, asking home assistant", "score", round(score),
+			"below", config.Get().Wake.OnHA.FaintBelow())
 		n.faint(slot, at, score)
 		return
 	}
-	n.wokeClear(slot, at, score)
+	n.wokeClear(slot, at, score, chimed)
 }
 
 // wonOver is won for a wake word claimed over a turn of this device's own (over: busy when it was
 // heard), which is never asked about: how clearly it stood out was measured over this device's own
-// reply, and a wake word that interrupts one has always opened at once.
-func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64) {
+// reply, and a wake word that interrupts one has always opened at once. Nor did it chime as it was heard.
+func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64, chimed time.Time) {
 	if over {
-		n.wokeClear(slot, at, score)
+		n.wokeClear(slot, at, score, time.Time{})
 		return
 	}
-	n.won(slot, at, score)
+	n.won(slot, at, score, chimed)
 }
 
 // Confirmed is a wake this device was not sure of that Home Assistant then heard too (#685), heard at at
@@ -416,7 +470,7 @@ func (n *Nearest) wonOver(over bool, slot int, at time.Time, score float64) {
 func (n *Nearest) Confirmed(slot int, at time.Time, clarity, mean float64, settled func(confirmed bool), decide func(answer, claimed bool)) {
 	n.contendHeard(n.wakeWord(slot), at, clarity, finite(mean), true,
 		func() bool { return n.canAnswer(slot) },
-		func(time.Time, float64) { decide(true, true) },
+		func(time.Time, float64, time.Time) { decide(true, true) },
 		func() {
 			// Answered without a claim for the word (busy, unable, nobody to ask): the unsure claim
 			// is taken back, or a device that heard it for sure would wait unsureFor on it for nothing.
@@ -425,7 +479,7 @@ func (n *Nearest) Confirmed(slot int, at time.Time, clarity, mean float64, settl
 			}
 			decide(true, false)
 		},
-		func() { decide(false, true) })
+		func() { decide(false, true) }, nil)
 }
 
 // Asking is a wake this device was not sure of, being asked about now (#685), heard with clarity and
@@ -461,20 +515,21 @@ func (n *Nearest) Asking(slot int, clarity, mean float64) (settled func(confirme
 // after the window, and the others hear nothing of it. Word names what was said, so it is not taken for
 // a wake word or for another word.
 func (n *Nearest) Answer(word string, can func() bool, act func()) {
-	n.contend(word, n.now(), false, can, func(time.Time, float64) { act() }, act, nil)
+	n.contend(word, n.now(), false, can, func(time.Time, float64, time.Time) { act() }, act, nil, nil)
 }
 
 // contend is the claim every word goes through; wake is whether it is a wake word. open runs after the
 // window, with the time the word was heard and this device's score for it, if this device is the
 // nearest; now runs in its place when there is nobody to ask. A turn that is already open is not
 // claimed over, but for a wake word that takes it over (claimsOver). lost, if not nil, runs when another
-// device has the word instead.
-func (n *Nearest) contend(word string, at time.Time, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
+// device has the word instead. early, if not nil, plays the wake sound once the word is claimed and says
+// when (#727), which open is then given; open's third argument is zero otherwise.
+func (n *Nearest) contend(word string, at time.Time, wake bool, can func() bool, open func(time.Time, float64, time.Time), now, lost func(), early func(clarity float64) time.Time) {
 	if n.passes(wake, can) {
 		now()
 		return
 	}
-	n.contendHeard(word, at, n.score(), n.measured(wake), wake, can, open, now, lost)
+	n.contendHeard(word, at, n.score(), n.measured(wake), wake, can, open, now, lost, early)
 }
 
 // measured is this device's mean standout for a wake word's claim, or nil for any other word or when it is
@@ -566,8 +621,8 @@ func (n *Nearest) claimsOver(wake bool) bool {
 
 // contendHeard is contend with how clearly this device heard the word already measured, and its mean
 // standout, nil when it was not measured; lost, if not nil, runs when another device
-// has it instead.
-func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, mean *float64, wake bool, can func() bool, open func(time.Time, float64), now, lost func()) {
+// has it instead, and early, if not nil, chimes as the word is claimed.
+func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, mean *float64, wake bool, can func() bool, open func(time.Time, float64, time.Time), now, lost func(), early func(clarity float64) time.Time) {
 	if n.passes(wake, can) {
 		now()
 		return
@@ -598,12 +653,33 @@ func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, mean 
 		lost:    lost,
 	}
 	n.mu.Lock()
+	prev := n.mine
 	n.mine = mine
 	n.skipped = ""
 	n.mu.Unlock()
 
 	n.fanout(peers, mine)
+	// The sound goes as the claim does (#727), but not for a repeat: a detector can fire again on the
+	// same words a second or two later (#661), and a device that lost the first, which has no turn to
+	// ignore it with, would chime again for nothing. It is claimed all the same, as before.
+	if early != nil && !repeats(prev, word, at) {
+		chimed := early(clarity)
+		n.mu.Lock()
+		mine.chimed = chimed
+		n.mu.Unlock()
+	}
 	n.after(window, func() { n.decide(word, mine, can, open) })
+}
+
+// repeats is whether a word heard at at is the same one as prev, this device's last claim: the same
+// word, within kept of it. A turn that claim opened here may have ended by then, quickly canceled, and
+// the word then opens its turn with its own sound, as before. Called without the lock: prev's word and
+// time never change once it is made.
+func repeats(prev *pending, word string, at time.Time) bool {
+	if prev == nil || prev.Word != word {
+		return false
+	}
+	return at.Sub(prev.at) < kept
 }
 
 // decide is the end of the window: the turn opens unless a claim heard since a window before the word
@@ -612,12 +688,15 @@ func (n *Nearest) contendHeard(word string, at time.Time, clarity float64, mean 
 // Whether this device can still answer is asked again here: the window is long enough for Home Assistant
 // to go, or a call to start. One that cannot does not claim the word as answered, so a later device that
 // can is not told to stand down for it, and it is passed on all the same, to say so in the usual way.
-func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(time.Time, float64)) {
+func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(time.Time, float64, time.Time)) {
+	n.mu.Lock()
+	chimed := mine.chimed
+	n.mu.Unlock()
 	defer func() {
 		// Whatever went wrong here, the wake word is still somebody talking to a device.
 		if r := recover(); r != nil {
 			slog.Error("nearest device: deciding failed, answering", "panic", r)
-			open(mine.at, mine.clarity)
+			open(mine.at, mine.clarity, chimed)
 		}
 	}()
 
@@ -667,23 +746,25 @@ func (n *Nearest) decide(word string, mine *pending, can func() bool, open func(
 
 	switch {
 	case elsewhere:
-		slog.Info("nearest device: another had already answered", "word", word, "score", round(mine.Score))
+		slog.Info("nearest device: another had already answered", "word", word, "score", round(mine.Score),
+			"chimed_early", !chimed.IsZero())
 		if mine.lost != nil {
 			mine.lost()
 		}
 	case beaten:
 		slog.Info("nearest device: another heard it better", "word", word, "mine", round(mine.Score),
-			"theirs", round(best.Score), "by", best.From)
+			"theirs", round(best.Score), "by", best.From, "chimed_early", !chimed.IsZero())
 		if mine.lost != nil {
 			mine.lost()
 		}
 	case !able:
 		slog.Info("nearest device: could not answer after all, passing it on", "word", word)
-		open(mine.at, mine.clarity)
+		open(mine.at, mine.clarity, chimed)
 	default:
 		slog.Info("nearest device: answering", "word", word, "score", round(mine.Score), "clarity", round(mine.clarity),
-			"waited", now.Sub(mine.at).Round(time.Millisecond), "held", !mine.held.IsZero(), "peers", mine.peers)
-		open(mine.at, mine.clarity)
+			"waited", now.Sub(mine.at).Round(time.Millisecond), "held", !mine.held.IsZero(), "peers", mine.peers,
+			"chimed_early", !chimed.IsZero())
+		open(mine.at, mine.clarity, chimed)
 	}
 }
 

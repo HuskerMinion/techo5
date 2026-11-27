@@ -48,7 +48,7 @@ func TestAWeighedWakeGivesItsTurnItsClarity(t *testing.T) {
 func TestWokeClearCarriesTheClarity(t *testing.T) {
 	c := newConversation(&esphome.VoiceSatellite{})
 	at := time.Now().Add(-300 * time.Millisecond)
-	c.wokeAt(0, at, wakeClarity{dB: 9.4, measured: true})
+	c.wokeAt(0, at, wakeClarity{dB: 9.4, measured: true}, time.Time{})
 	if e := <-c.events; e.kind != evStart || !e.woke || e.clarity != (wakeClarity{dB: 9.4, measured: true}) {
 		t.Fatalf("posted %+v", e)
 	}

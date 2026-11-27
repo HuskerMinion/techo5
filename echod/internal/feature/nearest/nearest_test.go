@@ -28,8 +28,14 @@ type house struct {
 	later  []func()
 	opened []time.Time
 	faint  []time.Time
-	// clarity is what each turn opened by wokeClear was told the wake was heard with.
-	clarity []float64
+	// clarity is what each turn opened by wokeClear was told the wake was heard with, and chimedAt when
+	// its sound had played (zero: the turn plays it).
+	clarity  []float64
+	chimedAt []time.Time
+	// chimes is the wake sounds played as the word was heard (#727), by slot; noChime makes chime play
+	// none, as the voice feature does over a ring, a call slot or a muted microphone.
+	chimes  []int
+	noChime bool
 	at0     int
 	sent    []claim
 	mine    *pending
@@ -63,9 +69,17 @@ func newHouse(t *testing.T) *house {
 	n.after = func(_ time.Duration, f func()) { h.later = append(h.later, f) }
 	n.woke = func(_ int, at time.Time) { h.opened = append(h.opened, at) }
 	n.wokeNow = func(int) { h.at0++ }
-	n.wokeClear = func(_ int, at time.Time, clarity float64) {
+	n.wokeClear = func(_ int, at time.Time, clarity float64, chimed time.Time) {
 		h.opened = append(h.opened, at)
 		h.clarity = append(h.clarity, clarity)
+		h.chimedAt = append(h.chimedAt, chimed)
+	}
+	n.chime = func(slot int) time.Time {
+		if h.noChime {
+			return time.Time{}
+		}
+		h.chimes = append(h.chimes, slot)
+		return h.now
 	}
 	n.faint = func(_ int, at time.Time, _ float64) { h.faint = append(h.faint, at) }
 	h.n = n
@@ -377,7 +391,7 @@ func TestAPanicDecidingStillAnswers(t *testing.T) {
 	h := newHouse(t)
 	h.n.Woke(0)
 	answered := 0
-	h.n.wokeClear = func(int, time.Time, float64) {
+	h.n.wokeClear = func(int, time.Time, float64, time.Time) {
 		answered++
 		if answered == 1 {
 			panic("boom")

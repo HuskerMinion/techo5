@@ -34,6 +34,13 @@ func (s *sink) Audio(f []byte) error {
 // whether the device decided the speaker had finished.
 func run(t *testing.T, tone config.Tone, cancel bool, pre []int16, frames ...[]int16) (be *sink, ended bool) {
 	t.Helper()
+	return runWith(t, tone, cancel, -1, pre, frames...)
+}
+
+// runWith is run for a turn whose wake sound played chimed before the end of its history (#727),
+// negative for one that chimes as it opens.
+func runWith(t *testing.T, tone config.Tone, cancel bool, chimed time.Duration, pre []int16, frames ...[]int16) (be *sink, ended bool) {
+	t.Helper()
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
 	if err := config.Set().Wake(0).Tone(tone); err != nil {
 		t.Fatal(err)
@@ -48,7 +55,7 @@ func run(t *testing.T, tone config.Tone, cancel bool, pre []int16, frames ...[]i
 		ch <- f
 	}
 	close(ch)
-	c.pump(context.Background(), be, 0, false, false, holdsForTone(0, false), "turn", pre, ch)
+	c.pump(context.Background(), be, 0, false, false, holdsForTone(0, false), "turn", chimed, pre, ch)
 	for len(c.out) > 0 {
 		_ = (<-c.out)()
 	}

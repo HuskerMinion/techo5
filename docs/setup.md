@@ -2275,7 +2275,7 @@ What to know before turning them on:
 by default, and it does nothing until the devices share a house word). With two devices in earshot, Home Assistant answers whichever reaches it first,
 which is the faster one and not always the one you spoke to. With this on, a device that hears its
 wake word tells the others how clearly it heard it and waits a moment to hear from them, and only
-the one that heard it best answers. The others go back to listening without a sound. It is on on
+the one that heard it best answers. The others go back to listening. It is on on
 every device unless you turn it off; they need the same house word, set on each device's setup page,
 which signs what they tell each other so nothing else on the network can silence them. Make it a long
 phrase, 16 characters or more: anything on the network that hears the devices can try words until one
@@ -2283,6 +2283,17 @@ fits. The house word is case-sensitive: it has to match exactly, capitals includ
 announcements for having a different word, the setup page names it next to the house word for an
 hour, and the log says so.
 With the switch on and no house word, the setup page and the device's log say it is doing nothing.
+
+The wake sound doesn't wait for that. A device that heard its wake word for sure and clearly chimes the
+moment it hears it, as a device on its own does, and the devices decide while you go on talking. The
+one that answers opens its turn without a second sound; the others go quiet: nothing on their screen
+or ring, no ducked music, and nothing sent to Home Assistant. So two devices that both heard you both
+chime, and the chime of one that didn't answer may be heard faintly at the start of what the other
+sends. A wake that may not open anything still chimes only once it does, as before: one the device
+wasn't sure of, one heard faintly (Confirm below nearest-device score), one said over the device's own
+reply, and one held for a moment to see if a command word such as "next song" was meant. So does a
+wake word over a ringing alarm or timer, which silences the ring and then chimes, and a device on a
+release before this one.
 
 How clearly is how far the wake word stood out from that device's own room, so a device with hotter
 microphones or in a louder room does not win for that alone. Nothing you say during the wait is
@@ -2303,8 +2314,9 @@ waiting on a device asking home assistant". A device on a release before this on
 answers as it did before.
 
 **Nearest device window** (100 to 500 ms, 300 to start with) is how long a device waits to hear from
-the others. Every wake word waits this long. Raise it if two devices sometimes both answer, or a
-nearer one loses; lower it if the wait is noticeable. **Nearest device offset** (-30 to 30 dB, 0 to
+the others. Every wake word waits this long before its turn opens, though you hear its sound at once.
+Raise it if two devices sometimes both answer, or a nearer one loses; lower it if the wait is
+noticeable. **Nearest device offset** (-30 to 30 dB, 0 to
 start with) is added to how clearly this device heard you: raise it on a device that loses when you
 speak right beside it, lower it on one that answers from across the room. The log shows each
 device's score on every wake word. If the device that heard you best loses Home Assistant during the

@@ -274,7 +274,7 @@ func (v *Voice) HomeAssistant() bool { return v.vs.Subscribed() }
 // A wake word said over a ringing alarm or timer silences it first, the way a button press does:
 // whoever says it at a ringing alarm wants it quiet, and should not have to know the one word that
 // stops it. The turn goes on, over a quiet room, and "stop" in it ends the ring (see stopsRing).
-func (v *Voice) Start(slot int) { v.open(slot, false, time.Time{}, wakeClarity{}) }
+func (v *Voice) Start(slot int) { v.open(slot, false, time.Time{}, wakeClarity{}, time.Time{}) }
 
 // CancelRequest is the Cancel request button: it ends a request that is running, whichever
 // assistant it is for and whatever step it is at, as a tap on the action button ends one, and like
@@ -291,16 +291,49 @@ func (v *Voice) CancelRequest() {
 
 // Woke is Start for the wake word itself, which is the one way a turn can be opened by mistake: by a
 // sound that was not the word (see Mistaken).
-func (v *Voice) Woke(slot int) { v.open(slot, true, time.Time{}, wakeClarity{}) }
+func (v *Voice) Woke(slot int) { v.open(slot, true, time.Time{}, wakeClarity{}, time.Time{}) }
 
 // WokeAt is Woke for a wake word heard at at and acted on later, once the devices that heard it agreed
 // which answers (feature/nearest). The turn sends what was said in between, from the history.
-func (v *Voice) WokeAt(slot int, at time.Time) { v.open(slot, true, at, wakeClarity{}) }
+func (v *Voice) WokeAt(slot int, at time.Time) { v.open(slot, true, at, wakeClarity{}, time.Time{}) }
 
 // WokeClear is WokeAt for a wake word Nearest device weighed against the other devices, having heard it
 // stand out by dB here: the turn's event reports it (#727). A wake it did not weigh has no such reading.
 func (v *Voice) WokeClear(slot int, at time.Time, dB float64) {
-	v.open(slot, true, at, wakeClarity{dB: dB, measured: true})
+	v.WokeChimed(slot, at, dB, time.Time{})
+}
+
+// WokeChimed is WokeClear for a wake word whose sound ChimeNow played as it was heard, at chimed (#727):
+// the turn opens without a second one, and times what it sends from that one. Zero chimed is WokeClear.
+func (v *Voice) WokeChimed(slot int, at time.Time, dB float64, chimed time.Time) {
+	v.open(slot, true, at, wakeClarity{dB: dB, measured: true}, chimed)
+}
+
+// ChimeNow plays the wake sound for a wake word in slot heard just now, ahead of the turn it may open,
+// and reports when, zero when it did not (#727). Nearest device calls it as it claims the word, so the
+// person hears at once that they were heard while the devices decide which of them answers; the one that
+// answers opens its turn without another sound (WokeChimed), and the others say nothing more. Nothing but
+// the sound: the screen, the ring, the ducking and Home Assistant all wait for the turn, so a device that
+// does not answer never looks like it is listening.
+//
+// It plays only where the turn would have chimed the same way as it opened, and nothing about the sound
+// waits on the decision:
+//   - not while a turn of this device's own is running: a wake word over it is claimed with a lead and
+//     opens at once if it wins (feature/nearest), and the sound would land on the reply;
+//   - not while an alarm or timer rings: the wake word that wins silences the ring as its turn opens, as
+//     a wake word always has, and only then chimes. A sound over the ring would be lost in it, and on a
+//     device that does not answer, a ring going on after a chime says the word was heard and ignored;
+//   - not for a slot that calls a contact, which makes no wake sound; nor with the microphones taken or
+//     muted, where no turn opens; nor for a slot, or in quiet hours, with no sound at all.
+func (v *Voice) ChimeNow(slot int) time.Time {
+	if micTaken() || ring.IsSounding() || wakeCallApplies(slot) || v.turn.Busy() || !wakeword.Tones(slot, false) {
+		return time.Time{}
+	}
+	if muted, err := mute.Get().Muted(); err == nil && muted {
+		return time.Time{}
+	}
+	wakeChime(slot, false)
+	return time.Now()
 }
 
 // CanAnswer is whether a wake word in slot would open a turn here now: an assistant is there to take it
@@ -330,7 +363,7 @@ func (v *Voice) CanAnswer(slot int) bool {
 	return slot >= 0 && slot < len(v.ActiveWakeWords())
 }
 
-func (v *Voice) open(slot int, woke bool, at time.Time, heard wakeClarity) {
+func (v *Voice) open(slot int, woke bool, at time.Time, heard wakeClarity, chimed time.Time) {
 	if micTaken() {
 		slog.Info("wake word ignored: the microphones are taken", "by", heldBy())
 		return
@@ -350,7 +383,7 @@ func (v *Voice) open(slot int, woke bool, at time.Time, heard wakeClarity) {
 		if at.IsZero() {
 			v.turn.Woke(slot)
 		} else {
-			v.turn.wokeAt(slot, at, heard)
+			v.turn.wokeAt(slot, at, heard, chimed)
 		}
 		return
 	}

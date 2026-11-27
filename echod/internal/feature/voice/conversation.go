@@ -141,6 +141,10 @@ type event struct {
 	// clarity is how clearly Nearest device heard an evStart's or an evFaint's wake, when it measured.
 	clarity wakeClarity
 
+	// chimed is when an evStart's wake sound was played, as the word was heard and ahead of the turn
+	// (Voice.ChimeNow, #727); zero for a turn that chimes as it opens, as every other does.
+	chimed time.Time
+
 	// claimed is an evContested whose answer came of a claim, the wake's clarity weighed by the devices.
 	claimed bool
 
@@ -401,6 +405,11 @@ type nextTurn struct {
 	// clarity is how clearly Nearest device heard the wake that opened it, for the turn's event (#727).
 	clarity wakeClarity
 
+	// chimed is when its wake sound played, at the word and before the devices decided which answers
+	// (#727): the turn opens without a second one, and what it sends is timed from that one. Zero for
+	// a turn that chimes as it opens.
+	chimed time.Time
+
 	// rtResume is a realtime follow-up that keeps the session the last turn opened, rather than opening
 	// one of its own, so the provider still has the conversation (#487). idle keeps the session for it
 	// instead of closing it, and start reuses it rather than dialing.
@@ -631,7 +640,7 @@ func (c *conversation) turnEvent(e event) {
 		// A turn that could not open (no pipeline, the microphones on a camera call) leaves no answer
 		// to follow an announced question, so the question goes as a cut-off one does. One only put off
 		// (a wake word run or a mistaken turn still closing) opens in a moment: the question stays.
-		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited, clarity: e.clarity}) && c.pending == nil {
+		if !c.start(nextTurn{slot: e.slot, woke: e.woke, asked: e.asked, at: e.at, waited: e.waited, clarity: e.clarity, chimed: e.chimed}) && c.pending == nil {
 			c.dropQuestion()
 		}
 
@@ -1100,7 +1109,7 @@ func (c *conversation) start(n nextTurn) (started bool) {
 
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
-		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity}
+		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity, chimed: n.chimed}
 		c.turn.Cancels(activity.Interrupted)
 		c.idle("interrupted", activity.Canceled)
 
@@ -1133,7 +1142,9 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	}
 	if !c.be.Ready() {
 		slog.Warn("no voice pipeline ready, ignoring wake", "slot", slot+1, "backend", c.be.Name())
-		wakeword.Chime(slot, n.followUp)
+		if n.chimed.IsZero() {
+			wakeChime(slot, n.followUp)
+		}
 		why := FailedNoAssistant
 		if _, home := c.be.(ha); home {
 			why = FailedNotReady
@@ -1188,7 +1199,12 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	// A follow-up chimes like the wake word that started the conversation, unless the slot has been
 	// told a follow-up should be silent: the microphone is open again with nothing said to say so. It
 	// is not a wake, though, so it does not report a phrase nobody spoke.
-	wakeword.Chime(slot, n.followUp)
+	//
+	// A wake word that chimed as it was heard, while the devices decided which of them answers, has
+	// had its sound (#727): a second would be heard as a second turn, and would land on the request.
+	if n.chimed.IsZero() {
+		wakeChime(slot, n.followUp)
+	}
 	if !n.followUp {
 		c.log.Woke(phrase)
 	}
@@ -1245,10 +1261,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if n.woke && !n.at.IsZero() {
 		heard = time.Since(n.at)
 	}
-	c.startAudio(slot, n.followUp, hadAudio(n), historyFor(slot, n.followUp, n.confirmed, n.waited, heard))
+	c.startAudio(slot, n.followUp, hadAudio(n), historyFor(slot, n.followUp, n.confirmed, n.waited, heard), n.chimed)
 	// The phrase is logged for a follow-up too, because it is what chose the pipeline — not because
 	// anyone said it.
-	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued)
+	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued,
+		"chimed_early", !n.chimed.IsZero())
 	return true
 }
 
@@ -1712,12 +1729,17 @@ func (c *conversation) Woke(slot int) {
 }
 
 // WokeAt is Woke for a wake word heard at at and acted on now.
-func (c *conversation) WokeAt(slot int, at time.Time) { c.wokeAt(slot, at, wakeClarity{}) }
+func (c *conversation) WokeAt(slot int, at time.Time) { c.wokeAt(slot, at, wakeClarity{}, time.Time{}) }
 
-// wokeAt is WokeAt with how clearly Nearest device heard the word, if it measured.
-func (c *conversation) wokeAt(slot int, at time.Time, heard wakeClarity) {
-	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0), clarity: heard})
+// wokeAt is WokeAt with how clearly Nearest device heard the word, if it measured, and when its wake
+// sound played if that was as it was heard (chimed, #727), zero if the turn is to play it.
+func (c *conversation) wokeAt(slot int, at time.Time, heard wakeClarity, chimed time.Time) {
+	c.post(event{kind: evStart, slot: slot, woke: true, at: at, waited: max(time.Since(at), 0), clarity: heard,
+		chimed: chimed})
 }
+
+// wakeChime plays a turn's wake sound; a test stands in to count them.
+var wakeChime = wakeword.Chime
 
 // wakeClarity is how far a wake word stood out from the room here, in dB, as Nearest device measured it to
 // weigh the wake against the other devices (#727). measured is false for a wake it did not weigh, Nearest
@@ -1750,7 +1772,7 @@ func audioSettings() *api.VoiceAssistantAudioSettings {
 
 // startAudio begins sending microphone frames. The streamer only reads, so it needs no coordination
 // beyond being told to stop. continued is a run that has had the audio up to now already.
-func (c *conversation) startAudio(slot int, followUp, continued bool, history time.Duration) {
+func (c *conversation) startAudio(slot int, followUp, continued bool, history time.Duration, chimed time.Time) {
 	ctx, cancel := context.WithCancel(context.Background())
 	c.stopAudio = cancel
 
@@ -1766,7 +1788,7 @@ func (c *conversation) startAudio(slot int, followUp, continued bool, history ti
 	safe.Go("turn audio", func() {
 		defer streams.Done()
 		defer listened()
-		c.stream(ctx, be, slot, followUp, continued, id, history)
+		c.stream(ctx, be, slot, followUp, continued, id, history, chimed)
 	})
 }
 
@@ -1789,14 +1811,25 @@ func (c *conversation) stopStreaming() {
 // it was asked went to its wake word stage, not to speech-to-text, so the history is sent after all.
 func hadAudio(n nextTurn) bool { return n.continued && !n.confirmed }
 
-// stream sends microphone frames until it is told to stop.
-func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, history time.Duration) {
+// stream sends microphone frames until it is told to stop. chimed is when the wake sound played, for a
+// turn whose wake word chimed as it was heard (#727), zero for one that chimed as it opened.
+func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, history time.Duration, chimed time.Time) {
 	frames, pre, unlisten := c.source.ListenHistory("turn", history)
 	defer unlisten()
+	// The history ends now: how long before that the sound began places it in what is sent.
+	ago := time.Duration(-1)
+	if !chimed.IsZero() {
+		ago = max(time.Since(chimed), 0)
+	}
 	hold := holdsForTone(slot, followUp)
-	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
-	c.pump(ctx, be, slot, followUp, continued, hold, id, pre, frames)
+	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate,
+		"chimed_ms_ago", ago.Milliseconds())
+	c.pump(ctx, be, slot, followUp, continued, hold, id, ago, pre, frames)
 }
+
+// samplesIn is how many microphone samples d holds, and durationOf the other way.
+func samplesIn(d time.Duration) int        { return int(d * mic.Rate / time.Second) }
+func durationOf(samples int) time.Duration { return time.Duration(samples) * time.Second / mic.Rate }
 
 // historyFor is how far back a turn's history reaches. Without a wake sound people run straight on
 // into the request, so it takes mic.History from before the word was heard, the compromise that
@@ -1898,9 +1931,28 @@ func toneEnds(slot int, followUp bool) time.Duration {
 }
 
 // pump sends the history and then the frames to the backend until it is told to stop. hold is
-// holdsForTone.
-func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp, continued, hold bool, id string, pre []int16, frames <-chan []int16) {
+// holdsForTone. chimed is how long before the end of the history the wake sound began, for a turn whose
+// wake word chimed as it was heard (#727), and negative for one whose sound plays as it opens.
+//
+// Everything timed from the wake sound is timed from where it is in what is sent. A sound that plays as
+// the turn opens comes after all of the history; one played at the word, while the devices decided
+// which of them answers, is inside it, and what was said after it is history the turn would otherwise
+// drop (without the canceller) or hear while it was still deaf to the sound (with it).
+func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp, continued, hold bool, id string, chimed time.Duration, pre []int16, frames <-chan []int16) {
 	buf := make([]byte, 0, mic.FrameSamples*2)
+
+	// early is a sound already played, and over where it stops mattering to the microphones, in
+	// samples from the start of the history: past its end while it still sounds, before its start
+	// once it had ended before the history began.
+	early := chimed >= 0 && wakeword.Tones(slot, followUp)
+	var over int
+	if early {
+		over = len(pre) - samplesIn(chimed) + samplesIn(toneEnds(slot, followUp))
+	}
+	// in is how much of the history the sound covers, and rest how much of it is still to come after
+	// the history.
+	in := min(max(over, 0), len(pre))
+	rest := over - len(pre)
 
 	// Send what was already said before this turn began. The wake word can only be recognized after
 	// it has been spoken, and people run straight on into the request, so the opening words exist only
@@ -1910,8 +1962,15 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// history holds the wake word rather than the request, and the tone itself is louder at the array
 	// than they are (holdsForTone). With the canceller the tone is taken out of what is sent, and the
 	// history reaches back to where the wake word was heard (historyFor).
+	//
+	// A sound played at the word was waited for there: what was said after it is the request, and is
+	// sent; the history up to the end of the sound is not, as before.
 	if hold {
-		pre = nil
+		if early {
+			pre = pre[in:]
+		} else {
+			pre = nil
+		}
 	}
 
 	// End of speech as the device hears it, which ends the turn when the pipeline has not already.
@@ -1941,24 +2000,40 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// end the turn in the pause of someone waiting for the sound. If the watching one heard speech, the
 	// turn also ends once nothing near it has been heard for saidQuiet: a request said inside the
 	// sound, or running just past it, that the fresh detector heard too little of to decide on.
+	//
+	// A sound played at the word (early) is over where it is in the history, not a sound's length after
+	// the turn opens: the history is split there, and only what is left of the sound after the history,
+	// if anything, is waited out on the clock.
 	var deafUntil time.Time
+	watching := false
 	if tone := wakeword.Tones(slot, followUp); tone && !hold {
-		deafUntil = clock().Add(toneEnds(slot, followUp))
+		watching = true
+		if early {
+			deafUntil = clock().Add(durationOf(rest))
+		} else {
+			deafUntil = clock().Add(toneEnds(slot, followUp))
+		}
 		ep.Hold(true)
 	}
-	watching := !deafUntil.IsZero()
 	var said saidCheck
-	see := func(frame []int16) {
-		sent += len(frame)
-		if watching && !clock().Before(deafUntil) {
-			watching = false
-			// After a wake word only: a follow-up opens on the reply's own tail and its sound, which are
-			// not a request.
-			if peak, _, speech := ep.Heard(); speech >= ep.Settings().Speech && !followUp {
-				said = saidCheck{off: saidOff * peak, peak: peak}
-			}
-			ep = endpoint.New(endpointSettings())
+	heardOut := func() {
+		watching = false
+		// After a wake word only: a follow-up opens on the reply's own tail and its sound, which are
+		// not a request.
+		if peak, _, speech := ep.Heard(); speech >= ep.Settings().Speech && !followUp {
+			said = saidCheck{off: saidOff * peak, peak: peak}
 		}
+		ep = endpoint.New(endpointSettings())
+	}
+	var feed func(frame []int16)
+	see := func(frame []int16) {
+		if watching && !clock().Before(deafUntil) {
+			heardOut()
+		}
+		feed(frame)
+	}
+	feed = func(frame []int16) {
+		sent += len(frame)
 		ended := ep.Feed(frame)
 		if !watching && said.watch(frame) {
 			ended = true
@@ -1982,7 +2057,15 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 			}
 		}
 	}
-	see(pre)
+	if early && watching {
+		feed(pre[:in])
+		if in < len(pre) {
+			heardOut()
+		}
+		feed(pre[in:])
+	} else {
+		see(pre)
+	}
 
 	// A run Home Assistant's engine heard the word in has had all of it, and is already listening to
 	// what follows: without a tone the history is only the end-of-speech detector's, which measures the
@@ -2011,9 +2094,13 @@ func (c *conversation) pump(ctx context.Context, be backend, slot int, followUp,
 	// Without the canceller the tone plays as the turn opens and is louder at the array than a talker
 	// across the room, so nothing is sent while it is sounding. What the speaker still has queued says
 	// when that is, and hardwareTail is what the driver holds after the queue runs out.
+	// A sound played at the word is waited out for only what is left of it.
 	var sounding time.Time
-	if hold {
+	switch {
+	case hold && !early:
 		sounding = time.Now().Add(toneEnds(slot, followUp))
+	case hold && rest > 0:
+		sounding = time.Now().Add(durationOf(rest))
 	}
 	var held int
 
