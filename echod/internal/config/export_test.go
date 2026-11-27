@@ -445,6 +445,32 @@ func TestARestoreKeepsWhatIsOnByDefaultOff(t *testing.T) {
 	}
 }
 
+// Cast from a phone is the device's own (#670): a file from a device with it on does not turn it on
+// here, and a file with it off does not turn off the one this device has. The key stays this device's.
+func TestARestoreKeepsCast(t *testing.T) {
+	here := Defaults()
+	from := Defaults()
+	from.Cast = Cast{Enabled: true, Key: "theirs"}
+	file, _ := Export(from, "m", "v0")
+	r, err := Restored(here, file, "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Config.Cast.Enabled || r.Config.Cast.Key != "" {
+		t.Errorf("off here: restored %+v", r.Config.Cast)
+	}
+
+	here.Cast = Cast{Enabled: true, Key: "mine"}
+	from.Cast = Cast{}
+	file, _ = Export(from, "m", "v0")
+	if r, err = Restored(here, file, "m"); err != nil {
+		t.Fatal(err)
+	}
+	if r.Config.Cast != here.Cast {
+		t.Errorf("on here: restored %+v, want %+v", r.Config.Cast, here.Cast)
+	}
+}
+
 // Snapcast and its server are the device's own: a file can neither turn it on nor point it elsewhere,
 // nor turn off or move one this device has.
 func TestARestoreKeepsSnapcast(t *testing.T) {

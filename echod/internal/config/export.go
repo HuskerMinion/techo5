@@ -446,6 +446,9 @@ func KeepOwn(c *Config, from Config) {
 	// Home Assistant. Neither is a restore's to turn on: Sendspin is on by default, so a file from before
 	// it was turned off would turn it back on.
 	c.Sendspin = from.Sendspin
+	// Cast from a phone holds a port open that takes pictures and sound from the network (#670): turned
+	// on here, never by a file. A restore that turned it on would also make a new key and open the port.
+	c.Cast.Enabled = from.Cast.Enabled
 	// Snapcast dials out to a server and plays whatever it sends: which server, and whether at all, is the
 	// device's own, not a file's from a device in another house.
 	c.Snapcast = from.Snapcast

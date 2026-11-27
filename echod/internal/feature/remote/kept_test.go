@@ -34,6 +34,7 @@ var keptByRestore = map[string]keptSetting{
 	"video":                        {func(c *config.Config) { c.Video.On = true }, func(c config.Config) bool { return c.Video.On }},
 	"dlna_video":                   {func(c *config.Config) { c.Video.DLNA = true }, func(c config.Config) bool { return c.Video.DLNA }},
 	"sendspin":                     {func(c *config.Config) { c.Sendspin.Enabled = !c.Sendspin.Enabled }, nil},
+	"cast":                         {func(c *config.Config) { c.Cast.Enabled = true }, func(c config.Config) bool { return c.Cast.Enabled }},
 	"snapcast":                     {func(c *config.Config) { c.Snapcast.Enabled = true }, func(c config.Config) bool { return c.Snapcast.Enabled }},
 	"snapcast_server":              {func(c *config.Config) { c.Snapcast.Server = "192.168.1.30" }, func(c config.Config) bool { return c.Snapcast.Server != "" }},
 	"bluetooth_proxy":              {func(c *config.Config) { c.Bluetooth.Proxy = true }, func(c config.Config) bool { return c.Bluetooth.Proxy }},
