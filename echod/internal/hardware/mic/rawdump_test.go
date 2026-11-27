@@ -132,4 +132,17 @@ func TestDumpFallsBackToMemory(t *testing.T) {
 	if dir != ram || room != 1000 {
 		t.Errorf("folder %s with %d bytes, want %s with 1000", dir, room, ram)
 	}
+
+	// Plenty of memory: still no more than ramMax, which a 10 s native dump fits.
+	memAvailable = func() (int64, error) { return 1 << 40, nil }
+	dir, room, err = prepareDumpDir(1 << 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != ram || room != ramMax {
+		t.Errorf("folder %s with %d bytes, want %s with %d", dir, room, ram, ramMax)
+	}
+	if n := dumpLength(10, 96000, 24, room); n != 23040000 {
+		t.Errorf("a 10 s native dump in memory = %d bytes, want all 23040000", n)
+	}
 }

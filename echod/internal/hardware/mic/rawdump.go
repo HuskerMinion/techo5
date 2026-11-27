@@ -36,8 +36,9 @@ import (
 // folder is root's alone (0700) and each file is created 0600 and exclusively, so nobody else on the
 // device (the add-ons) can read a recording. The folder is on flash where the dump fits there
 // (dumpSpots), and otherwise in memory under /run: the Dot 5's /data has only a few MB free. A dump
-// is cut to the room its folder has (in memory, to what the kernel says is available as well), less
-// a reserve, and a .part left by a dump the daemon did not finish is removed when the next one
+// is cut to the room its folder has less a reserve (in memory, to what the kernel says is available
+// as well, and never past ramMax: /run has no size of its own, so a long native dump on a board with
+// little memory would otherwise crowd the daemon), and a .part left by a dump the daemon did not finish is removed when the next one
 // starts. The files stay until someone deletes them, or on /run until the next boot.
 const (
 	rawNativeTrigger = "/run/techo5/rawnative"
@@ -48,9 +49,11 @@ const (
 	rawNativeMax = 60
 
 	// flashReserve is what a dump leaves free on flash, for the state and the log; ramReserve what it
-	// leaves of the memory available, for the daemon and the rest.
+	// leaves of the memory available, for the daemon and the rest. ramMax is the most a dump writes in
+	// memory whatever is free: a 10 s native dump on the Dot 5 (23 MB) fits it.
 	flashReserve = 16 << 20
 	ramReserve   = 64 << 20
+	ramMax       = 32 << 20
 )
 
 // dumpSpot is a folder a dump may go to; ram is a tmpfs, whose room is memory.
@@ -155,7 +158,7 @@ func prepareSpot(s dumpSpot) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return dumpRoom(min(avail, mem), ramReserve), nil
+	return min(dumpRoom(min(avail, mem), ramReserve), ramMax), nil
 }
 
 // dumpRoom is what a dump may write where avail bytes are free and reserve must stay so.
