@@ -133,3 +133,35 @@ func TestAnIncompleteClassRingIsNotTaken(t *testing.T) {
 		t.Error("a ring with a module missing was taken")
 	}
 }
+
+// The ring is found whichever chip names its modules: an IS31FL3246's or an LP5036's (#780).
+func TestTheClassRingIsFoundByItsSuffix(t *testing.T) {
+	for _, chip := range []string{"is31fl3246", "lp5036"} {
+		dir := t.TempDir()
+		// A colon is not allowed in a path on every test host; the kernel's names have one.
+		prefix := filepath.Join(dir, chip+"-ledmod_")
+		for n := range Segments {
+			d := prefix + strconv.Itoa(n)
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(d, "color"), []byte("0 0 0\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Another LED class device beside the ring is not one.
+		if err := os.MkdirAll(filepath.Join(dir, "mute"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		r, ok := findClassRing(dir)
+		if !ok {
+			t.Fatalf("%s: no ring found", chip)
+		}
+		if got := r.classDirs[11]; got != prefix+"11" {
+			t.Errorf("%s: segment 11 at %s", chip, got)
+		}
+	}
+	if _, ok := findClassRing(t.TempDir()); ok {
+		t.Error("a ring found where there are no modules")
+	}
+}

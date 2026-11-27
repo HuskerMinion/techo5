@@ -1,5 +1,5 @@
 // Package led drives the Echo Dot's ring through the is31fl3236 driver's sysfs attributes, the Echo Dot
-// 5th gen's through the is31fl3246's twelve RGB LED class devices, and the Echo Input's single LED
+// 5th gen's through its ring chip's twelve RGB LED class devices (IS31FL3246 or LP5036), and the Echo Input's single LED
 // through the LP5562's LED class devices.
 //
 // This deliberately bypasses Amazon's LedController service. A direct frame write works even
@@ -26,14 +26,15 @@ const DefaultPath = "/sys/bus/i2c/devices/0-003f"
 // libled_hal.so drives it (echo-dot-assist, docs/re-cupcake.md).
 const SinglePath = "/sys/bus/i2c/devices/0-0030/leds"
 
-// ClassRingPrefix is the Echo Dot 5th gen's ring: an ISSI IS31FL3246 at 0-0031 whose twelve RGB modules
-// are LED class devices of their own, is31fl3246:ledmod_0 to _11, each taking its color as "R G B" in
-// its color attribute (Amazon's led-class-rgb, in the 6.5.5.5 GPL tree). The device tree maps the
-// labels onto the chip's modules (ledmod_0 is module 3, ..., ledmod_9 is module 0) and the R/G/B order
-// (rgb-map), so a label is a place on the ring and segment n is ledmod_n. Walked on one unit
-// (2026-11-21): ledmod_0 is at the back, over the power socket, and the numbers run clockwise seen from
-// above, as segments do on every ring here.
-const ClassRingPrefix = "/sys/class/leds/is31fl3246:ledmod_"
+// ClassRingDir holds the Echo Dot 5th gen's ring: twelve RGB modules at 0-0031 that are LED class
+// devices of their own, <chip>:ledmod_0 to _11, each taking its color as "R G B" in its color attribute
+// (Amazon's led-class-rgb, in the 6.5.5.5 GPL tree). The chip is the board's: an ISSI IS31FL3246 on the
+// first unit (is31fl3246:ledmod_N), a TI LP5036 on others (lp5036:ledmod_N, the lp50xx driver, #780),
+// so the ring is found by the labels' ledmod_ suffix, not by the chip's name. The device tree maps the
+// labels onto the chip's modules and the R/G/B order (rgb-map), so a label is a place on the ring and
+// segment n is ledmod_n. Walked on one unit (2026-11-21): ledmod_0 is at the back, over the power
+// socket, and the numbers run clockwise seen from above, as segments do on every ring here.
+const ClassRingDir = "/sys/class/leds"
 
 // singleChannels are the Echo Input LED's class devices under SinglePath, in R, G, B order.
 var singleChannels = [3]string{"R", "G", "B"}
@@ -122,7 +123,7 @@ func New() *Ring {
 	if _, err := os.Stat(r.path()); err == nil {
 		return r
 	}
-	if c, ok := newClassRing(ClassRingPrefix); ok {
+	if c, ok := findClassRing(ClassRingDir); ok {
 		return c
 	}
 	if s, ok := newSingle(SinglePath); ok {
@@ -130,6 +131,18 @@ func New() *Ring {
 	}
 	r.absent = true
 	return r
+}
+
+// findClassRing is the first complete ring of ledmod_ class devices in dir, whichever chip's name they
+// carry, in name order.
+func findClassRing(dir string) (*Ring, bool) {
+	zeros, _ := filepath.Glob(filepath.Join(dir, "*ledmod_0"))
+	for _, z := range zeros {
+		if c, ok := newClassRing(strings.TrimSuffix(z, "0")); ok {
+			return c, true
+		}
+	}
+	return nil, false
 }
 
 // newClassRing is the Echo Dot 5th gen's ring, when all twelve of its modules are there.
