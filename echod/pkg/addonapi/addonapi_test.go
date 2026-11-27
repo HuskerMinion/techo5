@@ -20,7 +20,9 @@ func TestFrames(t *testing.T) {
 	if err != nil || n != 8 || string(msg) != `{"id":1}` {
 		t.Fatalf("read back %q %d %v", msg, n, err)
 	}
-	if err := WriteFrame(&b, make([]byte, MaxMessage+1)); !errors.Is(err, ErrTooLarge) {
+	// Only an image.put is longer than a message, which the daemon's reader holds to MaxMessage for every
+	// other op; nothing is written past MaxImageMessage.
+	if err := WriteFrame(&b, make([]byte, MaxImageMessage+1)); !errors.Is(err, ErrTooLarge) {
 		t.Errorf("wrote a message past the limit: %v", err)
 	}
 	b.Reset()

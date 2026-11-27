@@ -148,14 +148,16 @@ at all is answered with id 0.
 | `unknown_op` | no such op at this level |
 | `too_large` | a message, or a field, past its limit |
 | `rate_limited` | past a rate limit |
-| `busy` | a queue is full, a count is reached, or it is quiet hours |
+| `busy` | a queue is full, a count is reached, or it is quiet hours; for `screen.open`, nobody asked for the page |
 | `unavailable` | Home Assistant is not connected, or what it needs isn't there |
 | `internal` | the device could not do it (the reason stays in the device's log) |
 
 ## Limits
 
 - 64 KB a message; one that says it is longer is answered `too_large` and skipped, and one claiming
-  more than 1 MB is hung up on.
+  more than 1 MB is hung up on. An `image.put`, from an add-on with the screen, may be up to 352 KB
+  (256 KB of image in base64, and the rest of the request); a connection has one of those read and
+  answered at a time, the next waiting for it.
 - 20 requests a second on a connection, with a burst of 40, counted as each message arrives, before
   it is read.
 - 4 connections per add-on, 64 requests waiting for their answers on each.
@@ -354,7 +356,7 @@ unknown key is.
 | `list` | `sections`: each `{"heading": "…", "items": [blocks]}` | scrolls, which is the daemon's; no list inside a list |
 | `card` | `children`, `spacing`, `accent` | `accent` is one of the theme's: `accent`, `dim`, `rules` |
 | `text` | `text`, `size`, `bold`, `align`, `max_lines` | `size`: `small`, `body` (the default), `title`, `huge`; `align`: `start`, `center`, `end`; line breaks kept |
-| `image` | `url` or `data`, `fit` | `fit`: `contain` (the default) or `cover` |
+| `image` | `url`, `name` or `data`, `fit` | one of the three; `fit`: `contain` (the default) or `cover` |
 | `button` | `label`, `icon`, an `id` | a tap sends `touch` |
 | `chip` | `label`, `icon`, `selected`, an `id` | a tap sends `touch`; `selected` for a row of tabs |
 | `progress` | `value` or `timer` | `value` from 0 to 1, or `timer`, one of the add-on's own timers by `timer.start`'s id, counted down with the clock's |
@@ -362,16 +364,28 @@ unknown key is.
 
 `spacing` is `none`, `small`, `normal` (the default) or `large`. Any child of a row or a column may have
 a `weight`, from 1 to 12: its share of the room the children without one leave. A button or a chip has
-a label, an icon (`mdi:…`, as Home Assistant names one) or both, and must have an `id`. Only buttons
-and chips can be tapped.
+a label, an icon (`mdi:…`, as Home Assistant names one) or both, and must have an `id`. Buttons and
+chips can be tapped, and so can a list's item that has an `id`, as a whole, whatever its type: a row of
+a recipe's picture and name, say. A button or a chip inside such an item is tapped as itself; a tap
+anywhere else on the item sends the item's id.
 
-An image is fetched from `url`, an http or https address on the LAN or Home Assistant (an address given
-as a number must be a private one, 10/8, 172.16/12, 192.168/16, fc00::/7, or 100.64/10 as Tailscale
-uses; never the device itself, loopback or link-local; a name is checked against what it resolves to
-when it is fetched), with no user or password in it. Or it is `data`, a JPEG or a PNG's bytes (base64
-in JSON), which count toward the scene's 64 KB, so bytes suit an icon or a thumbnail and a photo goes
-by address. Either way at most 256 KB and 1280 by 800 pixels, either way up; of bytes, the header is
-checked when the scene is set.
+An image is one of three:
+
+- `name`: one the add-on put on the device with `image.put` under that name (below). This is the way
+  for a photo the add-on has: sent once, shown by every scene that names it. A scene may name one that
+  is not put yet; its place is drawn empty until it is.
+- `url`: fetched by the device, never by the add-on's code, from an http or https address on the LAN or
+  at Home Assistant's own host, with no user or password in it. The rule is held on the address
+  actually dialed, whatever a name resolved to and wherever a redirect led: a private address (10/8,
+  172.16/12, 192.168/16, fc00::/7) or one in 100.64/10, as Tailscale uses, and never the device itself,
+  loopback, link-local or multicast; only the host Home Assistant was given as may be another address.
+  The device's Home Assistant sign-in is never sent with it. It may take 10 seconds and 256 KB; one
+  that fails is tried again after a minute, and its place is drawn empty meanwhile.
+- `data`: a JPEG or a PNG's bytes (base64 in JSON), which count toward the scene's 64 KB, so bytes suit
+  an icon; the header is checked when the scene is set.
+
+Each is at most 256 KB and 1280 by 800 pixels, either way up, and the device decodes it away from
+drawing, so a page is drawn at once with the places of images still to come left empty.
 
 ```json
 {"type": "column", "children": [
@@ -403,6 +417,7 @@ keep their place behind it.
 | Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters but a text's line breaks, and none that reorder text |
 | Lines | `max_lines` at most 20 (3 on a card) |
 | Images | 32 on a page, 1 on a card; 256 KB and 1280 by 800 pixels each; an address at most 2048 characters |
+| Images kept | 8 MB an add-on, those put and those fetched together, each counted as its pixels at four bytes (or its bytes, when more); 64 put at once |
 | Drawing | at most 10 times a second, page and card together |
 | `screen.open` | 3 at once, then one every 10 seconds |
 
@@ -428,10 +443,29 @@ every limit; a patch of an id the scene does not have is `bad_request`.
 
 #### screen.open, screen.close
 
-`screen.open` asks for the add-on's page to be brought up, from a command, say, so "start cooking"
-opens the recipe. It waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
+`screen.open` asks for the add-on's page to be brought up, in answer to somebody: so "start cooking"
+opens the recipe. It is allowed only for 5 seconds after a person asked something of the add-on, which
+is one of its commands sent to it (from Home Assistant, by voice, or by its button), or a tap on its
+tile, its card or one of its blocks; at any other time it is answered `busy`, and nothing is brought
+up. Allowed at night, it lifts the night light, as a long press does, since somebody asked for the
+page. It still waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
 screen the device reserves), as the dashboard and Cast do, and `screen.state` says when it is in view.
 `bad_request` with no page set. `screen.close` asks for it to be put away.
+
+#### image.put, image.drop
+
+`{"name": "photo_1", "data": "…"}` keeps a JPEG or a PNG (base64, at most 256 KB and 1280 by 800
+pixels either way up, its header checked) on the device under the name, for image blocks of that
+`name` to show; a put of the name again replaces it, and every scene that shows it is drawn again.
+`{"name": "photo_1"}` to `image.drop` lets it go. Both answer `{"used": 2000000, "budget": 8388608}`:
+how much of its 8 MB the add-on's images take now, each counted as its pixels at four bytes (or its
+bytes, when that is more), which is what it takes decoded.
+
+A put that would take the add-on past 8 MB is refused, `too_large`, and nothing it put is let go to
+make room: drop one first. Images the device fetched by address count toward the same 8 MB, but are
+its own copies, which it can fetch again, so they make room for a put, the least recently drawn
+first. Images are kept in RAM only, never written to the device's storage, and go with the add-on's
+last connection as its scenes do.
 
 #### card.clear
 
@@ -441,8 +475,8 @@ Takes the add-on's card away from over the clock.
 
 #### touch
 
-`{"id": "next", "on": "page"}`: a tap on one of the add-on's buttons or chips, on its page or its card.
-Only for what is in view.
+`{"id": "next", "on": "page"}`: a tap on one of the add-on's buttons or chips, or on a list's item with
+an id, on its page or its card. Only for what is in view.
 
 #### swipe, back
 
@@ -458,8 +492,8 @@ the owner swiped the card away; it is gone until the next `scene.set` of the car
 
 ### What stays
 
-Scenes are in memory only, the add-on's own: another add-on can neither see nor patch them, and touches
-go only to the add-on whose block was tapped. Its page and card go when its last connection closes,
+Scenes and images are in memory only, the add-on's own: another add-on can neither see nor patch them,
+and touches go only to the add-on whose block was tapped. Its page, its card and its images go when its last connection closes,
 when it stops and when it is removed, so a crashed add-on leaves no buttons that nothing answers; it
 sets them again after `hello`. Its tile is under the Add-ons tab while it runs.
 
@@ -490,7 +524,8 @@ The daemon writes nothing per message, and logs nothing per message or connectio
 `/run`, in RAM. An add-on's settings are written to `/data/techo5-addons/<id>/settings.json` (root's,
 `0600`) only when Save changes them. Its timers, queues, holds, entity states, scenes and what its
 media is doing are in memory only; nothing about `media.state` is logged above Debug, and nothing about
-a scene at all.
+a scene at all. Its images, put or fetched, are in memory only too, never written; a fetch that fails
+is said in the log at most once a minute for each add-on.
 
 ## The fake daemon
 
@@ -508,8 +543,9 @@ refuses the screen, as a Dot does).
 
 Scenes are checked as a device checks them, and each change is said in the log with its size in blocks
 and bytes; `scene page` or `scene card` prints one as it is now. The fake has nothing more pressing to
-show, so `screen.open` brings the page up at once and every card shows as it is set. From the keyboard,
-`touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
+show, so `screen.open` brings the page up at once, when it may (within 5 seconds of a command or a
+tap, as on a device), and every card shows as it is set. From the keyboard, `tile` (a tap on the
+add-on's tile, which brings its page up), `touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
 say) and `dismiss` (the card swiped away) do what the owner would. It does not draw the scene yet; a
 PNG of it, made with the device's own layout code, comes with the screen's drawing on the device.
 
@@ -521,7 +557,7 @@ does next.
 
 In Go, `Client.StartMedia` answers the media's id, `Client.MediaStatus` asks `media.status`, and
 `Client.WatchMedia` has `media.state` events arrive decoded on a channel of their own instead of on
-`Events`. `Client.SetScene`, `PatchScene`, `OpenScreen`, `CloseScreen` and `ClearCard` are the screen's
+`Events`. `Client.SetScene`, `PatchScene`, `OpenScreen`, `CloseScreen`, `ClearCard`, `PutImage` and `DropImage` are the screen's
 ops, `Client.WatchScreen` has its events arrive decoded on a channel of their own, and `Column`, `Row`,
-`Card`, `List`, `Text`, `Title`, `Button`, `Chip`, `Progress`, `Countdown`, `Image`, `ImageData`,
+`Card`, `List`, `Text`, `Title`, `Button`, `Chip`, `Progress`, `Countdown`, `Image`, `ImageNamed`, `ImageData`,
 `Divider` and `Spacer` build blocks. `SetScene` checks a scene as the device does before sending it.

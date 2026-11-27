@@ -42,6 +42,9 @@ const EnvSocket = "TECHO5_ADDON_API"
 const (
 	// MaxMessage is the most a message may hold, its length prefix aside.
 	MaxMessage = 64 << 10
+	// MaxImageMessage is the most an image.put may hold: MaxImage bytes, base64 in JSON, and room for
+	// the rest of the request. No other message may be longer than MaxMessage.
+	MaxImageMessage = (MaxImage+2)/3*4 + 4<<10
 	// Rate and Burst are the requests a second a connection may send, and how many it may send at
 	// once after a quiet spell.
 	Rate  = 20
@@ -107,6 +110,8 @@ const (
 	OpScreenOpen  = "screen.open"
 	OpScreenClose = "screen.close"
 	OpCardClear   = "card.clear"
+	OpImagePut    = "image.put"
+	OpImageDrop   = "image.drop"
 )
 
 // Events the daemon sends.
@@ -183,9 +188,10 @@ func CodeOf(err error) string {
 // ErrTooLarge is a message whose length is more than the reader allows.
 var ErrTooLarge = errors.New("addonapi: the message is larger than allowed")
 
-// WriteFrame writes one message: its length, then it.
+// WriteFrame writes one message: its length, then it. Only an image.put may be longer than MaxMessage,
+// which the reader checks; this refuses anything past MaxImageMessage.
 func WriteFrame(w io.Writer, b []byte) error {
-	if len(b) > MaxMessage {
+	if len(b) > MaxImageMessage {
 		return ErrTooLarge
 	}
 	buf := make([]byte, 4+len(b))

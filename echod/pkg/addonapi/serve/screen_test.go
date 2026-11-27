@@ -67,6 +67,8 @@ func TestScreenNeedsTheCapability(t *testing.T) {
 		addonapi.OpScreenOpen:  addonapi.None{},
 		addonapi.OpScreenClose: addonapi.None{},
 		addonapi.OpCardClear:   addonapi.None{},
+		addonapi.OpImagePut:    addonapi.ImagePut{Name: "a", Data: pngBytes(t, 2, 2)},
+		addonapi.OpImageDrop:   addonapi.ImageDrop{Name: "a"},
 	} {
 		if err := c.Call(ctx(t), op, a, nil); code(err) != addonapi.CodeDenied {
 			t.Errorf("%s without the screen capability: %v", op, err)
@@ -93,7 +95,8 @@ func TestScreenUnavailableWithoutOne(t *testing.T) {
 // level knows is answered as an op, so a new one cannot be added and forgotten in handle.
 func TestEveryScreenOpIsHandled(t *testing.T) {
 	_, _, c := screenRig(t)
-	for _, op := range []string{addonapi.OpSceneSet, addonapi.OpScenePatch, addonapi.OpScreenOpen, addonapi.OpScreenClose, addonapi.OpCardClear} {
+	for _, op := range []string{addonapi.OpSceneSet, addonapi.OpScenePatch, addonapi.OpScreenOpen, addonapi.OpScreenClose, addonapi.OpCardClear,
+		addonapi.OpImagePut, addonapi.OpImageDrop} {
 		if err := c.Call(ctx(t), op, nil, nil); code(err) == addonapi.CodeUnknownOp {
 			t.Errorf("%s is unknown", op)
 		}
@@ -319,6 +322,7 @@ func TestScreenEvents(t *testing.T) {
 	if r.s.Touch("meals", addonapi.OnPage, "next") || r.s.Swipe("meals", addonapi.SwipeLeft) || r.s.Back("meals") {
 		t.Error("a page out of view was touched")
 	}
+	r.s.Asked("meals") // a tap on its tile, say
 	if err := c.OpenScreen(ctx(t)); err != nil {
 		t.Fatal(err)
 	}
@@ -389,6 +393,7 @@ func TestScreenOpenIsLimited(t *testing.T) {
 	if err := c.SetScene(ctx(t), addonapi.OnPage, page); err != nil {
 		t.Fatal(err)
 	}
+	r.s.Asked("meals")
 	for i := range addonapi.ScreenOpenBurst {
 		if err := c.OpenScreen(ctx(t)); err != nil {
 			t.Fatalf("open %d: %v", i, err)
@@ -398,6 +403,7 @@ func TestScreenOpenIsLimited(t *testing.T) {
 		t.Errorf("an open past the burst: %v", err)
 	}
 	r.advance(addonapi.ScreenOpenEvery)
+	r.s.Asked("meals")
 	if err := c.OpenScreen(ctx(t)); err != nil {
 		t.Errorf("an open after the wait: %v", err)
 	}

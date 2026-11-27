@@ -45,6 +45,8 @@ var needs = map[string]string{
 	addonapi.OpScreenOpen:    addonapi.CapScreen,
 	addonapi.OpScreenClose:   addonapi.CapScreen,
 	addonapi.OpCardClear:     addonapi.CapScreen,
+	addonapi.OpImagePut:      addonapi.CapScreen,
+	addonapi.OpImageDrop:     addonapi.CapScreen,
 }
 
 func bad(format string, a ...any) error {
@@ -327,6 +329,11 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 
 	case addonapi.OpSceneSet, addonapi.OpScenePatch, addonapi.OpScreenOpen, addonapi.OpScreenClose, addonapi.OpCardClear:
 		return s.screenOp(c, req)
+	case addonapi.OpImagePut, addonapi.OpImageDrop:
+		if s.screenSink() == nil {
+			return nil, addonapi.Errorf(addonapi.CodeUnavailable, "this device has no screen for an add-on")
+		}
+		return s.imageOp(c.a, req)
 	}
 	return nil, addonapi.Errorf(addonapi.CodeUnknownOp, "there is no op %q at API level %d", req.Op, addonapi.Version)
 }
@@ -683,6 +690,8 @@ func (s *Server) Command(ctx context.Context, id, name string, args map[string]a
 	if err := cmd.CheckArgs(args); err != nil {
 		return "", bad("%v", err)
 	}
+	// Somebody asked for something of the add-on: for a moment it may bring its page up (screen.open).
+	s.Asked(id)
 	if !wait {
 		_, c := s.first(id)
 		if c == nil {

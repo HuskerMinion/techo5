@@ -297,7 +297,29 @@ type ScenePatch struct {
 	Block Block  `json:"block"`
 }
 
-// TouchEvent is a tap on one of the add-on's buttons or chips, by its id, on its page or its card.
+// ImagePut is image.put: a JPEG or a PNG under a name, which a scene's image block shows by that name
+// (Block.Name). It is kept in RAM only, counted toward the add-on's MaxImageBudget, until image.drop,
+// another put of the name, or the add-on's last connection closing.
+type ImagePut struct {
+	Name string `json:"name"`
+	Data []byte `json:"data"`
+}
+
+// ImageDrop is image.drop: the image of that name let go. A scene that still shows it draws its place
+// empty.
+type ImageDrop struct {
+	Name string `json:"name"`
+}
+
+// ImageBudget is the answer to image.put and image.drop: how much of the add-on's MaxImageBudget its
+// images now take, in bytes as they are counted (ImageCost).
+type ImageBudget struct {
+	Used   int `json:"used"`
+	Budget int `json:"budget"`
+}
+
+// TouchEvent is a tap on one of the add-on's buttons or chips, or on a list item with an id, by its id,
+// on its page or its card.
 type TouchEvent struct {
 	ID string `json:"id"`
 	On string `json:"on"`

@@ -130,7 +130,23 @@ const (
 	// ScreenOpenEvery. Bringing a page up takes the screen from whoever looks at it.
 	ScreenOpenBurst = 3
 	ScreenOpenEvery = 10 * time.Second
+	// ScreenOpenWindow is how long after a person's action screen.open may bring the add-on's page up:
+	// one of its commands sent to it (from Home Assistant, by voice or by its button), or a tap on its
+	// tile, its card or its page. Outside it screen.open is refused (busy): an add-on's page comes up
+	// only because somebody asked for something of it, never at 3 a.m. of its own accord.
+	ScreenOpenWindow = 5 * time.Second
+	// MaxImageBudget is the most an add-on's images may take in RAM, all together: those it put
+	// (image.put) and those fetched from their addresses for its scenes, each counted by ImageCost. A put
+	// past it is refused (too_large); fetched ones are let go, the least recently drawn first, to make
+	// room for the next, as they can be fetched again.
+	MaxImageBudget = 8 << 20
+	// MaxImageNames is how many images an add-on may have put at once.
+	MaxImageNames = 64
 )
+
+// ImageCost is what an image counts toward MaxImageBudget: its pixels, four bytes each, which is what it
+// takes decoded, or its bytes, when they are more.
+func ImageCost(w, h, n int) int { return max(w*h*4, n) }
 
 // Block is one building block of a scene. Which fields a block may have is its type's; one it may not
 // have is refused, as an unknown key is. There is deliberately no field for a color, a position, a size
@@ -163,9 +179,11 @@ type Block struct {
 	MaxLines int    `json:"max_lines,omitempty"`
 
 	// URL is where an image is fetched from, an http or https address on the LAN or Home Assistant; Data
-	// its bytes instead, a JPEG or a PNG (base64 in JSON). Fit is how it fills its room (Fits).
+	// its bytes instead, a JPEG or a PNG (base64 in JSON); Name one the add-on put (image.put) under that
+	// name. Exactly one of the three. Fit is how it fills its room (Fits).
 	URL  string `json:"url,omitempty"`
 	Data []byte `json:"data,omitempty"`
+	Name string `json:"name,omitempty"`
 	Fit  string `json:"fit,omitempty"`
 
 	// Label and Icon are a button's or a chip's: words, an icon from Material Design Icons ("mdi:timer"),
@@ -195,7 +213,7 @@ var blockFields = map[string][]string{
 	BlockList:     {"sections"},
 	BlockCard:     {"children", "spacing", "accent"},
 	BlockText:     {"text", "size", "bold", "align", "max_lines"},
-	BlockImage:    {"url", "data", "fit"},
+	BlockImage:    {"url", "data", "name", "fit"},
 	BlockButton:   {"label", "icon"},
 	BlockChip:     {"label", "icon", "selected"},
 	BlockProgress: {"value", "timer"},
@@ -203,7 +221,8 @@ var blockFields = map[string][]string{
 	BlockSpacer:   {},
 }
 
-// Pressable is whether a block of this type can be tapped, and so must have an id.
+// Pressable is whether a block of this type can be tapped, and so must have an id. A list's item of any
+// type can be tapped too, as a whole, when it has an id (TapTarget): a recipe in a list of them.
 func Pressable(blockType string) bool { return blockType == BlockButton || blockType == BlockChip }
 
 // setFields is the JSON names of the block's fields that are not their zero value.
@@ -439,11 +458,22 @@ func (c *sceneCheck) image(b *Block, what string) error {
 	if b.Fit != "" && !slices.Contains(Fits, b.Fit) {
 		return badScene("%s's fit is one of %s", what, strings.Join(Fits, ", "))
 	}
+	given := 0
+	for _, set := range []bool{b.URL != "", len(b.Data) != 0, b.Name != ""} {
+		if set {
+			given++
+		}
+	}
 	switch {
-	case (b.URL == "") == (len(b.Data) == 0):
-		return badScene("%s has an address or bytes, and not both", what)
+	case given != 1:
+		return badScene("%s has an address, bytes or the name of an image put, and only one of them", what)
 	case b.URL != "":
 		return ImageURL(b.URL)
+	case b.Name != "":
+		if !ValidName(b.Name) {
+			return badScene("%s's name %q is not a name (lowercase letters, digits and underscores, starting with a letter)", what, b.Name)
+		}
+		return nil
 	}
 	return ImageBytes(b.Data)
 }
@@ -578,10 +608,55 @@ func (b Block) Patched(id string, with Block) (Block, bool, error) {
 	return out, true, nil
 }
 
-// TapTarget is whether id is a block in the scene that can be tapped.
+// TapTarget is whether id is a block in the scene that can be tapped: a button, a chip, or an item of a
+// list that has an id, which is tapped as a whole.
 func (b *Block) TapTarget(id string) bool {
-	f, ok := b.Find(id)
-	return ok && Pressable(f.Type)
+	if id == "" {
+		return false
+	}
+	if f, ok := b.Find(id); ok && Pressable(f.Type) {
+		return true
+	}
+	return b.isItem(id)
+}
+
+// isItem is whether id is one of the scene's list items.
+func (b *Block) isItem(id string) bool {
+	for i := range b.Children {
+		if b.Children[i].isItem(id) {
+			return true
+		}
+	}
+	for s := range b.Sections {
+		for i := range b.Sections[s].Items {
+			it := &b.Sections[s].Items[i]
+			if it.ID == id || it.isItem(id) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Images is the names of the images put (image.put) that the scene shows.
+func (b *Block) Images() []string {
+	var out []string
+	var walk func(*Block)
+	walk = func(x *Block) {
+		if x.Name != "" && !slices.Contains(out, x.Name) {
+			out = append(out, x.Name)
+		}
+		for i := range x.Children {
+			walk(&x.Children[i])
+		}
+		for s := range x.Sections {
+			for i := range x.Sections[s].Items {
+				walk(&x.Sections[s].Items[i])
+			}
+		}
+	}
+	walk(b)
+	return out
 }
 
 // Timers is the add-on timers a scene's progress blocks are tied to.

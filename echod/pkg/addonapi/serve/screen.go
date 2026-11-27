@@ -57,6 +57,9 @@ type Scene struct {
 	// cards, the newest is the one with the latest At.
 	Rev uint64
 	At  time.Time
+	// Images goes up whenever the add-on's images change (one put, dropped or fetched), so the display
+	// lays the scene out again, with Server.Image, when either this or Rev is not what it laid out.
+	Images uint64
 }
 
 // screenState is one add-on's page and card, under the server's mu.
@@ -70,6 +73,9 @@ type screenState struct {
 	timer                *time.Timer // the next telling, nil with none due
 
 	opens bucket // screen.open
+	// askedAt is the last time a person asked something of the add-on (Asked): screen.open is allowed
+	// for addonapi.ScreenOpenWindow after it.
+	askedAt time.Time
 }
 
 // sceneEvery is how often the display is told of an add-on's scenes, at most: addonapi's, as a
@@ -156,12 +162,18 @@ func (s *Server) screenOp(c *conn, req addonapi.Request) (any, error) {
 			return nil, err
 		}
 		s.mu.Lock()
+		now := s.Now()
 		has := a.screen.page != nil
-		ok := has && a.screen.opens.take(s.Now())
+		asked := !a.screen.askedAt.IsZero() && now.Sub(a.screen.askedAt) <= addonapi.ScreenOpenWindow
+		ok := has && asked && a.screen.opens.take(now)
 		s.mu.Unlock()
 		switch {
 		case !has:
 			return nil, bad("the add-on has no page to open; scene.set sets one")
+		case !asked:
+			return nil, addonapi.Errorf(addonapi.CodeBusy,
+				"screen.open is only in answer to a person: within %v of one of the add-on's commands, or a tap on its tile, its card or its page",
+				addonapi.ScreenOpenWindow)
 		case !ok:
 			s.strike(a)
 			return nil, addonapi.Errorf(addonapi.CodeRateLimited, "screen.open %d at once, then once every %v",
@@ -277,6 +289,8 @@ func (s *Server) screenDrop(a *addon) {
 	sc := &a.screen
 	page, card := sc.page != nil, sc.card != nil
 	sc.page, sc.card, sc.pageShown, sc.cardShown = nil, nil, false, false
+	// Its images with them: they are there for its scenes, and it puts them again after hello.
+	a.images.clear()
 	sc.dirtyPage, sc.dirtyCard = false, false
 	if sc.timer != nil {
 		sc.timer.Stop()
@@ -314,7 +328,9 @@ func (s *Server) Scene(id, on string) (Scene, bool) {
 	if sc == nil {
 		return Scene{}, false
 	}
-	return *sc, true
+	out := *sc
+	out.Images = a.images.gen
+	return out, true
 }
 
 // Screens is the running add-ons granted the screen, sorted: the tiles under the Add-ons tab. One that
@@ -386,14 +402,28 @@ func (s *Server) shownWith(id, on string) (*Scene, bool) {
 }
 
 // Touch is a tap on a block of the add-on's page or card: the add-on is told, when the block is one of
-// its buttons or chips in what is in view, and Touch says whether it was.
+// its buttons or chips, or a list item with an id, in what is in view, and Touch says whether it was. A
+// tap is a person asking something of the add-on, so it may bring its page up for a moment after
+// (screen.open).
 func (s *Server) Touch(id, on, block string) bool {
 	sc, ok := s.shownWith(id, on)
 	if !ok || !sc.Root.TapTarget(block) {
 		return false
 	}
+	s.Asked(id)
 	s.Emit(id, addonapi.EventTouch, addonapi.TouchEvent{ID: block, On: on})
 	return true
+}
+
+// Asked is a person asking something of the add-on: one of its commands sent to it, or a tap on its tile,
+// its card or its page. For addonapi.ScreenOpenWindow after it, the add-on may bring its page up
+// (screen.open); at no other time.
+func (s *Server) Asked(id string) {
+	s.mu.Lock()
+	if a := s.addons[id]; a != nil {
+		a.screen.askedAt = s.Now()
+	}
+	s.mu.Unlock()
 }
 
 // Swipe is a swipe left or right across the add-on's page while it is in view.

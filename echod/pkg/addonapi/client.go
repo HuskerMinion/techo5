@@ -387,6 +387,29 @@ func (c *Client) ClearCard(ctx context.Context) error {
 	return c.Call(ctx, OpCardClear, None{}, nil)
 }
 
+// PutImage keeps a JPEG or a PNG on the device under name, for an image block of that name
+// (ImageNamed) to show; its header is checked here first as the device checks it. It answers how much
+// of the add-on's MaxImageBudget its images take now. A put that would take more than the budget is
+// refused (too_large): drop one first (DropImage).
+func (c *Client) PutImage(ctx context.Context, name string, b []byte) (ImageBudget, error) {
+	var out ImageBudget
+	if !ValidName(name) {
+		return out, Errorf(CodeBadRequest, "an image's name %q is not a name", name)
+	}
+	if err := ImageBytes(b); err != nil {
+		return out, err
+	}
+	err := c.Call(ctx, OpImagePut, ImagePut{Name: name, Data: b}, &out)
+	return out, err
+}
+
+// DropImage lets the image of that name go.
+func (c *Client) DropImage(ctx context.Context, name string) (ImageBudget, error) {
+	var out ImageBudget
+	err := c.Call(ctx, OpImageDrop, ImageDrop{Name: name}, &out)
+	return out, err
+}
+
 // ScreenEvent is one of the screen's events, decoded: Event says which, and the field of that name is
 // set (Touch for touch, Swipe for swipe, State for screen.state; back carries nothing).
 type ScreenEvent struct {
@@ -474,6 +497,9 @@ func Image(url string) Block { return Block{Type: BlockImage, URL: url} }
 
 // ImageData is an image of these bytes, a JPEG or a PNG.
 func ImageData(b []byte) Block { return Block{Type: BlockImage, Data: b} }
+
+// ImageNamed is the image the add-on put under name (PutImage).
+func ImageNamed(name string) Block { return Block{Type: BlockImage, Name: name} }
 
 // Divider is a rule between blocks; Spacer is room.
 func Divider() Block { return Block{Type: BlockDivider} }

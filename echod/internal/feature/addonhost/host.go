@@ -77,6 +77,7 @@ func newHost(dir string, root func() string, allowed func(uint32) bool, d *devic
 		grants: func() []addons.APIGrant { return nil }, names: func() map[string]string { return nil }}
 	d.host = h
 	h.srv = serve.New(dir, d, allowed)
+	h.srv.FetchImage = fetchImage
 	timer.Get().Owned.Listen(h.timerEvent)
 	return h
 }

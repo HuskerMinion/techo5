@@ -464,10 +464,42 @@ never changed once given out, a revision and when it was set), lists the tiles w
 Storage: nothing per message. Scenes are in RAM, at most 64 KB each and two per add-on, and nothing
 about one is logged or written.
 
-Questions for part B:
+Questions for part B, as decided (2026-11-27):
 
-1. A larger message for image bytes (the plan's 256 KB), as an `image.put` op that a scene's image
-   names, or images by address only?
-2. Should a list item be tappable as a whole (a recipe in a list), as a `button` laid out as a row is
-   now, or by a pressable row?
-3. Should `screen.open` be refused at night, or left to the display's "more pressing" rule?
+1. A larger message for image bytes: yes, as `image.put`, which a scene's image names.
+2. A list item tappable as a whole: yes, by an id on the item.
+3. `screen.open` at night: allowed only in answer to a person, and then it lifts the night light.
+
+## Stage 2 as built (part B)
+
+Part B is drawing it on the device and the fake daemon's PNG of a scene, and the three decisions
+above. [addon-api.md](addon-api.md) says what was built. Where it differs from the plan or part A, and
+why:
+
+- **`image.put` and `image.drop`**, with the screen capability: a JPEG or a PNG of at most 256 KB and
+  1280 by 800 kept under a name, which an image block shows by `name`. It is the one message that may
+  be longer than 64 KB, to 352 KB (the image in base64 and the request around it), and a connection
+  has one read and answered at a time: 64 waiting at 352 KB on each of 4 connections would be 90 MB.
+  Inline `data` stays, as part A had it, for an icon within the scene's 64 KB.
+- **8 MB of images an add-on**, put and fetched together, each counted as its pixels at four bytes (or
+  its bytes, when more), since that is what it takes decoded; 64 names at once. **A put past it is
+  refused**, `too_large`, rather than letting the least recently used go: the add-on knows what it put
+  and what its scenes show, and an image let go behind its back would leave a hole in its page with
+  nothing to say why, where a refusal says it at the put. Images fetched by address are the device's
+  own copies, which it can fetch again, so those are let go, the least recently drawn first, for a put
+  or another fetch. Images go with the last connection, as scenes do.
+- **Images by address are fetched by the daemon** when the display first lays out a block that shows
+  one, two at a time for each add-on, 10 seconds and 256 KB each, through a dialer that holds the
+  address actually dialed (after DNS, after redirects) to netguard's rule (never the device, loopback,
+  link-local, multicast) and to a private address or 100.64/10, or to Home Assistant's own host by the
+  name the device was given. The sign-in is never sent. A failed fetch is tried again after a minute,
+  and said in the log at most once a minute per add-on.
+- **A list item with an id is tapped as a whole**, whatever its type; a button or a chip inside one is
+  tapped as itself. Nothing else gained a tap: a text or an image outside a list is still only words.
+- **`screen.open` only in answer to a person**: within 5 seconds of one of the add-on's commands being
+  sent to it (from an action, by voice through one, or by its button), or a tap on its tile, its card
+  or one of its blocks. Outside that it is `busy`, before its rate is counted, so an add-on cannot take
+  the screen of its own accord at 3 a.m.; inside it, at night, opening lifts the night light as a long
+  press does. `busy` rather than a new code: the codes are a fixed set an author's client already
+  knows, and "the screen is not yours to take now" is what busy says. The window is per add-on and
+  starts from the command's sending, so a command answered within the action's 4 seconds can open.

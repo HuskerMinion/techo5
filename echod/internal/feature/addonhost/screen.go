@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons"
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi/serve"
 )
 
@@ -79,3 +80,12 @@ func (h *Host) Back(id string) bool { return h.srv.Back(id) }
 
 // DismissCard is the owner swiping the add-on's card away.
 func (h *Host) DismissCard(id string) { h.srv.DismissCard(id) }
+
+// Asked is a tap on the add-on's tile or its card: a person asking something of it, after which it may
+// bring its page up for a moment (screen.open). Its commands and the taps on its blocks count already.
+func (h *Host) Asked(id string) { h.srv.Asked(id) }
+
+// Image is the bytes an image block of the add-on's shows and a key naming them, for the display to
+// decode and scale off its draw path; false while there are none yet (an address being fetched, a name
+// not put). See serve.Server.Image.
+func (h *Host) Image(id string, b *addonapi.Block) ([]byte, string, bool) { return h.srv.Image(id, b) }

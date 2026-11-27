@@ -424,7 +424,8 @@ const help = `the keyboard's commands:
   media STATE [SECONDS] the add-on's media is playing, paused or buffering (at SECONDS in), as media.state says
   media duration SECONDS the add-on's media says how long it is
   media REASON          the add-on's media ends: ended, device (the Stop button), replaced (other media), error
-  touch ID [page|card]  tap the button or chip of this id on the page (or the card) in view
+  tile                  tap the add-on's tile under the Add-ons tab: its page comes up
+  touch ID [page|card]  tap the button, chip or list item of this id on the page (or the card) in view
   swipe left|right      swipe across the page in view
   back                  the back gesture on the page in view
   shown page|card on|off the page or the card comes into view, or goes (a ring covering it, say)
@@ -509,7 +510,7 @@ func (d *fake) keyboard(in io.Reader, m catalog.Manifest) error {
 			}
 		case "media":
 			d.mediaKeys(rest)
-		case "touch", "swipe", "back", "shown", "dismiss", "scene":
+		case "tile", "touch", "swipe", "back", "shown", "dismiss", "scene":
 			d.screenKeys(verb, rest)
 		case "stop":
 			d.mu.Lock()

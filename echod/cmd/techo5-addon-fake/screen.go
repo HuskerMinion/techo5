@@ -75,6 +75,12 @@ func (d *fake) screenKeys(verb, rest string) {
 		return def
 	}
 	switch verb {
+	case "tile":
+		// As a device's Add-ons tab: the tap opens the page, and asks something of the add-on, so it
+		// may bring its page up itself for a moment after.
+		d.say("a tap on the add-on's tile")
+		d.srv.Asked(d.id)
+		fakeScreen{d}.Open(d.id)
 	case "touch":
 		on := arg(1, addonapi.OnPage)
 		if len(args) == 0 || !d.srv.Touch(d.id, on, args[0]) {

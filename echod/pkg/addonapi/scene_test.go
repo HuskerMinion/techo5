@@ -69,41 +69,44 @@ func TestSceneValid(t *testing.T) {
 func TestSceneRefusals(t *testing.T) {
 	one := 1.0
 	for what, b := range map[string]Block{
-		"no type":                {Children: []Block{Text("x")}},
-		"an unknown type":        {Type: "webview"},
-		"a field not its type's": {Type: BlockButton, ID: "a", Label: "A", Text: "words"},
-		"an accent on a column":  {Type: BlockColumn, Accent: "accent"},
-		"an accent not a role":   Card("green", Text("x")),
-		"a button with no id":    Column(Block{Type: BlockButton, Label: "Go"}),
-		"a chip with no id":      Column(Block{Type: BlockChip, Label: "Go"}),
-		"a bad id":               Column(Button("Next", "Next", "")),
-		"an id with a dash":      Column(Button("go-on", "Next", "")),
-		"a duplicate id":         Column(Button("next", "Next", ""), Block{Type: BlockText, ID: "next", Text: "x"}),
-		"a weight outside a row": Card("", Block{Type: BlockText, Text: "x", Weight: 1}),
-		"a weight too great":     Row(Block{Type: BlockSpacer, Weight: MaxWeight + 1}),
-		"a button with nothing":  Button("a", "", ""),
-		"an icon not mdi":        Button("a", "", "fa:check"),
-		"a control character":    Text("a\x07b"),
-		"a bidi override":        Text("abc‮def"),
-		"a break in a label":     Button("a", "two\nlines", ""),
-		"a size not one":         {Type: BlockText, Text: "x", Size: "giant"},
-		"too many lines":         {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
-		"a progress past 1":      {Type: BlockProgress, Value: func() *float64 { v := 1.5; return &v }()},
-		"a progress of both":     {Type: BlockProgress, Value: &one, Timer: "local:abc"},
-		"a progress of neither":  {Type: BlockProgress},
-		"another's timer":        Countdown("local:theirs"),
-		"a list of nothing":      {Type: BlockList},
-		"a list in a list":       List(Section{Items: []Block{List(Section{Items: []Block{Text("x")}})}}),
-		"a list deep in a list":  List(Section{Items: []Block{Column(List(Section{Items: []Block{Text("x")}}))}}),
-		"an image of both":       {Type: BlockImage, URL: "http://192.168.1.2/a.png", Data: []byte{1}},
-		"an image of neither":    {Type: BlockImage},
-		"an image by ftp":        Image("ftp://192.168.1.2/a.png"),
-		"an image from outside":  Image("http://8.8.8.8/a.png"),
-		"an image from loopback": Image("http://127.0.0.1:8080/a.png"),
-		"an image link-local":    Image("http://[fe80::1]/a.png"),
-		"an image with a user":   Image("http://me:pw@192.168.1.2/a.png"),
-		"an image not an image":  ImageData([]byte("GIF89a......")),
-		"a fit not one":          {Type: BlockImage, URL: "http://ha.local/a.png", Fit: "stretch"},
+		"no type":                 {Children: []Block{Text("x")}},
+		"an unknown type":         {Type: "webview"},
+		"a field not its type's":  {Type: BlockButton, ID: "a", Label: "A", Text: "words"},
+		"an accent on a column":   {Type: BlockColumn, Accent: "accent"},
+		"an accent not a role":    Card("green", Text("x")),
+		"a button with no id":     Column(Block{Type: BlockButton, Label: "Go"}),
+		"a chip with no id":       Column(Block{Type: BlockChip, Label: "Go"}),
+		"a bad id":                Column(Button("Next", "Next", "")),
+		"an id with a dash":       Column(Button("go-on", "Next", "")),
+		"a duplicate id":          Column(Button("next", "Next", ""), Block{Type: BlockText, ID: "next", Text: "x"}),
+		"a weight outside a row":  Card("", Block{Type: BlockText, Text: "x", Weight: 1}),
+		"a weight too great":      Row(Block{Type: BlockSpacer, Weight: MaxWeight + 1}),
+		"a button with nothing":   Button("a", "", ""),
+		"an icon not mdi":         Button("a", "", "fa:check"),
+		"a control character":     Text("a\x07b"),
+		"a bidi override":         Text("abc‮def"),
+		"a break in a label":      Button("a", "two\nlines", ""),
+		"a size not one":          {Type: BlockText, Text: "x", Size: "giant"},
+		"too many lines":          {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
+		"a progress past 1":       {Type: BlockProgress, Value: func() *float64 { v := 1.5; return &v }()},
+		"a progress of both":      {Type: BlockProgress, Value: &one, Timer: "local:abc"},
+		"a progress of neither":   {Type: BlockProgress},
+		"another's timer":         Countdown("local:theirs"),
+		"a list of nothing":       {Type: BlockList},
+		"a list in a list":        List(Section{Items: []Block{List(Section{Items: []Block{Text("x")}})}}),
+		"a list deep in a list":   List(Section{Items: []Block{Column(List(Section{Items: []Block{Text("x")}}))}}),
+		"an image of both":        {Type: BlockImage, URL: "http://192.168.1.2/a.png", Data: []byte{1}},
+		"an image of neither":     {Type: BlockImage},
+		"an image by ftp":         Image("ftp://192.168.1.2/a.png"),
+		"an image from outside":   Image("http://8.8.8.8/a.png"),
+		"an image from loopback":  Image("http://127.0.0.1:8080/a.png"),
+		"an image link-local":     Image("http://[fe80::1]/a.png"),
+		"an image with a user":    Image("http://me:pw@192.168.1.2/a.png"),
+		"an image not an image":   ImageData([]byte("GIF89a......")),
+		"a fit not one":           {Type: BlockImage, URL: "http://ha.local/a.png", Fit: "stretch"},
+		"an image put and by url": {Type: BlockImage, URL: "http://192.168.1.2/a.png", Name: "photo"},
+		"an image put, bad name":  ImageNamed("Photo 1"),
+		"a name on a text":        {Type: BlockText, Text: "x", Name: "photo"},
 	} {
 		refuses(t, what, OnPage, b, CodeBadRequest)
 	}
@@ -127,6 +130,45 @@ func TestSceneRefusals(t *testing.T) {
 	}
 	if err := ValidScene(OnPage, Image("http://100.64.0.10/a.jpg"), nil); err != nil {
 		t.Errorf("an image over Tailscale: %v", err)
+	}
+}
+
+// An image put is shown by its name, on a page or a card; whether it is there is the daemon's to say
+// when it draws, as an image put may come after the scene that shows it.
+func TestImageByName(t *testing.T) {
+	if err := ValidScene(OnPage, Column(ImageNamed("photo_1")), nil); err != nil {
+		t.Errorf("an image put, on a page: %v", err)
+	}
+	if err := ValidScene(OnCard, Row(ImageNamed("photo_1"), Text("Soup")), nil); err != nil {
+		t.Errorf("an image put, on a card: %v", err)
+	}
+	b := Column(ImageNamed("a"), List(Section{Items: []Block{ImageNamed("b"), ImageNamed("a")}}))
+	if got := b.Images(); !slices.Equal(got, []string{"a", "b"}) {
+		t.Errorf("images shown: %v", got)
+	}
+}
+
+// A list's item with an id is tapped as a whole, whatever its type; a block with an id outside a list
+// is tapped only when it is a button or a chip.
+func TestTapTargets(t *testing.T) {
+	b := Column(
+		Block{Type: BlockText, ID: "title", Text: "Recipes"},
+		Button("add", "Add", "mdi:plus"),
+		List(Section{Heading: "Soups", Items: []Block{
+			{Type: BlockRow, ID: "soup", Children: []Block{{Type: BlockText, ID: "soup_name", Text: "Soup"}, Chip("soup_fav", "", "mdi:star")}},
+			Text("no id"),
+			{Type: BlockImage, ID: "bread", Name: "bread"},
+		}}),
+	)
+	if err := ValidScene(OnPage, b, nil); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]bool{
+		"title": false, "add": true, "soup": true, "soup_name": false, "soup_fav": true, "bread": true, "": false, "none": false,
+	} {
+		if got := b.TapTarget(id); got != want {
+			t.Errorf("TapTarget(%q) = %v, want %v", id, got, want)
+		}
 	}
 }
 
@@ -239,7 +281,7 @@ func TestCardRefusals(t *testing.T) {
 // be added without this test, and its reason, being looked at.
 func TestNothingImitatesTheSystem(t *testing.T) {
 	want := []string{"type", "id", "weight", "children", "spacing", "sections", "accent", "text", "size", "bold",
-		"align", "max_lines", "url", "data", "fit", "label", "icon", "selected", "value", "timer"}
+		"align", "max_lines", "url", "data", "name", "fit", "label", "icon", "selected", "value", "timer"}
 	var got []string
 	bt := reflect.TypeOf(Block{})
 	for i := range bt.NumField() {

@@ -128,6 +128,10 @@ type Server struct {
 	Now     func() time.Time
 	// Trace, when set, is told every request and how it ended: the fake daemon's log of them.
 	Trace func(id string, req addonapi.Request, err error)
+	// FetchImage gets the bytes an image block's address serves, at most addonapi.MaxImage of them,
+	// within ctx: the device's fetches only from the LAN and Home Assistant, through a dialer that
+	// refuses the device itself, loopback and link-local. nil shows no image by address.
+	FetchImage func(ctx context.Context, url string) ([]byte, error)
 
 	mu     sync.Mutex
 	addons map[string]*addon
@@ -180,6 +184,7 @@ type addon struct {
 
 	screen  screenState
 	sceneMu sync.Mutex // held across reading a scene and keeping the next, so a patch cannot be lost
+	images  imageStore // under mu
 }
 
 // pending is a call waiting for the add-on's reply: a command's, or a settings test's, which is
@@ -361,7 +366,7 @@ func (s *Server) admit(a *addon, nc net.Conn) string {
 	}
 	a.nextID++
 	c := &conn{s: s, a: a, nc: nc, id: a.nextID, out: make(chan []byte, outQueue),
-		work: make(chan addonapi.Request, addonapi.MaxOutstanding), gone: make(chan struct{}),
+		work: make(chan job, addonapi.MaxOutstanding), gone: make(chan struct{}), big: make(chan struct{}, 1),
 		tokens: bucket{rate: addonapi.Rate, burst: addonapi.Burst}}
 	a.conns[c] = true
 	go c.writer()
@@ -398,6 +403,12 @@ func (s *Server) strike(a *addon) {
 	}
 }
 
+// job is a request waiting for the worker, and whether it is an image.put holding the connection's big.
+type job struct {
+	req addonapi.Request
+	big bool
+}
+
 // conn is one connection of an add-on's.
 type conn struct {
 	s  *Server
@@ -406,9 +417,13 @@ type conn struct {
 	id uint64
 
 	out  chan []byte
-	work chan addonapi.Request
+	work chan job
 	gone chan struct{}
 	once sync.Once
+	// big is held while an image.put, the one message longer than addonapi.MaxMessage, is read and
+	// answered: the reader takes the next only once it is done, so a connection holds one at a time
+	// rather than MaxOutstanding of them.
+	big chan struct{}
 
 	tokens bucket // touched by the reader alone
 
@@ -485,7 +500,18 @@ func (c *conn) reader() {
 		// The request's token is taken here, before anything of it is read or parsed: a flood of
 		// messages that never parse costs the add-on its rate as much as one of good ones.
 		allowed := c.tokens.take(c.s.Now())
-		if n > addonapi.MaxMessage {
+		big := n > addonapi.MaxMessage && n <= addonapi.MaxImageMessage && c.a.grant.Has(addonapi.CapScreen)
+		if big {
+			// One at a time: wait for the last to be answered before reading this one.
+			_ = c.nc.SetReadDeadline(time.Time{})
+			select {
+			case c.big <- struct{}{}:
+			case <-c.gone:
+				return
+			}
+			_ = c.nc.SetReadDeadline(time.Now().Add(bodyWithin))
+		}
+		if n > addonapi.MaxMessage && !big {
 			if n > skipMost {
 				c.s.warn(c.a.grant.ID, "huge", "addonapi: an add-on sent a message far past the limit; disconnected", "bytes", n)
 				c.s.strike(c.a)
@@ -504,7 +530,12 @@ func (c *conn) reader() {
 			return
 		}
 		_ = c.nc.SetReadDeadline(time.Time{})
+		done := func() {}
+		if big {
+			done = func() { <-c.big }
+		}
 		if !allowed {
+			done()
 			// Its id alone is read, so the add-on can tell which request was refused: a plain decode of
 			// one field, which costs no more than the message is long.
 			var head struct {
@@ -516,14 +547,22 @@ func (c *conn) reader() {
 			continue
 		}
 		var req addonapi.Request
-		if err := addonapi.Unmarshal(b, &req); err != nil {
+		err = addonapi.Unmarshal(b, &req)
+		if big && (err != nil || req.Op != addonapi.OpImagePut) {
+			done()
+			c.refuse(req.ID, addonapi.Errorf(addonapi.CodeTooLarge, "a message is at most %d bytes; only image.put may be longer", addonapi.MaxMessage))
+			c.s.strike(c.a)
+			continue
+		}
+		if err != nil {
 			c.refuse(0, addonapi.Errorf(addonapi.CodeBadRequest, "the message does not read: %v", err))
 			c.s.strike(c.a)
 			continue
 		}
 		select {
-		case c.work <- req:
+		case c.work <- job{req, big}:
 		default:
+			done()
 			c.refuse(req.ID, addonapi.Errorf(addonapi.CodeRateLimited, "at most %d requests may wait for an answer", addonapi.MaxOutstanding))
 			c.s.strike(c.a)
 		}
@@ -535,8 +574,12 @@ func (c *conn) worker() {
 		select {
 		case <-c.gone:
 			return
-		case req := <-c.work:
+		case j := <-c.work:
+			req := j.req
 			result, err := c.s.handle(c, req)
+			if j.big {
+				<-c.big
+			}
 			if c.s.Trace != nil {
 				c.s.Trace(c.a.grant.ID, req, err)
 			}

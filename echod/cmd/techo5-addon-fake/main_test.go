@@ -225,6 +225,13 @@ func TestTheFakeTakesScenes(t *testing.T) {
 	if err := c.Call(ctx, addonapi.OpSceneSet, addonapi.SceneSet{On: addonapi.OnPage, Scene: addonapi.Block{Type: "webview"}}, nil); addonapi.CodeOf(err) != addonapi.CodeBadRequest {
 		t.Errorf("a scene the device would refuse: %v", err)
 	}
+	// Nobody asked for it: refused, as a device refuses it.
+	if err := c.OpenScreen(ctx); addonapi.CodeOf(err) != addonapi.CodeBusy {
+		t.Fatalf("an open nobody asked for: %v", err)
+	}
+	// A tap on its tile is a person asking.
+	_, _ = io.WriteString(keys, "tile\n")
+	waitFor(t, out, "a tap on the add-on's tile")
 	if err := c.OpenScreen(ctx); err != nil {
 		t.Fatal(err)
 	}
