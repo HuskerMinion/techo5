@@ -243,6 +243,10 @@ func TestImagesByAddress(t *testing.T) {
 	if err := c.SetScene(ctx(t), addonapi.OnPage, scene); err != nil {
 		t.Fatal(err)
 	}
+	// The display is told of the page before it lays it out and asks for its images, as a device's is:
+	// told before, a fetch that came while the telling of the page was still due would be merged into it
+	// (only the latest is told), and there would be no second telling to wait for.
+	eventually(t, "the display told of the page", func() bool { return k.count("page meals") == 1 })
 	sc, _ := r.s.Scene("meals", addonapi.OnPage)
 	img := func(i int) bool {
 		cur, _ := r.s.Scene("meals", addonapi.OnPage)
@@ -493,4 +497,40 @@ func TestAStaleRetryTimerDoesNothing(t *testing.T) {
 		t.Errorf("the stale timer forgot the armed one (%v) or laid the page out (%d, was %d)", a.images.retry, a.images.gen, gen)
 	}
 	a.images.retry.Stop()
+}
+
+// A fetch that comes while the page's telling is still due is told with it, once: the telling is merged
+// (only the latest is told), and the page the display reads then has the image. Nothing is lost; there
+// is just no second telling, which is why the tests wait for the page's own telling before they ask for
+// its images.
+func TestAFetchMergedIntoAPendingTelling(t *testing.T) {
+	was := sceneEvery
+	sceneEvery = time.Second
+	t.Cleanup(func() { sceneEvery = was })
+	r, k, c := screenRig(t)
+	photo := pngBytes(t, 8, 8)
+	r.s.FetchImage = func(ctx context.Context, u string) ([]byte, error) { return photo, nil }
+	if err := c.SetScene(ctx(t), addonapi.OnPage, addonapi.Column(addonapi.Text("first"))); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the first telling", func() bool { return k.count("page meals") == 1 })
+	// Set again within sceneEvery: its telling is due later; the image's fetch comes before it.
+	if err := c.SetScene(ctx(t), addonapi.OnPage, addonapi.Column(addonapi.Image("http://192.168.1.20/a.png"))); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := r.s.Scene("meals", addonapi.OnPage)
+	r.s.Image("meals", &cur.Root.Children[0])
+	eventually(t, "fetched", func() bool { return len(r.s.fetching("meals")) == 0 })
+	if k.count("page meals") != 1 {
+		t.Fatalf("told %d times before the telling was due", k.count("page meals"))
+	}
+	eventually(t, "the merged telling", func() bool { return k.count("page meals") == 2 })
+	now, _ := r.s.Scene("meals", addonapi.OnPage)
+	if _, _, ok := r.s.Image("meals", &now.Root.Children[0]); !ok || now.Images == cur.Images {
+		t.Error("the page told after the fetch does not have its image")
+	}
+	time.Sleep(sceneEvery + 200*time.Millisecond)
+	if n := k.count("page meals"); n != 2 {
+		t.Errorf("told %d times; the fetch should have been merged into the page's telling", n)
+	}
 }
