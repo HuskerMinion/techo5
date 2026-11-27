@@ -42,6 +42,9 @@ const (
 	// startFrames are passed over after the camera starts, while its exposure finds the room.
 	startFrames = 6
 
+	// roomEvery is how often the room is compared, whatever the camera's rate: about two a second.
+	roomEvery = 450 * time.Millisecond
+
 	// retry is how soon a camera that could not be had (muted, the shutter closed) is asked again.
 	retry = 10 * time.Second
 )
@@ -73,6 +76,7 @@ type Feature struct {
 	lastRoom  time.Time // when the room detector last took a frame: it wants about two a second
 	skip      int       // frames still to pass over: the camera's first ones, after a start
 	hushUntil time.Time // the device's own light changing (Hush): frames until then are not compared
+	passed    passStats // the looks passed over while nobody is near, for the log (passover.go)
 }
 
 var (
@@ -337,6 +341,7 @@ func (f *Feature) watchFor(ctx context.Context, release func()) {
 	f.det = newDetector(config.Get().Presence.PresenceSensitivity())
 	f.cover, f.lastRoom = coverDetector{}, time.Time{}
 	f.skip = startFrames
+	f.passed.reset()
 	f.mu.Unlock()
 	slog.Info("presence: watching")
 	defer func() {
@@ -389,6 +394,8 @@ func (f *Feature) take(g []uint8, at time.Time) {
 		// light changing: not compared, and the next comparison starts from the next frame.
 		if f.skip > 0 {
 			f.skip--
+		} else if config.Get().Presence.On && !f.present {
+			f.passed.hush(at)
 		}
 		f.det.prev = nil
 		f.mu.Unlock()
@@ -399,7 +406,7 @@ func (f *Feature) take(g []uint8, at time.Time) {
 		f.gestured("cover")
 		f.mu.Lock()
 	}
-	if !config.Get().Presence.On || at.Sub(f.lastRoom) < 450*time.Millisecond {
+	if !config.Get().Presence.On || at.Sub(f.lastRoom) < roomEvery {
 		f.mu.Unlock()
 		// Presence detection off (only gestures on), or too soon: the room is compared at about two
 		// frames a second, whatever the camera's rate.
@@ -411,6 +418,13 @@ func (f *Feature) take(g []uint8, at time.Time) {
 	if moved {
 		f.lastSeen, f.present = at, true
 	}
+	switch {
+	case moved && !was:
+		f.passed.reset() // seen: nothing passed over to explain
+	case !was:
+		l := f.det.last
+		f.passed.add(at, l, l.kind == lookCounted && l.patch >= f.det.need())
+	}
 	f.mu.Unlock()
 	if moved && !was {
 		slog.Info("presence: somebody near")
@@ -419,14 +433,26 @@ func (f *Feature) take(g []uint8, at time.Time) {
 	}
 }
 
-// expire says the room is empty once nothing has moved for hold.
+// expire says the room is empty once nothing has moved for hold, and sums up a minute of looks passed
+// over while nobody was near, when it had something to explain.
 func (f *Feature) expire(now time.Time) {
 	f.mu.Lock()
 	gone := f.present && now.Sub(f.lastSeen) > hold
 	if gone {
 		f.present = false
 	}
+	need := f.det.need()
+	p, worth := f.passed.due(now, need)
+	var raised int
+	var bar, top float64
+	if worth {
+		bar = f.det.bar()
+		raised, top = f.det.raised()
+	}
 	f.mu.Unlock()
+	if worth {
+		logPassed(p, need, bar, raised, top)
+	}
 	if gone {
 		slog.Info("presence: nobody near")
 		f.sensor.Set(false)

@@ -28,7 +28,27 @@ type detector struct {
 	// have moved: the sensitivity (see patchFor and cellFor). Zero is the default.
 	patchMin int
 	cellMin  float64
+
+	// last is what the last step made of its frame, for the log's account of the looks passed over
+	// (passover.go).
+	last look
 }
+
+// look is what one step made of its frame: whether it was compared, and if so, how much moved.
+type look struct {
+	kind  lookKind
+	patch int // the largest patch of joined cells that moved
+	glare int // cells too bright to show a change
+}
+
+type lookKind uint8
+
+const (
+	lookFirst   lookKind = iota // nothing to compare with: the first frame, or the first after a break
+	lookSwing                   // the whole picture changed beyond steadyLo to steadyHi
+	lookBright                  // the picture brighter on average than brightMax
+	lookCounted                 // compared
+)
 
 // newDetector is a detector at a sensitivity of 1 to 100.
 func newDetector(sensitivity int) detector {
@@ -75,6 +95,7 @@ const (
 
 // step takes the next grid and reports whether somebody is moving in front of the camera.
 func (d *detector) step(cur []uint8) bool {
+	d.last = look{}
 	if len(cur) != gridW*gridH {
 		return false
 	}
@@ -92,10 +113,13 @@ func (d *detector) step(cur []uint8) bool {
 	if sumPrev > 4*len(cur) {
 		ratio = float64(sumCur) / float64(sumPrev)
 	}
-	steady := ratio >= steadyLo && ratio <= steadyHi &&
-		sumCur < brightMax*len(cur) && sumPrev < brightMax*len(cur)
-	if !steady {
+	switch {
+	case ratio < steadyLo || ratio > steadyHi:
+		d.last.kind = lookSwing
 		return d.hits() >= 2 // not counted: the last counted frames stand
+	case sumCur >= brightMax*len(cur) || sumPrev >= brightMax*len(cur):
+		d.last.kind = lookBright
+		return d.hits() >= 2
 	}
 
 	res := make([]float64, len(cur))
@@ -126,21 +150,19 @@ func (d *detector) step(cur []uint8) bool {
 			d.noise[i] = cellStep / noiseTimes
 		}
 	}
-	cell := d.cellMin
-	if cell == 0 {
-		cell = cellStep
-	}
+	cell := d.bar()
 	moved := make([]bool, len(cur))
 	for i, v := range res {
 		bright := min(float64(cur[i]), float64(prev[i])*ratio)
 		step := max(cell, noiseTimes*d.noise[i])
 		moved[i] = (v > step || v < -step) && bright < saturated
+		if bright >= saturated {
+			d.last.glare++
+		}
 	}
-	need := d.patchMin
-	if need == 0 {
-		need = defaultPatch
-	}
-	movement := largestPatch(moved) >= need
+	patch := largestPatch(moved)
+	d.last.kind, d.last.patch = lookCounted, patch
+	movement := patch >= d.need()
 	if !movement {
 		// A still frame teaches each cell what it does on its own.
 		for i, v := range res {
@@ -153,6 +175,35 @@ func (d *detector) step(cur []uint8) bool {
 	d.recent[d.n%3] = movement
 	d.n++
 	return d.hits() >= 2
+}
+
+// need is the patch a frame needs for movement.
+func (d *detector) need() int {
+	if d.patchMin == 0 {
+		return defaultPatch
+	}
+	return d.patchMin
+}
+
+// bar is the change a cell needs to have moved at this sensitivity, before its own noise.
+func (d *detector) bar() float64 {
+	if d.cellMin == 0 {
+		return cellStep
+	}
+	return d.cellMin
+}
+
+// raised counts the cells whose own noise has put their bar above bar, and gives the highest bar of
+// any: a room's TV or a lamp raises a few, a whole picture of raised cells sees little.
+func (d *detector) raised() (cells int, top float64) {
+	top = d.bar()
+	for _, n := range d.noise {
+		if b := noiseTimes * n; b > d.bar() {
+			cells++
+			top = max(top, b)
+		}
+	}
+	return cells, top
 }
 
 func (d *detector) hits() int {
