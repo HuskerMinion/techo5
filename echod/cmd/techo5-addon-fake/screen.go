@@ -1,8 +1,13 @@
 package main
 
 import (
+	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/display"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi/serve"
 )
@@ -39,14 +44,62 @@ func (f fakeScreen) changed(id, on string) {
 	}
 	b, _ := addonapi.Marshal(sc.Root)
 	f.d.say("the %s is now %d blocks, %d bytes (type scene %s to see it)", on, countBlocks(sc.Root), len(b), on)
-	// TODO(stage 2 part B): draw the scene to a PNG with the device's own layout code, at the family's
-	// screen size, so an author sees the page and the card without a device (-png FOLDER).
-	renderScene(id, on, sc)
+	f.d.drawScene(on, sc)
 }
 
-// renderScene is where the PNG of a scene will be made; it does nothing until the display's layout
-// code for scenes exists.
-var renderScene = func(id, on string, sc serve.Scene) {}
+// drawing is where the fake draws the add-on's page and card as PNGs (-png), and for which screen
+// (-size): "" draws nothing.
+type drawing struct {
+	to, size string
+}
+
+// pngFor is where the page (or the card) is drawn: the -png path, and the card beside it as
+// NAME-card.png.
+func (w drawing) pngFor(on string) string {
+	if on == addonapi.OnPage {
+		return w.to
+	}
+	ext := filepath.Ext(w.to)
+	return strings.TrimSuffix(w.to, ext) + "-card" + ext
+}
+
+// drawScene draws the add-on's page or card to its PNG with the device's own layout code
+// (display.RenderAddonScene), at the -size screen's size, its images as the device has them: one by
+// address is drawn once it has been fetched, which draws the scene again.
+func (d *fake) drawScene(on string, sc serve.Scene) {
+	if d.draw.to == "" {
+		return
+	}
+	img, err := display.RenderAddonScene(d.draw.size, d.name, on, sc.Root,
+		func(b *addonapi.Block) ([]byte, string, bool) { return d.srv.Image(d.id, b) }, d.timerLeft)
+	if err != nil {
+		d.say("the %s could not be drawn: %v", on, err)
+		return
+	}
+	path := d.draw.pngFor(on)
+	f, err := os.Create(path)
+	if err == nil {
+		err = png.Encode(f, img)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+	}
+	if err != nil {
+		d.say("the %s could not be written: %v", on, err)
+		return
+	}
+	d.say("drew the %s, as a %s draws it, to %s", on, d.draw.size, path)
+}
+
+// timerLeft is one of the add-on's timers as the fake keeps it: how long is left, of how long.
+func (d *fake) timerLeft(id string) (time.Duration, time.Duration, bool) {
+	for _, t := range d.Timers(d.id) {
+		if t.ID == id {
+			return time.Duration(t.Left * float64(time.Second)), time.Duration(t.Total * float64(time.Second)), true
+		}
+	}
+	return 0, 0, false
+}
 
 func countBlocks(b addonapi.Block) int {
 	n := 1

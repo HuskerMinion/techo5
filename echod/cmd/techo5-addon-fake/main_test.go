@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/feature/display"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
@@ -57,7 +60,7 @@ func TestTheFakeServesAnAddon(t *testing.T) {
 	in, keys := io.Pipe()
 	out := &syncBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- run(man, "", filepath.Join(dir, "run"), "show", nil, in, out) }()
+	go func() { done <- run(man, "", filepath.Join(dir, "run"), "show", nil, in, out, drawing{}) }()
 	waitFor(t, out, "export TECHO5_ADDON_API=")
 	path := regexp.MustCompile(`TECHO5_ADDON_API=(\S+)`).FindStringSubmatch(out.String())[1]
 
@@ -102,7 +105,7 @@ func TestTheFakeReadsTheManifestAsTheDeviceDoes(t *testing.T) {
 	man := filepath.Join(dir, "addon.json")
 	_ = os.WriteFile(man, []byte(`{"id":"meals","version":"0.1.0","command":["meals"],"ports":[],"root":false,
 	 "memory_mb":10,"api":1,"capabilities":["commands"]}`), 0o644)
-	if err := run(man, "", "", "show", nil, strings.NewReader(""), io.Discard); err == nil {
+	if err := run(man, "", "", "show", nil, strings.NewReader(""), io.Discard, drawing{}); err == nil {
 		t.Error("commands without any declared was taken")
 	}
 }
@@ -129,7 +132,7 @@ func TestTheFakeSimulatesMediaState(t *testing.T) {
 	in, keys := io.Pipe()
 	out := &syncBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- run(man, "", filepath.Join(dir, "run"), "show", nil, in, out) }()
+	go func() { done <- run(man, "", filepath.Join(dir, "run"), "show", nil, in, out, drawing{}) }()
 	waitFor(t, out, "export TECHO5_ADDON_API=")
 	path := regexp.MustCompile(`TECHO5_ADDON_API=(\S+)`).FindStringSubmatch(out.String())[1]
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -181,6 +184,12 @@ func TestTheFakeSimulatesMediaState(t *testing.T) {
 // fakeWith runs the fake for a manifest of these capabilities and family, and connects to it.
 func fakeWith(t *testing.T, caps, family string) (*addonapi.Client, *io.PipeWriter, *syncBuffer, chan error) {
 	t.Helper()
+	return fakeDrawing(t, caps, family, drawing{})
+}
+
+// fakeDrawing is fakeWith, drawing the add-on's scenes as draw says.
+func fakeDrawing(t *testing.T, caps, family string, draw drawing) (*addonapi.Client, *io.PipeWriter, *syncBuffer, chan error) {
+	t.Helper()
 	if os.Getuid() == 0 {
 		t.Skip("the API refuses root")
 	}
@@ -197,7 +206,7 @@ func fakeWith(t *testing.T, caps, family string) (*addonapi.Client, *io.PipeWrit
 	in, keys := io.Pipe()
 	out := &syncBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- run(man, "", filepath.Join(dir, "run"), family, nil, in, out) }()
+	go func() { done <- run(man, "", filepath.Join(dir, "run"), family, nil, in, out, draw) }()
 	waitFor(t, out, "export TECHO5_ADDON_API=")
 	path := regexp.MustCompile(`TECHO5_ADDON_API=(\S+)`).FindStringSubmatch(out.String())[1]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -281,5 +290,51 @@ func TestTheFakeDotHasNoScreen(t *testing.T) {
 	_, _ = io.WriteString(keys, "quit\n")
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// With -png, the fake draws the add-on's page and its card with the device's own layout code, at the
+// screen -size names, each time they change: what an author looks at without a device.
+func TestTheFakeDrawsScenes(t *testing.T) {
+	if len(display.AddonScreens) == 0 {
+		t.Skip("a Dot's build draws no screen")
+	}
+	dir := t.TempDir()
+	for _, size := range []string{"show5", "show8", "spot"} {
+		to := filepath.Join(dir, size+".png")
+		c, keys, out, done := fakeDrawing(t, `"screen"`, "show", drawing{to: to, size: size})
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		var b bytes.Buffer
+		img := image.NewRGBA(image.Rect(0, 0, 40, 30))
+		_ = png.Encode(&b, img)
+		if _, err := c.PutImage(ctx, "dish", b.Bytes()); err != nil {
+			t.Fatal(err)
+		}
+		page := addonapi.Column(addonapi.Title("Stir the onions"), addonapi.ImageNamed("dish"), addonapi.Button("next", "Next", "mdi:arrow-right"))
+		if err := c.SetScene(ctx, addonapi.OnPage, page); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.SetScene(ctx, addonapi.OnCard, addonapi.Row(addonapi.Text("Stir"), addonapi.Chip("next", "Next", ""))); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, out, "drew the page, as a "+size+" draws it")
+		waitFor(t, out, "drew the card, as a "+size+" draws it")
+		want := map[string][2]int{"show5": {960, 480}, "show8": {1280, 800}, "spot": {480, 480}}[size]
+		for _, path := range []string{to, filepath.Join(dir, size+"-card.png")} {
+			f, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := png.Decode(f)
+			f.Close()
+			if err != nil || got.Bounds().Dx() != want[0] || got.Bounds().Dy() != want[1] {
+				t.Errorf("%s: %v %v", path, got.Bounds(), err)
+			}
+		}
+		cancel()
+		_, _ = io.WriteString(keys, "quit\n")
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
 	}
 }

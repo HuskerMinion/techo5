@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addons/catalog"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/display"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi/serve"
 )
@@ -38,8 +39,10 @@ func main() {
 	values := flag.String("settings", "", "a JSON file of the add-on's settings, by key")
 	socket := flag.String("socket", "", "where to make the socket's folder (default: a temporary folder)")
 	family := flag.String("family", "show", "the device family hello tells: show, spot or dot")
+	pngTo := flag.String("png", "", "draw the add-on's page to this PNG, and its card beside it (page-card.png), each time they change")
+	size := flag.String("size", "", "the screen the PNG is drawn for: show5, show8 or spot (default: show8, or spot with -family spot)")
 	flag.Parse()
-	if err := run(*manifest, *values, *socket, *family, flag.Args(), os.Stdin, os.Stdout); err != nil {
+	if err := run(*manifest, *values, *socket, *family, flag.Args(), os.Stdin, os.Stdout, drawing{to: *pngTo, size: *size}); err != nil {
 		fmt.Fprintln(os.Stderr, "techo5-addon-fake:", err)
 		os.Exit(1)
 	}
@@ -48,7 +51,7 @@ func main() {
 // screens are each family's screen, as hello says them.
 var screens = map[string][2]int{"show": {960, 480}, "spot": {480, 480}, "dot": {0, 0}}
 
-func run(manifest, values, socket, family string, program []string, in io.Reader, out io.Writer) error {
+func run(manifest, values, socket, family string, program []string, in io.Reader, out io.Writer, draw drawing) error {
 	b, err := os.ReadFile(manifest)
 	if err != nil {
 		return err
@@ -64,7 +67,16 @@ func run(manifest, values, socket, family string, program []string, in io.Reader
 	if os.Getuid() == 0 {
 		return errors.New("run it as yourself, not as root: the API refuses root, as the device does")
 	}
-	d := &fake{out: out, family: family, timers: map[string]*fakeTimer{}, settings: map[string]any{}}
+	if draw.size == "" {
+		draw.size = "show8"
+		if family == "spot" {
+			draw.size = "spot"
+		}
+	}
+	if _, ok := display.AddonScreens[draw.size]; draw.to != "" && !ok {
+		return fmt.Errorf("-size %q: the PNG is drawn for show5, show8 or spot", draw.size)
+	}
+	d := &fake{out: out, family: family, timers: map[string]*fakeTimer{}, settings: map[string]any{}, draw: draw}
 	if values != "" {
 		vb, err := os.ReadFile(values)
 		if err != nil {
@@ -103,7 +115,8 @@ func run(manifest, values, socket, family string, program []string, in io.Reader
 		return err
 	}
 	defer s.Close(m.ID)
-	d.id = m.ID
+	// The name bar says the name the add-on's catalog entry gives it; the fake has only its id.
+	d.id, d.name = m.ID, m.ID
 	fmt.Fprintf(out, "serving %s on %s\n", m.ID, path)
 	if len(program) > 0 {
 		cmd := exec.Command(program[0], program[1:]...)
@@ -123,7 +136,9 @@ func run(manifest, values, socket, family string, program []string, in io.Reader
 type fake struct {
 	srv    *serve.Server
 	id     string
+	name   string
 	family string
+	draw   drawing
 
 	mu       sync.Mutex
 	out      io.Writer
