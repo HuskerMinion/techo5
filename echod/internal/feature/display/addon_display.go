@@ -326,7 +326,11 @@ func (p *paint) addonPageRooms() (bar, close, content image.Rectangle) {
 // addonBar is the page's name bar: the add-on's mark (the icon its catalog entry gives it, or its
 // initials) and name, and the way out. It is drawn after the scene, over all of it, and nothing in a
 // scene can move, cover or color it.
-func (r *paint) addonBar(name, icon string, bar, closeAt image.Rectangle, pal scenePalette) {
+//
+// end, when not 0, is where the name must end before, short of the way out: a pill of the device's own
+// (the microphone off) drawn in the bar beside it (renderer.headerAt), which the name keeps clear of, so
+// both stay readable.
+func (r *paint) addonBar(name, icon string, bar, closeAt image.Rectangle, pal scenePalette, end int) {
 	r.roundFill(bar, 0, pal.surface(3), pal.surface(2))
 	for x := bar.Min.X; x < bar.Max.X; x++ {
 		r.blendAt(x, bar.Max.Y-1, pal.rules, 1)
@@ -336,6 +340,9 @@ func (r *paint) addonBar(name, icon string, bar, closeAt image.Rectangle, pal sc
 	rad := r.s(22)
 	cx, cy := bar.Min.X+r.s(28)+rad, bar.Min.Y+bar.Dy()/2
 	room := closeAt.Min.X - (cx + rad + r.s(16)) - r.s(16)
+	if end > 0 {
+		room = min(room, end-(cx+rad+r.s(16))-r.s(16))
+	}
 	if r.round {
 		// On the round face the bar is a band across the top of the circle, its mark and name in the
 		// middle of it, where the circle is wide enough; the way out is at the foot (addonPageRoomsSpot).

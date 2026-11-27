@@ -3,6 +3,7 @@
 package display
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/fonts"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
@@ -545,4 +547,108 @@ func inked(img *image.RGBA, box image.Rectangle, ground color.RGBA) (image.Point
 		}
 	}
 	return image.Point{}, false
+}
+
+// The screen-demo add-on's page as a device showed it: in Comic Neue and the Ember theme, with the
+// microphone off. A toggle and a stepper sharing a row keep to their own shares, the device's pill sits in
+// the name bar beside the way out and the add-on's name stays whole, and the list's rows show no sliver
+// at its foot. With SHOW_PREVIEW set it is written there, with the page and the card in every font.
+func TestAddonDemoPage(t *testing.T) {
+	dir := os.Getenv("SHOW_PREVIEW")
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	keepPalette(t)
+	h := sampleHost(t, demoPage())
+	useHost(t, h)
+	applyTheme(themes[themeIndex("Ember")])
+	t.Cleanup(func() { _ = config.Set().Screen().Font("") })
+	if err := config.Set().Screen().Font("comicneue"); err != nil {
+		t.Fatal(err)
+	}
+	for _, panel := range showPanels()[:2] {
+		v := addonPageOf(h, "meals")
+		v.name = "Screen demo (TEST)"
+		s := scene{now: addonNow, phase: "idle", muted: true, addonPage: v}
+		_, r := addonFrame(t, dir, "addon-demo-comicneue-"+panel.name, panel.wide, panel.high, s)
+		r.zmu.Lock()
+		lay := r.addon.pageAt.lay
+		r.zmu.Unlock()
+		var toggle, stepper image.Rectangle
+		for i, b := range lay.boxes {
+			if b.b == nil {
+				continue
+			}
+			rr, _ := lay.at(i, nil, image.Point{})
+			switch {
+			case b.b.ID == "warm":
+				toggle = rr
+			case b.b.ID == "servings" && b.step == 0:
+				stepper = rr
+			}
+		}
+		if toggle.Empty() || stepper.Empty() || toggle.Overlaps(stepper) || toggle.Dx() > content(r).Dx()/3 {
+			t.Errorf("%s: the toggle at %v and the stepper at %v, in a row of %v", panel.name, toggle, stepper, content(r))
+		}
+		// The pill in the bar beside the way out, clear of the name's room.
+		pill := r.addonPillAt(s)
+		bar, closeAt, _ := r.addonPageRooms()
+		if pill.Empty() || !pill.In(bar) || pill.Max.X > closeAt.Min.X {
+			t.Errorf("%s: the pill at %v, the bar %v, the way out %v", panel.name, pill, bar, closeAt)
+		}
+	}
+	// Each font the device offers, the page and the card, to be looked at.
+	if dir == "" {
+		return
+	}
+	for _, fam := range fonts.Families() {
+		if err := config.Set().Screen().Font(fam.Value); err != nil {
+			t.Fatal(err)
+		}
+		name := fam.Value
+		if name == "" {
+			name = "go"
+		}
+		v := addonPageOf(h, "meals")
+		v.name = "Screen demo (TEST)"
+		addonFrame(t, dir, "font-"+name+"-page", show8Wide, show8High, scene{now: addonNow, phase: "idle", muted: true, addonPage: v})
+		addonFrame(t, dir, "font-"+name+"-card", show8Wide, show8High, scene{now: addonNow, phase: "idle", weather: hassSunny(),
+			timers: sampleTimers(), addonCard: addonCardOf(h, "meals")})
+	}
+}
+
+// content is the page's room for its scene.
+func content(r *renderer) image.Rectangle {
+	_, _, c := r.addonPageRooms()
+	return c
+}
+
+// demoPage is the screen-demo test add-on's page as it sets it: a title, a row of chips, a toggle and a
+// stepper sharing a row, a picture and a timer's bar beside a list whose rows have a picture or an icon,
+// a status line and the way back and on.
+func demoPage() addonapi.Block {
+	chips := addonapi.Row(addonapi.Block{Type: addonapi.BlockChip, ID: "chip_one", Label: "Chip one", Selected: true},
+		addonapi.Chip("chip_two", "Chip two", ""), addonapi.Chip("chip_three", "Chip three", ""))
+	toggle, stepper := addonapi.Toggle("warm", "Keep warm", true), addonapi.Stepper("servings", "Servings", 3, 1, 12, 1, "")
+	toggle.Weight, stepper.Weight = 1, 1
+	var items []addonapi.Block
+	for i := 1; i <= 5; i++ {
+		r := addonapi.Row(addonapi.Text(fmt.Sprintf("Item %d", i)))
+		r.ID = fmt.Sprintf("item_%d", i)
+		if i%2 == 0 {
+			r.Icon = "mdi:food-apple"
+		} else {
+			r.Name = "thumb"
+		}
+		items = append(items, r)
+	}
+	left := addonapi.Column(addonapi.ImageNamed("dish"), addonapi.Progress(1))
+	left.Weight = 2
+	list := addonapi.List(addonapi.Section{Heading: "Tap an item", Items: items})
+	list.Weight = 3
+	middle := addonapi.Row(left, list)
+	middle.Weight = 1
+	status := addonapi.Block{Type: addonapi.BlockText, ID: "status", Text: "Last: button back", Size: addonapi.SizeSmall}
+	on := addonapi.Spacer()
+	on.Weight = 1
+	return addonapi.Column(addonapi.Title("Screen demo"), chips, addonapi.Row(toggle, stepper), middle, status,
+		addonapi.Row(addonapi.Button("back", "Back", "mdi:arrow-left"), on, addonapi.Button("next", "Next", "mdi:arrow-right")))
 }

@@ -238,6 +238,8 @@ show/addon-blocks-show5.png
 show/addon-blocks-show8.png
 show/addon-controls-show5.png
 show/addon-controls-show8.png
+show/addon-demo-comicneue-show5.png
+show/addon-demo-comicneue-show8.png
 show/addon-overflow-show5.png
 show/addon-overflow-show8.png
 show/addon-overflow-scrolled-show5.png

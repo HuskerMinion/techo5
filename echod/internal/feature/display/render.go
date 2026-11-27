@@ -1544,6 +1544,10 @@ func (r *renderer) headerAt(s scene, y int) {
 	w := r.width(r.tiny, line)
 	pad := r.s(14)
 	x := (r.w - w) / 2
+	if at := r.addonPillAt(s); !at.Empty() {
+		// Over an add-on's page, in its name bar beside the way out, clear of the add-on's name.
+		x, y = at.Min.X+pad, at.Min.Y
+	}
 	fill, ink := walnut, amber
 	if s.micOffSaid() {
 		// The microphone off is red with black words, the way a mute light is red: 5.7 to 1, readable

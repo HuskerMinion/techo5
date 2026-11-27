@@ -321,9 +321,19 @@ func TestAddonScrollingColumnEdges(t *testing.T) {
 	if lay.maxScroll(0) <= 0 {
 		t.Fatal("the column does not scroll on a Show 5")
 	}
-	for step := 0; step <= lay.maxScroll(0); step += 7 {
-		scrolls := []int{step}
+	for step := 0; step <= max(lay.maxScroll(0), lay.maxScroll(1)); step += 7 {
+		scrolls := []int{min(step, lay.maxScroll(0)), min(step, lay.maxScroll(1))}
 		for i, b := range lay.boxes {
+			if b.list == 0 {
+				continue
+			}
+			if b.lead || b.whole {
+				// A list row's icon or picture: whole or not at all, never a sliver at the list's edge.
+				if r, seen := lay.shown(i, scrolls, image.Point{}); !seen.Empty() && seen != r {
+					t.Errorf("scrolled %d: a row's icon or picture is shown cut, %v of %v", step, seen, r)
+				}
+				continue
+			}
 			if b.list != 1 {
 				continue
 			}

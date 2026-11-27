@@ -138,6 +138,8 @@ type sceneBox struct {
 	label image.Rectangle // a progress tied to a timer: where its time is written; a stepper's number
 	clip  image.Rectangle // the room it was laid out in, which nothing of it is drawn outside
 	lead  bool            // a list row's icon at its start
+	whole bool            // a list row's picture at its start: shown, in a scroll, only whole
+	in    image.Rectangle // in a list, the item it belongs to, in the list's content: shown with it, whole
 }
 
 // scenePic is an image's bytes and the key that names them, and the size it was laid out at.
@@ -652,7 +654,7 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 			if thumb, ok := b.Thumb(); ok {
 				t := &thumb
 				pic, _, _ := l.picOf(t)
-				l.add(sceneBox{b: t, r: sq, pic: pic})
+				l.add(sceneBox{b: t, r: sq, pic: pic, whole: true})
 			} else {
 				l.add(sceneBox{b: b, r: sq, lead: true})
 			}
@@ -804,6 +806,12 @@ func (l *sceneLayouter) placeRow(b *addonapi.Block, r image.Rectangle) {
 	for i := range b.Children {
 		c := &b.Children[i]
 		box := image.Rect(x, r.Min.Y, x+widths[i], r.Max.Y)
+		if c.Type == addonapi.BlockToggle || c.Type == addonapi.BlockStepper {
+			// Beside others in a row, a toggle's switch and a stepper's − number + stay by its label, at its
+			// own width from the start of its share: spread to the end of a wide share, a switch stood
+			// beside the next block and read as that block's.
+			box.Max.X = min(box.Max.X, box.Min.X+l.size(c, max(widths[i], 1)).X)
+		}
 		switch c.Type {
 		case addonapi.BlockCard, addonapi.BlockColumn, addonapi.BlockList:
 		default:
@@ -839,13 +847,17 @@ func (l *sceneLayouter) placeList(b *addonapi.Block, r image.Rectangle) {
 			h := l.size(it, r.Dx()).Y
 			ib := image.Rect(r.Min.X, y, r.Max.X, y+h+2*m.gap[2])
 			if it.ID != "" {
-				l.add(sceneBox{b: it, r: ib, tap: it.ID, item: true})
+				// Taken by a finger only while the item is shown, as its blocks are (shown).
+				l.add(sceneBox{b: it, r: ib, tap: it.ID, item: true, in: image.Rect(r.Min.X, y+m.gap[2], r.Max.X, y+m.gap[2]+h)})
 			}
 			n := len(l.out.boxes)
 			l.place(it, image.Rect(r.Min.X, y+m.gap[2], r.Max.X, y+m.gap[2]+h))
-			// What the item holds is in the list's content as it is.
+			// What the item holds is in the list's content as it is, and is shown as the item is: all of it
+			// or none, so a row's words never show without its picture or icon.
+			whole := image.Rect(r.Min.X, y+m.gap[2], r.Max.X, y+m.gap[2]+h)
 			for j := n; j < len(l.out.boxes); j++ {
 				l.out.boxes[j].list = l.list
+				l.out.boxes[j].in = whole
 			}
 			y = ib.Max.Y
 			l.add(sceneBox{b: b, r: image.Rect(r.Min.X, y, r.Max.X, y+1), rule: true})
@@ -881,16 +893,30 @@ func (s *sceneLayout) at(i int, scrolls []int, off image.Point) (image.Rectangle
 }
 
 // shown is at, but nothing seen of a block in a list or a scrolling column that is only partly in its
-// view: words, a button, a chip, a stepper or a toggle is drawn, and takes a finger, only whole, so a
-// scroll leaves no sliver of a line at the view's edge; a picture, the rule between items and an item's
-// whole are cut at the edge, a picture only while a third of it is seen.
+// view: words, a button, a chip, a stepper, a toggle, and a list row's icon or picture is drawn, and takes
+// a finger, only whole, so a scroll leaves no sliver of a line or a glyph at the view's edge; a picture of
+// its own, the rule between items and an item's whole are cut at the edge, a picture only while a third
+// of it is seen.
 func (s *sceneLayout) shown(i int, scrolls []int, off image.Point) (image.Rectangle, image.Rectangle) {
 	r, seen := s.at(i, scrolls, off)
 	b := s.boxes[i]
-	if b.list == 0 || seen == r || b.item || b.rule {
+	if b.list == 0 || b.rule || seen.Empty() {
 		return r, seen
 	}
-	if b.b != nil && (b.b.Type == addonapi.BlockImage || b.lead) && seen.Dy()*3 >= r.Dy() {
+	view := s.lists[b.list-1].view.Add(off)
+	if !b.in.Empty() {
+		// A list item's block, or the item itself: shown when its whole item is (or the item is taller
+		// than the view, and so never whole in it), cut only by the view's own edge then.
+		in := b.in.Add(r.Min.Sub(b.r.Min))
+		if in.In(view) || in.Dy() >= view.Dy() {
+			return r, seen
+		}
+		return r, image.Rectangle{}
+	}
+	if seen == r || r.Dy() >= view.Dy() {
+		return r, seen // whole, or taller than the view and so never whole in it: seen cut rather than never
+	}
+	if b.b != nil && b.b.Type == addonapi.BlockImage && !b.whole && seen.Dy()*3 >= r.Dy() {
 		return r, seen
 	}
 	return r, image.Rectangle{}

@@ -36,10 +36,25 @@ func (r *renderer) addonPage(s scene) {
 		msg := r.fit(f, fmt.Sprintf(tr("addon_waiting"), v.name), content.Dx())
 		r.text(f, msg, content.Min.X+(content.Dx()-r.width(f, msg))/2, content.Min.Y+content.Dy()/2, dim)
 	}
-	r.addonBar(v.name, v.icon, bar, closeAt, pal)
+	r.addonBar(v.name, v.icon, bar, closeAt, pal, r.addonPillAt(s).Min.X)
 	r.zmu.Lock()
 	r.addon.pageAt.id, r.addon.pageAt.lay, r.addon.pageAt.scrolls, r.addon.pageAt.close = v.id, lay, v.scrolls, closeAt
 	r.zmu.Unlock()
+}
+
+// addonPillAt is where the device's own pill (the microphone off, a lost connection: headerLine) goes
+// over an add-on's page: in its name bar, at the end before the way out, rather than across the middle of
+// the bar where it covered the add-on's name, which says whose page it is. Empty with no pill.
+func (r *renderer) addonPillAt(s scene) image.Rectangle {
+	line := headerLine(s)
+	if line == "" || s.addonPage == nil {
+		return image.Rectangle{}
+	}
+	bar, closeAt, _ := r.addonPageRooms()
+	w, pad := r.width(r.tiny, line), r.s(14)
+	right := closeAt.Min.X - r.s(16)
+	top := bar.Min.Y + (bar.Dy()-r.s(28))/2
+	return image.Rect(right-w-2*pad, top, right, top+r.s(28))
 }
 
 // addonCardRoom is where the card goes over the clock: along the foot, where the Next up card is, at most

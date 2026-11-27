@@ -344,7 +344,10 @@ down on it, a thumb and faded edges while there is more, its blocks cut cleanly 
 on what is seen, and a gutter at its right edge for the thumb, which never lies over a block), so
 every button, stepper and toggle on a page can be reached. In a list or a scrolling column, words and
 controls are drawn, and take a finger, only whole: one the view's edge would cut waits until it is
-scrolled fully into view, so the edges never show a sliver of a line; a picture is cut cleanly. The card, a glance at
+scrolled fully into view, so the edges never show a sliver of a line; a list's item, with its row's
+picture or icon, is shown all together or not at all; a picture of its own is cut cleanly. A toggle or a
+stepper sharing a row with others keeps its switch or its − number + beside its label, at its own width
+from the start of its share, so it never stands beside the next block as if it were that block's. The card, a glance at
 the clock, does not scroll: what does not fit whole in it is left out (its chip row, say, rather than
 half a chip), and it is as tall as what it keeps, at most a third of the screen. On the page:
 
@@ -408,7 +411,8 @@ it is fixed once published; a new icon comes with a new version.
 a device with no screen for add-ons, every screen op is answered `unavailable`.
 
 **What a page can never do.** The name bar over the page, with the add-on's name and its mark, is the
-daemon's and cannot be hidden or covered. The mark is the icon the catalog's reviewer chose for the
+daemon's and cannot be hidden or covered: not even by the device's own pill (the microphone off, a lost
+connection), which over a page sits in the name bar beside the way out, the name kept clear of it. The mark is the icon the catalog's reviewer chose for the
 version (below), or without one the add-on's initials; never an icon the add-on picks, which could pass
 for one of the device's own (a padlock, a phone). Nothing in a block names a color, a position or a size in
 pixels: a card is marked with one of the theme's own colors by name, and there is no accept or decline

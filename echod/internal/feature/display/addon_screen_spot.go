@@ -205,7 +205,7 @@ func (r *roundRenderer) addonPageSpot(s roundScene) {
 		msg := r.fit(f, fmt.Sprintf(tr("addon_waiting"), v.name), content.Dx())
 		r.text(f, msg, center-r.width(f, msg)/2, center, dim)
 	}
-	r.addonBar(v.name, v.icon, bar, closeAt, pal)
+	r.addonBar(v.name, v.icon, bar, closeAt, pal, 0)
 	if s.showVolume {
 		// The volume being turned, over the page: the page dimmed under it, so its number reads, and
 		// still in view.

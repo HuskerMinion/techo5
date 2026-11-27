@@ -775,3 +775,20 @@ A look at those goldens found three more, done:
   give, so it is drawn whole and smaller above the card, put down where it is not the face's ground so a
   photo behind shows through. A test draws each style on the Show 5, the Show 8 and the Spot with the
   card left out and holds the card's room to the ground; goldens of each are added.
+
+A device test (a Show 8, the Ember theme, Comic Neue) found three more, done:
+
+- **A toggle stood beside the next block.** In a row of a toggle and a stepper with a share each, the
+  toggle's switch was drawn at the end of its half, right beside the stepper's label, where it read as
+  the stepper's. A toggle or a stepper beside others in a row now keeps to its own width from the start
+  of its share, its switch or its − number + by its label.
+- **A sliver of a row's icon.** The rule that words show only whole did not cover a list row's icon or
+  picture, so the edge of the list showed a piece of an apple. A list's item is now shown all together or
+  not at all, its words, its picture and its icon (a block taller than the view, never whole in it, is cut
+  by the view instead), and its tap follows what is shown.
+- **The microphone pill over the name.** The device's pill across the top of the screen covered the
+  add-on's name, which the name bar is there to show. Over a page it now sits in the name bar beside the
+  way out, and the name keeps clear of it.
+
+The demo's page is a golden in Comic Neue and Ember on the Show 5 and the Show 8, with the microphone
+off; the page and the card were drawn in every font on offer and looked at.
