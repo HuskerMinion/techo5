@@ -269,6 +269,7 @@ func (s *Source) open() error {
 	s.mu.Unlock()
 
 	afterOpen()
+	s.startRawDump()
 	return nil
 }
 
