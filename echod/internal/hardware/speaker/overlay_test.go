@@ -126,3 +126,29 @@ func TestUnderlayIsItsOwnLane(t *testing.T) {
 		t.Error("the underlay is still queued after DrainUnder")
 	}
 }
+
+// A chime mixed in over a track is never ducked with it (#727): a turn's duck rewrites the track's own
+// queue (Bed.Adjust), and the chime is in the speaker's, whether it was mixed in before the duck or
+// after.
+func TestADuckLeavesAChimeAlone(t *testing.T) {
+	p := &Player{}
+	tone := []int16{1000, 1000, 1000, 1000}
+	p.mu.Lock()
+	p.pending = mix(p.pending, tone)
+	p.overlaid(len(tone))
+	p.bed = []int16{800, 800, 800, 800}
+	p.mu.Unlock()
+	p.Bed().Adjust(func(s []int16) {
+		for i := range s {
+			s[i] /= 4
+		}
+	})
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !slices.Equal(p.pending, tone) {
+		t.Errorf("the chime became %v, want %v", p.pending, tone)
+	}
+	if p.bed[0] != 200 {
+		t.Errorf("the track was not ducked: %v", p.bed)
+	}
+}

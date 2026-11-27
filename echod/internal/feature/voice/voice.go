@@ -324,9 +324,14 @@ func (v *Voice) WokeChimed(slot int, at time.Time, dB float64, chimed time.Time)
 //     a wake word always has, and only then chimes. A sound over the ring would be lost in it, and on a
 //     device that does not answer, a ring going on after a chime says the word was heard and ignored;
 //   - not for a slot that calls a contact, which makes no wake sound; nor with the microphones taken or
-//     muted, where no turn opens; nor for a slot, or in quiet hours, with no sound at all.
+//     muted, where no turn opens; nor for a slot, or in quiet hours, with no sound at all;
+//   - not for a slot after the first with no wake word to reach its pipeline by, which the turn refuses
+//     without a sound (start).
 func (v *Voice) ChimeNow(slot int) time.Time {
 	if micTaken() || ring.IsSounding() || wakeCallApplies(slot) || v.turn.Busy() || !wakeword.Tones(slot, false) {
+		return time.Time{}
+	}
+	if _, ok := v.turn.phraseFor(slot); slot > 0 && !ok {
 		return time.Time{}
 	}
 	if muted, err := mute.Get().Muted(); err == nil && muted {
@@ -371,6 +376,9 @@ func (v *Voice) open(slot int, woke bool, at time.Time, heard wakeClarity, chime
 	silencedRing := ring.IsSounding() && ring.Silence()
 	if silencedRing {
 		slog.Info("wake word over a ring, silencing it")
+		// A ring that began after the word chimed, while the devices decided (#727), drowned that
+		// sound: the turn chimes again once it is quiet, as one over a ring always has.
+		chimed = time.Time{}
 	}
 	if woke && wakeCallApplies(slot) {
 		// The first wake over a ringing alarm only quiets it. A second can call.

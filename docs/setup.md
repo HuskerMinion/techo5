@@ -2287,13 +2287,15 @@ With the switch on and no house word, the setup page and the device's log say it
 The wake sound doesn't wait for that. A device that heard its wake word for sure and clearly chimes the
 moment it hears it, as a device on its own does, and the devices decide while you go on talking. The
 one that answers opens its turn without a second sound; the others go quiet: nothing on their screen
-or ring, no ducked music, and nothing sent to Home Assistant. So two devices that both heard you both
+or ring, no ducked music, and nothing sent to Home Assistant. That is why the listening screen, and on
+a Dot the ring light, comes up one window after the chime: only on the device that answers. So two devices that both heard you both
 chime, and the chime of one that didn't answer may be heard faintly at the start of what the other
 sends. A wake that may not open anything still chimes only once it does, as before: one the device
 wasn't sure of, one heard faintly (Confirm below nearest-device score), one said over the device's own
 reply, and one held for a moment to see if a command word such as "next song" was meant. So does a
 wake word over a ringing alarm or timer, which silences the ring and then chimes, and a device on a
-release before this one.
+release before this one. An alarm or timer that starts ringing during the window drowns the chime, so
+the device that answers silences it and chimes again.
 
 How clearly is how far the wake word stood out from that device's own room, so a device with hotter
 microphones or in a louder room does not win for that alone. Nothing you say during the wait is
@@ -2314,9 +2316,10 @@ waiting on a device asking home assistant". A device on a release before this on
 answers as it did before.
 
 **Nearest device window** (100 to 500 ms, 300 to start with) is how long a device waits to hear from
-the others. Every wake word waits this long before its turn opens, though you hear its sound at once.
-Raise it if two devices sometimes both answer, or a nearer one loses; lower it if the wait is
-noticeable. **Nearest device offset** (-30 to 30 dB, 0 to
+the others. Every wake word waits this long before its turn opens. A wake heard for sure and clearly
+chimes at once anyway; the ones listed above (not sure, faint, over the device's own reply, held for a
+command word, over a ring) chime only when the turn opens, after the wait. Raise it if two devices
+sometimes both answer, or a nearer one loses; lower it if the wait is noticeable on those. **Nearest device offset** (-30 to 30 dB, 0 to
 start with) is added to how clearly this device heard you: raise it on a device that loses when you
 speak right beside it, lower it on one that answers from across the room. The log shows each
 device's score on every wake word. If the device that heard you best loses Home Assistant during the

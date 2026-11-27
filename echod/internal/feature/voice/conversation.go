@@ -1192,8 +1192,9 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	// first, and it has a second of queued music to get through, so every step it waits behind is a
 	// step of full-volume music over somebody who has already started talking.
 	//
-	// It also keeps the chime out of the duck: the chime is mixed into the queue after this, so it
-	// sounds at its own level rather than being faded along with the track underneath it.
+	// The chime is never ducked, whether it plays after this or played at the word (#727): it is mixed
+	// into the speaker's own queue, and ducking rewrites only the track's (speaker.Bed), so it sounds at
+	// its own level rather than being faded along with the track underneath it.
 	c.hold(true)
 
 	// A follow-up chimes like the wake word that started the conversation, unless the slot has been
@@ -1261,7 +1262,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if n.woke && !n.at.IsZero() {
 		heard = time.Since(n.at)
 	}
-	c.startAudio(slot, n.followUp, hadAudio(n), historyFor(slot, n.followUp, n.confirmed, n.waited, heard), n.chimed)
+	history := historyFor(slot, n.followUp, n.confirmed, n.waited, heard)
+	if !n.chimed.IsZero() {
+		history = sinceChime(history, time.Since(n.chimed))
+	}
+	c.startAudio(slot, n.followUp, hadAudio(n), history, n.chimed)
 	// The phrase is logged for a follow-up too, because it is what chose the pipeline — not because
 	// anyone said it.
 	slog.Info("turn started", "slot", slot+1, "phrase", phrase, "follow_up", n.followUp, "on_ha", n.continued,
@@ -1816,15 +1821,29 @@ func hadAudio(n nextTurn) bool { return n.continued && !n.confirmed }
 func (c *conversation) stream(ctx context.Context, be backend, slot int, followUp, continued bool, id string, history time.Duration, chimed time.Time) {
 	frames, pre, unlisten := c.source.ListenHistory("turn", history)
 	defer unlisten()
-	// The history ends now: how long before that the sound began places it in what is sent.
+	// How long before the end of the history the sound began places it in what is sent.
 	ago := time.Duration(-1)
 	if !chimed.IsZero() {
-		ago = max(time.Since(chimed), 0)
+		ago = chimedAgo(time.Since(chimed), speaker.Get().Latency())
+		slog.Debug("turn: wake sound played at the word", "chimed_ms_ago", ago.Milliseconds(),
+			"queued_ms_ago", time.Since(chimed).Milliseconds(), "output_ms", speaker.Get().Latency().Milliseconds())
 	}
 	hold := holdsForTone(slot, followUp)
-	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate,
-		"chimed_ms_ago", ago.Milliseconds())
+	slog.Info("turn: wake sound", "tone", wakeword.Tones(slot, followUp), "held", hold, "history_ms", len(pre)*1000/mic.Rate)
 	c.pump(ctx, be, slot, followUp, continued, hold, id, ago, pre, frames)
+}
+
+// captureLag is how far behind the room the newest frame of the history is when it is handed out: up to
+// a frame (mic.FrameSamples), the capture's own buffering and the beamformer's few samples aside.
+const captureLag = time.Second * mic.FrameSamples / mic.Rate
+
+// chimedAgo is how long before the end of the history a sound queued queued ago began to be heard,
+// output being the speaker's latency then (speaker.Player.Latency): it sounded that much after it was
+// queued, and the history ends captureLag before now. Both put the sound later in the history than
+// the wall clock does, and an error the other way would send its start as the request, so both come
+// off; never below zero.
+func chimedAgo(queued, output time.Duration) time.Duration {
+	return max(queued-output-captureLag, 0)
 }
 
 // samplesIn is how many microphone samples d holds, and durationOf the other way.
@@ -1854,6 +1873,14 @@ func historyFor(slot int, followUp, confirmed bool, waited, heard time.Duration)
 		return min(max(waited, heard), mic.History+waited)
 	}
 	return mic.History + waited
+}
+
+// sinceChime is a turn's history, history, for a wake word whose sound played chimed ago, at the word
+// (#727): it reaches back at least to the sound, as far as the microphones' history goes (mic.Held). A
+// turn held back on its way to opening (a run still closing) opens later than the window it waited,
+// and with the reach historyFor gives it the first words said after the sound would fall out.
+func sinceChime(history, chimed time.Duration) time.Duration {
+	return min(max(history, chimed), mic.Held)
 }
 
 // prerollWithSound is whether a turn with a wake sound keeps the 250 ms before the word anyway

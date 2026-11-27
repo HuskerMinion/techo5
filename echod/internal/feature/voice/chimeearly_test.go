@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 )
 
 // countChimes stands in for the wake sound for one test and counts it.
@@ -195,4 +196,69 @@ func TestAnEarlyChimeTimesTheEndOfSpeechFromTheSound(t *testing.T) {
 			t.Fatal("a turn that chimes as it opens heard the end of speech inside its own sound")
 		}
 	})
+}
+
+// A turn held back on its way to opening still reaches back to a sound played at the word, however long
+// it was held, as far as the microphones' history goes: with the window's reach alone, the first words
+// after the sound fell out of a turn held past it.
+func TestAHeldTurnReachesBackToTheChime(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	_ = config.Set().Wake(0).Tone(config.ToneHA)
+	waited, heard := 300*time.Millisecond, 1500*time.Millisecond
+	got := sinceChime(historyFor(0, false, false, waited, heard), heard)
+	if got < heard {
+		t.Errorf("held 1.5 s after the sound: history %v, want at least %v", got, heard)
+	}
+	if got := sinceChime(historyFor(0, false, false, waited, time.Minute), time.Minute); got != mic.Held {
+		t.Errorf("a minute after the sound: history %v, want at most %v", got, mic.Held)
+	}
+	if got := sinceChime(mic.History+waited, 10*time.Millisecond); got != mic.History+waited {
+		t.Errorf("a reach longer than the time since the sound was cut to %v", got)
+	}
+}
+
+// An alarm that started ringing after the word chimed, while the devices decided, is silenced as the
+// turn opens, and the turn chimes again over the quiet.
+func TestARingInTheWindowChimesAgainAfterIt(t *testing.T) {
+	for _, ringing := range []bool{true, false} {
+		t.Run(map[bool]string{true: "ringing", false: "not"}[ringing], func(t *testing.T) {
+			config.Use(filepath.Join(t.TempDir(), "state.json"))
+			v := wakeCallVoice()
+			if ringing {
+				sound(t)
+			}
+			v.WokeChimed(0, time.Now(), 12, time.Now())
+			if e := <-v.turn.events; e.kind != evStart || e.chimed.IsZero() == !ringing {
+				t.Fatalf("posted chimed %v; want the turn to chime again only after a ring", e.chimed)
+			}
+		})
+	}
+}
+
+// A slot after the first whose wake word is not running has no pipeline to reach, and the turn refuses
+// it without a sound: so it does not chime at the word either.
+func TestNoChimeForASlotWithNoWakeWord(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	_ = config.Set().Wake(1).Tone(config.ToneHA)
+	chimes := countChimes(t)
+	v := wakeCallVoice()
+	v.vs.ActiveWakeWords = []string{"okay_nabu"}
+	if at := v.ChimeNow(1); !at.IsZero() || *chimes != 0 {
+		t.Errorf("chimed %d times for a slot with no wake word", *chimes)
+	}
+	v.vs.ActiveWakeWords = []string{"okay_nabu", "hey_jarvis"}
+	if at := v.ChimeNow(1); at.IsZero() {
+		t.Error("no chime for the second slot with its wake word running")
+	}
+}
+
+// The sound is placed by when it was heard, not when it was queued: the speaker's latency after it, and
+// the capture's before the history ends, both come off; never below zero.
+func TestTheChimeIsPlacedWhereTheMicrophonesHeardIt(t *testing.T) {
+	if got, want := chimedAgo(500*time.Millisecond, 60*time.Millisecond), 440*time.Millisecond-captureLag; got != want {
+		t.Errorf("queued 500 ms ago, 60 ms out: %v, want %v", got, want)
+	}
+	if got := chimedAgo(10*time.Millisecond, 60*time.Millisecond); got != 0 {
+		t.Errorf("not heard yet: %v, want 0", got)
+	}
 }
