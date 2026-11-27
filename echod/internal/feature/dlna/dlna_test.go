@@ -105,11 +105,11 @@ func TestTheDescriptionsAreXML(t *testing.T) {
 // A search for the renderer, or for everything, is understood; anything else is not.
 func TestSearches(t *testing.T) {
 	msg := "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 9\r\nST: " + deviceType + "\r\n\r\n"
-	st, mx, ok := parseSearch([]byte(msg))
-	if !ok || st != deviceType || mx != 5 {
-		t.Errorf("parseSearch = %q %d %v", st, mx, ok)
+	s, ok := parseSearch([]byte(msg))
+	if !ok || s.st != deviceType || s.mx != 5 || s.unicast {
+		t.Errorf("parseSearch = %+v %v", s, ok)
 	}
-	if _, _, ok := parseSearch([]byte("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\n\r\n")); ok {
+	if _, ok := parseSearch([]byte("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\n\r\n")); ok {
 		t.Error("a NOTIFY was taken for a search")
 	}
 }

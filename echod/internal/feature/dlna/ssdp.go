@@ -1,8 +1,6 @@
 package dlna
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/web"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/metrics"
+	"golang.org/x/net/ipv4"
 )
 
 // SSDP: how controllers find the renderer. A controller asks the network who is there (M-SEARCH, to
@@ -23,9 +22,16 @@ import (
 // (NOTIFY byebye) when it goes off.
 
 const (
-	ssdpAddr   = "239.255.255.250:1900"
-	maxAge     = 1800
-	aliveEvery = 15 * time.Minute
+	ssdpAddr = "239.255.255.250:1900"
+	maxAge   = 1800
+	// aliveEvery is how often the device says it is here: well inside max-age, and often enough that a
+	// controller which never hears the device's answers to its searches (a router that stopped passing
+	// the search group on to the device, a phone that drops multicast while it dozes) still lists it in
+	// a few minutes rather than a quarter of an hour (#779).
+	aliveEvery = 3 * time.Minute
+	// sayAgain is the gap before each announcement is sent a second time: multicast over Wi-Fi is not
+	// acknowledged, and UPnP asks for each set to go out more than once.
+	sayAgain = 300 * time.Millisecond
 
 	deviceType = "urn:schemas-upnp-org:device:MediaRenderer:1"
 	avtType    = "urn:schemas-upnp-org:service:AVTransport:1"
@@ -45,6 +51,17 @@ func usn(target string) string {
 		return id
 	}
 	return id + "::" + target
+}
+
+// matching is the targets a search for st is answered with: all of them for ssdp:all, else the one it names.
+func matching(st string) []string {
+	var answer []string
+	for _, t := range targets() {
+		if strings.EqualFold(st, "ssdp:all") || strings.EqualFold(st, t) {
+			answer = append(answer, t)
+		}
+	}
+	return answer
 }
 
 // announce answers searches and says the device is here, until ctx ends; then it says goodbye.
@@ -72,37 +89,97 @@ func (f *Feature) announce(ctx context.Context) {
 	defer stop()
 	slog.Info("dlna: renderer on", "name", friendlyName())
 
-	go func() {
-		for {
-			notify(group, "ssdp:alive")
-			select {
-			case <-ctx.Done():
-				notify(group, "ssdp:byebye")
-				return
-			case <-time.After(aliveEvery):
+	pc := ipv4.NewPacketConn(listen)
+	go herald(ctx, func() { rejoin(pc, group) }, func(nts string) { notify(metrics.Addresses(), group, nts) },
+		func() time.Duration { return aliveEvery - 20*time.Second + rand.N(40*time.Second) })
+	respond(ctx, listen)
+}
+
+// herald says the device is here (twice, a moment apart) now and every so often until ctx ends, then
+// says goodbye the same way. Before each round the search group is joined afresh on every network.
+func herald(ctx context.Context, join func(), say func(nts string), every func() time.Duration) {
+	twice := func(nts string) {
+		say(nts)
+		time.Sleep(sayAgain)
+		say(nts)
+	}
+	for {
+		join()
+		twice("ssdp:alive")
+		select {
+		case <-ctx.Done():
+			twice("ssdp:byebye")
+			return
+		case <-time.After(every()):
+		}
+	}
+}
+
+// rejoin joins the search group on each network the device is on. It leaves and joins again rather
+// than only joining: the join is what tells the network's switches and access points to pass the
+// group on to the device, and one that heard it only once at boot, with nothing on the network
+// asking again, may forget the device after a few minutes and stop passing it searches.
+func rejoin(pc *ipv4.PacketConn, group *net.UDPAddr) {
+	for _, ifi := range multicastInterfaces() {
+		_ = pc.LeaveGroup(&ifi, group)
+		if err := pc.JoinGroup(&ifi, group); err != nil {
+			slog.Debug("dlna: joining the search group failed", "interface", ifi.Name, "err", err)
+		}
+	}
+}
+
+// multicastInterfaces is the networks the device announces on: those up, able to multicast, and
+// holding one of the device's own IPv4 addresses.
+func multicastInterfaces() []net.Interface {
+	own := metrics.Addresses()
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var keep []net.Interface
+	for _, ifi := range ifs {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 || ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifi.Addrs()
+		if holdsOne(addrs, own) {
+			keep = append(keep, ifi)
+		}
+	}
+	return keep
+}
+
+func holdsOne(addrs []net.Addr, own []net.IP) bool {
+	for _, a := range addrs {
+		n, ok := a.(*net.IPNet)
+		if !ok || n.IP.To4() == nil {
+			continue
+		}
+		for _, ip := range own {
+			if ip.Equal(n.IP) {
+				return true
 			}
 		}
-	}()
+	}
+	return false
+}
 
+// respond answers the searches that reach conn until it is closed.
+func respond(ctx context.Context, conn *net.UDPConn) {
 	buf := make([]byte, 2048)
 	for {
-		n, from, err := listen.ReadFromUDP(buf)
+		n, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			if ctx.Err() == nil {
 				slog.Warn("dlna: reading searches failed", "err", err)
 			}
 			return
 		}
-		st, mx, ok := parseSearch(buf[:n])
+		s, ok := parseSearch(buf[:n])
 		if !ok {
 			continue
 		}
-		var answer []string
-		for _, t := range targets() {
-			if st == "ssdp:all" || st == t {
-				answer = append(answer, t)
-			}
-		}
+		answer := matching(s.st)
 		if len(answer) == 0 || !local(from.IP) {
 			continue
 		}
@@ -110,42 +187,79 @@ func (f *Feature) announce(ctx context.Context) {
 		case replying <- struct{}{}:
 			go func() {
 				defer func() { <-replying }()
-				reply(ctx, from, answer, mx)
+				reply(ctx, from, answer, s.wait())
 			}()
 		default: // more searches than any home sends at once: the rest go unanswered
 		}
 	}
 }
 
-// replying bounds the answers waiting to go out: each waits up to MX seconds, and a flood of searches
-// must not become a flood of goroutines, or of answers sent at whoever the searches claim to be from.
-var replying = make(chan struct{}, 8)
+// replying bounds the answers waiting to go out: each waits up to a few seconds, and a flood of
+// searches must not become a flood of goroutines, or of answers sent at whoever the searches claim
+// to be from. Room for several controllers' bursts at once: a phone app and a media server each send a
+// handful of searches together, one per kind of thing they look for (#779).
+var replying = make(chan struct{}, 32)
 
 // local is an address a search may come from: the home network's own ranges, never the internet.
 func local(ip net.IP) bool {
 	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()
 }
 
-// parseSearch reads an M-SEARCH: what is being looked for (ST) and how long answers may be spread over (MX).
-func parseSearch(b []byte) (st string, mx int, ok bool) {
-	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(b)))
-	if err != nil || req.Method != "M-SEARCH" {
-		return "", 0, false
-	}
-	if strings.Trim(req.Header.Get("MAN"), `"`) != "ssdp:discover" {
-		return "", 0, false
-	}
-	mx, _ = strconv.Atoi(req.Header.Get("MX"))
-	return strings.TrimSpace(req.Header.Get("ST")), min(max(mx, 1), 5), true
+// search is an M-SEARCH: what is looked for (ST), how many seconds answers may be spread over (MX,
+// at most 5 as UPnP caps it), and whether it was sent to the device alone rather than to the group.
+type search struct {
+	st      string
+	mx      int
+	unicast bool
 }
 
-// reply answers a search, after a moment up to mx seconds, as SSDP asks so a network of devices does
-// not all answer at once.
-func reply(ctx context.Context, to *net.UDPAddr, answer []string, mx int) {
+// wait is how long an answer may wait: a random part of MX, so a network of devices does not all
+// answer at once; nothing for a search sent to the device alone, which UPnP answers at once.
+func (s search) wait() time.Duration {
+	if s.unicast {
+		return 0
+	}
+	return time.Duration(rand.Int64N(int64(s.mx) * int64(time.Second) / 2))
+}
+
+// parseSearch reads an M-SEARCH. Read by hand, not as HTTP: controllers send them loosely, with bare
+// newlines, no blank line at the end, or headers in any case, and each of those is still a search.
+func parseSearch(b []byte) (search, bool) {
+	lines := strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n")
+	if first := strings.Fields(lines[0]); len(first) == 0 || !strings.EqualFold(first[0], "M-SEARCH") {
+		return search{}, false
+	}
+	h := map[string]string{}
+	for _, l := range lines[1:] {
+		if strings.TrimSpace(l) == "" {
+			break
+		}
+		k, v, ok := strings.Cut(l, ":")
+		if ok {
+			h[strings.ToUpper(strings.TrimSpace(k))] = strings.TrimSpace(v)
+		}
+	}
+	if !strings.EqualFold(strings.Trim(h["MAN"], `"`), "ssdp:discover") || h["ST"] == "" {
+		return search{}, false
+	}
+	host := h["HOST"]
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		host = hh
+	}
+	mx, _ := strconv.Atoi(h["MX"])
+	return search{
+		st:      h["ST"],
+		mx:      min(max(mx, 1), 5),
+		unicast: host != "" && host != "239.255.255.250",
+	}, true
+}
+
+// reply answers a search, after wait, once for each target it matched, to where the search came from.
+func reply(ctx context.Context, to *net.UDPAddr, answer []string, wait time.Duration) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(time.Duration(rand.Int64N(int64(mx) * int64(time.Second) / 2))):
+	case <-time.After(wait):
 	}
 	conn, err := net.DialUDP("udp4", nil, to)
 	if err != nil {
@@ -166,9 +280,9 @@ func reply(ctx context.Context, to *net.UDPAddr, answer []string, mx int) {
 	}
 }
 
-// notify announces every target on every address the device has.
-func notify(group *net.UDPAddr, nts string) {
-	for _, ip := range metrics.Addresses() {
+// notify announces every target from each of the given addresses.
+func notify(from []net.IP, group *net.UDPAddr, nts string) {
+	for _, ip := range from {
 		if ip.To4() == nil {
 			continue
 		}
