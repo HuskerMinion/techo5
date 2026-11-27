@@ -81,6 +81,13 @@ type Home struct {
 	// Go2RTC is a go2rtc server whose streams are cameras on the list (feature/home/go2rtc.go).
 	Go2RTC Go2RTC `json:"go2rtc,omitempty"`
 
+	// SunriseEntity and SunsetEntity are Home Assistant timestamp sensors whose times stand in for the
+	// sunrise and sunset worked out from home's place (feature/home/sun.go), for a house whose hills or
+	// buildings hide the sun well after it is up (#747): the Sun clock style, the night sky and the
+	// weather art follow them. Empty, or a sensor with no time for today, is the worked-out time.
+	SunriseEntity string `json:"sunrise_entity,omitempty"`
+	SunsetEntity  string `json:"sunset_entity,omitempty"`
+
 	// Glance are Home Assistant entities shown as chips along the foot of the clock page, each only
 	// while it has something to say (feature/home/glance.go), in the order given.
 	Glance []string `json:"glance,omitempty"`
@@ -497,6 +504,11 @@ func (w HomeWriter) RadarSource(source string) error {
 
 func (w HomeWriter) RadioSource(source string) error {
 	return w.st.Update(func(c *Config) { c.Home.RadioSource = source })
+}
+
+// SunEntities sets the sensors sunrise and sunset are taken from, empty for the worked-out times.
+func (w HomeWriter) SunEntities(rise, set string) error {
+	return w.st.Update(func(c *Config) { c.Home.SunriseEntity, c.Home.SunsetEntity = rise, set })
 }
 
 func (w HomeWriter) Glance(entities []string) error {

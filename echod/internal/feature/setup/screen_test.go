@@ -280,3 +280,46 @@ func TestThePhotoCountdownOnTheSetupPage(t *testing.T) {
 		t.Errorf("unticking it left it on (%s)", p)
 	}
 }
+
+// The sunrise and sunset entities are on the Screen tab under the clock style, saved tidied, emptied to
+// go back to the worked-out times, and refused when they are not entity IDs; a form from before them
+// leaves them as they are.
+func TestTheSunEntitiesSave(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	SetScreen(&ScreenChoices{Styles: []string{"Classic", "Sun"}, Current: func() int { return 1 }, Choose: func(int) {}})
+	t.Cleanup(func() { SetScreen(nil) })
+
+	v := screenForm("1", "", false)
+	v.Set("sunrise", " Sensor.Sunrise_Effective ")
+	v.Set("sunset", "sensor.sunset_effective")
+	if p := saveScreen(form(v)); p != "" {
+		t.Fatal(p)
+	}
+	if h := config.Get().Home; h.SunriseEntity != "sensor.sunrise_effective" || h.SunsetEntity != "sensor.sunset_effective" {
+		t.Errorf("saved %q and %q", h.SunriseEntity, h.SunsetEntity)
+	}
+	w := httptest.NewRecorder()
+	screenSection(w, "tok")
+	page := w.Body.String()
+	style, rise := strings.Index(page, `name="clockstyle"`), strings.Index(page, `value="sensor.sunrise_effective"`)
+	if style < 0 || rise < style || !strings.Contains(page, `<label for="sunset">Sunset entity</label>`) {
+		t.Error("the sunrise and sunset entities are not shown under the clock style")
+	}
+
+	if p := saveScreen(form(screenForm("1", "", false))); p != "" || config.Get().Home.SunriseEntity == "" {
+		t.Errorf("a form without the rows changed them (%s)", p)
+	}
+	bad := screenForm("1", "", false)
+	bad.Set("sunrise", "seven o'clock")
+	if p := saveScreen(form(bad)); p == "" || config.Get().Home.SunriseEntity != "sensor.sunrise_effective" {
+		t.Errorf("a sunrise that is not an entity was taken (%s)", p)
+	}
+	v.Set("sunrise", "")
+	v.Set("sunset", "")
+	if p := saveScreen(form(v)); p != "" {
+		t.Fatal(p)
+	}
+	if h := config.Get().Home; h.SunriseEntity != "" || h.SunsetEntity != "" {
+		t.Errorf("emptied, they are %q and %q", h.SunriseEntity, h.SunsetEntity)
+	}
+}

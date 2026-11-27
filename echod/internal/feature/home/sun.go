@@ -1,10 +1,14 @@
 package home
 
 import (
+	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/hastate"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safe"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/sun"
@@ -30,9 +34,23 @@ type sunKeeper struct {
 	retry    time.Time // after a failed lookup, when to try again
 }
 
-// SunTimes is today's sunrise and sunset at home, for the Sun clock style and the weather art; ok is
-// false until home's place is known, and on a day the sun does not rise or set there.
+// SunTimes is today's sunrise and sunset at home, for the Sun clock style, the night sky and the
+// weather art: the sunrise and sunset sensors' times where they are set and have one for today
+// (sunFromSensors), the times worked out from home's place for the rest. ok is false until there is a
+// time for both, which is never on a day the sun does not rise or set at home and no sensor says.
 func (f *Feature) SunTimes(now time.Time) (rise, set time.Time, ok bool) {
+	rise, set, ok = sunWorkedOut(now)
+	h := config.Get().Home
+	if h.SunriseEntity == "" && h.SunsetEntity == "" {
+		return rise, set, ok
+	}
+	t := hastate.Get()
+	return sunFromSensors(now, t.State(h.SunriseEntity), t.State(h.SunsetEntity), rise, set, ok)
+}
+
+// sunWorkedOut is today's sunrise and sunset at home as the sun's own place says: ok is false until
+// home's place is known, and on a day the sun does not rise or set there.
+func sunWorkedOut(now time.Time) (rise, set time.Time, ok bool) {
 	k := &sunKept
 	day := now.Format("2006-01-02")
 	k.mu.Lock()
@@ -118,4 +136,128 @@ func sunLookUp(day string) {
 		k.lat, k.lon, k.placed = lat, lon, true
 		k.day = "" // worked out again from the new place on the next ask
 	}
+}
+
+// The sunrise and sunset sensors (#747). Where hills or buildings hide the horizon, the sun shows well
+// after it is up by the almanac and goes well before it sets, and a house can keep the times it really
+// appears and goes in two Home Assistant timestamp sensors. A sensor's time stands in for the worked-out
+// one, each on its own, when:
+//
+//   - it is set, and Home Assistant has sent a state for it that is a time: ISO 8601 with its offset, as
+//     a timestamp sensor's state is ("2026-11-27T07:41:00+00:00"), or a date and time with none, as an
+//     input_datetime's is, taken in the device's own time zone;
+//   - that time, in the device's time zone, is today, or tomorrow: a sensor of the next sunrise (the way
+//     the Sun integration's are made) says tomorrow's once today's is past, and tomorrow's less a day is
+//     today's to within a few minutes, where taking the almanac's instead would move the sun by however
+//     far the hills put it. A time on any other day is a sensor that stopped being updated, and is not
+//     used;
+//   - the sunrise it leaves comes before the sunset.
+//
+// Otherwise the times are the worked-out ones, which also means a sensor that is unavailable, unknown,
+// or not a time changes nothing. Sensors that give both times make a day even where the almanac has
+// none (inside the polar circles) or before home's place is known.
+
+// sunFromSensors is today's sunrise and sunset from the sensors' states riseState and setState, with
+// the worked-out rise, set and ok for what they leave out.
+func sunFromSensors(now time.Time, riseState, setState string, rise, set time.Time, ok bool) (time.Time, time.Time, bool) {
+	r, rOK := sensorSunTime(riseState, now)
+	s, sOK := sensorSunTime(setState, now)
+	if !rOK && !sOK {
+		return rise, set, ok
+	}
+	if !rOK || !sOK {
+		if !ok {
+			return rise, set, ok // half a day from a sensor, and nothing worked out for the other half
+		}
+		if !rOK {
+			r = rise
+		}
+		if !sOK {
+			s = set
+		}
+	}
+	if !r.Before(s) {
+		return rise, set, ok
+	}
+	return r, s, true
+}
+
+// sunStateLayouts are the forms a sensor's time is read in: ISO 8601 with an offset (with a T or a
+// space, with or without fractions of a second), then a date and time with none.
+var sunStateLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999Z07:00"}
+var sunLocalLayouts = []string{"2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999", "2006-01-02T15:04", "2006-01-02 15:04"}
+
+// sensorSunTime is a sensor's state as a time today in now's time zone, or false when it is not one
+// (see above).
+func sensorSunTime(state string, now time.Time) (time.Time, bool) {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return time.Time{}, false
+	}
+	loc := now.Location()
+	t, ok := parseSunState(state, loc)
+	if !ok {
+		return time.Time{}, false
+	}
+	t = t.In(loc)
+	switch {
+	case onSameDay(t, now):
+		return t, true
+	case onSameDay(t, now.AddDate(0, 0, 1)):
+		return t.AddDate(0, 0, -1), true
+	}
+	return time.Time{}, false
+}
+
+// parseSunState reads a state in one of the layouts above; one with no offset is a time in loc.
+func parseSunState(state string, loc *time.Location) (time.Time, bool) {
+	for _, l := range sunStateLayouts {
+		if t, err := time.Parse(l, state); err == nil {
+			return t, true
+		}
+	}
+	for _, l := range sunLocalLayouts {
+		if t, err := time.ParseInLocation(l, state, loc); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func onSameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
+}
+
+// SunEntity is an entity id typed for the sunrise or sunset sensor, tidied: empty for none, an error
+// for something that is not an entity id.
+func SunEntity(typed string) (string, error) {
+	id := strings.ToLower(strings.TrimSpace(typed))
+	if id == "" || entityID.MatchString(id) {
+		return id, nil
+	}
+	return "", errors.New(typed + " is not an entity ID; use one like sensor.sunrise")
+}
+
+// SetSunEntities chooses the sensors sunrise and sunset are taken from, empty for the worked-out
+// times, and has Home Assistant asked for their states at the next connection.
+func (f *Feature) SetSunEntities(rise, set string) error {
+	var err error
+	if rise, err = SunEntity(rise); err != nil {
+		return err
+	}
+	if set, err = SunEntity(set); err != nil {
+		return err
+	}
+	h := config.Get().Home
+	if rise == h.SunriseEntity && set == h.SunsetEntity {
+		return nil
+	}
+	if err := config.Set().Home().SunEntities(rise, set); err != nil {
+		return err
+	}
+	slog.Info("home: sunrise and sunset sensors", "sunrise", rise, "sunset", set)
+	f.rewire()
+	return nil
 }

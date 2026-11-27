@@ -157,6 +157,7 @@ func screenSection(w http.ResponseWriter, token string) {
 	 <input id="world" name="world" value="%s" placeholder="America/New_York, Europe/London, Asia/Tokyo">
 	 <p class="note">For the World clock style: up to %d time zone names, with commas between them. Leave it
 	  empty for New York, London and Tokyo.%s</p></div>`, html.EscapeString(places), maxWorldPlaces, fewerPlaces(s.Places))
+	sunSensors(w)
 	swipe := ""
 	if !config.Get().Screen.NoStyleSwipe {
 		swipe = " checked"
@@ -239,6 +240,20 @@ func screenSection(w http.ResponseWriter, token string) {
 	sectionClose(w)
 }
 
+// sunSensors are the sunrise and sunset entities, under the clock style: the Sun style's arc follows
+// them, and so do the night sky and the weather art, whichever style is chosen (home's sun.go).
+func sunSensors(w http.ResponseWriter) {
+	h := config.Get().Home
+	fmt.Fprintf(w, `<label for="sunrise">Sunrise entity</label>
+	 <input id="sunrise" name="sunrise" value="%s" maxlength="100" placeholder="sensor.sunrise" autocomplete="off">
+	 <label for="sunset">Sunset entity</label>
+	 <input id="sunset" name="sunset" value="%s" maxlength="100" placeholder="sensor.sunset" autocomplete="off">
+	 <p class="note">Optional: Home Assistant timestamp sensors with the times the sun really comes up and goes
+	  down here, for a house where hills or buildings hide it. The Sun clock style, the night sky and weather
+	  art then follow them. Left empty, or while a sensor is unavailable or has no time for today or
+	  tomorrow, the times are worked out from where home is.</p>`, html.EscapeString(h.SunriseEntity), html.EscapeString(h.SunsetEntity))
+}
+
 // screenSummary is the line on the shut card: the clock style, and what the slideshow does.
 func screenSummary(styles []string, cur int, slideshow string, art bool) []string {
 	var out []string
@@ -312,6 +327,25 @@ func saveScreen(r *http.Request) string {
 			return problem
 		}
 	}
+	// Only when the page sent them: a form from before it had the rows leaves the sensors as they are.
+	riseVals, riseSent := r.PostForm["sunrise"]
+	setVals, setSent := r.PostForm["sunset"]
+	var rise, set string
+	if riseSent || setSent {
+		var err error
+		h := config.Get().Home
+		rise, set = h.SunriseEntity, h.SunsetEntity
+		if riseSent {
+			if rise, err = home.SunEntity(riseVals[0]); err != nil {
+				return "the sunrise entity: " + err.Error()
+			}
+		}
+		if setSent {
+			if set, err = home.SunEntity(setVals[0]); err != nil {
+				return "the sunset entity: " + err.Error()
+			}
+		}
+	}
 	if i != s.Current() {
 		s.Choose(i)
 	}
@@ -343,6 +377,11 @@ func saveScreen(r *http.Request) string {
 	if has && !slices.Equal(places, config.Get().Screen.WorldClocks) {
 		if err := config.Set().Screen().WorldClocks(places); err != nil {
 			return "the world clock places could not be saved"
+		}
+	}
+	if riseSent || setSent {
+		if err := home.Get().SetSunEntities(rise, set); err != nil {
+			return "the sunrise and sunset entities could not be saved"
 		}
 	}
 	h := home.Get()

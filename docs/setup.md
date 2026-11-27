@@ -1022,6 +1022,15 @@ other Shows don't have the switches.
   across the clock for the next style or the one before; its name shows for a moment, and a swipe
   the other way puts the last style back. The night clock keeps its own look. Also in Home Assistant
   and on the setup page's Screen tab.
+- **Sunrise entity** and **Sunset entity** (setup page, Screen tab, under Clock style; empty by
+  default): Home Assistant timestamp sensors with the times the sun really comes up and goes down at
+  home, for a house where hills or buildings hide the horizon. The *Sun* style's arc, the night sky
+  (when the weather takes its night icons) and weather art follow them; otherwise the times are worked
+  out from where home is. A sensor's time is used when it is today, or tomorrow, which a "next
+  sunrise" sensor shows once today's is past: tomorrow's less a day stands for today's. A sensor that
+  is unavailable, is not a time, holds a time on another day, or leaves sunrise after sunset falls back
+  to the worked-out time, each sensor on its own. A state with no offset is read in the device's time
+  zone. Settings files carry both.
 - **Brightness** (Settings > Display): on the screen it moves in steps of 5 from 5 to 30, then in
   steps of 10 up to 100. With auto-brightness on, it is the most the screen goes to. In Home
   Assistant it is the brightness of the **Screen** light.

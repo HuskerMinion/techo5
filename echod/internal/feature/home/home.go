@@ -549,6 +549,15 @@ func (f *Feature) want(h config.Home) {
 			keys = append(keys, hastate.Key{Entity: l})
 		}
 	}
+	// The sunrise and sunset sensors, whose times the Sun clock, the night sky and the weather art take
+	// (sun.go): a screen redraws when they change.
+	if hasScreen {
+		for _, e := range []string{h.SunriseEntity, h.SunsetEntity} {
+			if e != "" {
+				keys = append(keys, hastate.Key{Entity: e})
+			}
+		}
+	}
 	others := make(map[string]bool, len(keys))
 	for _, k := range keys {
 		others[k.Entity] = true
