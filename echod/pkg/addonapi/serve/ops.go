@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -430,13 +429,18 @@ func (s *Server) sound(a *addon, so addonapi.Sound) error {
 	return s.Device.PlaySound(g.ID, so.Name, wav)
 }
 
-// readWAV reads a sound, never more of it than a sound may be.
+// readWAV reads a sound, never more of it than a sound may be: a regular file, not through a link. The
+// add-on's own folder is its to write, and a link there named as the sound, or a FIFO, would have the
+// device read whatever it points at, or hang on it.
 func readWAV(path string) (addonapi.WAV, error) {
-	f, err := os.Open(path)
+	f, err := openNoFollow(path)
 	if err != nil {
-		return addonapi.WAV{}, err
+		return addonapi.WAV{}, fmt.Errorf("%s cannot be read: it is missing, or a link", filepath.Base(path))
 	}
 	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		return addonapi.WAV{}, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
 	b, err := io.ReadAll(io.LimitReader(f, addonapi.MaxWAV+1))
 	if err != nil {
 		return addonapi.WAV{}, err

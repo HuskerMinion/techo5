@@ -583,6 +583,21 @@ func TestSound(t *testing.T) {
 	if err := c.PlayFile(ctx(t), "ding.wav"); code(err) != addonapi.CodeBadRequest {
 		t.Errorf("a six-second WAV: %v", err)
 	}
+	// A link in its place, to a sound that would play, is not followed (O_NOFOLLOW); a FIFO is not read.
+	elsewhere := filepath.Join(t.TempDir(), "elsewhere.wav")
+	if err := os.WriteFile(elsewhere, wavBytes(16000, 8000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(r.dir, "ding.wav")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(elsewhere, filepath.Join(r.dir, "ding.wav")); err != nil {
+		t.Fatal(err)
+	}
+	advance()
+	if err := c.PlayFile(ctx(t), "ding.wav"); code(err) != addonapi.CodeBadRequest {
+		t.Errorf("a link to a WAV: %v", err)
+	}
 	r.d.mu.Lock()
 	r.d.quiet = true
 	r.d.mu.Unlock()
