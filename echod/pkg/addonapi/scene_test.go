@@ -3,6 +3,7 @@ package addonapi
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"reflect"
@@ -84,7 +85,18 @@ func TestSceneRefusals(t *testing.T) {
 		"a button with nothing":   Button("a", "", ""),
 		"an icon not mdi":         Button("a", "", "fa:check"),
 		"a control character":     Text("a\x07b"),
-		"a bidi override":         Text("abc‮def"),
+		"a bidi override":         Text("abc\u202edef"),
+		"a bidi isolate":          Text("abc\u2066def"),
+		"a C1 control":            Text("a\u0085b"),
+		"DEL":                     Text("a\x7fb"),
+		"a zero-width space":      Text("pay\u200bpal"),
+		"a zero-width joiner":     Text("a\u200db"),
+		"a byte order mark":       Text("\ufeffhello"),
+		"a line separator":        Text("one\u2028two"),
+		"a paragraph separator":   Text("one\u2029two"),
+		"a hidden label":          Button("a", "O\u200bK", ""),
+		"a hidden heading":        List(Section{Heading: "A\u202eB", Items: []Block{Text("x")}}),
+		"a stack of marks":        Text("e" + strings.Repeat("\u0301", MaxMarks+1)),
 		"a break in a label":      Button("a", "two\nlines", ""),
 		"a size not one":          {Type: BlockText, Text: "x", Size: "giant"},
 		"too many lines":          {Type: BlockText, Text: "x", MaxLines: MaxLines + 1},
@@ -327,6 +339,76 @@ func TestNothingImitatesTheSystem(t *testing.T) {
 		if err == nil {
 			t.Errorf("%s was taken", msg)
 		}
+	}
+}
+
+// Words are written as people write them, accents and all, but nothing in them hides or reorders what is
+// seen: a few combining marks on a character are taken, and a line break in a text.
+func TestWordsAsWritten(t *testing.T) {
+	for what, text := range map[string]string{
+		"accents":                "Crème brûlée, jalapeño",
+		"marks within the limit": "e" + strings.Repeat("\u0301", MaxMarks),
+		"Devanagari":             "\u0928\u092e\u0938\u094d\u0924\u0947",
+		"Arabic":                 "\u0645\u0631\u062d\u0628\u0627",
+		"a line break":           "Step 2\nStir",
+	} {
+		if err := ValidScene(OnPage, Text(text), nil); err != nil {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	if got := StripHidden("Me\u202eals\u200b\x07 "); got != "Meals " {
+		t.Errorf("StripHidden left %q", got)
+	}
+	if StripHidden("Meals") != "Meals" {
+		t.Error("StripHidden changed plain words")
+	}
+}
+
+// Ten buttons or chips of a digit each, one after another, are a PIN pad, which is the device's own: a
+// scene with them is refused, page or card, in rows or not; fewer, or with other keys among them, are
+// taken.
+func TestNoPINPad(t *testing.T) {
+	key := func(d string) Block { return Button("k"+d, d, "") }
+	var keys []Block
+	for _, d := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"} {
+		keys = append(keys, key(d))
+	}
+	pad := Column(Row(keys[0:3]...), Row(keys[3:6]...), Row(keys[6:9]...), Row(Spacer(), keys[9], Spacer()))
+	refuses(t, "a PIN pad", OnPage, pad, CodeBadRequest)
+	refuses(t, "a PIN pad in a row", OnPage, Row(keys...), CodeBadRequest)
+	chips := make([]Block, 0, 10)
+	for i := range 10 {
+		chips = append(chips, Chip(fmt.Sprintf("c%d", i), fmt.Sprintf("%d", i), ""))
+	}
+	refuses(t, "a PIN pad of chips", OnPage, Column(Row(chips[:5]...), Row(chips[5:]...)), CodeBadRequest)
+	refuses(t, "a PIN pad of other digits", OnPage, Row(func() []Block {
+		var out []Block
+		for i, d := range []rune("\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669\u0660") {
+			out = append(out, Button(fmt.Sprintf("a%d", i), string(d), ""))
+		}
+		return out
+	}()...), CodeBadRequest)
+	if err := ValidScene(OnPage, Row(keys[:MaxDigitRun-1]...), nil); err != nil {
+		t.Errorf("nine digit keys: %v", err)
+	}
+	broken := append(append(append([]Block{}, keys[:5]...), Text("and")), keys[5:]...)
+	if err := ValidScene(OnPage, Row(broken...), nil); err != nil {
+		t.Errorf("digit keys with words among them: %v", err)
+	}
+	calc := Column(Row(key("7"), key("8"), key("9"), Button("div", "÷", "")), Row(key("4"), key("5"), key("6"), Button("mul", "×", "")),
+		Row(key("1"), key("2"), key("3"), Button("sub", "−", "")), Row(key("0"), Button("dot", ".", ""), Button("eq", "=", "")))
+	if err := ValidScene(OnPage, calc, nil); err != nil {
+		t.Errorf("a calculator's keys: %v", err)
+	}
+	if err := ValidScene(OnPage, Row(Button("ten", "10", ""), key("1"), key("2")), nil); err != nil {
+		t.Errorf("a few numbered buttons: %v", err)
+	}
+}
+
+func TestURLs(t *testing.T) {
+	sc := Column(Image("http://192.168.1.2/a.png"), List(Section{Items: []Block{Image("http://192.168.1.2/b.png"), Image("http://192.168.1.2/a.png")}}), ImageNamed("x"))
+	if got := sc.URLs(); !slices.Equal(got, []string{"http://192.168.1.2/a.png", "http://192.168.1.2/b.png"}) {
+		t.Errorf("URLs %v", got)
 	}
 }
 

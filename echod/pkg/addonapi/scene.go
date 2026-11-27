@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -142,6 +143,14 @@ const (
 	MaxImageBudget = 8 << 20
 	// MaxImageNames is how many images an add-on may have put at once.
 	MaxImageNames = 64
+	// MaxMarks is the most combining marks (accents and the like) one character may carry: a few are
+	// how many scripts are written, and a stack of dozens is drawn far above and below its line, over
+	// whatever is there.
+	MaxMarks = 4
+	// MaxDigitRun is the fewest buttons and chips labeled with one digit each, one after another, that a
+	// scene is refused for: ten of them, 0 to 9, are a PIN pad, which is the device's own and must not be
+	// passed for on a page or a card.
+	MaxDigitRun = 10
 )
 
 // ImageCost is what an image counts toward MaxImageBudget: its pixels, four bytes each, which is what it
@@ -269,6 +278,9 @@ func ValidScene(on string, root Block, timer func(string) bool) error {
 	}
 	c := &sceneCheck{card: on == OnCard, timer: timer, ids: map[string]bool{}}
 	if err := c.block(&root, 1, ""); err != nil {
+		return err
+	}
+	if err := digitRun(&root); err != nil {
 		return err
 	}
 	// Measured as Marshal writes it, without HTML escaping, as it goes on the wire.
@@ -423,8 +435,9 @@ func hasList(b Block) bool {
 	return false
 }
 
-// words checks words a block shows: at most most characters, and no control characters but, where lines
-// may break, a line break.
+// words checks words a block shows: at most most characters, and none of the characters that are not
+// seen but change what is (Hidden) but, where lines may break, a line break, and no character carrying
+// more than MaxMarks combining marks.
 func words(what, s string, most int, breaks bool) error {
 	if !utf8.ValidString(s) {
 		return badScene("%s is not UTF-8", what)
@@ -432,18 +445,99 @@ func words(what, s string, most int, breaks bool) error {
 	if n := utf8.RuneCountInString(s); n > most {
 		return tooLarge("%s is at most %d characters; it is %d", what, most, n)
 	}
-	if strings.ContainsFunc(s, func(r rune) bool {
-		return (r < 0x20 && !(breaks && r == '\n')) || r == 0x7f || isBidiControl(r)
-	}) {
-		return badScene("%s holds a control character", what)
+	if strings.ContainsFunc(s, func(r rune) bool { return Hidden(r) && !(breaks && r == '\n') }) {
+		return badScene("%s holds a control character, or one that is not seen (a zero-width space, a direction mark) or reorders the words around it", what)
+	}
+	marks := 0
+	for _, r := range s {
+		if !unicode.Is(unicode.M, r) {
+			marks = 0
+			continue
+		}
+		if marks++; marks > MaxMarks {
+			return badScene("%s has a character with more than %d combining marks", what, MaxMarks)
+		}
 	}
 	return nil
+}
+
+// Hidden is a character that words an add-on shows may not hold, as it is not seen but changes what is:
+// a control character (C0, DEL and C1, the line break among them, which only a text's words may have), one
+// that reorders the text around it (the bidi embeddings, overrides and isolates, and the direction
+// marks), one of no width (U+200B to U+200F, U+FEFF), or a line or paragraph separator. Any of them could
+// make words read as other words than they are, or hide some of them.
+func Hidden(r rune) bool {
+	switch {
+	case r < 0x20, r >= 0x7f && r <= 0x9f:
+		return true
+	case r >= 0x200b && r <= 0x200f, r == 0xfeff, r == 0x2028, r == 0x2029:
+		return true
+	}
+	return isBidiControl(r)
+}
+
+// StripHidden is s without its Hidden characters: words the device draws that were checked elsewhere,
+// or not at all (an add-on's name, as its catalog entry gives it).
+func StripHidden(s string) string {
+	if !strings.ContainsFunc(s, Hidden) {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		if Hidden(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // isBidiControl is a character that reorders the text around it, which could make words read as
 // other words than they are.
 func isBidiControl(r rune) bool {
 	return (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) || r == 0x200e || r == 0x200f || r == 0x061c
+}
+
+// digitRun checks that the scene has no run of MaxDigitRun buttons and chips one after another whose
+// labels are each a single digit: a PIN pad's keys, which the device's own PIN pad has and no add-on may
+// pass for. Blocks that show nothing (a spacer, a divider, a text of only spaces) and the rows and columns
+// that hold the keys do not end a run; anything else that is seen does.
+func digitRun(root *Block) error {
+	run := 0
+	var walk func(b *Block) error
+	walk = func(b *Block) error {
+		switch {
+		case Pressable(b.Type) && singleDigit(b.Label):
+			if run++; run >= MaxDigitRun {
+				return badScene("a scene may not have %d buttons or chips labeled with a digit each, one after another: that is a PIN pad, which is the device's own", MaxDigitRun)
+			}
+		case b.Type == BlockSpacer, b.Type == BlockDivider, b.Type == BlockText && strings.TrimSpace(b.Text) == "",
+			b.Type == BlockColumn, b.Type == BlockRow, b.Type == BlockCard, b.Type == BlockList:
+		default:
+			run = 0
+		}
+		for i := range b.Children {
+			if err := walk(&b.Children[i]); err != nil {
+				return err
+			}
+		}
+		for s := range b.Sections {
+			if strings.TrimSpace(b.Sections[s].Heading) != "" {
+				run = 0
+			}
+			for i := range b.Sections[s].Items {
+				if err := walk(&b.Sections[s].Items[i]); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return walk(root)
+}
+
+// singleDigit is a label that is one digit, whatever the script, spaces aside.
+func singleDigit(label string) bool {
+	r, n := utf8.DecodeRuneInString(strings.TrimSpace(label))
+	return n > 0 && n == len(strings.TrimSpace(label)) && unicode.IsDigit(r)
 }
 
 // image checks an image block: an address or bytes, not both, within its limits.
@@ -645,6 +739,27 @@ func (b *Block) Images() []string {
 	walk = func(x *Block) {
 		if x.Name != "" && !slices.Contains(out, x.Name) {
 			out = append(out, x.Name)
+		}
+		for i := range x.Children {
+			walk(&x.Children[i])
+		}
+		for s := range x.Sections {
+			for i := range x.Sections[s].Items {
+				walk(&x.Sections[s].Items[i])
+			}
+		}
+	}
+	walk(b)
+	return out
+}
+
+// URLs is the addresses of the images by address that the scene shows.
+func (b *Block) URLs() []string {
+	var out []string
+	var walk func(*Block)
+	walk = func(x *Block) {
+		if x.URL != "" && !slices.Contains(out, x.URL) {
+			out = append(out, x.URL)
 		}
 		for i := range x.Children {
 			walk(&x.Children[i])
