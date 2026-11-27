@@ -246,6 +246,19 @@ func (c Client) Play(ctx context.Context, queueID, uri string) error {
 	return c.do(ctx, "player_queues/play_media", map[string]any{"queue_id": queueID, "media": uri, "option": "replace"}, nil)
 }
 
+// PlayShuffled plays uris on the player queueID in that order, replacing what its queue held, shuffled
+// or explicitly in order. Music Assistant 2.10 switches the queue's shuffle off for media with an order
+// of its own (an album, a podcast, an audiobook) unless the play itself asks for it (#762), so a
+// shuffle set before the play is not enough there. An older server ignores the argument and follows
+// the queue's shuffle, which the caller sets first.
+func (c Client) PlayShuffled(ctx context.Context, queueID string, uris []string, shuffle bool) error {
+	var media any = uris
+	if len(uris) == 1 {
+		media = uris[0]
+	}
+	return c.do(ctx, "player_queues/play_media", map[string]any{"queue_id": queueID, "media": media, "option": "replace", "shuffle": shuffle}, nil)
+}
+
 // PlayerState is a player as the server sees it: its id there, whether it is connected and what it
 // is doing ("playing", "paused", "idle").
 type PlayerState struct {

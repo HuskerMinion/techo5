@@ -1501,9 +1501,18 @@ func (d *Display) libPlay(target string, e musicassistant.Entry, kind string, sh
 		return
 	}
 	putOn.Store(target, e.URI)
+	uris := []string{e.URI}
+	for _, r := range rest {
+		uris = append(uris, r.URI)
+	}
 	go func() {
 		if libQueueShuffle(target, shuffle) {
-			play() // Music Assistant has answered, so the shuffle is set before the play is asked for
+			// Music Assistant has answered, so the shuffle is set before the play is asked for. The play
+			// goes to it too, saying shuffled or not: it switches the shuffle off again for an album
+			// otherwise (#762). Home Assistant's play_media has no way to say it.
+			if !libQueuePlay(target, uris, shuffle) {
+				play()
+			}
 			return
 		}
 		libTap(dashboard.Action{Entity: target, Service: "media_player.shuffle_set", Data: map[string]any{"shuffle": shuffle}})
@@ -1541,6 +1550,26 @@ func libTracksAfter(s libSection, i int) []musicassistant.Entry {
 		}
 	}
 	return rest
+}
+
+// libQueuePlay plays uris on target's queue through Music Assistant's own API, shuffled or in order,
+// and says whether it did; Home Assistant's play_media is left to try when it did not.
+func libQueuePlay(target string, uris []string, shuffle bool) bool {
+	c, set := libClient()
+	if !set {
+		return false
+	}
+	q := libQueueOf(target)
+	if q == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := c.PlayShuffled(ctx, q, uris, shuffle); err != nil {
+		slog.Warn("dashboard music library play", "err", err)
+		return false
+	}
+	return true
 }
 
 // libQueueShuffle sets the shuffle of target's queue through Music Assistant's own API, and says

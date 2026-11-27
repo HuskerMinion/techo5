@@ -553,13 +553,15 @@ func TestTheLibraryLeavesAfterAPlay(t *testing.T) {
 }
 
 // With Music Assistant set up and a queue to name, the shuffle is set through Music Assistant's own
-// player_queues/shuffle before the play goes to Home Assistant, and Home Assistant's shuffle_set is not
-// asked; a server that refuses it leaves Home Assistant's to try.
+// player_queues/shuffle and the play goes to it too, saying shuffled or not, since Music Assistant
+// switches the shuffle off again for an album otherwise (#762); Home Assistant's shuffle_set is not
+// asked. A server that refuses the play leaves it to Home Assistant, and one that refuses the shuffle
+// leaves both to Home Assistant.
 func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 	noLibrary(t)
 	var mu sync.Mutex
 	var events []string
-	refuse := false
+	refuse := map[string]bool{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Command string         `json:"command"`
@@ -567,8 +569,12 @@ func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 		}
 		json.NewDecoder(r.Body).Decode(&body)
 		mu.Lock()
-		events = append(events, fmt.Sprintf("ma %s %v %v", body.Command, body.Args["queue_id"], body.Args["shuffle_enabled"]))
-		no := refuse
+		if body.Command == "player_queues/play_media" {
+			events = append(events, fmt.Sprintf("ma %s %v %v %v %v", body.Command, body.Args["queue_id"], body.Args["media"], body.Args["option"], body.Args["shuffle"]))
+		} else {
+			events = append(events, fmt.Sprintf("ma %s %v %v", body.Command, body.Args["queue_id"], body.Args["shuffle_enabled"]))
+		}
+		no := refuse[body.Command]
 		mu.Unlock()
 		if no {
 			w.WriteHeader(http.StatusForbidden)
@@ -593,12 +599,23 @@ func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 	album := libEntries("album", 1)[0]
 	d.libPlay("media_player.ma_kitchen", album, "album", true, libEnqueueReplace)
 	waitUntil(t, "a play", func() bool { return strings.Contains(got(), "play_media") })
-	if want := "ma player_queues/shuffle up0a1b2c3d true; ha music_assistant.play_media"; got() != want {
+	want := fmt.Sprintf("ma player_queues/shuffle up0a1b2c3d true; ma player_queues/play_media up0a1b2c3d %s replace true", album.URI)
+	if got() != want {
 		t.Errorf("asked %q, want %q", got(), want)
 	}
 
 	mu.Lock()
-	events, refuse = nil, true
+	events, refuse = nil, map[string]bool{"player_queues/play_media": true}
+	mu.Unlock()
+	d.libPlay("media_player.ma_kitchen", album, "album", true, libEnqueueReplace)
+	waitUntil(t, "a play", func() bool { return strings.Contains(got(), "ha music_assistant.play_media") })
+	want = fmt.Sprintf("ma player_queues/shuffle up0a1b2c3d true; ma player_queues/play_media up0a1b2c3d %s replace true; ha music_assistant.play_media", album.URI)
+	if got() != want {
+		t.Errorf("play refused, asked %q, want %q", got(), want)
+	}
+
+	mu.Lock()
+	events, refuse = nil, map[string]bool{"player_queues/shuffle": true, "player_queues/play_media": true}
 	mu.Unlock()
 	d.libPlay("media_player.ma_kitchen", album, "album", false, libEnqueueReplace)
 	waitUntil(t, "a play", func() bool { return strings.Contains(got(), "play_media") })
