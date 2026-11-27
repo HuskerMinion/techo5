@@ -251,3 +251,74 @@ func TestTheDeviceSaysItIsHereOftenAndTwice(t *testing.T) {
 		t.Errorf("did not say goodbye twice: %v", said)
 	}
 }
+
+// Going off waits for the goodbyes: what runs beside the answers finishes before the renderer is said
+// to be off, so the next alive cannot go out before the last byebye, and the daemon cannot exit first.
+func TestGoingOffWaitsForTheGoodbyes(t *testing.T) {
+	var mu sync.Mutex
+	var said []string
+	ctx, cancel := context.WithCancel(context.Background())
+	answering := make(chan struct{})
+	go func() { <-answering; cancel() }()
+	alongside(func() {
+		herald(ctx, func() {}, func(nts string) { mu.Lock(); said = append(said, nts); mu.Unlock() },
+			func() time.Duration { return time.Hour })
+	}, func() {
+		close(answering)
+		<-ctx.Done()
+	}, heraldWait)
+	mu.Lock()
+	got := append([]string(nil), said...)
+	mu.Unlock()
+	if n := len(got); n < 2 || got[n-1] != "ssdp:byebye" || got[n-2] != "ssdp:byebye" {
+		t.Fatalf("off before the goodbyes went out: %v", got)
+	}
+	// Bounded: a goodbye that never finishes does not hold going off.
+	start := time.Now()
+	alongside(func() { time.Sleep(time.Second) }, func() {}, 50*time.Millisecond)
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Errorf("waited %v for a background past its bound", d)
+	}
+}
+
+// A flood of searches sent to the device alone, answered at once with no MX wait, is answered no faster
+// than the bucket allows: a burst, then repliesPerSecond.
+func TestAFloodOfSearchesIsAnsweredAtABoundedRate(t *testing.T) {
+	device, controller := responder(t)
+	start := time.Now()
+	for range 60 {
+		if _, err := controller.WriteToUDP([]byte(mSearch(device.String(), "upnp:rootdevice", 1)), device); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := collect(t, controller, 200*time.Millisecond)
+	most := replyBurst + int(time.Since(start).Seconds()*repliesPerSecond) + 1
+	if len(got) < replyBurst || len(got) > most {
+		t.Fatalf("%d answers to 60 searches in %v, want %d to %d", len(got), time.Since(start), replyBurst, most)
+	}
+}
+
+func TestTheBucketRefills(t *testing.T) {
+	now := time.Unix(0, 0)
+	b := newBucket(20, 3, func() time.Time { return now })
+	for i := range 3 {
+		if !b.take() {
+			t.Fatalf("token %d of the burst refused", i+1)
+		}
+	}
+	if b.take() {
+		t.Fatal("a fourth token in the same instant")
+	}
+	now = now.Add(50 * time.Millisecond)
+	if !b.take() || b.take() {
+		t.Fatal("not one token back after a twentieth of a second")
+	}
+	now = now.Add(time.Hour)
+	n := 0
+	for b.take() {
+		n++
+	}
+	if n != 3 {
+		t.Fatalf("%d tokens after an hour, want the burst of 3", n)
+	}
+}

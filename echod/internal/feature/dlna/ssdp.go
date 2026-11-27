@@ -90,9 +90,33 @@ func (f *Feature) announce(ctx context.Context) {
 	slog.Info("dlna: renderer on", "name", friendlyName())
 
 	pc := ipv4.NewPacketConn(listen)
-	go herald(ctx, func() { rejoin(pc, group) }, func(nts string) { notify(metrics.Addresses(), group, nts) },
-		func() time.Duration { return aliveEvery - 20*time.Second + rand.N(40*time.Second) })
-	respond(ctx, listen)
+	alongside(func() {
+		herald(ctx, func() { rejoin(pc, group) }, func(nts string) { notify(metrics.Addresses(), group, nts) },
+			func() time.Duration { return aliveEvery - 20*time.Second + rand.N(40*time.Second) })
+	}, func() { respond(ctx, listen) }, heraldWait)
+}
+
+// heraldWait is the most going off waits for the goodbyes: two rounds of two, a moment apart, if an
+// alive was still going out.
+const heraldWait = 2 * time.Second
+
+// alongside runs background while foreground runs, and when foreground returns waits for background
+// to finish too, for at most bound. The renderer's announcements run beside its answers, and going
+// off waits for their goodbyes: switched off and on again quickly, the next alive must not be sent
+// before the last byebye (which would have a controller drop the device it was just told is here), and
+// the daemon going down must not exit before they are sent.
+func alongside(background, foreground func(), bound time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		background()
+	}()
+	foreground()
+	select {
+	case <-done:
+	case <-time.After(bound):
+		slog.Warn("dlna: the goodbyes did not go out in time", "waited", bound)
+	}
 }
 
 // herald says the device is here (twice, a moment apart) now and every so often until ctx ends, then
@@ -167,6 +191,7 @@ func holdsOne(addrs []net.Addr, own []net.IP) bool {
 // respond answers the searches that reach conn until it is closed.
 func respond(ctx context.Context, conn *net.UDPConn) {
 	buf := make([]byte, 2048)
+	allowed := newBucket(repliesPerSecond, replyBurst, time.Now)
 	for {
 		n, from, err := conn.ReadFromUDP(buf)
 		if err != nil {
@@ -182,6 +207,9 @@ func respond(ctx context.Context, conn *net.UDPConn) {
 		answer := matching(s.st)
 		if len(answer) == 0 || !local(from.IP) {
 			continue
+		}
+		if !allowed.take() {
+			continue // more searches than any home sends: the rest go unanswered
 		}
 		select {
 		case replying <- struct{}{}:
@@ -199,6 +227,39 @@ func respond(ctx context.Context, conn *net.UDPConn) {
 // to be from. Room for several controllers' bursts at once: a phone app and a media server each send a
 // handful of searches together, one per kind of thing they look for (#779).
 var replying = make(chan struct{}, 32)
+
+// repliesPerSecond and replyBurst bound how fast searches are answered, whoever they claim to be from:
+// an answer to a search sent to the device alone goes at once, with no MX wait to spread it, so a
+// flood of them, from a sender spoofing another address on the network, would otherwise be a flood of
+// answers sent there. A home's controllers send a handful at a time, well inside the burst.
+const (
+	repliesPerSecond = 20
+	replyBurst       = 10
+)
+
+// bucket is a token bucket: up to burst at once, refilled at rate a second.
+type bucket struct {
+	rate, burst float64
+	tokens      float64
+	last        time.Time
+	now         func() time.Time
+}
+
+func newBucket(rate, burst float64, now func() time.Time) *bucket {
+	return &bucket{rate: rate, burst: burst, tokens: burst, last: now(), now: now}
+}
+
+// take is whether there is a token now, and takes it if there is. One goroutine's (respond's).
+func (b *bucket) take() bool {
+	t := b.now()
+	b.tokens = min(b.burst, b.tokens+t.Sub(b.last).Seconds()*b.rate)
+	b.last = t
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
 
 // local is an address a search may come from: the home network's own ranges, never the internet.
 func local(ip net.IP) bool {
