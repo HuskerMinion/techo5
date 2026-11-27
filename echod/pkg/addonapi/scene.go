@@ -6,6 +6,7 @@ import (
 	"image"
 	_ "image/jpeg" // DecodeConfig reads a JPEG's size
 	_ "image/png"  // and a PNG's
+	"math"
 	"net/netip"
 	"net/url"
 	"reflect"
@@ -47,16 +48,18 @@ const (
 	BlockProgress = "progress"
 	BlockDivider  = "divider"
 	BlockSpacer   = "spacer"
+	BlockStepper  = "stepper"
+	BlockToggle   = "toggle"
 )
 
 // BlockTypes is every block a scene may hold.
 var BlockTypes = []string{BlockColumn, BlockRow, BlockList, BlockCard, BlockText, BlockImage, BlockButton,
-	BlockChip, BlockProgress, BlockDivider, BlockSpacer}
+	BlockChip, BlockProgress, BlockDivider, BlockSpacer, BlockStepper, BlockToggle}
 
 // CardBlocks are the blocks a card over the clock may hold: words, a chip, a progress and one image,
 // arranged in rows and columns. Nothing in it scrolls or is a button: the card is a glance at the clock,
 // and the add-on's page is where it is used.
-var CardBlocks = []string{BlockColumn, BlockRow, BlockText, BlockChip, BlockProgress, BlockImage, BlockSpacer}
+var CardBlocks = []string{BlockColumn, BlockRow, BlockText, BlockChip, BlockProgress, BlockImage, BlockSpacer, BlockStepper, BlockToggle}
 
 // Text sizes, from the theme's fonts.
 const (
@@ -151,6 +154,13 @@ const (
 	// it is refused for: ten of them, 0 to 9, are a PIN pad, which is the device's own and must not be
 	// passed for on a page or a card.
 	MaxDigitRun = 10
+	// MaxStepperSteps is the most steps a stepper's range may hold ((max - min) / step), MaxStepperDecimals
+	// the most decimal places its numbers may have, MaxStepperMagnitude the largest any may be either way,
+	// and MaxUnit the most characters its unit may have.
+	MaxStepperSteps     = 1000
+	MaxStepperDecimals  = 2
+	MaxStepperMagnitude = 1e9
+	MaxUnit             = 16
 )
 
 // ImageCost is what an image counts toward MaxImageBudget: its pixels, four bytes each, which is what it
@@ -205,6 +215,18 @@ type Block struct {
 	// its id (timer.start's answer), which the daemon counts down with the clock's.
 	Value *float64 `json:"value,omitempty"`
 	Timer string   `json:"timer,omitempty"`
+
+	// Min, Max and Step are a stepper's: Value is its number, from Min to Max in steps of Step (1 when it
+	// gives none), drawn as − value unit + with its Label beside it. A tap on − or + changes the number at
+	// once on the screen and sends the change event; the add-on may patch the block to set it otherwise.
+	Min  *float64 `json:"min,omitempty"`
+	Max  *float64 `json:"max,omitempty"`
+	Step *float64 `json:"step,omitempty"`
+	Unit string   `json:"unit,omitempty"`
+
+	// On is a toggle's: on or off, drawn as the device's own switch beside its Label. A tap flips it at
+	// once on the screen and sends the change event; the add-on may patch the block to set it otherwise.
+	On bool `json:"on,omitempty"`
 }
 
 // Section is one part of a list: a heading, if it likes, and its items.
@@ -218,7 +240,7 @@ type Section struct {
 // saying which blocks have it.
 var blockFields = map[string][]string{
 	BlockColumn:   {"children", "spacing"},
-	BlockRow:      {"children", "spacing"},
+	BlockRow:      {"children", "spacing", "icon", "name", "url"},
 	BlockList:     {"sections"},
 	BlockCard:     {"children", "spacing", "accent"},
 	BlockText:     {"text", "size", "bold", "align", "max_lines"},
@@ -228,11 +250,29 @@ var blockFields = map[string][]string{
 	BlockProgress: {"value", "timer"},
 	BlockDivider:  {},
 	BlockSpacer:   {},
+	BlockStepper:  {"label", "value", "min", "max", "step", "unit"},
+	BlockToggle:   {"label", "on"},
 }
 
-// Pressable is whether a block of this type can be tapped, and so must have an id. A list's item of any
-// type can be tapped too, as a whole, when it has an id (TapTarget): a recipe in a list of them.
-func Pressable(blockType string) bool { return blockType == BlockButton || blockType == BlockChip }
+// Pressable is whether a block of this type can be tapped, and so must have an id: a button and a chip,
+// whose tap sends touch, and a stepper, whose − and + send change. A list's item of any type can be tapped
+// too, as a whole, when it has an id (TapTarget): a recipe in a list of them.
+func Pressable(blockType string) bool {
+	return blockType == BlockButton || blockType == BlockChip || blockType == BlockStepper || blockType == BlockToggle
+}
+
+// Changes is whether a block of this type is changed by a tap on the screen itself, and the add-on told
+// so by the change event: a stepper's number, a toggle's on or off.
+func Changes(blockType string) bool { return blockType == BlockStepper || blockType == BlockToggle }
+
+// Thumb is a list row's picture at its start, as an image block (its name or its address, filling a small
+// square), when it has one; an icon instead is the row's Icon.
+func (b *Block) Thumb() (Block, bool) {
+	if b.Type != BlockRow || (b.Name == "" && b.URL == "") {
+		return Block{}, false
+	}
+	return Block{Type: BlockImage, Name: b.Name, URL: b.URL, Fit: "cover"}, true
+}
 
 // setFields is the JSON names of the block's fields that are not their zero value.
 func (b *Block) setFields() []string {
@@ -347,6 +387,22 @@ func (c *sceneCheck) block(b *Block, depth int, parent string) error {
 		return badScene("%s's spacing is one of %s", what, strings.Join(Spacings, ", "))
 	}
 
+	if b.Type == BlockRow && (b.Icon != "" || b.Name != "" || b.URL != "") {
+		// A list's row may have a picture or an icon at its start: a recipe's photo, a room's icon.
+		switch {
+		case parent != BlockList:
+			return badScene("%s has a picture or an icon, which only a row that is a list's item has", what)
+		case b.Icon != "" && (b.Name != "" || b.URL != ""):
+			return badScene("%s has a picture or an icon, not both", what)
+		case b.Icon != "" && !iconName.MatchString(b.Icon):
+			return badScene("%s's icon %q is not an mdi: icon", what, b.Icon)
+		}
+		if thumb, ok := b.Thumb(); ok {
+			if err := c.image(&thumb, what+"'s picture"); err != nil {
+				return err
+			}
+		}
+	}
 	switch b.Type {
 	case BlockColumn, BlockRow, BlockCard:
 		if b.Accent != "" && !slices.Contains(Accents, b.Accent) {
@@ -405,6 +461,13 @@ func (c *sceneCheck) block(b *Block, depth int, parent string) error {
 		if b.Icon != "" && !iconName.MatchString(b.Icon) {
 			return badScene("%s's icon %q is not an mdi: icon", what, b.Icon)
 		}
+	case BlockStepper:
+		return stepperCheck(b, what)
+	case BlockToggle:
+		if b.Label == "" {
+			return badScene("%s has a label", what)
+		}
+		return words(what+"'s label", b.Label, MaxBlockLabel, false)
 	case BlockProgress:
 		switch {
 		case (b.Value == nil) == (b.Timer == ""):
@@ -544,7 +607,7 @@ func digitKeys(root *Block) error {
 	n := 0
 	var walk func(b *Block)
 	walk = func(b *Block) {
-		if Pressable(b.Type) && singleDigit(b.Label) {
+		if (b.Type == BlockButton || b.Type == BlockChip) && singleDigit(b.Label) {
 			n++
 		}
 		for i := range b.Children {
@@ -744,7 +807,7 @@ func (b *Block) TapTarget(id string) bool {
 	if id == "" {
 		return false
 	}
-	if f, ok := b.Find(id); ok && Pressable(f.Type) {
+	if f, ok := b.Find(id); ok && (f.Type == BlockButton || f.Type == BlockChip) {
 		return true
 	}
 	return b.isItem(id)
@@ -787,6 +850,73 @@ func (b *Block) Images() []string {
 	}
 	walk(b)
 	return out
+}
+
+// stepperCheck checks a stepper: a label and a unit that are words, a value, a min and a max, a step above
+// nothing, all finite, at most MaxStepperDecimals places and MaxStepperMagnitude either way, the value
+// within the range, and at most MaxStepperSteps steps across it.
+func stepperCheck(b *Block, what string) error {
+	if err := words(what+"'s label", b.Label, MaxBlockLabel, false); err != nil {
+		return err
+	}
+	if err := words(what+"'s unit", b.Unit, MaxUnit, false); err != nil {
+		return err
+	}
+	if b.Value == nil || b.Min == nil || b.Max == nil {
+		return badScene("%s has a value, a min and a max", what)
+	}
+	v, lo, hi, step := *b.Value, *b.Min, *b.Max, b.StepOr1()
+	for _, x := range []float64{v, lo, hi, step} {
+		if math.IsNaN(x) || math.IsInf(x, 0) || math.Abs(x) > MaxStepperMagnitude {
+			return badScene("%s's numbers are finite and at most %g either way", what, float64(MaxStepperMagnitude))
+		}
+		if !decimals(x) {
+			return badScene("%s's numbers have at most %d decimal places", what, MaxStepperDecimals)
+		}
+	}
+	switch {
+	case step <= 0:
+		return badScene("%s's step is more than 0", what)
+	case lo >= hi:
+		return badScene("%s's min is less than its max", what)
+	case v < lo || v > hi:
+		return badScene("%s's value is from its min to its max", what)
+	case (hi-lo)/step > MaxStepperSteps+1e-9:
+		return tooLarge("%s has at most %d steps from its min to its max", what, MaxStepperSteps)
+	}
+	return nil
+}
+
+// decimals is whether x has at most MaxStepperDecimals decimal places.
+func decimals(x float64) bool {
+	scaled := x * math.Pow10(MaxStepperDecimals)
+	return math.Abs(scaled-math.Round(scaled)) < 1e-6
+}
+
+// StepOr1 is a stepper's step, 1 when it gives none.
+func (b *Block) StepOr1() float64 {
+	if b.Step == nil {
+		return 1
+	}
+	return *b.Step
+}
+
+// Stepped is a stepper's value moved by n steps (−1 for −, 1 for +), held to its range and to the
+// stepper's decimal places: what a tap makes it, on the screen and in the change event.
+func (b *Block) Stepped(n int) float64 {
+	if b.Value == nil || b.Min == nil || b.Max == nil {
+		return 0
+	}
+	return b.Clamped(*b.Value + float64(n)*b.StepOr1())
+}
+
+// Clamped is x held to the stepper's range, rounded to its decimal places.
+func (b *Block) Clamped(x float64) float64 {
+	if b.Min == nil || b.Max == nil || math.IsNaN(x) {
+		return 0
+	}
+	p := math.Pow10(MaxStepperDecimals)
+	return math.Round(min(max(x, *b.Min), *b.Max)*p) / p
 }
 
 // URLs is the addresses of the images by address that the scene shows.

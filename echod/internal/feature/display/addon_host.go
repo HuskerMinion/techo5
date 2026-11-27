@@ -20,6 +20,7 @@ type screenHost interface {
 	Scene(id, on string) (addonhost.Scene, bool)
 	Shown(id, on string, shown bool)
 	Touch(id, on, block string, rev uint64) bool
+	Change(id, on, block string, rev uint64, value any) bool
 	Left(id string)
 	Swipe(id, direction string) bool
 	Back(id string) bool

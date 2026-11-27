@@ -52,7 +52,7 @@ func RenderAddonScene(screen, name, on string, root addonapi.Block, images func(
 		p.addonCardIn(v, box, inner, &drawn, timers, false, &buf)
 	} else {
 		bar, closeAt, content := p.addonPageRooms()
-		lay := p.laid(&drawn.page, "addon", sc, content, false, images)
+		lay := p.laid(&drawn.page, "addon", sc, 0, content, false, images)
 		p.drawScene(lay, nil, image.Point{}, pal, timers, picturesNow)
 		p.addonBar(name, "", bar, closeAt, pal)
 	}

@@ -411,12 +411,13 @@ func (c *Client) DropImage(ctx context.Context, name string) (ImageBudget, error
 }
 
 // ScreenEvent is one of the screen's events, decoded: Event says which, and the field of that name is
-// set (Touch for touch, Swipe for swipe, State for screen.state; back carries nothing).
+// set (Touch for touch, Change for change, Swipe for swipe, State for screen.state; back carries nothing).
 type ScreenEvent struct {
-	Event string
-	Touch TouchEvent
-	Swipe SwipeEvent
-	State ScreenStateEvent
+	Event  string
+	Touch  TouchEvent
+	Change ChangeEvent
+	Swipe  SwipeEvent
+	State  ScreenStateEvent
 }
 
 // screenEvent decodes a screen event, when it is one.
@@ -426,6 +427,8 @@ func screenEvent(name string, data json.RawMessage) (ScreenEvent, bool) {
 	switch name {
 	case EventTouch:
 		err = json.Unmarshal(data, &ev.Touch)
+	case EventChange:
+		err = json.Unmarshal(data, &ev.Change)
 	case EventSwipe:
 		err = json.Unmarshal(data, &ev.Swipe)
 	case EventScreenState:
@@ -437,7 +440,7 @@ func screenEvent(name string, data json.RawMessage) (ScreenEvent, bool) {
 	return ev, err == nil
 }
 
-// WatchScreen has touch, swipe, back and screen.state events arrive on the channel it returns rather
+// WatchScreen has touch, change, swipe, back and screen.state events arrive on the channel it returns rather
 // than on Events, decoded; it is closed when the connection ends. As with WatchMedia, an add-on that
 // leaves it unread holds up everything the daemon sends and is disconnected once the daemon's queue for
 // it is full. Asked again, it returns the same channel.
@@ -484,6 +487,17 @@ func Button(id, label, icon string) Block {
 // Chip is a chip with an id, a label and an icon ("" for none).
 func Chip(id, label, icon string) Block {
 	return Block{Type: BlockChip, ID: id, Label: label, Icon: icon}
+}
+
+// Toggle is an on and off switch beside its label, flipped by a tap (the change event).
+func Toggle(id, label string, on bool) Block {
+	return Block{Type: BlockToggle, ID: id, Label: label, On: on}
+}
+
+// Stepper is a stepper: a number from min to max in steps of step, its label and unit beside it (either
+// may be ""), changed by its − and + (the change event).
+func Stepper(id, label string, value, min, max, step float64, unit string) Block {
+	return Block{Type: BlockStepper, ID: id, Label: label, Value: &value, Min: &min, Max: &max, Step: &step, Unit: unit}
 }
 
 // Progress is a bar at value, from 0 to 1.

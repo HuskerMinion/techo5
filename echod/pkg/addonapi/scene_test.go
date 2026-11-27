@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -301,7 +302,11 @@ func TestCardRefusals(t *testing.T) {
 // be added without this test, and its reason, being looked at.
 func TestNothingImitatesTheSystem(t *testing.T) {
 	want := []string{"type", "id", "weight", "children", "spacing", "sections", "accent", "text", "size", "bold",
-		"align", "max_lines", "url", "data", "name", "fit", "label", "icon", "selected", "value", "timer"}
+		"align", "max_lines", "url", "data", "name", "fit", "label", "icon", "selected", "value", "timer",
+		// A stepper's: numbers and words, drawn as the device's own − and +, with no color or place.
+		"min", "max", "step", "unit",
+		// A toggle's: on or off, drawn as the device's own switch.
+		"on"}
 	var got []string
 	bt := reflect.TypeOf(Block{})
 	for i := range bt.NumField() {
@@ -415,6 +420,167 @@ func TestNoPINPad(t *testing.T) {
 	if err := ValidScene(OnPage, Row(Button("ten", "10", ""), key("1"), key("2")), nil); err != nil {
 		t.Errorf("a few numbered buttons: %v", err)
 	}
+}
+
+// A stepper is a number in a range, in steps: each is finite, of at most two decimal places, the value
+// within the range, the step above nothing, and at most MaxStepperSteps steps across it. It needs an id,
+// and it is no digit key.
+func TestStepper(t *testing.T) {
+	ok := Stepper("servings", "Servings", 4, 1, 12, 1, "people")
+	if err := ValidScene(OnPage, Column(ok), nil); err != nil {
+		t.Fatalf("a stepper: %v", err)
+	}
+	if err := ValidScene(OnCard, Row(ok), nil); err != nil {
+		t.Errorf("a stepper on a card: %v", err)
+	}
+	if err := ValidScene(OnPage, Block{Type: BlockStepper, ID: "s", Value: ptr(0.5), Min: ptr(0), Max: ptr(2)}, nil); err != nil {
+		t.Errorf("a stepper with no step, label or unit: %v", err)
+	}
+	with := func(f func(*Block)) Block { b := Stepper("s", "Servings", 4, 1, 12, 1, ""); f(&b); return b }
+	for what, b := range map[string]Block{
+		"no id":           with(func(b *Block) { b.ID = "" }),
+		"no value":        with(func(b *Block) { b.Value = nil }),
+		"no min":          with(func(b *Block) { b.Min = nil }),
+		"no max":          with(func(b *Block) { b.Max = nil }),
+		"min above max":   with(func(b *Block) { b.Min, b.Max = ptr(12), ptr(1) }),
+		"min at max":      with(func(b *Block) { b.Min, b.Max, b.Value = ptr(3), ptr(3), ptr(3) }),
+		"value below":     with(func(b *Block) { b.Value = ptr(0) }),
+		"value above":     with(func(b *Block) { b.Value = ptr(13) }),
+		"a step of 0":     with(func(b *Block) { b.Step = ptr(0) }),
+		"a step below 0":  with(func(b *Block) { b.Step = ptr(-1) }),
+		"NaN":             with(func(b *Block) { b.Value = ptr(math.NaN()) }),
+		"infinity":        with(func(b *Block) { b.Max = ptr(math.Inf(1)) }),
+		"huge":            with(func(b *Block) { b.Max = ptr(1e12) }),
+		"three decimals":  with(func(b *Block) { b.Step = ptr(0.125) }),
+		"a hidden label":  with(func(b *Block) { b.Label = "Serv\u202eings" }),
+		"a unit too long": with(func(b *Block) { b.Unit = strings.Repeat("u", MaxUnit+1) }),
+		"a field not its": with(func(b *Block) { b.Icon = "mdi:plus" }),
+		"a color, say":    with(func(b *Block) { b.Accent = "accent" }),
+	} {
+		code := CodeBadRequest
+		if what == "a unit too long" {
+			code = CodeTooLarge
+		}
+		refuses(t, "a stepper with "+what, OnPage, b, code)
+	}
+	refuses(t, "a stepper of too many steps", OnPage, with(func(b *Block) { b.Max, b.Step = ptr(1002), ptr(1) }), CodeTooLarge)
+	if err := ValidScene(OnPage, with(func(b *Block) { b.Min, b.Max, b.Step, b.Value = ptr(0), ptr(10), ptr(0.01), ptr(0.25) }), nil); err != nil {
+		t.Errorf("a stepper of exactly 1000 steps: %v", err)
+	}
+	// Steppers labeled with a digit are not digit keys: ten of them are not a PIN pad.
+	var many []Block
+	for i := range 10 {
+		many = append(many, Stepper(fmt.Sprintf("s%d", i), fmt.Sprintf("%d", i), 1, 0, 9, 1, ""))
+	}
+	if err := ValidScene(OnPage, Column(many...), nil); err != nil {
+		t.Errorf("ten steppers: %v", err)
+	}
+	// A touch is not a stepper's: it sends change.
+	if col := Column(ok); col.TapTarget("servings") {
+		t.Error("a stepper is a touch target")
+	}
+}
+
+// A tap moves a stepper by its step, held to its range and its decimal places.
+func TestStepped(t *testing.T) {
+	b := Stepper("s", "", 4, 1, 5, 1, "")
+	if b.Stepped(1) != 5 || b.Stepped(-1) != 3 {
+		t.Errorf("4 in steps of 1: %v %v", b.Stepped(1), b.Stepped(-1))
+	}
+	top := Stepper("s", "", 5, 1, 5, 1, "")
+	bottom := Stepper("s", "", 1, 1, 5, 1, "")
+	if top.Stepped(1) != 5 || bottom.Stepped(-1) != 1 {
+		t.Error("a stepper went past its range")
+	}
+	tenths := Stepper("s", "", 0.3, 0, 1, 0.1, "")
+	if got := tenths.Stepped(1); got != 0.4 {
+		t.Errorf("0.3 + 0.1 is %v", got)
+	}
+	odd := Stepper("s", "", 9, 0, 10, 3, "")
+	if odd.Stepped(1) != 10 {
+		t.Errorf("a step past the max is held to it: %v", odd.Stepped(1))
+	}
+}
+
+func ptr(x float64) *float64 { return &x }
+
+// A toggle has an id and a label, and is on or off; it is no digit key. A chip may be selected, which is
+// the add-on's to set: it is drawn as the theme's picked chip, and a tap on it is still a touch.
+func TestToggleAndSelected(t *testing.T) {
+	if err := ValidScene(OnPage, Column(Toggle("wifi", "Keep warm", true), Toggle("timer", "Timer sound", false)), nil); err != nil {
+		t.Fatalf("toggles: %v", err)
+	}
+	if err := ValidScene(OnCard, Row(Toggle("warm", "Warm", true)), nil); err != nil {
+		t.Errorf("a toggle on a card: %v", err)
+	}
+	refuses(t, "a toggle with no id", OnPage, Block{Type: BlockToggle, Label: "Warm"}, CodeBadRequest)
+	refuses(t, "a toggle with no label", OnPage, Block{Type: BlockToggle, ID: "w"}, CodeBadRequest)
+	refuses(t, "a toggle with a hidden label", OnPage, Toggle("w", "W\u202earm", false), CodeBadRequest)
+	refuses(t, "a toggle with an icon", OnPage, Block{Type: BlockToggle, ID: "w", Label: "Warm", Icon: "mdi:fire"}, CodeBadRequest)
+	var ten []Block
+	for i := range 10 {
+		ten = append(ten, Toggle(fmt.Sprintf("t%d", i), fmt.Sprintf("%d", i), false))
+	}
+	if err := ValidScene(OnPage, Column(ten...), nil); err != nil {
+		t.Errorf("ten toggles labeled with digits are not a PIN pad: %v", err)
+	}
+	tabs := Row(Block{Type: BlockChip, ID: "a", Label: "Shopping", Selected: true}, Chip("b", "Plan", ""))
+	if err := ValidScene(OnPage, tabs, nil); err != nil {
+		t.Errorf("a selected chip: %v", err)
+	}
+	if !tabs.TapTarget("a") || !tabs.TapTarget("b") {
+		t.Error("a chip, selected or not, is a touch target")
+	}
+	if col := Column(Toggle("w", "Warm", true)); col.TapTarget("w") {
+		t.Error("a toggle is a touch target; it sends change")
+	}
+	refuses(t, "a selected button", OnPage, Block{Type: BlockButton, ID: "b", Label: "OK", Selected: true}, CodeBadRequest)
+}
+
+// A row that is a list's item may have a picture (an image put, or an address, by the image's rules) or
+// an icon at its start; a row anywhere else may not, and not both.
+func TestListRowPictures(t *testing.T) {
+	item := func(f func(*Block)) Block {
+		b := Block{Type: BlockRow, ID: "soup", Children: []Block{Text("Soup")}}
+		f(&b)
+		return List(Section{Items: []Block{b}})
+	}
+	for what, b := range map[string]Block{
+		"an image put":      item(func(b *Block) { b.Name = "soup_photo" }),
+		"an image by url":   item(func(b *Block) { b.URL = "http://192.168.1.20/soup.jpg" }),
+		"an icon":           item(func(b *Block) { b.Icon = "mdi:pot-steam" }),
+		"an unknown icon":   item(func(b *Block) { b.Icon = "mdi:no-such-icon-at-all" }),
+		"a plain list item": item(func(b *Block) {}),
+	} {
+		if err := ValidScene(OnPage, b, nil); err != nil {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	for what, b := range map[string]Block{
+		"a picture and an icon": item(func(b *Block) { b.Name, b.Icon = "soup_photo", "mdi:pot-steam" }),
+		"an image from outside": item(func(b *Block) { b.URL = "http://8.8.8.8/soup.jpg" }),
+		"a bad name":            item(func(b *Block) { b.Name = "Soup Photo" }),
+		"an icon not mdi":       item(func(b *Block) { b.Icon = "fa:soup" }),
+		"a picture on a row":    Column(Block{Type: BlockRow, Name: "soup_photo", Children: []Block{Text("x")}}),
+		"an icon on a row":      Column(Block{Type: BlockRow, Icon: "mdi:lock", Children: []Block{Text("x")}}),
+		"a picture on a column": List(Section{Items: []Block{{Type: BlockColumn, Name: "x", Children: []Block{Text("x")}}}}),
+	} {
+		refuses(t, what, OnPage, b, CodeBadRequest)
+	}
+	sc := item(func(b *Block) { b.URL = "http://192.168.1.20/soup.jpg" })
+	if got := sc.URLs(); len(got) != 1 {
+		t.Errorf("a row's picture is not among the scene's addresses: %v", got)
+	}
+	row := sc.Sections[0].Items[0]
+	if th, ok := row.Thumb(); !ok || th.Type != BlockImage || th.URL == "" || th.Fit != "cover" {
+		t.Errorf("Thumb %+v %v", th, ok)
+	}
+	// The row's pictures count among the page's images.
+	var items []Block
+	for i := range MaxImages + 1 {
+		items = append(items, Block{Type: BlockRow, ID: fmt.Sprintf("r%d", i), Name: "p", Children: []Block{Text("x")}})
+	}
+	refuses(t, "more rows with pictures than a page's images", OnPage, List(Section{Items: items}), CodeTooLarge)
 }
 
 func TestURLs(t *testing.T) {

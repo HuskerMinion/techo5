@@ -65,6 +65,8 @@ func TestAddonPreviews(t *testing.T) {
 		if lay == nil || lay.maxScroll(0) <= 0 {
 			t.Errorf("%s: the list does not scroll", panel.name)
 		}
+		h.set("meals", addonapi.OnPage, controlsPage(), addonNow)
+		frame("addon-controls", scene{addonPage: addonPageOf(h, "meals")})
 		frame("addon-waiting", scene{addonPage: &addonPageView{id: "plex", name: "Plex Remote"}})
 		frame("addon-tab", scene{showDrawer: true, drawerTab: drawerAddons, weather: hassSunny()})
 		frame("addon-card", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})
@@ -344,5 +346,93 @@ func TestAddonGoesWithItsAddon(t *testing.T) {
 	d.addonScene(&s, addonNow)
 	if s.addonPage != nil || d.addon.page != "" {
 		t.Error("the page of an add-on that stopped stayed up")
+	}
+}
+
+// A tap on a stepper's + or −, or on a toggle, changes it on the screen at once and sends the add-on
+// what it made it, with the revision of the layout the finger was on; − at the min does nothing. The
+// add-on's own patch takes over from what the screen showed, and a new scene drops it.
+func TestAddonStepperAndToggleFingers(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	h := sampleHost(t, cookingPage())
+	h.set("meals", addonapi.OnPage, controlsPage(), addonNow)
+	useHost(t, h)
+	img := image.NewRGBA(image.Rect(0, 0, showWide, showHigh))
+	d := &Display{on: true, poke: make(chan struct{}, 1), r: newRenderer(img)}
+	d.openAddon("meals", "Meals")
+	draw := func() *sceneLayout {
+		s := scene{now: addonNow, phase: "idle"}
+		d.addonScene(&s, addonNow)
+		s.addonPage.pics = picturesNow
+		d.r.draw(s)
+		d.r.zmu.Lock()
+		defer d.r.zmu.Unlock()
+		return d.r.addon.pageAt.lay
+	}
+	zone := func(lay *sceneLayout, id string, step int) image.Point {
+		for i, b := range lay.boxes {
+			if b.tap == id && b.step == step {
+				_, r := lay.at(i, nil, image.Point{})
+				return image.Pt(r.Min.X+r.Dx()/2, r.Min.Y+r.Dy()/2)
+			}
+		}
+		t.Fatalf("no %s %d", id, step)
+		return image.Point{}
+	}
+	value := func(lay *sceneLayout, id string) any {
+		for _, b := range lay.boxes {
+			if b.b != nil && b.b.ID == id && addonapi.Changes(b.b.Type) {
+				return changeValue(b.b)
+			}
+		}
+		return nil
+	}
+	lay := draw()
+	plus := zone(lay, "servings", 1)
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: plus.X, Y: plus.Y})
+	sc, _ := h.Scene("meals", addonapi.OnPage)
+	if !h.said("change meals page servings 5") || h.revs[len(h.revs)-1] != sc.Rev {
+		t.Fatalf("a tap on +: %v %v", h.calls, h.revs)
+	}
+	if lay = draw(); value(lay, "servings") != 5.0 {
+		t.Errorf("the stepper shows %v after a tap on +, not 5 at once", value(lay, "servings"))
+	}
+	toggle := zone(lay, "warm", 0)
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: toggle.X, Y: toggle.Y})
+	if !h.said("change meals page warm false") {
+		t.Errorf("a tap on the toggle: %v", h.calls)
+	}
+	if lay = draw(); value(lay, "warm") != false {
+		t.Error("the toggle did not flip at once")
+	}
+	// The add-on sets the servings to 8 (a patch): that is what shows.
+	page := controlsPage()
+	page.Children[1] = addonapi.Stepper("servings", "Servings", 8, 1, 12, 1, "people")
+	h.patch("meals", addonapi.OnPage, page, addonNow)
+	if lay = draw(); value(lay, "servings") != 8.0 {
+		t.Errorf("after the add-on's patch the stepper shows %v", value(lay, "servings"))
+	}
+	// At its min, − does nothing.
+	page.Children[1] = addonapi.Stepper("servings", "Servings", 1, 1, 12, 1, "people")
+	h.set("meals", addonapi.OnPage, page, addonNow)
+	lay = draw()
+	n := len(h.calls)
+	minus := zone(lay, "servings", -1)
+	d.gesture(touch.Gesture{Kind: touch.Tap, X: minus.X, Y: minus.Y})
+	if len(h.calls) != n {
+		t.Errorf("− at the min sent %v", h.calls[n:])
+	}
+	// A new scene: what the screen showed of the toggle is dropped.
+	if lay = draw(); value(lay, "warm") != true {
+		t.Error("a new scene kept the toggle as a tap left it")
+	}
+}
+
+// Over the night clock a card shows no stepper or toggle, which would take a finger there.
+func TestAddonNightCardHidesControls(t *testing.T) {
+	card := addonapi.Column(addonapi.Text("Soup"), addonapi.Stepper("servings", "Servings", 4, 1, 12, 1, ""), addonapi.Toggle("warm", "Warm", true))
+	night := withoutPressable(card)
+	if len(night.Children) != 1 || night.Children[0].Type != addonapi.BlockText {
+		t.Errorf("the night card holds %+v", night.Children)
 	}
 }

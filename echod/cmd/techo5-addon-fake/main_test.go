@@ -323,6 +323,45 @@ func TestTheFakePageWaitedFor(t *testing.T) {
 	}
 }
 
+// The fake's change is a tap on a stepper or a toggle: the add-on is told what it made it.
+func TestTheFakeChanges(t *testing.T) {
+	c, keys, out, done := fakeWith(t, `"screen"`, "show")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ev := c.WatchScreen()
+	if err := c.SetScene(ctx, addonapi.OnPage, addonapi.Column(addonapi.Stepper("servings", "Servings", 4, 1, 12, 1, ""),
+		addonapi.Toggle("warm", "Keep warm", false))); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(keys, "tile\n")
+	waitFor(t, out, "brings the page up")
+	next := func() addonapi.ScreenEvent {
+		t.Helper()
+		for {
+			select {
+			case e := <-ev:
+				if e.Event == addonapi.EventChange {
+					return e
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no change")
+			}
+		}
+	}
+	_, _ = io.WriteString(keys, "change servings 5\n")
+	if e := next(); e.Change.ID != "servings" || e.Change.Value != 5.0 {
+		t.Errorf("%+v", e)
+	}
+	_, _ = io.WriteString(keys, "change warm on\n")
+	if on, ok := next().Change.Bool(); !ok || !on {
+		t.Error("the toggle's change")
+	}
+	_, _ = io.WriteString(keys, "quit\n")
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A dot has no screen, and refuses the screen's ops as a device does.
 func TestTheFakeDotHasNoScreen(t *testing.T) {
 	c, keys, _, done := fakeWith(t, `"screen"`, "dot")
@@ -354,7 +393,8 @@ func TestTheFakeDrawsScenes(t *testing.T) {
 		if _, err := c.PutImage(ctx, "dish", b.Bytes()); err != nil {
 			t.Fatal(err)
 		}
-		page := addonapi.Column(addonapi.Title("Stir the onions"), addonapi.ImageNamed("dish"), addonapi.Button("next", "Next", "mdi:arrow-right"))
+		page := addonapi.Column(addonapi.Title("Stir the onions"), addonapi.ImageNamed("dish"), addonapi.Button("next", "Next", "mdi:arrow-right"),
+			addonapi.Stepper("servings", "Servings", 4, 1, 12, 1, ""), addonapi.Toggle("warm", "Keep warm", true))
 		if err := c.SetScene(ctx, addonapi.OnPage, page); err != nil {
 			t.Fatal(err)
 		}

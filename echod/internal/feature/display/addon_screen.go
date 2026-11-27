@@ -7,6 +7,8 @@ import (
 	"image"
 	"log/slog"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
 // An add-on's page and card on the Show (stage 2 of the add-on API). The page is reached from the
@@ -27,7 +29,7 @@ func (r *renderer) addonPage(s scene) {
 	fillCanvas(r.dst, walnut)
 	var lay *sceneLayout
 	if v.has {
-		lay = r.laid(&r.addon.page, v.id, v.sc, content, false, v.images)
+		lay = r.laid(&r.addon.page, v.id, v.sc, v.local, content, false, v.images)
 		r.drawScene(lay, v.scrolls[:], image.Point{}, pal, timersIn(s.timers), v.pics)
 	} else {
 		f := sceneFace(r.faceKey(), r.sceneMetrics().text[1], false)
@@ -78,7 +80,7 @@ func (r *renderer) addonCardReserve(s scene) int {
 
 // addonCardHeight is how tall v's card is in box, laid out in inner, over the night clock or not.
 func (p *paint) addonCardHeight(v *addonCardView, box, inner image.Rectangle, drawn *addonDrawn, night bool) int {
-	lay := p.laidAt(&drawn.card, v.id, v.sc, inner, true, night, v.images)
+	lay := p.laidAt(&drawn.card, v.id, v.sc, v.local, inner, true, night, v.images)
 	m := p.sceneMetrics()
 	return min(box.Dy(), lay.height+2*m.pad+lineH(sceneFace(p.faceKey(), m.text[0], true))+m.gap[1])
 }
@@ -141,7 +143,9 @@ func (d *Display) addonCardScene(s *scene, clock bool) {
 	if best == nil {
 		return
 	}
-	s.addonCard = best
+	v := *best
+	v.local = d.addonChangedIn(v.id, addonapi.OnCard, &v.sc)
+	s.addonCard = &v
 	// It takes the foot: the Next up card and the chips wait under it until it goes.
 	s.nextUp, s.glance = nil, nil
 	d.mu.Lock()

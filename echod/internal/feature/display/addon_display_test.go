@@ -249,7 +249,7 @@ func TestAddonTapCarriesItsRevision(t *testing.T) {
 	p := &paint{dst: img, w: 960, h: 480, sNum: 1, sDen: 1}
 	var kept addonLaid
 	sc, _ := h.Scene("meals", addonapi.OnPage)
-	lay := p.laid(&kept, "meals", sc, image.Rect(20, 80, 940, 460), false, nil)
+	lay := p.laid(&kept, "meals", sc, 0, image.Rect(20, 80, 940, 460), false, nil)
 	if lay.rev != sc.Rev || sc.Rev != 2 {
 		t.Errorf("the layout of revision %d says %d", sc.Rev, lay.rev)
 	}

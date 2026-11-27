@@ -4,6 +4,7 @@ package display
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -72,6 +73,13 @@ func (h *fakeHost) Touch(id, on, block string, rev uint64) bool {
 	return true
 }
 func (h *fakeHost) Left(id string) { h.note("left " + id) }
+func (h *fakeHost) Change(id, on, block string, rev uint64, value any) bool {
+	h.note(fmt.Sprintf("change %s %s %s %v", id, on, block, value))
+	h.mu.Lock()
+	h.revs = append(h.revs, rev)
+	h.mu.Unlock()
+	return true
+}
 func (h *fakeHost) Swipe(id, direction string) bool {
 	h.note("swipe " + id + " " + direction)
 	return true
@@ -209,6 +217,25 @@ func cardScene() addonapi.Block {
 		addonapi.Column(addonapi.Block{Type: addonapi.BlockText, Text: "Stir the onions", Size: addonapi.SizeTitle, MaxLines: 1},
 			addonapi.Block{Type: addonapi.BlockProgress, Timer: "local:onions"}),
 		addonapi.Chip("next", "Next", "mdi:arrow-right"))
+}
+
+// controlsPage is the controls an add-on takes a choice or a number with: a row of tabs, one selected (the
+// add-on's to set), a stepper for the servings, toggles, and a list whose rows have a picture or an icon
+// at their start.
+func controlsPage() addonapi.Block {
+	tabs := addonapi.Row(addonapi.Block{Type: addonapi.BlockChip, ID: "tab_week", Label: "This week", Selected: true},
+		addonapi.Chip("tab_next", "Next week", ""))
+	tabs.Spacing = "small"
+	rows := addonapi.List(addonapi.Section{Heading: "Tonight", Items: []addonapi.Block{
+		{Type: addonapi.BlockRow, ID: "soup", Name: "thumb", Children: []addonapi.Block{
+			addonapi.Block{Type: addonapi.BlockText, Text: "Tomato soup", Bold: true}}},
+		{Type: addonapi.BlockRow, ID: "oven", Icon: "mdi:stove", Children: []addonapi.Block{addonapi.Text("Oven at 200°")}},
+	}})
+	return addonapi.Column(tabs,
+		addonapi.Stepper("servings", "Servings", 4, 1, 12, 1, "people"),
+		addonapi.Toggle("warm", "Keep warm", true),
+		addonapi.Toggle("alarm", "Ring when done", false),
+		rows)
 }
 
 // sampleHost is a host with Meals running, its page and card set, and its images put.
@@ -378,10 +405,10 @@ func TestNightCardShowsNothingPressable(t *testing.T) {
 		}
 		return n
 	}
-	if n := taps(p.laidAt(&kept, "meals", hs, room, true, false, nil)); n != 1 {
+	if n := taps(p.laidAt(&kept, "meals", hs, 0, room, true, false, nil)); n != 1 {
 		t.Errorf("by day the card has %d to tap", n)
 	}
-	if n := taps(p.laidAt(&kept, "meals", hs, room, true, true, nil)); n != 0 {
+	if n := taps(p.laidAt(&kept, "meals", hs, 0, room, true, true, nil)); n != 0 {
 		t.Errorf("at night the card has %d to tap", n)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"image/draw"
 	_ "image/jpeg" // an add-on's JPEGs
 	_ "image/png"  // and PNGs
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -130,10 +131,12 @@ type sceneBox struct {
 	lines []string // a text's lines, a button's or a chip's one
 	face  font.Face
 	tap   string          // what a tap on it sends: a button's or a chip's id, or a list item's
+	step  int             // a stepper's − (-1) or + (1): a tap on it changes the stepper's number
 	pic   scenePic        // an image's
 	head  bool            // a list's section heading
 	rule  bool            // a rule between a list's items
-	label image.Rectangle // a progress tied to a timer: where its time is written
+	label image.Rectangle // a progress tied to a timer: where its time is written; a stepper's number
+	lead  bool            // a list row's icon at its start
 }
 
 // scenePic is an image's bytes and the key that names them, and the size it was laid out at.
@@ -312,6 +315,14 @@ func (l *sceneLayouter) size(b *addonapi.Block, w int) image.Point {
 		return image.Pt(l.pressWidth(b, w), m.button)
 	case addonapi.BlockChip:
 		return image.Pt(l.pressWidth(b, w), m.chip)
+	case addonapi.BlockToggle:
+		return image.Pt(min(w, l.p.width(l.face(addonapi.SizeBody, false), b.Label)+m.gap[2]+l.toggleW()), m.button)
+	case addonapi.BlockStepper:
+		lw := 0
+		if b.Label != "" {
+			lw = l.p.width(l.face(addonapi.SizeBody, false), b.Label) + m.gap[2]
+		}
+		return image.Pt(min(w, lw+l.stepperControls(b)), m.button)
 	case addonapi.BlockProgress:
 		h := m.bar
 		if b.Timer != "" {
@@ -334,16 +345,60 @@ func (l *sceneLayouter) size(b *addonapi.Block, w int) image.Point {
 		inner := l.columnSize(b.Children, b.Spacing, w-2*m.pad-m.stripe)
 		return image.Pt(w, inner.Y+2*m.pad)
 	case addonapi.BlockRow:
-		widths, h := l.rowWidths(b, w)
-		total := 0
+		lead := l.leadW(b)
+		widths, h := l.rowWidths(b, w-lead)
+		total := lead
 		for _, x := range widths {
 			total += x
+		}
+		if lead > 0 {
+			h = max(h, l.m.button)
 		}
 		return image.Pt(min(w, total+m.sceneGap(b.Spacing)*max(len(widths)-1, 0)), h)
 	case addonapi.BlockColumn:
 		return l.columnSize(b.Children, b.Spacing, w)
 	}
 	return image.Point{}
+}
+
+// toggleW is how wide a toggle's switch is.
+func (l *sceneLayouter) toggleW() int { return l.m.chip * 7 / 4 }
+
+// leadW is the room a list row's picture or icon takes at its start, gap and all; 0 for a row with
+// neither.
+func (l *sceneLayouter) leadW(b *addonapi.Block) int {
+	if b.Type != addonapi.BlockRow || (b.Icon == "" && b.Name == "" && b.URL == "") {
+		return 0
+	}
+	return l.m.button + l.m.sceneGap(b.Spacing)
+}
+
+// stepperControls is how wide a stepper's − number unit + is: two round buttons and, between them, room
+// for the widest its number can be with its unit, so the buttons do not move as it changes.
+func (l *sceneLayouter) stepperControls(b *addonapi.Block) int {
+	f := l.face(addonapi.SizeBody, true)
+	w := 0
+	for _, v := range []*float64{b.Min, b.Max, b.Value} {
+		if v != nil {
+			c := *b
+			c.Value = v
+			w = max(w, l.p.width(f, stepperValue(&c)))
+		}
+	}
+	return 2*l.m.button + 2*l.m.gap[2] + w
+}
+
+// stepperValue is a stepper's number as it is drawn, with its unit: as many decimal places as it has.
+func stepperValue(b *addonapi.Block) string {
+	v := 0.0
+	if b.Value != nil {
+		v = *b.Value
+	}
+	out := strconv.FormatFloat(v, 'f', -1, 64)
+	if b.Unit != "" {
+		out += " " + b.Unit
+	}
+	return out
 }
 
 // columnSize is children one under another in w.
@@ -495,6 +550,32 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 			label = l.p.fit(f, b.Label, max(room, 1))
 		}
 		l.add(sceneBox{b: b, r: r, lines: []string{label}, face: f, tap: b.ID})
+	case addonapi.BlockToggle:
+		// Its label from the start and its switch at the end; a tap anywhere on it flips it.
+		f := l.face(addonapi.SizeBody, false)
+		label := l.p.fit(f, b.Label, max(r.Dx()-l.toggleW()-m.gap[2], 1))
+		sw := min(l.toggleW(), r.Dx())
+		h := min(m.chip, r.Dy())
+		top := r.Min.Y + (r.Dy()-h)/2
+		l.add(sceneBox{b: b, r: r, lines: []string{label}, face: f, tap: b.ID,
+			label: image.Rect(r.Max.X-sw, top, r.Max.X, top+h)})
+	case addonapi.BlockStepper:
+		// Its label from the start, and its − number unit + at the end, − and + round buttons as tall
+		// as a button and as wide, so a finger finds them.
+		f := l.face(addonapi.SizeBody, false)
+		ctl := min(l.stepperControls(b), r.Dx())
+		label := ""
+		if b.Label != "" {
+			label = l.p.fit(f, b.Label, max(r.Dx()-ctl-m.gap[2], 1))
+		}
+		side := min(m.button, r.Dy())
+		top := r.Min.Y + (r.Dy()-side)/2
+		plus := image.Rect(r.Max.X-side, top, r.Max.X, top+side)
+		minus := image.Rect(max(r.Max.X-ctl, r.Min.X), top, max(r.Max.X-ctl, r.Min.X)+side, top+side)
+		l.add(sceneBox{b: b, r: r, lines: []string{label, stepperValue(b)}, face: f,
+			label: image.Rect(minus.Max.X, r.Min.Y, plus.Min.X, r.Max.Y)})
+		l.add(sceneBox{b: b, r: minus, tap: b.ID, step: -1})
+		l.add(sceneBox{b: b, r: plus, tap: b.ID, step: 1})
 	case addonapi.BlockProgress:
 		box := sceneBox{b: b, r: r, face: l.face(addonapi.SizeBody, false)}
 		if b.Timer != "" {
@@ -518,6 +599,19 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 	case addonapi.BlockColumn:
 		l.placeColumn(b.Children, b.Spacing, r)
 	case addonapi.BlockRow:
+		if lead := l.leadW(b); lead > 0 {
+			// A list row's picture or icon, a small square at its start, and the rest after it.
+			side := min(m.button, r.Dy())
+			sq := image.Rect(r.Min.X, r.Min.Y+(r.Dy()-side)/2, r.Min.X+side, r.Min.Y+(r.Dy()-side)/2+side)
+			if thumb, ok := b.Thumb(); ok {
+				t := &thumb
+				pic, _, _ := l.picOf(t)
+				l.add(sceneBox{b: t, r: sq, pic: pic})
+			} else {
+				l.add(sceneBox{b: b, r: sq, lead: true})
+			}
+			r.Min.X += lead
+		}
 		l.placeRow(b, r)
 	case addonapi.BlockList:
 		l.placeList(b, r)
@@ -664,6 +758,13 @@ func (s *sceneLayout) at(i int, scrolls []int, off image.Point) (image.Rectangle
 // tapAt is the id a tap at pt sends, if it is on something that can be tapped: the innermost, so a button
 // in a list's item is the button's, and anywhere else on the item the item's.
 func (s *sceneLayout) tapAt(pt image.Point, slop int, scrolls []int, off image.Point) string {
+	id, _, _ := s.tapStepAt(pt, slop, scrolls, off)
+	return id
+}
+
+// tapStepAt is tapAt, and for a stepper's − or + which it is (-1, 1, 0 for anything else) and the
+// stepper's block.
+func (s *sceneLayout) tapStepAt(pt image.Point, slop int, scrolls []int, off image.Point) (string, int, *addonapi.Block) {
 	for i := len(s.boxes) - 1; i >= 0; i-- {
 		if s.boxes[i].tap == "" {
 			continue
@@ -677,10 +778,10 @@ func (s *sceneLayout) tapAt(pt image.Point, slop int, scrolls []int, off image.P
 			reach = reach.Intersect(s.lists[l-1].view.Add(off))
 		}
 		if pt.In(reach) {
-			return s.boxes[i].tap
+			return s.boxes[i].tap, s.boxes[i].step, s.boxes[i].b
 		}
 	}
-	return ""
+	return "", 0, nil
 }
 
 // listAt is the list a finger at pt is on, or the first when it is on none; -1 with no list.
@@ -771,6 +872,14 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 		return
 	case box.item:
 		return // the item's own blocks are drawn as they come
+	case box.lead:
+		// A list row's icon, in the theme's accent; one this build has no glyph for is drawn as nothing.
+		if addonHasIcon(b.Icon) {
+			side := min(r.Dx(), r.Dy()) * 3 / 4
+			c := image.Pt(r.Min.X+r.Dx()/2, r.Min.Y+r.Dy()/2)
+			p.mdiIconIn(b.Icon, image.Rect(c.X-side/2, c.Y-side/2, c.X+side/2, c.Y+side/2), p.unscaled(side), pal.accent)
+		}
+		return
 	}
 	switch b.Type {
 	case addonapi.BlockText:
@@ -789,6 +898,60 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 				x = r.Max.X - w
 			}
 			p.text(box.face, ln, x, r.Min.Y+i*lh+asc, col)
+		}
+	case addonapi.BlockToggle:
+		f := box.face
+		base := r.Min.Y + r.Dy()/2 + (f.Metrics().Ascent.Ceil()-f.Metrics().Descent.Ceil())/2
+		p.text(f, box.lines[0], r.Min.X, base, pal.text)
+		// The switch: a track, filled with the accent when on, and its knob at the end it is at.
+		sw := box.label
+		rad := float64(sw.Dy()) / 2
+		knob := sw.Dy() - 2*max(sw.Dy()/10, 2)
+		pad := (sw.Dy() - knob) / 2
+		kx := sw.Min.X + pad
+		if b.On {
+			p.roundFill(sw, rad, shift(pal.accent, 10), shift(pal.accent, -10))
+			kx = sw.Max.X - pad - knob
+		} else {
+			p.roundFill(sw, rad, pal.surface(4), pal.surface(4))
+			p.roundStroke(sw, rad, 1, pal.rules)
+		}
+		ink := pal.text
+		if b.On {
+			ink = pal.onAccent
+		}
+		p.aaDisc(float64(kx)+float64(knob)/2, float64(sw.Min.Y)+float64(sw.Dy())/2, float64(knob)/2, ink)
+	case addonapi.BlockStepper:
+		if box.step == 0 {
+			// Its label at the start, its number between − and +.
+			f := box.face
+			base := r.Min.Y + r.Dy()/2 + (f.Metrics().Ascent.Ceil()-f.Metrics().Descent.Ceil())/2
+			if box.lines[0] != "" {
+				p.text(f, box.lines[0], r.Min.X, base, pal.text)
+			}
+			bold := sceneFace(p.faceKey(), m.text[1], true)
+			v := p.fit(bold, box.lines[1], max(box.label.Dx(), 1))
+			p.text(bold, v, box.label.Min.X+(box.label.Dx()-p.width(bold, v))/2, base, pal.text)
+			return
+		}
+		// − or +, a round button, drawn faint where it would go past the range.
+		end := (box.step < 0 && b.Value != nil && b.Min != nil && *b.Value <= *b.Min) ||
+			(box.step > 0 && b.Value != nil && b.Max != nil && *b.Value >= *b.Max)
+		rad := float64(r.Dy()) / 2
+		ink := pal.text
+		if end {
+			p.roundFill(r, rad, pal.surface(2), pal.surface(2))
+			p.roundStroke(r, rad, 1, pal.rules)
+			ink = pal.dim
+		} else {
+			p.roundFill(r, rad, shift(pal.surface(5), 4), pal.surface(3))
+			p.roundStroke(r, rad, 1, lerp(pal.rules, pal.surface(5), 0.3))
+		}
+		cx, cy := float64(r.Min.X)+float64(r.Dx())/2, float64(r.Min.Y)+float64(r.Dy())/2
+		arm, pen := float64(r.Dy())*0.2, max(float64(r.Dy())/16, 2)
+		p.aaLine(cx-arm, cy, cx+arm, cy, pen, ink)
+		if box.step > 0 {
+			p.aaLine(cx, cy-arm, cx, cy+arm, pen, ink)
 		}
 	case addonapi.BlockButton, addonapi.BlockChip:
 		rad := float64(r.Dy()) / 2

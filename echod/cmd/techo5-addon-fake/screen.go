@@ -4,6 +4,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -146,6 +147,24 @@ func (d *fake) screenKeys(verb, rest string) {
 		sc, _ := d.srv.Scene(d.id, on) // the fake's finger is on the scene as it is now
 		if len(args) == 0 || !d.srv.Touch(d.id, on, args[0], sc.Rev) {
 			d.say("touch takes the id of a button or a chip on the %s in view: touch ID [page|card]", on)
+		}
+	case "change":
+		// A tap on a stepper's − or + (the number it makes it) or on a toggle (on or off).
+		on := arg(2, addonapi.OnPage)
+		sc, _ := d.srv.Scene(d.id, on)
+		var v any
+		switch x := arg(1, ""); x {
+		case "on", "true":
+			v = true
+		case "off", "false":
+			v = false
+		default:
+			if n, err := strconv.ParseFloat(x, 64); err == nil {
+				v = n
+			}
+		}
+		if len(args) == 0 || v == nil || !d.srv.Change(d.id, on, args[0], sc.Rev, v) {
+			d.say("change takes a stepper's id and a number, or a toggle's and on or off, on the %s in view: change ID VALUE [page|card]", on)
 		}
 	case "swipe":
 		if !d.srv.Swipe(d.id, arg(0, "")) {

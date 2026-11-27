@@ -691,3 +691,76 @@ func TestAPageUpAcrossAReconnect(t *testing.T) {
 		t.Error("the page set again after a reconnect takes no tap")
 	}
 }
+
+// A tap on a stepper's − or + reaches the add-on as change, with the number it made, held to the
+// stepper's range; only for a stepper in view, and only off a layout of the block as it is now.
+func TestAStepperChanges(t *testing.T) {
+	r, _, c := screenRig(t)
+	ev := c.WatchScreen()
+	sc := addonapi.Column(addonapi.Stepper("servings", "Servings", 4, 1, 12, 1, ""), addonapi.Button("next", "Next", ""))
+	if err := c.SetScene(ctx(t), addonapi.OnPage, sc); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := r.s.Scene("meals", addonapi.OnPage)
+	if r.s.Change("meals", addonapi.OnPage, "servings", cur.Rev, 5.0) {
+		t.Error("a change on a page out of view")
+	}
+	r.s.Shown("meals", addonapi.OnPage, true)
+	nextScreen(t, ev)
+	if !r.s.Change("meals", addonapi.OnPage, "servings", cur.Rev, 5.0) {
+		t.Fatal("a change on a stepper in view")
+	}
+	if e := nextScreen(t, ev); e.Event != addonapi.EventChange || e.Change != (addonapi.ChangeEvent{ID: "servings", On: addonapi.OnPage, Value: 5.0}) {
+		t.Errorf("change: %+v", e)
+	}
+	r.s.Change("meals", addonapi.OnPage, "servings", cur.Rev, 99.0)
+	if e := nextScreen(t, ev); e.Change.Value != 12.0 {
+		t.Errorf("a number past the max is sent as %v", e.Change.Value)
+	}
+	if r.s.Change("meals", addonapi.OnPage, "next", cur.Rev, 1.0) || touch(r, "meals", addonapi.OnPage, "servings") ||
+		r.s.Change("meals", addonapi.OnPage, "servings", cur.Rev, true) {
+		t.Error("a change on a button, or a touch on a stepper, was sent")
+	}
+	// The add-on sets the number otherwise: a tap off the layout before is not sent.
+	if err := c.PatchScene(ctx(t), addonapi.OnPage, "servings", addonapi.Stepper("servings", "Servings", 6, 1, 12, 1, "")); err != nil {
+		t.Fatal(err)
+	}
+	if r.s.Change("meals", addonapi.OnPage, "servings", cur.Rev, 5.0) {
+		t.Error("a change off the layout before the stepper was patched was sent")
+	}
+	now, _ := r.s.Scene("meals", addonapi.OnPage)
+	if !r.s.Change("meals", addonapi.OnPage, "servings", now.Rev, 7.0) {
+		t.Error("a change off the layout as it is now")
+	}
+}
+
+// A tap on a toggle reaches the add-on as change, with true or false; a tap on a chip is a touch, and does
+// not select it: that is the add-on's to do, by a patch.
+func TestAToggleChanges(t *testing.T) {
+	r, _, c := screenRig(t)
+	ev := c.WatchScreen()
+	sc := addonapi.Column(addonapi.Toggle("warm", "Keep warm", false), addonapi.Chip("plan", "Plan", ""))
+	if err := c.SetScene(ctx(t), addonapi.OnPage, sc); err != nil {
+		t.Fatal(err)
+	}
+	r.s.Shown("meals", addonapi.OnPage, true)
+	nextScreen(t, ev)
+	cur, _ := r.s.Scene("meals", addonapi.OnPage)
+	if !r.s.Change("meals", addonapi.OnPage, "warm", cur.Rev, true) {
+		t.Fatal("a toggle flipped")
+	}
+	e := nextScreen(t, ev)
+	if on, ok := e.Change.Bool(); e.Event != addonapi.EventChange || !ok || !on || e.Change.ID != "warm" {
+		t.Errorf("change: %+v", e)
+	}
+	if r.s.Change("meals", addonapi.OnPage, "warm", cur.Rev, 3.0) || touch(r, "meals", addonapi.OnPage, "warm") {
+		t.Error("a number for a toggle, or a touch on one, was sent")
+	}
+	if !touch(r, "meals", addonapi.OnPage, "plan") {
+		t.Fatal("a tap on a chip")
+	}
+	nextScreen(t, ev)
+	if now, _ := r.s.Scene("meals", addonapi.OnPage); now.Root.Children[1].Selected {
+		t.Error("a tap selected the chip; that is the add-on's to do")
+	}
+}

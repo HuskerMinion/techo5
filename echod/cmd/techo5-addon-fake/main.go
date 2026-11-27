@@ -441,6 +441,7 @@ const help = `the keyboard's commands:
   media REASON          the add-on's media ends: ended, device (the Stop button), replaced (other media), error
   tile                  tap the add-on's tile under the Add-ons tab: its page comes up
   touch ID [page|card]  tap the button, chip or list item of this id on the page (or the card) in view
+  change ID VALUE [page|card] a tap on a stepper (VALUE, the number it makes it) or a toggle (on or off)
   swipe left|right      swipe across the page in view
   back                  the back gesture on the page in view
   shown page|card on|off the page or the card comes into view, or goes (a ring covering it, say); the add-on
@@ -527,7 +528,7 @@ func (d *fake) keyboard(in io.Reader, m catalog.Manifest) error {
 			}
 		case "media":
 			d.mediaKeys(rest)
-		case "tile", "touch", "swipe", "back", "shown", "dismiss", "close", "scene":
+		case "tile", "touch", "change", "swipe", "back", "shown", "dismiss", "close", "scene":
 			d.screenKeys(verb, rest)
 		case "stop":
 			d.mu.Lock()

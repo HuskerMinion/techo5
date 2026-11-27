@@ -12,6 +12,8 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+
+	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
 // An add-on's page and card on the Spot (stage 2 of the add-on API), as on the Show (addon_screen.go)
@@ -193,7 +195,7 @@ func (r *roundRenderer) addonPageSpot(s roundScene) {
 	bar, closeAt, content := r.addonPageRooms()
 	var lay *sceneLayout
 	if v.has {
-		lay = r.laid(&r.addon.page, v.id, v.sc, content, false, v.images)
+		lay = r.laid(&r.addon.page, v.id, v.sc, v.local, content, false, v.images)
 		r.drawScene(lay, v.scrolls[:], image.Point{}, pal, timersIn(s.timers), v.pics)
 	} else {
 		f := sceneFace(r.faceKey(), r.sceneMetrics().text[1], false)
@@ -265,7 +267,9 @@ func (d *Display) addonCardSceneSpot(s *roundScene) {
 		return
 	}
 	if best := d.addonCardNow(h, night); best != nil {
-		s.addonCard = best
+		v := *best
+		v.local = d.addonChangedIn(v.id, addonapi.OnCard, &v.sc)
+		s.addonCard = &v
 		d.mu.Lock()
 		d.addon.frameCard = addonShown{best.id, best.sc.Set}
 		d.mu.Unlock()

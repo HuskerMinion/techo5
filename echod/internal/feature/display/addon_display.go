@@ -37,6 +37,122 @@ type addonUI struct {
 	// card is the card over the clock as last taken (addonCardNow), held to a change every
 	// addonCardEvery, or addonCardNightEvery over the night clock.
 	card addonCardKept
+	// changed is what a tap made the add-ons' steppers and toggles, shown at once, ahead of the add-on,
+	// until the add-on's scene says otherwise; changedGen goes up with every change to it.
+	changed    map[addonChangedKey]addonChanged
+	changedGen uint64
+}
+
+// addonChangedKey is one block of an add-on's page or card.
+type addonChangedKey struct{ addon, on, block string }
+
+// addonChanged is a stepper's number or a toggle's state a tap made it (value), what the add-on's scene
+// said when the first such tap came (base), and the scene.set it was in: kept while the scene still says
+// base, so the add-on's own patch (to agree, or to set it otherwise) takes over, and a new scene drops it.
+type addonChanged struct {
+	base, value any
+	set         uint64
+}
+
+// changeValue is a stepper's number or a toggle's state, as a change event carries it.
+func changeValue(b *addonapi.Block) any {
+	if b.Type == addonapi.BlockToggle {
+		return b.On
+	}
+	if b.Value != nil {
+		return *b.Value
+	}
+	return nil
+}
+
+// setChangeValue gives a stepper a number or a toggle a state.
+func setChangeValue(b *addonapi.Block, v any) {
+	switch x := v.(type) {
+	case bool:
+		b.On = x
+	case float64:
+		b.Value = &x
+	}
+}
+
+// addonChangedIn puts into sc what taps made the add-on's steppers and toggles on that surface, dropping
+// what the scene has moved on from, and answers the generation for the layout. A copy of the scene's root
+// is changed, never the server's.
+func (d *Display) addonChangedIn(id, on string, sc *hostScene) uint64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var mine map[string]any
+	for k, c := range d.addon.changed {
+		if k.addon != id || k.on != on {
+			continue
+		}
+		b, ok := sc.Root.Find(k.block)
+		if !ok || !addonapi.Changes(b.Type) || sc.Set != c.set || changeValue(b) != c.base {
+			delete(d.addon.changed, k)
+			d.addon.changedGen++
+			continue
+		}
+		if mine == nil {
+			mine = map[string]any{}
+		}
+		mine[k.block] = c.value
+	}
+	if len(mine) > 0 {
+		root := sc.Root.Clone()
+		for block, v := range mine {
+			if b, ok := root.Find(block); ok {
+				setChangeValue(b, v)
+			}
+		}
+		sc.Root = root
+	}
+	return d.addon.changedGen
+}
+
+// addonChange is a tap on one of the add-on's steppers or toggles, found in lay: the number it makes the
+// stepper (step −1 or 1) or the state it makes the toggle, shown at once and sent to the add-on, which
+// may set it otherwise. A − at the min or a + at the max does nothing.
+func (d *Display) addonChange(h screenHost, id, on string, lay *sceneLayout, b *addonapi.Block, step int) {
+	var v any
+	switch b.Type {
+	case addonapi.BlockStepper:
+		if step == 0 || b.Value == nil {
+			return
+		}
+		n := b.Stepped(step)
+		if n == *b.Value {
+			return
+		}
+		v = n
+	case addonapi.BlockToggle:
+		v = !b.On
+	default:
+		return
+	}
+	if !h.Change(id, on, b.ID, lay.rev, v) {
+		return
+	}
+	sc, ok := h.Scene(id, on)
+	if !ok {
+		return
+	}
+	orig, ok := sc.Root.Find(b.ID)
+	if !ok {
+		return
+	}
+	k := addonChangedKey{id, on, b.ID}
+	d.mu.Lock()
+	if d.addon.changed == nil {
+		d.addon.changed = map[addonChangedKey]addonChanged{}
+	}
+	base := changeValue(orig)
+	if c, ok := d.addon.changed[k]; ok && c.set == sc.Set {
+		base = c.base
+	}
+	d.addon.changed[k] = addonChanged{base: base, value: v, set: sc.Set}
+	d.addon.changedGen++
+	d.mu.Unlock()
+	d.wake()
 }
 
 // addonShown is an add-on's page or card in view, and the scene.set it shows.
@@ -74,6 +190,7 @@ type addonPageView struct {
 	icon     string // its mark, from its catalog entry; "" for its initials
 	sc       hostScene
 	has      bool // false: the add-on has set no page yet, and the page says it is waited for
+	local    uint64 // the generation of the steppers' and toggles' values shown ahead of the add-on, in sc
 	scrolls  [maxSceneLists]int
 	images   sceneImages
 	pics     scenePics
@@ -84,6 +201,7 @@ type addonCardView struct {
 	id, name string
 	icon     string // its mark, from its catalog entry; "" for none
 	sc       hostScene
+	local    uint64 // as addonPageView's
 	images   sceneImages
 	pics     scenePics
 }
@@ -95,23 +213,26 @@ type addonLaid struct {
 }
 
 type addonLayKey struct {
-	id       string
-	rev, img uint64
-	room     image.Rectangle
+	id              string
+	rev, img, local uint64
+	room            image.Rectangle
 	font     fontKey
 	card     bool
 	night    bool
 }
 
 // laid is the layout of sc in room, made again only when something it was made for changed.
-func (r *paint) laid(kept *addonLaid, id string, sc hostScene, room image.Rectangle, card bool, imgs sceneImages) *sceneLayout {
-	return r.laidAt(kept, id, sc, room, card, false, imgs)
+func (r *paint) laid(kept *addonLaid, id string, sc hostScene, local uint64, room image.Rectangle, card bool, imgs sceneImages) *sceneLayout {
+	return r.laidAt(kept, id, sc, local, room, card, false, imgs)
 }
 
 // laidAt is laid for a card over the night clock as well (night): laid out without what can be
 // pressed (withoutPressable), as nothing on it takes a finger.
-func (r *paint) laidAt(kept *addonLaid, id string, sc hostScene, room image.Rectangle, card, night bool, imgs sceneImages) *sceneLayout {
-	k := addonLayKey{id, sc.Rev, sc.Images, room, r.faceKey(), card, night}
+//
+// local is the generation of the numbers the screen shows for its steppers ahead of the add-on
+// (addonUI.steppers), which sc has in it already: a tap's new number is laid out at once.
+func (r *paint) laidAt(kept *addonLaid, id string, sc hostScene, local uint64, room image.Rectangle, card, night bool, imgs sceneImages) *sceneLayout {
+	k := addonLayKey{id, sc.Rev, sc.Images, local, room, r.faceKey(), card, night}
 	if kept.lay == nil || kept.key != k {
 		root := sc.Root
 		if night {
@@ -483,7 +604,8 @@ func (d *Display) addonPageNow(h screenHost, id, name string) *addonPageView {
 	scrolls := d.addon.scrolls
 	d.addon.framePage = addonShown{id: id}
 	d.mu.Unlock()
-	return &addonPageView{id: id, name: name, icon: addonIcon(id), sc: sc, has: has, scrolls: scrolls,
+	local := d.addonChangedIn(id, addonapi.OnPage, &sc)
+	return &addonPageView{id: id, name: name, icon: addonIcon(id), sc: sc, has: has, scrolls: scrolls, local: local,
 		images: func(b *addonapi.Block) ([]byte, string, bool) { return h.Image(id, b) }, pics: addonPics.picture}
 }
 
@@ -541,7 +663,7 @@ func (p *paint) addonForget(drawn *addonDrawn, page, card bool) {
 // whose card it is, in the brightest the night allows, the clock's own red: the theme's dim, toned,
 // was too dark to read across a room.
 func (p *paint) addonCardIn(v *addonCardView, box, inner image.Rectangle, drawn *addonDrawn, timers sceneTimers, night bool, buf **image.RGBA) {
-	lay := p.laidAt(&drawn.card, v.id, v.sc, inner, true, night, v.images)
+	lay := p.laidAt(&drawn.card, v.id, v.sc, v.local, inner, true, night, v.images)
 	m := p.sceneMetrics()
 	label := sceneFace(p.faceKey(), m.text[0], true)
 	box.Min.Y = max(box.Min.Y, box.Max.Y-(lay.height+2*m.pad+lineH(label)+m.gap[1]))
@@ -643,7 +765,11 @@ func (d *Display) addonGesture(g touch.Gesture) {
 		if at.lay == nil {
 			return
 		}
-		if id := at.lay.tapAt(pt, r.s(4), at.scrolls[:], image.Point{}); id != "" {
+		id, step, b := at.lay.tapStepAt(pt, r.s(4), at.scrolls[:], image.Point{})
+		switch {
+		case b != nil && addonapi.Changes(b.Type):
+			d.addonChange(h, at.id, addonapi.OnPage, at.lay, b, step)
+		case id != "":
 			h.Touch(at.id, addonapi.OnPage, id, at.lay.rev)
 		}
 	case touch.SwipeUp, touch.SwipeDown:
@@ -691,8 +817,12 @@ func (d *Display) addonCardGesture(g touch.Gesture) bool {
 	switch g.Kind {
 	case touch.Tap:
 		if at.lay != nil {
-			if id := at.lay.tapAt(pt, r.s(4), nil, at.off); id != "" {
-				h.Touch(at.id, addonapi.OnCard, id, at.lay.rev)
+			if id, step, b := at.lay.tapStepAt(pt, r.s(4), nil, at.off); id != "" {
+				if b != nil && addonapi.Changes(b.Type) {
+					d.addonChange(h, at.id, addonapi.OnCard, at.lay, b, step)
+				} else {
+					h.Touch(at.id, addonapi.OnCard, id, at.lay.rev)
+				}
 				d.wake()
 				return true
 			}

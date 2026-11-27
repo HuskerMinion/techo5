@@ -79,6 +79,12 @@ func (h *Host) Shown(id, on string, shown bool) { h.srv.Shown(id, on, shown) }
 // the scene's revision rev (Scene.Rev): false when it is not one, or when the block changed since.
 func (h *Host) Touch(id, on, block string, rev uint64) bool { return h.srv.Touch(id, on, block, rev) }
 
+// Change is a tap that changed one of the add-on's steppers (value a float64) or toggles (a bool) in view,
+// as found in the layout of revision rev: false when it is not one, or it changed since.
+func (h *Host) Change(id, on, block string, rev uint64, value any) bool {
+	return h.srv.Change(id, on, block, rev, value)
+}
+
 // Swipe is a swipe left or right (addonapi.SwipeLeft, SwipeRight) across the add-on's page in view.
 func (h *Host) Swipe(id, direction string) bool { return h.srv.Swipe(id, direction) }
 

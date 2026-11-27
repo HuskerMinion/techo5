@@ -128,6 +128,7 @@ const (
 	EventSwipe       = "swipe"
 	EventBack        = "back"
 	EventScreenState = "screen.state"
+	EventChange      = "change"
 )
 
 // Error codes, a fixed set.

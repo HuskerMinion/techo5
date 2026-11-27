@@ -572,6 +572,52 @@ func (s *Server) Touch(id, on, block string, rev uint64) bool {
 	return true
 }
 
+// Change is a tap that changed one of the add-on's blocks on the screen, as the display found it in the
+// layout of revision rev, and what it made it: a stepper's number (a float64, held to the stepper's range
+// and places) or a toggle's on or off (a bool). The add-on is told (change), when the block is one of
+// those in what is in view, unchanged since rev, as for Touch, and value is of its kind. Change says
+// whether it was told. A tap on a stepper is a person asking something of the add-on,
+// as a tap on its button is, and nothing more: what the add-on does after it (a patch) is not.
+func (s *Server) Change(id, on, block string, rev uint64, value any) bool {
+	sc, ok := s.shownWith(id, on)
+	if !ok {
+		return false
+	}
+	b, found := sc.Root.Find(block)
+	if !found {
+		return false
+	}
+	switch v := value.(type) {
+	case float64:
+		if b.Type != addonapi.BlockStepper {
+			return false
+		}
+		value = b.Clamped(v)
+	case bool:
+		if b.Type != addonapi.BlockToggle {
+			return false
+		}
+	default:
+		return false
+	}
+	s.mu.Lock()
+	current := false
+	if a := s.addons[id]; a != nil {
+		taps := &a.screen.pageTaps
+		if on == addonapi.OnCard {
+			taps = &a.screen.cardTaps
+		}
+		current = taps.current(block, rev, sc.Rev)
+	}
+	s.mu.Unlock()
+	if !current {
+		return false
+	}
+	s.Asked(id)
+	s.Emit(id, addonapi.EventChange, addonapi.ChangeEvent{ID: block, On: on, Value: value})
+	return true
+}
+
 // Asked is a person asking something of the add-on: one of its commands sent to it, or a tap on its tile,
 // its card or its page. For addonapi.ScreenOpenWindow after it, the add-on may bring its page up
 // (screen.open); at no other time.

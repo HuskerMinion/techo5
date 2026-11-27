@@ -325,6 +325,28 @@ type TouchEvent struct {
 	On string `json:"on"`
 }
 
+// ChangeEvent is a tap that changed one of the add-on's blocks on the screen itself, by its id, on its page
+// or its card, and what it made it (Value): a stepper's number (a float64, held to its range), a toggle's
+// on or off (a bool). The device shows it at once; the add-on may patch the block to set it otherwise, as
+// it would any block.
+type ChangeEvent struct {
+	ID    string `json:"id"`
+	On    string `json:"on"`
+	Value any    `json:"value"`
+}
+
+// Number is a stepper's new number, and whether Value is one.
+func (e ChangeEvent) Number() (float64, bool) {
+	v, ok := e.Value.(float64)
+	return v, ok
+}
+
+// Bool is a toggle's new state, and whether Value is one.
+func (e ChangeEvent) Bool() (bool, bool) {
+	v, ok := e.Value.(bool)
+	return v, ok
+}
+
 // SwipeEvent is a swipe left or right across the add-on's page (SwipeLeft, SwipeRight). A swipe on the
 // card is the daemon's: it puts the card away.
 type SwipeEvent struct {
