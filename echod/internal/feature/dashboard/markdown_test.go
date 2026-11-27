@@ -67,6 +67,17 @@ func TestMarkdownLinesAndGaps(t *testing.T) {
 	}
 }
 
+// Bold in underscores is bold too, and is no crash: its pair is the expression's second group, the first
+// unset when it matches.
+func TestUnderscoreBoldIsBold(t *testing.T) {
+	if r := inlineRuns("__x__"); !reflect.DeepEqual(r, []TextRun{{Text: "x", Bold: true}}) {
+		t.Fatalf("runs: %+v", r)
+	}
+	if r := inlineRuns("It is __very__ windy and **cold**"); !reflect.DeepEqual(r, []TextRun{{Text: "It is "}, {Text: "very", Bold: true}, {Text: " windy and "}, {Text: "cold", Bold: true}}) {
+		t.Fatalf("runs: %+v", r)
+	}
+}
+
 // A markdown card's block carries both: the marked lines it draws and the plain ones a lone card uses.
 func TestMarkdownCardBlock(t *testing.T) {
 	n := textNode{body: textRef{plain: "## Today\n- Rain 20%"}}

@@ -1263,8 +1263,11 @@ func inlineRuns(line string) []TextRun {
 	at := 0
 	for _, m := range mdBold.FindAllStringSubmatchIndex(line, -1) {
 		add(line[at:m[0]], false)
-		inner := line[m[2]:m[3]]
-		if m[2] < 0 {
+		// The first group is the ** pair's, unset (-1) when the __ pair matched.
+		var inner string
+		if m[2] >= 0 {
+			inner = line[m[2]:m[3]]
+		} else {
 			inner = line[m[4]:m[5]]
 		}
 		add(inner, true)
