@@ -58,6 +58,11 @@ if [ -n "$ok" ]; then
 	iptables-legacy -A $CHAIN -p udp --dport 1900 -j ACCEPT &&
 		iptables-legacy -A $CHAIN -p udp --sport 67 --dport 68 -j ACCEPT &&
 		iptables-legacy -A $CHAIN -p icmp -j ACCEPT &&
+		# IGMP (protocol 2): the queries a switch or access point sends to learn who is in which group.
+		# Dropped, the kernel never answered them, and a network that snoops IGMP stopped passing the
+		# SSDP group on to the device after its membership timed out, so controllers' searches no longer
+		# reached it (#779). IPv6's own (MLD) is ICMPv6, let in next.
+		iptables-legacy -A $CHAIN -p igmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p ipv6-icmp -j ACCEPT &&
 		ip6tables-legacy -A $CHAIN -p udp --sport 547 --dport 546 -j ACCEPT &&
 		# What is left of a connection the device has already closed: a FIN lost while the network was
