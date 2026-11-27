@@ -610,17 +610,26 @@ func (v Version) uses() []string {
 	return f
 }
 
-// ValidIcon reports whether name is an icon the catalog may give an add-on: "mdi:" and the name of an icon
-// in the Material Design Icons this build draws (lib/mdi), so the device never shows an empty mark for
-// one it does not have. Not "hass:", Home Assistant's old name for the same set, nor a bare name: one
-// spelling, as the reviewer reads it.
+// ValidIcon reports whether name is an icon this build can draw as an add-on's mark: spelled as the
+// catalog spells one (IconSpelled), and the name of an icon in the Material Design Icons this build draws
+// (lib/mdi). mkcatalog holds every icon to it (Publishable), so a catalog is never signed with a mark a
+// device would draw empty; a device reading a catalog only spells it (IconSpelled), and draws the add-on's
+// initials for an icon its font does not have, so a catalog signed against a newer font than an older
+// device's is not refused there whole.
 func ValidIcon(name string) bool {
-	bare, ok := strings.CutPrefix(name, "mdi:")
-	if !ok || !iconBare.MatchString(bare) {
+	if !IconSpelled(name) {
 		return false
 	}
-	_, known := mdi.Rune(bare)
+	_, known := mdi.Rune(strings.TrimPrefix(name, "mdi:"))
 	return known
+}
+
+// IconSpelled reports whether name is spelled as an icon the catalog may give an add-on: "mdi:" and an
+// icon's name as Material Design Icons names one. Not "hass:", Home Assistant's old name for the same set,
+// nor a bare name: one spelling, as the reviewer reads it.
+func IconSpelled(name string) bool {
+	bare, ok := strings.CutPrefix(name, "mdi:")
+	return ok && iconBare.MatchString(bare)
 }
 
 // iconBare is an icon's name after "mdi:", as the set names its icons.
@@ -631,10 +640,31 @@ func (v Version) validIcon() error {
 	switch {
 	case v.Icon == "":
 		return nil
-	case !ValidIcon(v.Icon):
-		return fmt.Errorf("its icon %q is not mdi: and the name of a Material Design Icons icon this build has", v.Icon)
+	case !IconSpelled(v.Icon):
+		return fmt.Errorf("its icon %q is not mdi: and the name of a Material Design Icons icon", v.Icon)
 	case !slices.Contains(v.Capabilities, addonapi.CapScreen):
 		return errors.New("it has an icon without the screen capability, and so no tile or page for it to mark")
+	}
+	return nil
+}
+
+// Publishable holds a catalog to what is checked before it is signed, beyond what every device checks
+// as it reads one (Parse): each version's icon is one this build's icon font has (ValidIcon), so no
+// device of this build draws an empty mark; and each add-on's name has no control character, nor one
+// that is not seen or reorders the words around it (addonapi.Hidden), as it is drawn on the screen
+// beside the add-on's page and card. A device does not refuse a catalog for either, which would leave
+// it with no catalog at all over one entry: it draws the initials for an icon it lacks, and the name
+// without what it should not hold.
+func (c Catalog) Publishable() error {
+	for _, a := range c.Addons {
+		if strings.ContainsFunc(a.Name, addonapi.Hidden) {
+			return fmt.Errorf("catalog: %s's name %q holds a control character, or one that is not seen or reorders the words around it", a.ID, a.Name)
+		}
+		for _, v := range a.Versions {
+			if v.Icon != "" && !ValidIcon(v.Icon) {
+				return fmt.Errorf("catalog: %s %s's icon %q is not one this build's icon font has", a.ID, v.Version, v.Icon)
+			}
+		}
 	}
 	return nil
 }

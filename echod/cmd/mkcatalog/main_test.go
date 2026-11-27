@@ -363,4 +363,21 @@ func TestSignsAnIcon(t *testing.T) {
 	if err := run(source("bad.json", "mdi:not-an-icon-anywhere"), nil, false, filepath.Join(dir, "bad"), key); err == nil || !strings.Contains(err.Error(), "icon") {
 		t.Errorf("an unknown icon: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, "bad", "catalog-v2.json")); err == nil {
+		t.Error("a catalog with an unknown icon was signed")
+	}
+	// A name with words that hide or reorder others is refused before anything is signed too.
+	named := write(t, dir, "named.json", strings.Replace(readFile(t, source("named-src.json", "mdi:chef-hat")), `"name":"Meals"`, `"name":"Me\u202eals"`, 1))
+	if err := run(named, nil, false, filepath.Join(dir, "named"), key); err == nil || !strings.Contains(err.Error(), "name") {
+		t.Errorf("a name with a bidi override: %v", err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

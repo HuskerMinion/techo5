@@ -113,6 +113,11 @@ func run(in string, previous []string, firstV2 bool, out, keyFile string) error 
 	if err != nil {
 		return err
 	}
+	// What a device would take but should never be signed: an icon its font lacks, a name with words
+	// that hide or reorder others.
+	if err := c.Publishable(); err != nil {
+		return err
+	}
 	// The format 1 file is written from the format 2 source, never kept by hand: one source, one serial.
 	if c.Format != catalog.Format {
 		return fmt.Errorf("mkcatalog: %s is format %d; the source catalog is format %d, which the format %d file is written from", in, c.Format, catalog.Format, catalog.FormatV1)

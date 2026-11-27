@@ -274,12 +274,25 @@ func TestAnIcon(t *testing.T) {
 			t.Error("no icon is written as one")
 		}
 	}
-	for _, icon := range []string{"chef-hat", "hass:chef-hat", "mdi:", "mdi:no-such-icon-at-all", "mdi:Chef-Hat",
-		"mdi: chef-hat", "mdi:hass:chef-hat", "mdi:chef-hat ", "https://example.com/icon.png", "mdi:lock​"} {
+	// An icon this build's font does not have is not one to refuse the catalog for: a device reads it, and
+	// draws the initials; mkcatalog, which signs it, refuses it (Publishable).
+	unknown, _ := json.Marshal(withIcon("mdi:no-such-icon-at-all"))
+	if got, err := ParseKnown(unknown); err != nil {
+		t.Errorf("a catalog with an icon the font does not have is refused: %v", err)
+	} else if err := got.Publishable(); err == nil || !strings.Contains(err.Error(), "icon") {
+		t.Errorf("an icon the font does not have is publishable: %v", err)
+	} else if ValidIcon("mdi:no-such-icon-at-all") {
+		t.Error("an icon the font does not have is drawn")
+	}
+	for _, icon := range []string{"chef-hat", "hass:chef-hat", "mdi:", "mdi:Chef-Hat",
+		"mdi: chef-hat", "mdi:hass:chef-hat", "mdi:chef-hat ", "https://example.com/icon.png", "mdi:lock\u200b"} {
 		b, _ := json.Marshal(withIcon(icon))
 		if _, err := ParseKnown(b); err == nil {
 			t.Errorf("%q: taken", icon)
 		}
+	}
+	if got, _ := ParseKnown(func() []byte { b, _ := json.Marshal(withIcon("mdi:chef-hat")); return b }()); got.Publishable() != nil {
+		t.Errorf("a known icon is not publishable: %v", got.Publishable())
 	}
 	// Only on a version with the screen: anything else has no tile or page for it.
 	c := valid()
@@ -325,5 +338,28 @@ func TestAnIcon(t *testing.T) {
 	b, _ = json.Marshal(raw)
 	if _, err := ParseKnown(b); err == nil {
 		t.Error("an icon on the add-on, not its version, is taken")
+	}
+}
+
+// An add-on's name, drawn beside its page and card, is held to words that hide and reorder nothing before
+// the catalog is signed; a device reads a catalog with one, and draws the name without them.
+func TestANameIsPublishable(t *testing.T) {
+	for _, name := range []string{"Meals", "Crème brûlée", "Plex Remote"} {
+		c := valid()
+		c.Addons[0].Name = name
+		if err := c.Publishable(); err != nil {
+			t.Errorf("%q: %v", name, err)
+		}
+	}
+	for _, name := range []string{"Me\u202eals", "Pay\u200bpal", "Settings\u2028", "Lock\x07", "A\u0085B", "\ufeffMeals"} {
+		c := valid()
+		c.Addons[0].Name = name
+		b, _ := json.Marshal(c)
+		if _, err := ParseKnown(b); err != nil {
+			t.Errorf("%q: a device refuses the catalog: %v", name, err)
+		}
+		if err := c.Publishable(); err == nil {
+			t.Errorf("%q is publishable", name)
+		}
 	}
 }
