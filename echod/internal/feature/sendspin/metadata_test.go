@@ -63,23 +63,23 @@ func TestANullClearsAndAnOmissionDoesNot(t *testing.T) {
 	}
 }
 
-// Switching to a new title clears stale artist and album when the server omits them (for example
-// Music Assistant's aiosendspin omits None fields when switching to a radio station or jingle with
-// no artist/album), while keeping fields that the new message provides.
+// Workaround for Music Assistant: switching to a new title with neither artist nor album keys
+// clears stale artist and album (aiosendspin omits None fields instead of sending nulls). When a
+// message carries either artist or album alongside a new title, the omitted field is preserved for
+// servers that send partial deltas (for example the next track by the same artist on a new album).
 func TestNewTitleClearsOmittedArtistAndAlbum(t *testing.T) {
 	var m metadata
 	m.merge(metadataMessage(t, `{"title":"Song A","artist":"Singer A","album":"CAPITAL 958"}`))
 
-	// Same station switches to a jingle with no artist (omitted on the wire).
-	if !m.merge(metadataMessage(t, `{"title":"Station Jingle","album":"CAPITAL 958"}`)) {
-		t.Fatal("switching to jingle did not count as a change")
+	// Same artist, new track and album (artist key omitted as unchanged): artist is preserved.
+	if !m.merge(metadataMessage(t, `{"title":"Track 2","album":"Album 2"}`)) {
+		t.Fatal("next track by same artist did not count as a change")
 	}
-	if m.title != "Station Jingle" || m.artist != "" || m.album != "CAPITAL 958" {
-		t.Fatalf("after jingle = %+v, want title=Station Jingle artist=\"\" album=CAPITAL 958", m)
+	if m.title != "Track 2" || m.artist != "Singer A" || m.album != "Album 2" {
+		t.Fatalf("after same-artist track = %+v, want title=Track 2 artist=Singer A album=Album 2", m)
 	}
 
-	// Switch back to a track with artist, then to a radio station that sends only title.
-	m.merge(metadataMessage(t, `{"title":"Song B","artist":"Singer B","album":"CAPITAL 958"}`))
+	// Switch to a radio station that sends only title (neither artist nor album keys present).
 	if !m.merge(metadataMessage(t, `{"title":"CRI 环球资讯广播"}`)) {
 		t.Fatal("switching to station with title only did not count as a change")
 	}
