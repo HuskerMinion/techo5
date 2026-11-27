@@ -191,7 +191,11 @@ type scene struct {
 	// showDeck is the deck page, deck what it shows (render_deck.go).
 	showDeck bool
 	custom   customView // a custom screen, when custom.name is set (custom_screens.go)
-	deck     deckView
+	// addonPage is an add-on's page, when one is up and nothing more pressing is; addonCard the newest
+	// add-on's card over the clock or the night clock (addon_screen.go).
+	addonPage *addonPageView
+	addonCard *addonCardView
+	deck      deckView
 
 	// alerts are the weather alerts at home and nearby (the clock's badge, the rain map's pills and
 	// outlines); showAlert is the alert page, on alertIdx of them, scrolled alertScroll lines (alerts.go).
@@ -396,6 +400,9 @@ type renderer struct {
 	// lcarsDrawn is whether LCARS's frame, its top bar included, was drawn in the frame in hand: only
 	// around the home clock (lcarsFrame).
 	lcarsDrawn bool
+
+	// addon is the add-on page's and card's layouts, and where they were last drawn (addon_screen.go).
+	addon addonDrawn
 
 	// deckZones are the deck's buttons where they were last drawn, in order, read by the touch
 	// goroutine under zmu (render_deck.go).
@@ -678,6 +685,8 @@ func (r *renderer) draw(s scene) {
 	defer r.streamingDot(s)  // over everything, the update overlay included: deferred first, drawn last
 	defer r.updateOverlay(s) // Draw update overlay at the end of frame using defer
 
+	// Where an add-on's page or card was is nothing to tap once something else is drawn there.
+	r.addonClear(s)
 	if !s.showDeck {
 		// Where the deck's buttons were is nothing to tap once something else is drawn there.
 		r.zmu.Lock()
@@ -852,6 +861,13 @@ func (r *renderer) draw(s scene) {
 		}
 		return
 	}
+	if s.addonPage != nil {
+		r.addonPage(s)
+		if s.showVolume {
+			r.volumeBar(s)
+		}
+		return
+	}
 	if s.custom.name != "" {
 		r.customPage(s)
 		if s.showVolume {
@@ -984,6 +1000,7 @@ func (r *renderer) draw(s scene) {
 	}
 	if clock {
 		r.pressClock(s)
+		r.addonCard(s)
 	}
 	if s.strip && s.phase == "idle" && s.sunrise == 0 {
 		r.musicStrip(s)

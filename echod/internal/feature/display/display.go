@@ -128,6 +128,9 @@ type Display struct {
 	// customs is the custom screens between frames (custom_screens.go).
 	customs customState
 
+	// addon is the add-on screen between frames, under mu (addon_screen.go).
+	addon addonUI
+
 	// holdsMu makes reading whether holds are wanted and telling the touchscreen one step (applyHolds).
 	holdsMu sync.Mutex
 
@@ -1494,6 +1497,12 @@ func (d *Display) gesture(g touch.Gesture) {
 		d.wake()
 		return
 	}
+	// An add-on's page, the same way (addon_screen.go).
+	if d.addonPageShowing() {
+		d.addonGesture(g)
+		d.wake()
+		return
+	}
 
 	// A panel's apps list over the clock or the dashboard: every finger is its while it is up.
 	d.mu.Lock()
@@ -1603,6 +1612,10 @@ func (d *Display) gesture(g touch.Gesture) {
 	}
 	// Now Playing's bar to seek on, where it is one: a finger on it is its, not a play or a pause.
 	if d.seekGesture(g) {
+		return
+	}
+	// An add-on's card over the clock: its chips, the way to its page, and a swipe to put it away.
+	if d.addonCardGesture(g) {
 		return
 	}
 	switch g.Kind {
@@ -2680,6 +2693,7 @@ func (d *Display) Start(context.Context) error {
 	home.SetPanelSize(w, h)
 	tessera.SetPanelSize(w, h)
 	addonhost.SetScreenSize(w, h) // what hello tells an add-on
+	d.addonStart()
 	// The calendar's two switches that go by the panel's size are shown for this one from now on.
 	panelWide.Store(wideScreen(w, h))
 	d.lookChanged()
@@ -2789,6 +2803,9 @@ func (d *Display) lightForEvents(now time.Time, on, night bool, call phone.State
 // frame draws what the moment calls for and says how long until the next one is due.
 func (d *Display) frame() (next time.Duration) {
 	began := time.Now()
+	// What of the add-ons is in view is settled as the frame ends, whichever way it ends.
+	d.addonFrameBegin()
+	defer d.addonSettle()
 	d.videoPainting, d.vp.dark = false, false
 	d.mu.Lock()
 	on, view, at := d.on, d.view, d.viewAt
@@ -3196,6 +3213,7 @@ func (d *Display) frame() (next time.Duration) {
 	// has held for the configured wait, tracked by how long it has run continuously.
 	d.castAsked(&s)
 	d.castScene(&s, s.showSheet || ring.any() || s.callPageUp())
+	d.addonScene(&s, now)
 	d.deckScene(&s, now)
 	d.customScene(&s, now)
 	// A call drawn over the page leaves the page as it was: the dashboard, the photos, the
@@ -3203,7 +3221,7 @@ func (d *Display) frame() (next time.Duration) {
 	d.dashScene(&s, s.showSheet || ring.any() || s.callPageUp() || s.showCast)
 	boring := s.phase == "idle" && !s.callPageUp() && !ring.any() && !s.bt.Pairing &&
 		!s.showWifi && !s.showSheet && !s.showCamera && !s.showRadar && !s.showWeather && !s.showCalendar && !s.showAlert && !s.nowPlaying &&
-		!s.showDash && !s.showCast && !s.showDeck && s.custom.name == ""
+		!s.showDash && !s.showCast && !s.showDeck && s.custom.name == "" && s.addonPage == nil
 	// A browser waiting to be let in is a page of its own, over whatever is on the screen: asking for
 	// the setup page is done from the settings screen, so the answer has to reach somebody who is
 	// still standing in it. It was set only on the idle page once, and the press could not be given
@@ -3222,6 +3240,7 @@ func (d *Display) frame() (next time.Duration) {
 	}
 	d.pask.drawn(drawnPage, now)
 	d.videoScene(&s, now)
+	d.addonCovered(&s)
 	d.castLatch(&s, cast.Get().AskID(), now) // after the scene says what is over the question
 	if s.showVideo {
 		boring = false
@@ -3310,6 +3329,8 @@ func (d *Display) frame() (next time.Duration) {
 	d.saverUp = s.slideshowScreensaver != nil && !home.Get().SlideshowArt()
 	d.clockUp = d.clockUp && s.slideshowScreensaver == nil
 	d.mu.Unlock()
+	// The newest add-on card, on the clock or the night clock (addon_screen.go).
+	d.addonCardScene(&s, boring && !s.nowPlaying && !s.strip)
 	// Holds go to Home Assistant only on the plain clock: not over the screensaver, the light before an
 	// alarm, the night clock, a card, an answer, an announcement or any page of its own.
 	d.recordHoldScene(s.announceRecording)
@@ -3317,7 +3338,7 @@ func (d *Display) frame() (next time.Duration) {
 
 	// The Call button is on the clock itself and only there: on any other page a tap where it would be
 	// still does what that page does.
-	s.callButton = callButton.Load() && hasMicrophone() && s.call.Phase == phone.Idle && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck && s.custom.name == "" &&
+	s.callButton = callButton.Load() && hasMicrophone() && s.call.Phase == phone.Idle && s.phase == "idle" && !s.nowPlaying && !s.strip && !s.showWeather && !s.showCalendar && !s.showDeck && s.custom.name == "" && s.addonPage == nil &&
 		s.sunrise == 0 && s.slideshowScreensaver == nil && !s.showDrawer && !s.showSheet
 	d.mu.Lock()
 	d.callShown = s.callButton

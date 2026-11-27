@@ -138,6 +138,9 @@ type Display struct {
 	// firstRun is what the first-run faces keep between frames (firstrun.go, firstrun_spot.go).
 	firstRun firstRunState
 
+	// addon is the add-on screen between frames, under mu (addon_screen_spot.go).
+	addon addonUI
+
 	light *esphome.Light
 	auto  *esphome.Switch
 	// power is Screen power, the screen's on and off as a switch, and roomSw Screen ignores room light
@@ -959,6 +962,13 @@ func (d *Display) gesture(g touch.Gesture) {
 	if d.captionsTap(g) {
 		return
 	}
+	// An add-on's page takes every finger but a hold, which is the ring menu's as everywhere
+	// (addon_screen_spot.go).
+	if g.Kind != touch.Hold && d.addonPageShowing() {
+		d.addonGesture(g)
+		d.wake()
+		return
+	}
 	d.mu.Lock()
 	dashUp := d.dashShowing
 	d.mu.Unlock()
@@ -1010,6 +1020,10 @@ func (d *Display) gesture(g touch.Gesture) {
 			d.wake()
 			return
 		}
+	}
+	// An add-on's card on the clock: its chips, the way to its page, and a swipe to put it away.
+	if d.addonCardGesture(g) {
+		return
 	}
 	if d.musicFaceUp() {
 		switch g.Kind {
@@ -1335,6 +1349,9 @@ func (d *Display) act(id itemID) {
 		go pickCamera(i)
 		return
 	}
+	if d.actAddons(id) {
+		return
+	}
 	switch id {
 	case itemTalk:
 		d.locked(d.closeMenu)
@@ -1474,6 +1491,7 @@ func (d *Display) Start(context.Context) error {
 	fw, fh := dev.FrameSize()
 	w, h := dev.Size()
 	addonhost.SetScreenSize(w, h) // what hello tells an add-on
+	d.addonStart()
 	video.Get().UseScreen(video.Screen{W: w, H: h, Rotated: dev.Rotated(), PixFmt: dev.PixFmt()}, fw, fh)
 	d.settleScreen(dev)
 	slog.Info("screen open", "fb", dev.String())
@@ -1512,6 +1530,9 @@ func (d *Display) Run(ctx context.Context) error {
 }
 
 func (d *Display) frame() (next time.Duration) {
+	// What of the add-ons is in view is settled as the frame ends, whichever way it ends.
+	d.addonFrameBegin()
+	defer d.addonSettle()
 	d.videoPainting, d.vp.dark = false, false
 	now := time.Now()
 	if d.dev != nil {
@@ -1818,6 +1839,10 @@ func (d *Display) frame() (next time.Duration) {
 	s.reminderScroll = d.reminderScroll
 	d.mu.Unlock()
 	d.alertSceneSpot(&s, now)
+	d.addonSceneSpot(&s)
+	if s.addonPage != nil {
+		boring = false // the page, not the clock: no screensaver and no light before an alarm over it
+	}
 	s.missed = missedNote(now, true)
 
 	if boring {
@@ -1880,6 +1905,13 @@ func (d *Display) frame() (next time.Duration) {
 	d.dashSceneSpot(&s)
 	s.callButton = callButton.Load()
 	d.videoSceneSpot(&s, now)
+	if s.showVideo && s.addonPage != nil {
+		s.addonPage = nil
+		d.mu.Lock()
+		d.addon.framePage = ""
+		d.mu.Unlock()
+	}
+	d.addonCardSceneSpot(&s)
 	d.mu.Lock()
 	if s.showDash && d.dashHeld {
 		// A dashboard Home Assistant put up is shown over the night, as on the Show: somebody set it up

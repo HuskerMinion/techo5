@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -63,9 +64,14 @@ func TestImageFetchServes(t *testing.T) {
 	defer srv.Close()
 	// The test's server is on loopback: let loopback stand in for the LAN here.
 	loop := netip.MustParseAddr("127.0.0.1")
+	// Set once and switched by atomics: a dial the transport started for an earlier fetch may still be
+	// reading them.
+	var offLAN atomic.Bool
+	var ha atomic.Value
+	ha.Store("")
 	netguard.Refused = func(ip net.IP) bool { return !ip.Equal(net.ParseIP("127.0.0.1")) }
-	imageLAN = func(ip netip.Addr) bool { return ip == loop }
-	haHost = func() string { return "" }
+	imageLAN = func(ip netip.Addr) bool { return !offLAN.Load() && ip == loop }
+	haHost = func() string { return ha.Load().(string) }
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if b, err := fetchImage(ctx, srv.URL+"/a.png"); err != nil || string(b) != string(png) {
@@ -78,12 +84,12 @@ func TestImageFetchServes(t *testing.T) {
 		t.Error("a 404 was taken")
 	}
 	// Off the LAN, refused; at Home Assistant's own host, by its name, fetched.
-	imageLAN = func(netip.Addr) bool { return false }
+	offLAN.Store(true)
 	port := srv.URL[strings.LastIndex(srv.URL, ":")+1:]
 	if _, err := fetchImage(ctx, "http://localhost:"+port+"/a.png"); err == nil {
 		t.Error("an image off the LAN was fetched")
 	}
-	haHost = func() string { return "localhost" }
+	ha.Store("localhost")
 	if _, err := fetchImage(ctx, "http://localhost:"+port+"/a.png"); err != nil {
 		t.Errorf("an image at Home Assistant's host: %v", err)
 	}

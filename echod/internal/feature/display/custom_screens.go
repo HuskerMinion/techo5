@@ -238,7 +238,7 @@ func (d *Display) customScene(s *scene, now time.Time) {
 		return
 	}
 	over := s.showSheet || s.showDrawer || s.showCamera || s.showWifi || s.showAlert || s.showCalendar ||
-		s.showWeather || s.showRadar || s.bt.Pairing || s.showDeck || s.redClock || s.showCast
+		s.showWeather || s.showRadar || s.bt.Pairing || s.showDeck || s.redClock || s.showCast || s.addonPage != nil
 	idle := idleScreen()
 	d.mu.Lock()
 	if d.customs.up != "" && dashForgotten(d.customs.touched) {

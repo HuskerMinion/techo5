@@ -85,6 +85,7 @@ func (r *renderer) redClockPage(s scene) {
 	}
 	r.nightAlarmOver(s, alarmLine, alarmBand)
 	r.nightInfoOver(s)
+	r.addonCard(s)
 }
 
 // nightRingingPage is an alarm or a timer ringing over the night clock (#646): the ringing page, with

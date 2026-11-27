@@ -38,20 +38,16 @@ const (
 	drawerAnnounce = 2
 	drawerCall     = 3
 	drawerTodo     = 4 // only while lists are chosen (config.Todo)
+	drawerAddons   = 5 // only while an add-on with a page runs (addon_screen.go)
 )
 
 func (p *paint) drawerW() int {
-	if len(shownTabs()) > len(drawerTabs) {
-		return p.s(drawerWBase + drawerTodoExtra) // five tabs need the room "Announce" has with four
-	}
-	return p.s(drawerWBase)
+	// Five tabs need the room "Announce" has with four, and six as much again.
+	return p.s(drawerWBase + drawerTodoExtra*max(len(shownTabs())-len(drawerTabs), 0))
 }
 func (p *paint) drawerEdge() int { return p.s(drawerEdgeBase) }
 func (p *paint) drawerSeg() int {
-	if len(shownTabs()) > len(drawerTabs) {
-		return p.s(drawerSegBase + drawerTodoExtra)
-	}
-	return p.s(drawerSegBase)
+	return p.s(drawerSegBase + drawerTodoExtra*max(len(shownTabs())-len(drawerTabs), 0))
 }
 
 // drawerTodoExtra is how much wider the drawer and its strip are with the To-do tab beside the other four.
@@ -73,6 +69,9 @@ func shownTabIDs() []int {
 	if len(config.Get().Todo.Lists) > 0 {
 		ids = append(ids, drawerTodo)
 	}
+	if len(addonTiles()) > 0 {
+		ids = append(ids, drawerAddons)
+	}
 	return ids
 }
 
@@ -86,16 +85,22 @@ func shownTabs() []string {
 }
 
 func tabName(id int) string {
-	if id == drawerTodo {
+	switch id {
+	case drawerTodo:
 		return "To-do"
+	case drawerAddons:
+		return "Add-ons"
 	}
 	return drawerTabs[id]
 }
 
 // tabLabel is a tab's name in the screen's language.
 func tabLabel(id int) string {
-	if id == drawerTodo {
+	switch id {
+	case drawerTodo:
 		return tr("drawer_todo")
+	case drawerAddons:
+		return tr("drawer_addons")
 	}
 	return drawerTabLabels()[id]
 }
@@ -190,6 +195,9 @@ func drawerRows(s scene) ([]settingRow, string) {
 	}
 	if s.drawerTab == drawerTodo {
 		return todoRows(s)
+	}
+	if s.drawerTab == drawerAddons {
+		return addonRows()
 	}
 	if s.drawerTab == drawerCameras {
 		if len(s.cameras) == 0 {

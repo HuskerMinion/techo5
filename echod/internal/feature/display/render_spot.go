@@ -74,6 +74,11 @@ func (r *roundRenderer) timeLine(now time.Time, baseline int) {
 const ampmEdge = 48
 
 type roundScene struct {
+	// addonPage is an add-on's page, when one is up and nothing more pressing is; addonCard the newest
+	// add-on's card over the clock face or the night clock (addon_screen_spot.go).
+	addonPage *addonPageView
+	addonCard *addonCardView
+
 	// notifyPulse is how strongly a ringing critical notification pulses red (notifyPulse), 0 for none.
 	notifyPulse float64
 	// firstRunUp is first run still to do (firstrun_spot.go), and firstRun the step it shows.
@@ -273,6 +278,7 @@ type roundScene struct {
 type roundRenderer struct {
 	nightBuf                         *image.RGBA // the night layer kept between frames (nightLayerFor)
 	paint                                        // the canvas, and the settings screen's tap zones
+	addon                            addonDrawn  // the add-on page's and card's layouts, and where they were drawn
 	callDrawn                        bool        // the frame last drawn has the Call button on it; for taps
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
@@ -375,6 +381,8 @@ func (r *roundRenderer) draw(s roundScene) {
 	}
 	r.videoOver = image.Rectangle{}
 	r.setCaptionsAt(image.Rectangle{}) // until a frame draws them (render_cue_spot.go)
+	// Where an add-on's page or card was is nothing to tap once something else is drawn there.
+	r.addonForget(&r.addon, s.addonPage == nil, s.addonCard == nil)
 	// A video is over everything it is not covered by (video_spot.go decides which): the picture is
 	// the face, with no rim.
 	if s.showVideo {
@@ -399,6 +407,7 @@ func (r *roundRenderer) draw(s roundScene) {
 	// The red night clock is the whole face: nothing else, not even the rim, is drawn over it.
 	if s.nightClockFace() {
 		r.nightFace(s)
+		r.addonCardSpot(s)
 		return
 	}
 
@@ -477,6 +486,10 @@ func (r *roundRenderer) draw(s roundScene) {
 		r.sheetFace(s)
 		return
 	}
+	if s.addonPage != nil {
+		r.addonPageSpot(s)
+		return
+	}
 	// Under the ring menu a finger is on the menu, not on the face it dims.
 	r.press.on = s.press.on && !s.menuOpen
 	r.rim(s)
@@ -520,6 +533,7 @@ func (r *roundRenderer) draw(s roundScene) {
 			r.callButtonFace()
 			r.callDrawn = true
 		}
+		r.addonCardSpot(s)
 	}
 	if s.menuOpen {
 		r.press.on = s.press.on

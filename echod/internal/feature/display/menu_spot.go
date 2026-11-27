@@ -102,11 +102,13 @@ func itemsFor(m menuMode) []menuItem {
 	case modeMain:
 		if len(home.Get().CalendarSources()) == 0 {
 			// No calendar chosen: no calendar on the dial.
-			return slices.DeleteFunc(slices.Clone(mainItems), func(m menuItem) bool { return m.id == itemCalendar })
+			return withAddons(slices.DeleteFunc(slices.Clone(mainItems), func(m menuItem) bool { return m.id == itemCalendar }))
 		}
-		return mainItems
+		return withAddons(mainItems)
 	case modeCameras:
 		return cameraItems(home.Get().Cameras())
+	case modeAddons:
+		return addonItems()
 	}
 	return nil
 }
@@ -222,6 +224,9 @@ func wrapAngle(a float64) float64 {
 func nearestRest(rot float64, i, n int) float64 { return rot + wrapAngle(restFor(i, n)-rot) }
 
 func itemName(s roundScene, id itemID) string {
+	if name, ok := addonItemName(id); ok {
+		return name
+	}
 	if i := cameraOf(id); i >= 0 {
 		if i < len(s.cameras) {
 			return s.cameras[i].Name
@@ -266,6 +271,9 @@ func itemName(s roundScene, id itemID) string {
 }
 
 func itemHint(s roundScene, id itemID) string {
+	if hint, ok := addonItemHint(id); ok {
+		return hint
+	}
 	if i := cameraOf(id); i >= 0 {
 		if i < len(s.cameras) && s.cameras[i].Entity == s.camera.Entity {
 			return tr("drawer_camera_showing_now")
@@ -416,6 +424,8 @@ func (r *roundRenderer) dial(s roundScene) {
 		switch s.menuMode {
 		case modeCameras:
 			header = upper(tr("cameras"))
+		case modeAddons:
+			header = upper(tr("drawer_addons"))
 		}
 		r.ringLine(r.label, header, 206, colDim)
 		r.ringName(itemName(s, it.id), 252)
@@ -527,6 +537,9 @@ func (r *roundRenderer) jog(s roundScene) {
 
 // icon draws one item's line icon, centered at x, y, u half its size, w the stroke width.
 func (r *roundRenderer) icon(id itemID, s roundScene, x, y, u, w float64, c color.RGBA) {
+	if r.addonIcon(id, x, y, u, w, c) {
+		return
+	}
 	if i := cameraOf(id); i >= 0 {
 		// A camera is its initials, so the ring says which is where before one is chosen.
 		name := ""

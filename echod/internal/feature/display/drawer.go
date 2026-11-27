@@ -124,6 +124,10 @@ func (d *Display) drawerRowTap(id string) {
 		d.todoTap(id)
 		return
 	}
+	if addon, ok := strings.CutPrefix(id, "addon:"); ok {
+		d.addonTileTap(addon)
+		return
+	}
 	kind, n, ok := strings.Cut(id, ":")
 	i, err := strconv.Atoi(n)
 	if !ok || err != nil || i < 0 {

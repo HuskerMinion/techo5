@@ -34,6 +34,8 @@ func (r *renderer) nightInfoReserve(s scene) int {
 	switch {
 	case s.showNotification:
 		return 0 // the card is the one thing drawn; the foot is empty under it
+	case s.addonCard != nil:
+		return r.addonCardReserve(s) // an add-on's card has the foot, the chips and Next up under it
 	case nightInfoChips(s):
 		return r.s(96 + nightInfoGap)
 	case nightInfoCard(s):

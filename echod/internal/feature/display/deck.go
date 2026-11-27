@@ -150,7 +150,7 @@ func deckFrameKey(s scene, ringing, calling bool) string {
 func (d *Display) deckScene(s *scene, now time.Time) {
 	// The pages asked for while the deck is up are drawn over it, and have the touches.
 	over := s.showSheet || s.showDrawer || s.showCamera || s.showWifi || s.showAlert || s.showCalendar ||
-		s.showWeather || s.showRadar || s.bt.Pairing || s.showCast
+		s.showWeather || s.showRadar || s.bt.Pairing || s.showCast || s.addonPage != nil
 	d.mu.Lock()
 	up := d.deckUp && s.phase == "idle" && !over
 	d.deckOnScreen = up

@@ -152,6 +152,7 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
 
 	want := mode != config.DashboardOff && s.phase == "idle" && !sheetOrDrawer && !hidden &&
 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showDeck && s.custom.name == "" && !s.showWifi && !s.bt.Pairing &&
+		s.addonPage == nil &&
 		(asked || (f.Idle() && !away && !s.nowPlaying))
 	s.showDash, s.dashMode, s.dashAsked = want, mode, want && overNight
 	s.dashHide = config.Get().Dashboard.HideHandle
