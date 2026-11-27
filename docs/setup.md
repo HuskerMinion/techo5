@@ -3120,6 +3120,11 @@ full what an add-on needs and how it is reviewed. In short, it needs:
   anywhere but in a version skipped this way, so a version that uses a new field has to require the
   feature that brings it, and one that requires a feature has to use it.
 
+  A version with the add-on API's screen (`"requires": ["api1", "screen1"]`) may also carry an
+  `icon` the reviewer chooses, `mdi:` and a Material Design Icons name (`"icon": "mdi:chef-hat"`): the
+  add-on's mark on the device's screen in place of its initials
+  ([addon-api.md](addon-api.md#stage-2-the-screen)). The add-on cannot set it.
+
   Devices up to v1.6.53 read only format 1, and refuse the whole catalog for one field they don't
   know. So the catalog is published as two files from the one source: `catalog-v2.json`, everything in
   format 2, which newer devices fetch first, and `catalog.json`, format 1 as before, with every version

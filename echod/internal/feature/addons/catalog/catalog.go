@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/safename"
 	"github.com/HuskerMinion/techo5/echod/internal/update"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
@@ -148,6 +149,17 @@ type Version struct {
 	Capabilities []string `json:"capabilities,omitempty"`
 	Commands     []string `json:"commands,omitempty"`
 	Entities     []string `json:"entities,omitempty"`
+
+	// Icon is the add-on's mark on the device's screen (its tile under the Add-ons tab, its item on the
+	// Spot's dial, its page's name bar and its card's label), a Material Design Icons name as Home
+	// Assistant gives one ("mdi:chef-hat"), chosen by whoever reviews the listing, never by the add-on:
+	// neither its manifest nor anything it sends can set or change it, as an icon it picked could pass
+	// for one of the device's own. Without one the mark is the add-on's initials. It marks a page, so
+	// only a version with the screen capability has one, and it is a field of the version, not of the
+	// add-on, so that it rides on "screen1": a device that does not know the screen skips the version
+	// whole, where an unknown key beside the add-on's name would have every device before it refuse
+	// the catalog (decodeStrict).
+	Icon string `json:"icon,omitempty"`
 
 	// Withdrawn, when not empty, is why this version is no longer listed (a later one may be).
 	Withdrawn string `json:"withdrawn,omitempty"`
@@ -566,6 +578,9 @@ func (v Version) valid(id string, format int) error {
 	if err := v.validAPI(); err != nil {
 		return fmt.Errorf("catalog: %s: %w", what, err)
 	}
+	if err := v.validIcon(); err != nil {
+		return fmt.Errorf("catalog: %s: %w", what, err)
+	}
 	// A Dot has no screen to draw a page or a card on: a version that uses one is not for it, and its
 	// owner would be asked to agree to a line that means nothing there.
 	if _, dot := v.MinTECHO5["dot"]; dot && slices.Contains(v.Capabilities, addonapi.CapScreen) {
@@ -589,10 +604,39 @@ func (v Version) uses() []string {
 	if v.API > 0 || len(v.Capabilities) > 0 || len(v.Commands) > 0 || len(v.Entities) > 0 {
 		f = append(f, addonapi.LevelAPI1)
 	}
-	if slices.Contains(v.Capabilities, addonapi.CapScreen) {
+	if slices.Contains(v.Capabilities, addonapi.CapScreen) || v.Icon != "" {
 		f = append(f, addonapi.LevelScreen1)
 	}
 	return f
+}
+
+// ValidIcon reports whether name is an icon the catalog may give an add-on: "mdi:" and the name of an icon
+// in the Material Design Icons this build draws (lib/mdi), so the device never shows an empty mark for
+// one it does not have. Not "hass:", Home Assistant's old name for the same set, nor a bare name: one
+// spelling, as the reviewer reads it.
+func ValidIcon(name string) bool {
+	bare, ok := strings.CutPrefix(name, "mdi:")
+	if !ok || !iconBare.MatchString(bare) {
+		return false
+	}
+	_, known := mdi.Rune(bare)
+	return known
+}
+
+// iconBare is an icon's name after "mdi:", as the set names its icons.
+var iconBare = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// validIcon checks a version's icon: a known one, and only on a version with a page to mark.
+func (v Version) validIcon() error {
+	switch {
+	case v.Icon == "":
+		return nil
+	case !ValidIcon(v.Icon):
+		return fmt.Errorf("its icon %q is not mdi: and the name of a Material Design Icons icon this build has", v.Icon)
+	case !slices.Contains(v.Capabilities, addonapi.CapScreen):
+		return errors.New("it has an icon without the screen capability, and so no tile or page for it to mark")
+	}
+	return nil
 }
 
 // refPattern is an entity as the catalog lists it, domain and id.

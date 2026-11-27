@@ -243,3 +243,87 @@ func TestShownCoversTheAPI(t *testing.T) {
 		t.Errorf("a listing without the API changed digest: %s, was %s", Shown(plex(), p), want)
 	}
 }
+
+// A screen version may carry an icon the reviewer chose: mdi: and an icon this build draws. Without one
+// it reads as before; a wrong one, or one on a version with no page to mark, refuses the catalog. A device
+// before stage 2 skips such a version as it does any screen version, a format 1 device is never given it,
+// and the icon is a version's, never the add-on's, where every older device would refuse the key.
+func TestAnIcon(t *testing.T) {
+	withIcon := func(icon string) Catalog {
+		c := valid()
+		a := meals()
+		v := &a.Versions[0]
+		v.Capabilities = append(v.Capabilities, "screen")
+		v.Requires = append(v.Requires, "screen1")
+		v.MinTECHO5["spot"] = "v1.7.0"
+		v.Icon = icon
+		c.Addons = append(c.Addons, a)
+		return c
+	}
+	for _, icon := range []string{"", "mdi:chef-hat", "mdi:silverware-fork-knife"} {
+		b, _ := json.Marshal(withIcon(icon))
+		got, err := ParseKnown(b)
+		if err != nil {
+			t.Fatalf("%q: %v", icon, err)
+		}
+		a, _ := got.Find("meals")
+		if a.Versions[0].Icon != icon {
+			t.Errorf("%q read as %q", icon, a.Versions[0].Icon)
+		}
+		if icon == "" && strings.Contains(string(b), `"icon"`) {
+			t.Error("no icon is written as one")
+		}
+	}
+	for _, icon := range []string{"chef-hat", "hass:chef-hat", "mdi:", "mdi:no-such-icon-at-all", "mdi:Chef-Hat",
+		"mdi: chef-hat", "mdi:hass:chef-hat", "mdi:chef-hat ", "https://example.com/icon.png", "mdi:lock​"} {
+		b, _ := json.Marshal(withIcon(icon))
+		if _, err := ParseKnown(b); err == nil {
+			t.Errorf("%q: taken", icon)
+		}
+	}
+	// Only on a version with the screen: anything else has no tile or page for it.
+	c := valid()
+	a := meals()
+	a.Versions[0].Icon = "mdi:chef-hat"
+	a.Versions[0].Requires = append(a.Versions[0].Requires, "screen1")
+	c.Addons = append(c.Addons, a)
+	if b, _ := json.Marshal(c); func() bool { _, err := ParseKnown(b); return err == nil }() {
+		t.Error("an icon without the screen is taken")
+	}
+	// An icon with the screen still requires screen1, as the screen does.
+	c = withIcon("mdi:chef-hat")
+	c.Addons[1].Versions[0].Requires = []string{"api1"}
+	if b, _ := json.Marshal(c); func() bool { _, err := ParseKnown(b); return err == nil }() {
+		t.Error("an icon is taken without screen1")
+	}
+	// Format 1 cannot carry it, and its copy leaves the version out.
+	c = withIcon("mdi:chef-hat")
+	if v1 := c.V1(); len(v1.Addons) != 1 || v1.Addons[0].ID == "meals" {
+		t.Errorf("the format 1 copy has %+v", v1.Addons)
+	}
+	b, _ := json.Marshal(c.V1())
+	if strings.Contains(string(b), "chef-hat") {
+		t.Error("the format 1 copy carries the icon")
+	}
+	// A device before stage 2 skips the version, icon and all, rather than refusing the catalog.
+	b, _ = json.Marshal(withIcon("mdi:chef-hat"))
+	was := Features
+	Features = []string{"files", "api1"}
+	got, err := Parse(b)
+	Features = was
+	if err != nil {
+		t.Fatalf("refused where screen1 is unknown: %v", err)
+	}
+	if a, _ := got.Find("meals"); !a.NeedsNewer() {
+		t.Errorf("read where screen1 is unknown as %+v", a)
+	}
+	// Beside the add-on's name, where nothing requires it, the key is refused: there every device before
+	// it would refuse the whole catalog.
+	var raw map[string]any
+	_ = json.Unmarshal(b, &raw)
+	raw["addons"].([]any)[1].(map[string]any)["icon"] = "mdi:chef-hat"
+	b, _ = json.Marshal(raw)
+	if _, err := ParseKnown(b); err == nil {
+		t.Error("an icon on the add-on, not its version, is taken")
+	}
+}

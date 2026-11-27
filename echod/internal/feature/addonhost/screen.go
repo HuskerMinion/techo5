@@ -39,23 +39,26 @@ func (h *Host) SetScreen(sc ScreenSink) {
 	h.srv.SetScreen(sc)
 }
 
-// ScreenTile is a tile under the Add-ons tab: a running add-on granted the screen, by its id and the
-// name its listing gives it, which the page's name bar shows too.
+// ScreenTile is a tile under the Add-ons tab: a running add-on granted the screen, by its id, the name
+// its listing gives it, which the page's name bar shows too, and the icon its catalog entry gives it
+// (catalog.Version.Icon), its mark beside the name; "" for none, when the mark is its initials. The icon
+// is the catalog reviewer's: nothing the add-on sends sets or changes it.
 type ScreenTile struct {
 	ID   string
 	Name string
+	Icon string
 }
 
 // ScreenTiles is the tiles under the Add-ons tab, by id: there while the add-on runs, gone when it stops.
 func (h *Host) ScreenTiles() []ScreenTile {
-	names := h.names()
+	names, icons := h.names(), h.icons()
 	var out []ScreenTile
 	for _, id := range h.srv.Screens() {
 		name := names[id]
 		if name == "" {
 			name = id
 		}
-		out = append(out, ScreenTile{ID: id, Name: name})
+		out = append(out, ScreenTile{ID: id, Name: name, Icon: icons[id]})
 	}
 	return out
 }

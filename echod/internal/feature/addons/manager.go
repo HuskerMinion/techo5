@@ -1506,6 +1506,7 @@ type Status struct {
 	Page                      string // with {device} in it
 	Repo                      string
 	Withdrawn                 string // why the catalog no longer lists it, or this version
+	Icon                      string // its mark on the screen, as the catalog's entry for this version gives it ("" for its initials)
 	Update                    *Offer
 	RolledBack                string
 	Log                       string // its log file
@@ -1551,6 +1552,11 @@ func (m *Manager) Installed() []Status {
 				s.Withdrawn = entry.Withdrawn
 			} else if v, ok := entry.Version(rec.Version); ok && v.Withdrawn != "" {
 				s.Withdrawn = v.Withdrawn
+			}
+			// The icon is the reviewer's, from the catalog the device believes, for the version installed:
+			// never from the add-on, nor kept on the device (so nothing more is written).
+			if v, ok := entry.Version(rec.Version); ok && catalog.ValidIcon(v.Icon) {
+				s.Icon = v.Icon
 			}
 		}
 		out = append(out, s)

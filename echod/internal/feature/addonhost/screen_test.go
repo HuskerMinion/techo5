@@ -81,6 +81,11 @@ func TestAddonScreen(t *testing.T) {
 	if tiles := r.h.ScreenTiles(); len(tiles) != 1 || tiles[0] != (ScreenTile{ID: "meals", Name: "Meals"}) {
 		t.Errorf("tiles %+v", tiles)
 	}
+	// The icon is the catalog entry's (the supervisor's icons), and none is its initials.
+	r.h.icons = func() map[string]string { return map[string]string{"meals": "mdi:chef-hat"} }
+	if tiles := r.h.ScreenTiles(); len(tiles) != 1 || tiles[0].Icon != "mdi:chef-hat" {
+		t.Errorf("tiles with an icon %+v", tiles)
+	}
 	eventuallyTrue(t, "the display to be told", func() bool { return d.has("page meals") })
 	if sc, ok := r.h.Scene("meals", addonapi.OnPage); !ok || sc.Root.Children[0].Text != "Stir the onions" {
 		t.Errorf("the page %+v", sc)

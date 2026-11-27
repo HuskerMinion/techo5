@@ -328,3 +328,39 @@ func TestCheckManifestWithTheAPI(t *testing.T) {
 		}
 	}
 }
+
+// A reviewer's icon on a screen version is signed into catalog-v2.json as written, and catalog.json, which
+// cannot carry the screen, has neither the version nor its icon; a name the device has no icon for is
+// refused before anything is signed.
+func TestSignsAnIcon(t *testing.T) {
+	dir := t.TempDir()
+	_, k, _ := ed25519.GenerateKey(rand.Reader)
+	key := write(t, dir, "key", base64.StdEncoding.EncodeToString(k.Seed()))
+	pin := `{"url":"https://example.com/x","sha256":"` + strings.Repeat("a", 64) + `","size":1}`
+	source := func(name, icon string) string {
+		return write(t, dir, name, `{"format":2,"serial":2,"addons":[{"id":"meals","name":"Meals","author":"A","summary":"Cooks.",
+		 "repo":"https://example.com/x","versions":[
+		 {"version":"1.0.0","min_techo5":{"show":"v1.0.0"},"binaries":{"arm":`+pin+`},"ports":[],"root":false,"memory_mb":10,"disk_mb":1},
+		 {"version":"1.1.0","requires":["api1","screen1"],"min_techo5":{"show":"v1.0.0"},"binaries":{"arm":`+pin+`},"ports":[],"root":false,
+		  "memory_mb":10,"disk_mb":1,"api":1,"capabilities":["screen"],"icon":"`+icon+`"}]}]}`)
+	}
+	out := filepath.Join(dir, "out")
+	if err := run(source("in.json", "mdi:chef-hat"), nil, false, out, key); err != nil {
+		t.Fatal(err)
+	}
+	v2, _ := os.ReadFile(filepath.Join(out, "catalog-v2.json"))
+	c, err := catalog.Parse(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := c.Find("meals"); len(a.Versions) != 2 || a.Versions[1].Icon != "mdi:chef-hat" {
+		t.Errorf("catalog-v2.json has %+v", a.Versions)
+	}
+	v1, _ := os.ReadFile(filepath.Join(out, "catalog.json"))
+	if strings.Contains(string(v1), "icon") || strings.Contains(string(v1), "1.1.0") {
+		t.Errorf("catalog.json has the screen version or its icon:\n%s", v1)
+	}
+	if err := run(source("bad.json", "mdi:not-an-icon-anywhere"), nil, false, filepath.Join(dir, "bad"), key); err == nil || !strings.Contains(err.Error(), "icon") {
+		t.Errorf("an unknown icon: %v", err)
+	}
+}

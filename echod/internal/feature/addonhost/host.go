@@ -40,10 +40,12 @@ type Host struct {
 	settings *settingsStore
 	dev      *device
 
-	// grants is the installed add-ons that speak the API (addons.Manager.APIGrants), and names their
-	// names, for the entities: variables, so tests need no supervisor.
+	// grants is the installed add-ons that speak the API (addons.Manager.APIGrants), names their
+	// names, for the entities, and icons the icons their catalog entries give them, for the screen
+	// (ScreenTiles): variables, so tests need no supervisor.
 	grants func() []addons.APIGrant
 	names  func() map[string]string
+	icons  func() map[string]string
 
 	mu       sync.Mutex
 	entities map[string]*addonEntities // by add-on id
@@ -67,6 +69,15 @@ func Get() *Host {
 			}
 			return out
 		}
+		shared.icons = func() map[string]string {
+			out := map[string]string{}
+			for _, s := range f.Installed() {
+				if s.Icon != "" {
+					out[s.ID] = s.Icon
+				}
+			}
+			return out
+		}
 		f.SetAPI(shared)
 	})
 	return shared
@@ -74,7 +85,8 @@ func Get() *Host {
 
 func newHost(dir string, root func() string, allowed func(uint32) bool, d *device) *Host {
 	h := &Host{settings: &settingsStore{root: root}, dev: d, entities: map[string]*addonEntities{},
-		grants: func() []addons.APIGrant { return nil }, names: func() map[string]string { return nil }}
+		grants: func() []addons.APIGrant { return nil }, names: func() map[string]string { return nil },
+		icons: func() map[string]string { return nil }}
 	d.host = h
 	h.srv = serve.New(dir, d, allowed)
 	h.srv.FetchImage = fetchImage
