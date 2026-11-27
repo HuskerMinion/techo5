@@ -154,6 +154,10 @@ const (
 	// it is refused for: ten of them, 0 to 9, are a PIN pad, which is the device's own and must not be
 	// passed for on a page or a card.
 	MaxDigitRun = 10
+	// MaxKeypadRows is the fewest rows of three keys (buttons or chips of one or two characters) in one
+	// column, card or list section that a scene is refused for: three of them, nine keys in three
+	// columns, are a keypad laid out as the device's PIN pad is, whatever the keys say.
+	MaxKeypadRows = 3
 	// MaxStepperSteps is the most steps a stepper's range may hold ((max - min) / step), MaxStepperDecimals
 	// the most decimal places its numbers may have, MaxStepperMagnitude the largest any may be either way,
 	// and MaxUnit the most characters its unit may have.
@@ -599,44 +603,123 @@ func isBidiControl(r rune) bool {
 	return (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) || r == 0x200e || r == 0x200f || r == 0x061c
 }
 
-// digitKeys checks that the scene has fewer than MaxDigitRun buttons and chips whose labels are each a
-// single digit, wherever they are: ten are a PIN pad's keys (the device's own has 1 to 9, then back, 0
-// and OK), which the device's own PIN pad has and no add-on may pass for. A keycap ("1️⃣") is a digit:
-// its variation selector and enclosing keycap are not counted.
+// digitKeys checks that the scene passes for no PIN pad, which is the device's own (its pad has 1 to 9,
+// then back, 0 and OK) and no add-on may pass for:
+//   - fewer than MaxDigitRun buttons and chips, wherever they are, whose labels each read as one digit
+//     (digitLike): a digit in any script, a keycap ("1️⃣"), one in brackets ("(0)", "[1]"), or a letter
+//     or mark drawn like one ("O" for 0, "l" for 1);
+//   - no keypad: MaxKeypadRows rows of three keys each, in one column, card or list section, every
+//     key a button or chip labeled with one or two characters (keyLabel), whatever the characters.
 func digitKeys(root *Block) error {
 	n := 0
-	var walk func(b *Block)
-	walk = func(b *Block) {
-		if (b.Type == BlockButton || b.Type == BlockChip) && singleDigit(b.Label) {
+	var walk func(b *Block) error
+	walk = func(b *Block) error {
+		if (b.Type == BlockButton || b.Type == BlockChip) && digitLike(b.Label) {
 			n++
 		}
-		for i := range b.Children {
-			walk(&b.Children[i])
+		if keypadRows(b.Children) >= MaxKeypadRows {
+			return badScene("a scene may not have %d rows of three buttons or chips with one or two characters each: that is a PIN pad, which is the device's own", MaxKeypadRows)
 		}
-		for s := range b.Sections {
-			for i := range b.Sections[s].Items {
-				walk(&b.Sections[s].Items[i])
+		for i := range b.Children {
+			if err := walk(&b.Children[i]); err != nil {
+				return err
 			}
 		}
+		for s := range b.Sections {
+			items := b.Sections[s].Items
+			if keypadRows(items) >= MaxKeypadRows {
+				return badScene("a scene may not have %d rows of three buttons or chips with one or two characters each: that is a PIN pad, which is the device's own", MaxKeypadRows)
+			}
+			for i := range items {
+				if err := walk(&items[i]); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	walk(root)
+	if err := walk(root); err != nil {
+		return err
+	}
 	if n >= MaxDigitRun {
-		return badScene("a scene may not have %d buttons or chips labeled with a digit each: that is a PIN pad, which is the device's own", MaxDigitRun)
+		return badScene("a scene may not have %d buttons or chips labeled with a digit, or something drawn like one, each: that is a PIN pad, which is the device's own", MaxDigitRun)
 	}
 	return nil
 }
 
-// singleDigit is a label that is one digit, whatever the script, spaces, variation selectors and an
-// enclosing keycap aside.
-func singleDigit(label string) bool {
-	bare := strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) || unicode.Is(unicode.Variation_Selector, r) || r == 0x20e3 {
-			return -1
+// keypadRows is how many of blocks are a keypad's row: a row of three keys, spacers aside, each a
+// button or chip with a label of one or two characters.
+func keypadRows(blocks []Block) int {
+	rows := 0
+	for i := range blocks {
+		if blocks[i].Type != BlockRow {
+			continue
 		}
-		return r
-	}, label)
-	r, n := utf8.DecodeRuneInString(bare)
-	return n > 0 && n == len(bare) && unicode.IsDigit(r)
+		keys := 0
+		for _, k := range blocks[i].Children {
+			switch {
+			case k.Type == BlockSpacer:
+				continue
+			case (k.Type == BlockButton || k.Type == BlockChip) && keyLabel(k.Label):
+				keys++
+			default:
+				keys = -1
+			}
+			if keys < 0 {
+				break
+			}
+		}
+		if keys == 3 {
+			rows++
+		}
+	}
+	return rows
+}
+
+// bareLabel is a label without what is not drawn as a character of its own: spaces, variation
+// selectors, the enclosing keycap, combining marks and what Hidden finds.
+func bareLabel(label string) []rune {
+	var out []rune
+	for _, r := range label {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Variation_Selector, r) || r == 0x20e3 ||
+			unicode.In(r, unicode.Mn, unicode.Me) || Hidden(r) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// keyLabel is a label of one or two characters, as a keypad's key has.
+func keyLabel(label string) bool {
+	n := len(bareLabel(label))
+	return n >= 1 && n <= 2
+}
+
+// nearDigits are characters drawn like a digit on a key: O and its kin for 0, l, I and | for 1.
+var nearDigits = map[rune]bool{
+	'O': true, 'o': true, 'Q': true, 'D': true, 'l': true, 'I': true, '|': true,
+	'\u039f': true, '\u03bf': true, // Greek omicron
+	'\u041e': true, '\u043e': true, // Cyrillic o
+	'\u0399': true, '\u0406': true, '\u04c0': true, // Greek iota, Cyrillic i and palochka
+}
+
+// digitLike is a label that reads as one digit on a key: a digit or other number character in any
+// script (fullwidth, Arabic-Indic, circled, Roman), or a letter drawn like one (nearDigits), alone or
+// in one pair of brackets, spaces, variation selectors and an enclosing keycap aside.
+func digitLike(label string) bool {
+	bare := bareLabel(label)
+	if len(bare) == 3 {
+		switch string([]rune{bare[0], bare[2]}) {
+		case "()", "[]", "{}", "<>", "\uff08\uff09", "\uff3b\uff3d":
+			bare = bare[1:2]
+		}
+	}
+	if len(bare) != 1 {
+		return false
+	}
+	r := bare[0]
+	return unicode.IsNumber(r) || nearDigits[r]
 }
 
 // image checks an image block: an address or bytes, not both, within its limits.

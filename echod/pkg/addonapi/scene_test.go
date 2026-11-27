@@ -422,6 +422,66 @@ func TestNoPINPad(t *testing.T) {
 	}
 }
 
+// Nine digit keys and a tenth drawn like a digit are a PIN pad all the same: a letter O or l, a digit
+// in brackets, a fullwidth or circled one. Nine short keys in three columns are a keypad whatever they
+// say. Words, fewer keys, or rows of other widths are taken.
+func TestNoPINPadOfLookalikes(t *testing.T) {
+	refusesPad := func(t *testing.T, what, on string, b Block) {
+		t.Helper()
+		err := ValidScene(on, b, nil)
+		if err == nil || CodeOf(err) != CodeBadRequest || !strings.Contains(err.Error(), "PIN pad") {
+			t.Errorf("%s: %v, want refused as a PIN pad", what, err)
+		}
+	}
+	var nine []Block
+	for i := 1; i <= 9; i++ {
+		nine = append(nine, Button(fmt.Sprintf("k%d", i), fmt.Sprintf("%d", i), ""))
+	}
+	for _, tenth := range []string{"O", "o", "Q", "D", "l", "I", "|", "(0)", "[0]", "( 0 )", "\uff10", "\u24ea", "\u2460", "\u2474", "\u041e", "0\ufe0f\u20e3"} {
+		// Not in rows of three, so the count of digits is what refuses them.
+		keys := append(append([]Block{}, nine...), Chip("tenth", tenth, ""))
+		refusesPad(t, "nine digits and "+tenth, OnPage, Row(keys...))
+	}
+	var bracketed []Block
+	for i := range 10 {
+		bracketed = append(bracketed, Button(fmt.Sprintf("b%d", i), fmt.Sprintf("[%d]", i), ""))
+	}
+	refusesPad(t, "bracketed digits", OnPage, Row(bracketed...))
+	var wide []Block
+	for i, d := range []rune("\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18\uff19\uff10") {
+		wide = append(wide, Button(fmt.Sprintf("w%d", i), string(d), ""))
+	}
+	refusesPad(t, "fullwidth digits", OnPage, Row(wide...))
+
+	letters := func(labels ...string) []Block {
+		var out []Block
+		for i, l := range labels {
+			out = append(out, Button(fmt.Sprintf("g%d", i), l, ""))
+		}
+		return out
+	}
+	g := letters("A", "B", "C", "D", "E", "F", "G", "H", "IJ")
+	refusesPad(t, "a keypad of letters", OnPage, Column(Row(g[0:3]...), Row(g[3:6]...), Row(Spacer(), g[6], g[7], g[8])))
+	refusesPad(t, "a keypad of letters in a card", OnPage, Card("", Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)))
+	refusesPad(t, "a keypad in a list", OnPage, List(Section{Items: []Block{Row(g[0:3]...), Row(g[3:6]...), Row(g[6:9]...)}}))
+
+	// Two rows of three, rows of four, or keys with words, are no keypad.
+	if err := ValidScene(OnPage, Column(Row(g[0:3]...), Row(g[3:6]...)), nil); err != nil {
+		t.Errorf("two rows of three: %v", err)
+	}
+	four := letters("A", "B", "C", "E", "F", "G", "H", "J", "K", "L", "M", "N")
+	if err := ValidScene(OnPage, Column(Row(four[0:4]...), Row(four[4:8]...), Row(four[8:12]...)), nil); err != nil {
+		t.Errorf("rows of four: %v", err)
+	}
+	w := letters("Kitchen", "Hall", "Porch", "Den", "Attic", "Yard", "Garage", "Office", "Bath")
+	if err := ValidScene(OnPage, Column(Row(w[0:3]...), Row(w[3:6]...), Row(w[6:9]...)), nil); err != nil {
+		t.Errorf("a grid of rooms: %v", err)
+	}
+	if err := ValidScene(OnPage, Row(append(append([]Block{}, nine...), Button("go", "Go", ""))...), nil); err != nil {
+		t.Errorf("nine digits and a word: %v", err)
+	}
+}
+
 // A stepper is a number in a range, in steps: each is finite, of at most two decimal places, the value
 // within the range, the step above nothing, and at most MaxStepperSteps steps across it. It needs an id,
 // and it is no digit key.
