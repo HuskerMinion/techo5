@@ -120,6 +120,7 @@ func (s *sleeper) fire(stop chan struct{}) {
 		p = Get()
 	}
 	p.Transport(TransportStop)
+	p.Stop()
 	s.sel.Set(sleepOff)
 }
 

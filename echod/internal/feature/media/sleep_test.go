@@ -25,7 +25,9 @@ func TestSleepTimerStopsRemoteAndLocalStreams(t *testing.T) {
 		s.player = p
 
 		got := make(chan Transport, 1)
+		stopped := make(chan struct{}, 2)
 		p.OnTransport.Listen(func(tr Transport) { got <- tr })
+		p.OnStop.Listen(func(struct{}) { stopped <- struct{}{} })
 		p.RemoteState("playing")
 
 		s.Set(10 * time.Millisecond)
@@ -37,6 +39,11 @@ func TestSleepTimerStopsRemoteAndLocalStreams(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("sleep timer did not emit TransportStop for a remote stream")
 		}
+		select {
+		case <-stopped:
+		case <-time.After(time.Second):
+			t.Fatal("sleep timer did not emit OnStop for a remote stream")
+		}
 	})
 
 	t.Run("remote held", func(t *testing.T) {
@@ -46,7 +53,9 @@ func TestSleepTimerStopsRemoteAndLocalStreams(t *testing.T) {
 		s.player = p
 
 		got := make(chan Transport, 1)
+		stopped := make(chan struct{}, 2)
 		p.OnTransport.Listen(func(tr Transport) { got <- tr })
+		p.OnStop.Listen(func(struct{}) { stopped <- struct{}{} })
 		p.ExternalTrack("Take It Easy", "Eagles", "YES 933")
 		p.RemoteState("playing")
 		p.HoldRemote()
@@ -61,6 +70,11 @@ func TestSleepTimerStopsRemoteAndLocalStreams(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("sleep timer did not emit TransportStop for a held remote track")
 		}
+		select {
+		case <-stopped:
+		case <-time.After(time.Second):
+			t.Fatal("sleep timer did not emit OnStop for a held remote track")
+		}
 		if _, _, _, ok := p.Held(); ok {
 			t.Error("held track was not cleared when sleep timer fired")
 		}
@@ -71,7 +85,7 @@ func TestSleepTimerStopsRemoteAndLocalStreams(t *testing.T) {
 		s := newSleeper()
 		s.player = p
 
-		stopped := make(chan struct{}, 1)
+		stopped := make(chan struct{}, 2)
 		p.OnStop.Listen(func(struct{}) { stopped <- struct{}{} })
 
 		s.Set(10 * time.Millisecond)
