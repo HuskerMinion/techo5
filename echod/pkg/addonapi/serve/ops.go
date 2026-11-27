@@ -40,6 +40,11 @@ var needs = map[string]string{
 	addonapi.OpMediaResume:   addonapi.CapMedia,
 	addonapi.OpMediaStop:     addonapi.CapMedia,
 	addonapi.OpMediaStatus:   addonapi.CapMedia,
+	addonapi.OpSceneSet:      addonapi.CapScreen,
+	addonapi.OpScenePatch:    addonapi.CapScreen,
+	addonapi.OpScreenOpen:    addonapi.CapScreen,
+	addonapi.OpScreenClose:   addonapi.CapScreen,
+	addonapi.OpCardClear:     addonapi.CapScreen,
 }
 
 func bad(format string, a ...any) error {
@@ -319,6 +324,9 @@ func (s *Server) handle(c *conn, req addonapi.Request) (any, error) {
 		}
 		s.MediaChanged(g.ID)
 		return nil, nil
+
+	case addonapi.OpSceneSet, addonapi.OpScenePatch, addonapi.OpScreenOpen, addonapi.OpScreenClose, addonapi.OpCardClear:
+		return s.screenOp(c, req)
 	}
 	return nil, addonapi.Errorf(addonapi.CodeUnknownOp, "there is no op %q at API level %d", req.Op, addonapi.Version)
 }

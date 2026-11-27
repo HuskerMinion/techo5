@@ -131,7 +131,8 @@ type Server struct {
 
 	mu     sync.Mutex
 	addons map[string]*addon
-	holds  int // keep-awake holds alive, every add-on's
+	holds  int    // keep-awake holds alive, every add-on's
+	screen Screen // the display's side of the add-on screen; nil without one (SetScreen)
 
 	logs logLimit
 }
@@ -176,6 +177,9 @@ type addon struct {
 	nextCall uint64
 
 	media mediaWatch
+
+	screen  screenState
+	sceneMu sync.Mutex // held across reading a scene and keeping the next, so a patch cannot be lost
 }
 
 // pending is a call waiting for the add-on's reply: a command's, or a settings test's, which is
@@ -231,6 +235,7 @@ func (s *Server) Open(g Grant) (string, error) {
 		states:  bucket{rate: addonapi.StatesPerSecond, burst: addonapi.StatesPerSecond},
 		timerOp: bucket{rate: 1 / addonapi.TimerOpEvery.Seconds(), burst: addonapi.TimerOpBurst},
 		plays:   bucket{rate: 1 / addonapi.MediaPlayEvery.Seconds(), burst: addonapi.MediaPlayBurst},
+		screen:  screenState{opens: bucket{rate: 1 / addonapi.ScreenOpenEvery.Seconds(), burst: addonapi.ScreenOpenBurst}},
 		sets:    map[string]*bucket{}, shown: map[string]string{}, holds: map[string]*hold{}, calls: map[uint64]*pending{}}
 	s.mu.Lock()
 	if s.addons == nil {
@@ -243,7 +248,8 @@ func (s *Server) Open(g Grant) (string, error) {
 }
 
 // Close stops serving an add-on: its socket and folder go, its connections are dropped, its keep-awake
-// holds end, and its words not yet said are dropped. Its timers are the device's and stay.
+// holds end, its words not yet said are dropped, and its page and card go. Its timers are the device's
+// and stay.
 func (s *Server) Close(id string) {
 	s.mu.Lock()
 	a := s.addons[id]
@@ -266,6 +272,7 @@ func (s *Server) Close(id string) {
 		c.close()
 	}
 	s.releaseAll(a)
+	s.screenDrop(a)
 	_ = os.RemoveAll(a.dir)
 }
 
@@ -415,15 +422,20 @@ func (c *conn) greeted() bool {
 	return c.hello
 }
 
-// close drops the connection, and with it everything it held: its keep-awake holds.
+// close drops the connection, and with it everything it held: its keep-awake holds, and, when it was
+// the add-on's last, its page and card.
 func (c *conn) close() {
 	c.once.Do(func() {
 		close(c.gone)
 		c.nc.Close()
 		c.s.mu.Lock()
 		delete(c.a.conns, c)
+		last := len(c.a.conns) == 0
 		c.s.mu.Unlock()
 		c.s.releaseConn(c)
+		if last {
+			c.s.screenDrop(c.a)
+		}
 	})
 }
 
