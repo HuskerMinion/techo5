@@ -5,11 +5,11 @@ can call, words said on the device, its own timers, settings on the setup page, 
 screen drawn by the daemon. Meals, the Mealie add-on from #720, is the first user.
 
 **Status (2026-11-27):** stage 1 (`api1`) merged, as written down in [addon-api.md](addon-api.md).
-Stage 2 (`screen1`) part A, the protocol, the scene model and its checks, the host's state and the
-interface the display implements, built on `feat-addon-screen1`; part B, drawing it on the device and
-the fake daemon's PNG, not started. Stage 3 not started. Where a stage differs from this plan, the
-sections [Stage 1 as built](#stage-1-as-built) and [Stage 2 as built](#stage-2-as-built-part-a) at
-the end say how and why.
+Stage 2 (`screen1`) built on `feat-addon-screen1`: part A, the protocol, the scene model and its
+checks, the host's state and the interface the display implements; part B, drawing it on the Show and
+the Spot, images, and the fake daemon's PNG. Stage 3 not started. Where a stage differs from this plan,
+the sections [Stage 1 as built](#stage-1-as-built), [Stage 2 as built](#stage-2-as-built-part-a) and
+[part B](#stage-2-as-built-part-b) at the end say how and why.
 
 ## What is already there
 
@@ -503,3 +503,51 @@ why:
   press does. `busy` rather than a new code: the codes are a fixed set an author's client already
   knows, and "the screen is not yours to take now" is what busy says. The window is per add-on and
   starts from the command's sending, so a command answered within the action's 4 seconds can open.
+- **The Add-ons tab's tiles are rows** of the drawer, as its other tabs' are: the add-on's name and
+  Open. The tab is there only while an add-on with the screen runs, so a device without one has the
+  drawer it had; with five tabs already, the drawer and its strip widen by a tab's room again. **On a
+  Spot** it is an Add-ons item on the ring menu, before Settings, which opens the page with one add-on
+  and a dial of them (each its initials) with more.
+- **The mark is the add-on's initials, not an icon.** Neither the manifest nor the catalog entry has
+  an icon, and adding one would change both formats; and an icon the add-on chose could pass for one of
+  the device's own (a lock, a phone), which the name bar is there to rule out. Its initials in the
+  theme's accent cannot. A catalog icon, chosen by the catalog's reviewers, is a question below.
+- **The way out** is the name bar's × on a Show and a round button at the foot of a Spot. The back
+  gesture, which the plan left unnamed, is a swipe right from the left edge (the strip a swipe in to
+  the dashboard starts from); other swipes left and right are the add-on's.
+- **The page waits behind** a turn, a ring, a call, the settings and the PIN pad, the setup page's and a
+  video's questions, Cast, a camera, the Wi-Fi and Bluetooth pages, the QR scan and camera test, the
+  pages a turn or Home Assistant put up (the weather, the rain map, the calendar, an alert), the drawer
+  and first-run, and on a Spot the ring menu, a reminder, an announcement and a notification too, each
+  of which takes the whole face there. It is above the deck, the custom screens and the dashboard,
+  which wait under it. The add-on is told `screen.state` as it comes and goes, settled once each frame
+  whichever way the frame ended (a dark panel and first-run draw none).
+- **It goes by itself** when the add-on stops, and after the Dashboard returns time without a touch
+  unless something holds the screen awake: a page left up for nobody would keep the clock away.
+- **The card takes the clock's foot**, the Next up card's place, and the Next up card and the glance
+  chips wait under it: two cards and a strip in one band would each be cut. A tap on its body opens the
+  page, which is the glance leading to the page. It is not drawn under the screensaver, the light before
+  an alarm, the music, the drawer or an announcement's strip; over the night clock it is drawn in the
+  clock's tone (the night clock keeps clear of it, as it does of Night clock shows Next up) and takes no
+  finger.
+- **What does not fit is cut** at the edge of the page's room or a card: nothing of a scene is drawn
+  over the name bar or the way out, whatever its blocks ask for. A row with too little room has its
+  words wrap first, the shortest kept whole, then its buttons and chips shortened alike.
+- **Images are decoded and scaled away from drawing**, one at a time, and kept at the size they are
+  drawn, 12 MB for the whole screen, the least recently drawn let go first; a frame draws what is ready
+  and leaves the rest of the places empty. The add-on's 8 MB is the server's count of the bytes it
+  holds; this is the screen's copy of what is on it.
+- **The fake daemon's PNG** (`-png`, `-size show5|show8|spot`) is drawn by the display's own
+  layout and drawing code (`display.RenderAddonScene`), in the theme of the build it was built with.
+
+Storage, per day: nothing. Scenes, images and the screen's decoded copies are in RAM; nothing is
+logged per message, per scene or per image (a failed fetch is said at most once a minute per add-on,
+and opening a page once, as the deck's opening is).
+
+Questions for the maintainer:
+
+1. Should catalog entries gain an icon (Material Design Icons by name, picked at review) for the tile
+   and the name bar, in place of the initials?
+2. Should a page opened by `screen.open` at night, with the night's Screen off (the panel out rather
+   than the night light), light the panel? As built it lifts the night light only; a dark panel stays
+   dark until it is touched, as for the dashboard.

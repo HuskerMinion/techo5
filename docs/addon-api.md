@@ -331,11 +331,37 @@ screen), that may stay over the night clock, drawn in its dim colors. It draws n
 and colors, at the Show 5's, the Show 8's or the Spot's size. No pixels come from the add-on but its
 images.
 
+**Where it shows.** On a Show the drawer (a swipe in from the right edge of the clock) has an
+**Add-ons** tab while an add-on with the screen runs, with a row for each; Open brings its page up. On a
+Spot the ring menu (a long press) has an **Add-ons** item: with one such add-on it opens its page, with
+more a dial of them, each marked by its initials. The page fills the screen under the name bar: on a
+Show along the top, with the way out (×) at its end; on a Spot a band across the top of the circle,
+with the way out at the foot. What the scene holds is laid out inside the room left, and what does not
+fit is cut at its edge, never drawn over the bar or the way out. On the page:
+
+- a tap on a button, a chip or a list item with an id sends `touch`;
+- a swipe up or down scrolls the list under the finger (the first, if it is on none), which the daemon
+  draws with a thumb and faded edges while there is more;
+- a swipe right that starts at the left edge is the back gesture (`back`); any other swipe left or
+  right is `swipe`;
+- the way out puts the page away whatever the add-on says, and so does the add-on stopping, or the
+  page being left untouched as long as a dashboard opened by hand is (the Dashboard returns setting,
+  10 minutes unless chosen), unless something holds the screen awake (`awake.hold`).
+
+The card sits along the foot of the clock, where Next up is (the Next up card and the glance chips wait
+under it until it goes), as tall as what it holds and never more than a third of the screen, under the
+add-on's name; on a Spot along the foot of the face. Of several add-ons' cards the one set last shows.
+A tap on a chip sends `touch`; a tap anywhere else on the card brings the add-on's page up (and counts as
+somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). Over the
+night clock it is drawn in the clock's dim red, nothing on it brighter than the clock itself, and takes
+no finger: a touch on a night light is the night light's, as everywhere.
+
 A version that uses it requires `screen1` beside `api1` in the catalog, and names no Dot, which has no
 screen; the API level in `addon.json` stays 1. A device without the screen's ops skips the version. On
 a device with no screen for add-ons, every screen op is answered `unavailable`.
 
-**What a page can never do.** The name bar over the page, with the add-on's name and icon, is the
+**What a page can never do.** The name bar over the page, with the add-on's name and its mark (its
+initials, never an icon the add-on picks, which could pass for one of the device's own), is the
 daemon's and cannot be hidden or covered. Nothing in a block names a color, a position or a size in
 pixels: a card is marked with one of the theme's own colors by name, and there is no accept or decline
 color. The PIN pad and everything behind the settings lock, the settings sheet, the setup page's and
@@ -546,8 +572,15 @@ and bytes; `scene page` or `scene card` prints one as it is now. The fake has no
 show, so `screen.open` brings the page up at once, when it may (within 5 seconds of a command or a
 tap, as on a device), and every card shows as it is set. From the keyboard, `tile` (a tap on the
 add-on's tile, which brings its page up), `touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
-say) and `dismiss` (the card swiped away) do what the owner would. It does not draw the scene yet; a
-PNG of it, made with the device's own layout code, comes with the screen's drawing on the device.
+say) and `dismiss` (the card swiped away) do what the owner would.
+
+`-png page.png` draws the page to `page.png` and the card to `page-card.png` each time they change,
+with the device's own layout code, fonts and theme, at the size `-size` names: `show5` (960 by 480),
+`show8` (1280 by 800, the default) or `spot` (480 by 480, the circle's outside black; the default with
+`-family spot`). Images put are drawn as the device draws them, and one by address once the fake has
+fetched it (by the device's rules, from the LAN), which draws the scene again. The name bar says the
+add-on's id, where a device says the name its catalog entry gives it, and the colors are the Show's
+theme; built with `-tags spot`, the fake draws in the Spot's.
 
 Media the add-on plays buffers for a second and then plays, its position moving on as a device's
 does, and `media.state` is sent with the device's own timing. From the keyboard, `media playing`,
