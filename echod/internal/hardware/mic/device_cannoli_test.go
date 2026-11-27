@@ -108,3 +108,51 @@ func TestTheDot5ReferenceIsTheLoopbackInTheStream(t *testing.T) {
 		}
 	}
 }
+
+// The AK5704 board: the TI's stream, its own controls, slots 3, 2, 1 as ch0..ch2.
+func TestTheAK5704BoardReadsTheSameMicrophones(t *testing.T) {
+	k, ti := &cannoliAKMKernel, &cannoliKernel
+	if k.micDevice != ti.micDevice || k.micChannels != ti.micChannels || k.mics() != ti.mics() ||
+		k.micRates[0] != ti.micRates[0] || len(k.streamRef) != 2 || len(k.refControls) != len(ti.refControls) {
+		t.Fatal("the AK5704's capture is not the TI's stream")
+	}
+	want := map[string]uint32{
+		"AK5704 Pull-down Disable bits PSW0N": 1, "AK5704 Pull-down Disable bits PSW1N": 1,
+		"AK5704 Pull-down Disable bits PSW2N": 1, "AK5704 Clock Mode Select": 2, "AK5704 SDTO Data Length": 2,
+		"AK5704 TDM Mode Select": 1, "AK5704 ADC1A Enable": 1, "AK5704 ADC1B Enable": 1,
+		"AK5704 ADC2A Enable": 1, "AK5704 ADC2B Enable": 1, "AK5704 SDTO1 MUX": 0, "AK5704 SDTO2 MUX": 0,
+		"O26 I45 Switch": 1, "O27 I44 Switch": 1, "O28 I43 Switch": 1, "O29 I42 Switch": 1,
+	}
+	for _, c := range k.controls {
+		v, ok := want[c.name]
+		if !ok || v != c.value {
+			t.Errorf("control %s = %d", c.name, c.value)
+		}
+		delete(want, c.name)
+	}
+	if len(want) != 0 {
+		t.Errorf("controls not written: %v", want)
+	}
+	if cannoliAKM() && athenaRunning() != k || !cannoliAKM() && athenaRunning() != ti {
+		t.Error("the capture is not the converter's the unit has")
+	}
+}
+
+// The AK5704's gain: the setting in dB, on its amplifier's 3 dB steps and the rest digital.
+func TestTheAK5704GainIsTheSetting(t *testing.T) {
+	for _, c := range []struct {
+		db           int
+		amp, digital uint32
+	}{
+		{20, 6, 150}, // the default: 18 dB on the amplifier, 1.875 digital
+		{14, 4, 150},
+		{9, 3, 145},
+		{0, 0, 145},
+		{60, 15, 185}, // the amplifier's 45 dB, 15 digital
+	} {
+		amp, digital := akmSteps(c.db)
+		if amp != c.amp || digital != c.digital {
+			t.Errorf("%d dB: amplifier %d, digital %d; want %d, %d", c.db, amp, digital, c.amp, c.digital)
+		}
+	}
+}
