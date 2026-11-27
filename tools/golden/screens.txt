@@ -252,6 +252,7 @@ show/addon-card-Paper-show5.png
 show/addon-card-Paper-show8.png
 show/addon-card-show5.png
 show/addon-card-show8.png
+show/addon-card-sun-comicneue-show8.png
 show/addon-cards-show5.png
 show/addon-cards-show8.png
 show/addon-icon-card-show5.png

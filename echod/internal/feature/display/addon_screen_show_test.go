@@ -502,34 +502,58 @@ func TestAddonCardOverEveryStyle(t *testing.T) {
 		_ = config.Set().Screen().ClockStyle(styleClassic)
 		_ = config.Set().Screen().ClockPosition("")
 	})
-	for _, panel := range showPanels()[:2] {
-		for _, pos := range []string{"", "bottom-center", "bottom-left"} {
-			for _, st := range clockStyles {
-				if pos != "" && st.value != styleClassic && st.value != styleAnalog {
-					continue // at the foot: the compact clock, and a corner style
-				}
-				if err := config.Set().Screen().ClockStyle(st.value); err != nil {
-					t.Fatal(err)
-				}
-				if err := config.Set().Screen().ClockPosition(pos); err != nil {
-					t.Fatal(err)
-				}
-				s := scene{now: at, phase: "idle", weather: hassSunny(), style: facts, timers: sampleTimers(),
-					addonCard: addonCardOf(h, "meals")}
-				name := "addon-card-style-" + strings.ToLower(st.label)
-				if pos != "" {
-					name += "-" + pos
-				}
-				addonFrame(t, dir, name+"-"+panel.name, panel.wide, panel.high, s)
-				// Nothing of the clock where the card goes: drawn without the card, that room is the ground.
-				addonCardUnpainted = true
-				img, r := addonFrame(t, "", "", panel.wide, panel.high, s)
-				addonCardUnpainted = false
-				box, _ := r.addonCardRoom(s)
-				box.Min.Y = r.addonCardTop(s)
-				if st.value != styleGlow { // Glow's ground is its glow
-					if p, ok := inked(img, box, walnut); ok {
-						t.Errorf("%s %s at %q: the clock draws at %v, under the card %v", panel.name, st.label, pos, p, box)
+	t.Cleanup(func() { _ = config.Set().Screen().Font("") })
+	// Every font the device offers, with a timer's line and without one, the weather up: the preview
+	// in the screen's own font with a timer, the check in all of them.
+	for _, fam := range fonts.Families() {
+		if err := config.Set().Screen().Font(fam.Value); err != nil {
+			t.Fatal(err)
+		}
+		for _, timers := range [][]timer.Countdown{sampleTimers(), nil} {
+			preview := fam.Value == "" && timers != nil
+			for _, panel := range showPanels()[:2] {
+				for _, pos := range []string{"", "bottom-center", "bottom-left"} {
+					for _, st := range clockStyles {
+						if pos != "" && st.value != styleClassic && st.value != styleAnalog {
+							continue // at the foot: the compact clock, and a corner style
+						}
+						if err := config.Set().Screen().ClockStyle(st.value); err != nil {
+							t.Fatal(err)
+						}
+						if err := config.Set().Screen().ClockPosition(pos); err != nil {
+							t.Fatal(err)
+						}
+						s := scene{now: at, phase: "idle", weather: hassSunny(), style: facts, timers: timers,
+							addonCard: addonCardOf(h, "meals")}
+						check := []scene{s}
+						// And with the footer busy (music playing) and the Call button up, as a device often
+						// has them: the card higher and narrower.
+						busy := s
+						busy.playing, busy.callButton = true, true
+						check = append(check, busy)
+						name := "addon-card-style-" + strings.ToLower(st.label)
+						if pos != "" {
+							name += "-" + pos
+						}
+						if preview {
+							addonFrame(t, dir, name+"-"+panel.name, panel.wide, panel.high, s)
+						}
+						// Nothing of the clock where the card goes: drawn without the card, that room is the ground.
+						for k, cs := range check {
+							addonCardUnpainted = true
+							img, r := addonFrame(t, "", "", panel.wide, panel.high, cs)
+							addonCardUnpainted = false
+							box, _ := r.addonCardRoom(cs)
+							box.Min.Y = r.addonCardTop(cs)
+							if st.value == styleGlow { // Glow's ground is its glow
+								continue
+							}
+							// The busy footer's words are the device's, under the card's room: not the clock's.
+							if p, ok := inked(img, box, walnut); ok {
+								t.Errorf("%s %s at %q, font %q, timers %v, busy %v: the clock draws at %v, under the card %v",
+									panel.name, st.label, pos, fam.Value, timers != nil, k == 1, p, box)
+							}
+						}
 					}
 				}
 			}
@@ -651,4 +675,39 @@ func demoPage() addonapi.Block {
 	on.Weight = 1
 	return addonapi.Column(addonapi.Title("Screen demo"), chips, addonapi.Row(toggle, stepper), middle, status,
 		addonapi.Row(addonapi.Button("back", "Back", "mdi:arrow-left"), on, addonapi.Button("next", "Next", "mdi:arrow-right")))
+}
+
+// The Sun style as a device showed it under a card: a Show 8, Comic Neue and Ember, no timer, the footer
+// busy and the Call button up. Its weather and daylight line is left out rather than cut by the card.
+// With SHOW_PREVIEW set it is written there.
+func TestAddonCardOverTheSun(t *testing.T) {
+	dir := os.Getenv("SHOW_PREVIEW")
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	keepPalette(t)
+	h := sampleHost(t, cookingPage())
+	h.set("meals", addonapi.OnCard, crowdedCard(), addonNow)
+	useHost(t, h)
+	applyTheme(themes[themeIndex("Ember")])
+	t.Cleanup(func() {
+		_ = config.Set().Screen().Font("")
+		_ = config.Set().Screen().ClockStyle(styleClassic)
+	})
+	if err := config.Set().Screen().Font("comicneue"); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Set().Screen().ClockStyle(styleSun); err != nil {
+		t.Fatal(err)
+	}
+	facts := styleFacts{rise: time.Date(2026, 11, 27, 6, 57, 0, 0, time.Local), set: time.Date(2026, 11, 27, 16, 37, 0, 0, time.Local), sunOK: true}
+	s := scene{now: time.Date(2026, 11, 27, 12, 28, 0, 0, time.Local), phase: "idle", weather: hassSunny(), style: facts,
+		playing: true, callButton: true, addonCard: addonCardOf(h, "meals")}
+	addonFrame(t, dir, "addon-card-sun-comicneue-show8", show8Wide, show8High, s)
+	addonCardUnpainted = true
+	img, r := addonFrame(t, "", "", show8Wide, show8High, s)
+	addonCardUnpainted = false
+	box, _ := r.addonCardRoom(s)
+	box.Min.Y = r.addonCardTop(s)
+	if p, ok := inked(img, box, walnut); ok {
+		t.Errorf("the Sun draws at %v, under the card %v", p, box)
+	}
 }

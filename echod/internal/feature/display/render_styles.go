@@ -279,6 +279,13 @@ func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 	}
 }
 
+// lineFits is whether a line of f with its baseline at y fits in a style's box, where that matters: over
+// an add-on's card (cardUp), whose top is a little under the box's foot, nothing of the line, its
+// descenders included, may reach the card. Without a card the styles keep their own rules.
+func (r *renderer) lineFits(y int, f font.Face, box image.Rectangle) bool {
+	return !r.cardUp || y+f.Metrics().Descent.Ceil() <= box.Max.Y+r.s(10)
+}
+
 // analogShort is a box too short for the Analog style's own weather line under its date.
 func analogShort(r *renderer, box image.Rectangle) bool {
 	return r.cardUp && box.Min.Y+box.Dy()/2+r.s(96) > box.Max.Y+r.s(20)
@@ -491,7 +498,7 @@ func (r *renderer) sunStyle(s scene, box image.Rectangle) bool {
 	if ampm != "" {
 		r.text(r.title, ampm, x+r.width(tf, hm)+gap, base, dateColor(amber))
 	}
-	if r.cardUp && base+r.s(46) > box.Max.Y+r.s(6) {
+	if !r.lineFits(base+r.s(46), r.small, box) {
 		// Too short a box even for the smallest time and its date (an add-on's card has the foot): the
 		// time alone, the date and the weather left out rather than drawn over what is under the box.
 		return true
@@ -503,7 +510,7 @@ func (r *renderer) sunStyle(s scene, box image.Rectangle) bool {
 		line += "  ·  "
 	}
 	line += light
-	if line != "" && base+r.s(88) <= box.Max.Y+r.s(20) {
+	if line != "" && base+r.s(88) <= box.Max.Y+r.s(20) && r.lineFits(base+r.s(88), r.tiny, box) {
 		r.text(r.tiny, line, box.Min.X+(box.Dx()-r.width(r.tiny, line))/2, base+r.s(88), dim)
 		r.setWeatherAt(image.Rect(box.Min.X, base+r.s(60), box.Max.X, base+r.s(100)))
 	}
@@ -673,7 +680,7 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	if !showRow || (s.weather.Temp != "" && !tempShown) {
 		// Where the box is too short for it (an add-on's card has the foot), it is left out rather than
 		// drawn over the date.
-		if line := weatherText(s); line != "" && (!r.cardUp || base+r.s(100) <= box.Max.Y+r.s(10)) {
+		if line := weatherText(s); line != "" && r.lineFits(base+r.s(100), r.small, box) {
 			y := min(base+r.s(100), box.Max.Y)
 			ix := box.Min.X
 			if s.weather.Condition != "" {

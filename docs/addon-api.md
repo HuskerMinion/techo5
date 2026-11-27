@@ -362,7 +362,8 @@ half a chip), and it is as tall as what it keeps, at most a third of the screen.
   their tops again (a patch leaves them where they are);
 - a swipe right that starts at the left edge is the back gesture (`back`); any other swipe left or
   right is `swipe`;
-- the way out puts the page away whatever the add-on says, and so does the add-on stopping, or the
+- the way out puts the page away whatever the add-on says, and so does the add-on stopping (or its last
+  connection closing), or the
   page being left untouched as long as a dashboard opened by hand is (the Dashboard returns setting,
   10 minutes unless chosen), unless something holds the screen awake (`awake.hold`).
 
@@ -629,7 +630,11 @@ and touches go only to the add-on whose block was tapped. The device's decoded c
 kept under its id and the bytes' SHA-256, so one add-on's image never stands for another's, and go with
 it too. Its page, its card and its images go when its last connection closes,
 when it stops and when it is removed, so a crashed add-on leaves no buttons that nothing answers; it
-sets them again after `hello`. Its tile is under the Add-ons tab while it runs.
+sets them again after `hello`. A page that was up is put away then (`screen.state` shown false is not
+sent: the connection it would go to is gone), and does not come back by itself when the add-on connects
+again: the owner opens it again from its tile, or the add-on with `screen.open` in answer to somebody.
+Only a page opened before the add-on had set one (drawn waiting for it) is in view the moment the add-on
+sets it. Its tile is under the Add-ons tab while it runs.
 
 ## From Home Assistant
 

@@ -792,3 +792,12 @@ A device test (a Show 8, the Ember theme, Comic Neue) found three more, done:
 
 The demo's page is a golden in Comic Neue and Ember on the Show 5 and the Show 8, with the microphone
 off; the page and the card were drawn in every font on offer and looked at.
+
+A device test of the Sun style on a Show 8 (Comic Neue, the footer busy, no timer) found its weather
+and daylight line under the card's top edge: the style's own rule let the line run 20 pixels past its
+box. Over a card, every style's lines now fit above it, descenders and all, or are left out
+(lineFits). The test of every style with a card now runs every font on offer, with and without a timer's
+line, and with the footer busy and the Call button up; it failed for the Sun and the Agenda before.
+
+The page going with the add-on's last connection is as decided: the display puts it away, and it does
+not come back on its own when the add-on connects again; the docs now say so.
