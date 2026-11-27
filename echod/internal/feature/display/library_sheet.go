@@ -8,6 +8,7 @@ import (
 	"image"
 	"log/slog"
 	"net"
+	"net/http/httptrace"
 	"slices"
 	"strings"
 	"sync"
@@ -1556,9 +1557,10 @@ func libTracksAfter(s libSection, i int) []musicassistant.Entry {
 
 // libQueuePlay plays uris on target's queue through Music Assistant's own API, shuffled or in order,
 // and says whether Home Assistant's play_media is to be left alone: Music Assistant played them, or may
-// have. Only a refusal (an answer that is not OK, or no connection at all) is left for Home Assistant
-// to try. A play that timed out may well have been taken, Music Assistant only slow to answer, and Home
-// Assistant's play on top of it would play everything again, and in order, whatever the shuffle.
+// have. A play that timed out after it was sent may well have been taken, Music Assistant only slow to
+// answer, and Home Assistant's play on top of it would play everything again, and in order, whatever
+// the shuffle. Anything else (a refusal, no connection, a connection that timed out before the play
+// went) is left for Home Assistant to try.
 func libQueuePlay(target string, uris []string, shuffle bool) bool {
 	c, set := libClient()
 	if !set {
@@ -1570,12 +1572,20 @@ func libQueuePlay(target string, uris []string, shuffle bool) bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), libQueueWait)
 	defer cancel()
+	var sent atomic.Bool
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		WroteRequest: func(i httptrace.WroteRequestInfo) {
+			if i.Err == nil {
+				sent.Store(true)
+			}
+		},
+	})
 	if err := c.PlayShuffled(ctx, q, uris, shuffle); err != nil {
-		if libTimedOut(err) {
-			slog.Warn("dashboard music library play: no answer in time, taken as played", "err", err)
+		if libTakenAsPlayed(err, sent.Load()) {
+			slog.Warn("dashboard music library play: sent, and no answer in time, taken as played", "err", err)
 			return true
 		}
-		slog.Warn("dashboard music library play", "err", err)
+		slog.Warn("dashboard music library play", "err", err, "sent", sent.Load())
 		return false
 	}
 	return true
@@ -1584,8 +1594,12 @@ func libQueuePlay(target string, uris []string, shuffle bool) bool {
 // libQueueWait is how long a play through Music Assistant's API is waited for. A variable for tests.
 var libQueueWait = 10 * time.Second
 
-// libTimedOut is an error of a request that went out and was not answered in time.
-func libTimedOut(err error) bool {
+// libTakenAsPlayed is whether a play that failed with err may have been taken: it timed out after the
+// request was written whole (sent). A timeout connecting, or any other failure, is no play.
+func libTakenAsPlayed(err error, sent bool) bool {
+	if !sent {
+		return false
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}

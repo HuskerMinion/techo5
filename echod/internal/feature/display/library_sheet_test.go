@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"image"
@@ -661,7 +662,7 @@ func TestALibraryPlayThatTimesOutIsNotPlayedAgain(t *testing.T) {
 	got := func() string { mu.Lock(); defer mu.Unlock(); return strings.Join(events, "; ") }
 
 	if !libQueuePlay("media_player.ma_kitchen", []string{"library://album/1"}, true) {
-		t.Fatal("a play that timed out is left for Home Assistant to play again")
+		t.Fatal("a play that timed out after it was sent is left for Home Assistant to play again")
 	}
 	d := &Display{poke: make(chan struct{}, 1)}
 	album := libEntries("album", 1)[0]
@@ -670,6 +671,33 @@ func TestALibraryPlayThatTimesOutIsNotPlayedAgain(t *testing.T) {
 	time.Sleep(4 * libQueueWait)
 	if strings.Contains(got(), "ha music_assistant.play_media") {
 		t.Errorf("asked %q: Home Assistant played it again after the timeout", got())
+	}
+}
+
+// A Music Assistant that cannot be reached at all, its connection timing out before the play is sent,
+// played nothing: Home Assistant's play is the one that goes.
+func TestALibraryPlayThatNeverWentFallsBack(t *testing.T) {
+	noLibrary(t)
+	// TEST-NET-1: never answers, so the connection is still being made when the wait runs out (or is
+	// refused at once where the network says so): either way the play never went.
+	libClient = func() (musicassistant.Client, bool) {
+		return musicassistant.Client{URL: "http://192.0.2.1:8095", Token: "tok"}, true
+	}
+	libQueueOf = func(string) string { return "up0a1b2c3d" }
+	prevWait := libQueueWait
+	libQueueWait = 100 * time.Millisecond
+	t.Cleanup(func() { libQueueWait = prevWait })
+	if libQueuePlay("media_player.ma_kitchen", []string{"library://album/1"}, true) {
+		t.Fatal("a play that never reached Music Assistant was taken as played")
+	}
+	// The rule itself: a timeout counts only once the play went.
+	for _, err := range []error{context.DeadlineExceeded, fmt.Errorf("music assistant did not answer: %w", context.DeadlineExceeded)} {
+		if libTakenAsPlayed(err, false) || !libTakenAsPlayed(err, true) {
+			t.Errorf("%v: taken unsent %v, sent %v", err, libTakenAsPlayed(err, false), libTakenAsPlayed(err, true))
+		}
+	}
+	if libTakenAsPlayed(errors.New("music assistant answered 403 Forbidden"), true) {
+		t.Error("a refusal was taken as played")
 	}
 }
 
