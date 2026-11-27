@@ -839,6 +839,8 @@ func TestSettingsTest(t *testing.T) {
 			}
 		}
 	}()
+	// Dial returns once the add-on has said hello; the server files the connection just after.
+	eventually(t, "the connection to be filed", func() bool { return r.s.Connected("meals") == 1 })
 	if ok, why, err := r.s.Test(ctx(t), "meals", map[string]any{"token": "good"}); !ok || err != nil {
 		t.Errorf("a good token: %v %q %v", ok, why, err)
 	}

@@ -174,6 +174,8 @@ func TestRepliesAnswerOnlyTheirOwnKind(t *testing.T) {
 			}
 		}
 	}()
+	// Dial returns once the add-on has said hello; the server files the connection just after.
+	eventually(t, "the connection to be filed", func() bool { return r.s.Connected("meals") == 1 })
 	if ok, _, err := r.s.Test(ctx(t), "meals", nil); !ok || err != nil {
 		t.Errorf("the test: %v %v", ok, err)
 	}
