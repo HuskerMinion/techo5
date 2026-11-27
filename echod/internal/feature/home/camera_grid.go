@@ -32,7 +32,9 @@ const GridEntity = "grid"
 // MaxGridCells is the most cameras the grid shows: three across, two down.
 const MaxGridCells = 6
 
-// MaxGridFor is the longest the grid is put up for at once.
+// MaxGridFor is the longest Home Assistant's home_show_cameras puts the grid up for at once. A grid put
+// up on the device itself stays for the camera time chosen there, "Until tapped" too (#748): it shows
+// snapshots, so what it costs does not grow with the time it is up.
 const MaxGridFor = time.Hour
 
 // gridEvery is the least time between one snapshot of a camera in the grid and the next, and
@@ -93,11 +95,10 @@ func gridCamera(entity string) bool {
 // Assistant, which has no such camera; a variable for the tests.
 var gridGo2RTC = go2rtcSnap
 
-// ShowGrid puts the grid up for d (at most MaxGridFor), with the cameras named (entity ids), or the first
-// of the list when none are. The device's own camera is not one of them: its sensor is the screen's, and
+// ShowGrid puts the grid up for d, with the cameras named (entity ids), or the first of the list when
+// none are. The device's own camera is not one of them: its sensor is the screen's, and
 // one picture of it is the camera view's.
 func (f *Feature) ShowGrid(entities []string, d time.Duration) error {
-	d = min(d, MaxGridFor)
 	names := map[string]string{}
 	var listed []string
 	for _, c := range f.Cameras() {

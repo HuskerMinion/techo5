@@ -22,7 +22,7 @@ func (f *Feature) gridActions() []*esphome.Action {
 					entities = append(entities, e)
 				}
 			}
-			return nil, f.ShowGrid(entities, cameraSeconds(c))
+			return nil, f.ShowGrid(entities, min(cameraSeconds(c), MaxGridFor))
 		},
 	}}
 }

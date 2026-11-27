@@ -1560,7 +1560,7 @@ recorder's, and go2rtc's streams (`go2rtc:name`).
 
 *int*
 
-How long the grid stays up, an hour at most; 0 for 30 seconds.
+How long the grid stays up, an hour at most from this action; 0 for 30 seconds. A grid opened on the device stays for its Camera time on screen, "Until tapped" too.
 
 ```yaml
 # Somebody at the door after dark: the door, the drive and the yard together.

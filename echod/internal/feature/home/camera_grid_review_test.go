@@ -41,8 +41,9 @@ func TestASlowCameraHoldsUpNoOther(t *testing.T) {
 	t.Error("the quick camera waited on the slow one")
 }
 
-// Only cameras go in the grid, and it goes up for an hour at most.
-func TestTheGridTakesCamerasAndAnHourAtMost(t *testing.T) {
+// Only cameras go in the grid, and put up on the device it stays as long as asked, "Until tapped" too
+// (#748).
+func TestTheGridTakesCamerasForAsLongAsAsked(t *testing.T) {
 	f, _ := gridHouse(t, []config.Camera{{Entity: "camera.a", Name: "A"}})
 	if err := f.ShowGrid([]string{"light.kitchen", "grid", "local"}, time.Minute); err == nil {
 		t.Error("a grid of things that are not cameras went up")
@@ -51,9 +52,10 @@ func TestTheGridTakesCamerasAndAnHourAtMost(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, _ := f.Camera()
-	if left := time.Until(v.Until); left > MaxGridFor {
-		t.Errorf("up for %v, more than %v", left, MaxGridFor)
+	if left := time.Until(v.Until); left < 47*time.Hour {
+		t.Errorf("put up on the device for 48h, up for %v", left)
 	}
+
 }
 
 // The grid's own name asked for as a camera is not a camera: the grid stays as it is.
