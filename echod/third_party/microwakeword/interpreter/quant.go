@@ -89,3 +89,36 @@ func ClampUint8(v int32) uint8 {
 func Logistic(x float32) float32 {
 	return float32(1.0 / (1.0 + math.Exp(float64(-x))))
 }
+
+// techo5: multiplyTFLite is TFLite's own MultiplyByQuantizedMultiplier, which rounds twice: a rounding
+// doubling high multiply, then a rounding shift right. MultiplyByQuantizedMultiplier rounds once, and
+// on the large products of a MUL the two differ by one now and then (#768).
+func multiplyTFLite(x int32, qm QuantMultiplier) int32 {
+	left, right := max(qm.Shift, 0), max(-qm.Shift, 0)
+	return roundingDivideByPOT(roundingDoublingHighMul(saturateInt32(int64(x)<<left), qm.Multiplier), right)
+}
+
+func roundingDoublingHighMul(a, b int32) int32 {
+	if a == math.MinInt32 && b == math.MinInt32 {
+		return math.MaxInt32
+	}
+	ab := int64(a) * int64(b)
+	nudge := int64(1) << 30
+	if ab < 0 {
+		nudge = 1 - nudge
+	}
+	return int32((ab + nudge) / (int64(1) << 31))
+}
+
+func roundingDivideByPOT(x int32, exponent int) int32 {
+	mask := int32(1)<<exponent - 1
+	remainder, threshold := x&mask, mask>>1
+	if x < 0 {
+		threshold++
+	}
+	v := x >> exponent
+	if remainder > threshold {
+		v++
+	}
+	return v
+}

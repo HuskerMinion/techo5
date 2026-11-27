@@ -185,6 +185,9 @@ func wakeFromWAV(out io.Writer, det *detect.Detector, front, path string) error 
 		start := time.Now()
 		hit := det.ProcessAudio(samples[off : off+mic.FrameSamples])
 		spent += time.Since(start)
+		if err := det.Err(); err != nil {
+			return fmt.Errorf("%s: the model did not run at %.2fs: %w", path, float64(off)/mic.Rate, err)
+		}
 
 		if hit {
 			hits++

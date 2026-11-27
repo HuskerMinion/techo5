@@ -13,7 +13,14 @@ import (
 )
 
 func TestAddAndPoolModelMatchesTFLite(t *testing.T) {
-	m, err := model.LoadFile(filepath.Join(testRoot(), "testdata", "add_pool.tflite"))
+	matchesTFLite(t, "add_pool", model.OpAdd, model.OpAveragePool2D, model.OpMaxPool2D)
+}
+
+// matchesTFLite runs testdata/<name>.tflite, which must hold the operations codes, on the inputs in
+// testdata/<name>_tflite.bin and checks every output against TensorFlow Lite's in the same file.
+func matchesTFLite(t *testing.T, name string, codes ...int) {
+	t.Helper()
+	m, err := model.LoadFile(filepath.Join(testRoot(), "testdata", name+".tflite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,13 +28,13 @@ func TestAddAndPoolModelMatchesTFLite(t *testing.T) {
 	for _, op := range m.Subgraphs[0].Operators {
 		ops[op.OpCode] = true
 	}
-	for _, code := range []int{model.OpAdd, model.OpAveragePool2D, model.OpMaxPool2D} {
+	for _, code := range codes {
 		if !ops[code] {
 			t.Fatalf("the model has no %s", model.OpName(code))
 		}
 	}
 
-	data, err := os.ReadFile(filepath.Join(testRoot(), "testdata", "add_pool_tflite.bin"))
+	data, err := os.ReadFile(filepath.Join(testRoot(), "testdata", name+"_tflite.bin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +42,7 @@ func TestAddAndPoolModelMatchesTFLite(t *testing.T) {
 	inSize := int(binary.LittleEndian.Uint32(data[4:]))
 	outSize := int(binary.LittleEndian.Uint32(data[8:]))
 	if len(data) != 12+count*(inSize+outSize) {
-		t.Fatalf("add_pool_tflite.bin is %d bytes, not %d", len(data), 12+count*(inSize+outSize))
+		t.Fatalf("%s_tflite.bin is %d bytes, not %d", name, len(data), 12+count*(inSize+outSize))
 	}
 
 	interp, err := New(m)

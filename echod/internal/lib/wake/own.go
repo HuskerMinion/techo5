@@ -168,9 +168,9 @@ const (
 	MaxMicroFile = 4 << 20
 )
 
-// microOps is every operator the engine runs: every one the published models use, and ADD,
+// microOps is every operator the engine runs: every one the published models use, ADD,
 // AVERAGE_POOL_2D and MAX_POOL_2D, which models trained with residual connections or pooling use
-// (#190). Anything else the engine would refuse at the first inference; refusing it here says so at
+// (#190), and MUL, which a model averaged from several uses (wakesmith's combined models, #768). Anything else the engine would refuse at the first inference; refusing it here says so at
 // once.
 var microOps = map[tflite.Op]bool{
 	tflite.OpCallOnce: true, tflite.OpVarHandle: true, tflite.OpReadVariable: true,
@@ -178,6 +178,7 @@ var microOps = map[tflite.Op]bool{
 	tflite.OpStridedSlice: true, tflite.OpConv2D: true, tflite.OpDepthwiseConv: true,
 	tflite.OpFullyConnected: true, tflite.OpLogistic: true, tflite.OpQuantize: true,
 	tflite.OpSplitV: true, tflite.OpAdd: true, tflite.OpAveragePool2D: true, tflite.OpMaxPool2D: true,
+	tflite.OpMul: true,
 }
 
 // microInput checks that a model reads as a microWakeWord model the engine can be trusted with, and

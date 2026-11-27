@@ -34,6 +34,8 @@ func getOpDispatch() map[int]opFunc {
 		model.OpAdd:           opAdd,
 		model.OpAveragePool2D: opAveragePool2D,
 		model.OpMaxPool2D:     opMaxPool2D,
+		// techo5: models averaged into one, as wakesmith's combined models are (#768)
+		model.OpMul: opMul,
 	}
 }
 
@@ -505,6 +507,99 @@ func newAddPlan(sg model.Subgraph, op model.Operator) (*addPlan, error) {
 		m1:  QuantizeMultiplier(sc1 / twiceMax),
 		m2:  QuantizeMultiplier(sc2 / twiceMax),
 		mo:  QuantizeMultiplier(twiceMax / (float64(1<<addLeftShift) * so)),
+		zp1: zeroPoint(in1T), zp2: zeroPoint(in2T), zpo: zpo,
+		actMin: actMin, actMax: actMax,
+	}, nil
+}
+
+// techo5: MUL, which Keras's Average becomes after its ADDs (a MUL by 1/n), so a model averaged
+// from several (wakesmith's combined models, #768) runs. It follows TFLite Micro's integer MUL kernel;
+// testdata/mul.py makes a model of it and TFLite's outputs for it (mul_test.go).
+
+// mulPlan is what MUL works out once per operator, as addPlan is for ADD.
+type mulPlan struct {
+	shape          []int
+	s1, s2, coord  []int
+	n, len1, len2  int
+	m              QuantMultiplier
+	zp1, zp2, zpo  int32
+	actMin, actMax int32
+}
+
+// opMul implements quantized element-wise multiplication with NumPy-style broadcasting.
+func opMul(interp *Interpreter, op model.Operator) error {
+	if len(op.Inputs) != 2 || len(op.Outputs) != 1 {
+		return fmt.Errorf("MUL: bad io")
+	}
+	sg := interp.model.Subgraphs[interp.sgIdx]
+	pl, err := interp.plan(func() (any, error) { return newMulPlan(sg, op) })
+	if err != nil {
+		return err
+	}
+	p := pl.(*mulPlan)
+
+	in1 := interp.tensors[op.Inputs[0]].data
+	in2 := interp.tensors[op.Inputs[1]].data
+	out := interp.tensors[op.Outputs[0]].data
+	if len(in1) < p.len1 || len(in2) < p.len2 || len(out) < p.n {
+		return fmt.Errorf("MUL: tensor data shorter than shape")
+	}
+
+	coord := p.coord
+	clear(coord)
+	for i := range p.n {
+		off1, off2 := 0, 0
+		for d, c := range coord {
+			off1 += c * p.s1[d]
+			off2 += c * p.s2[d]
+		}
+		a := int32(int8(in1[off1])) - p.zp1
+		b := int32(int8(in2[off2])) - p.zp2
+		v := multiplyTFLite(a*b, p.m) + p.zpo
+		out[i] = byte(int8(min(max(v, p.actMin), p.actMax)))
+		for d := len(coord) - 1; d >= 0; d-- {
+			coord[d]++
+			if coord[d] < p.shape[d] {
+				break
+			}
+			coord[d] = 0
+		}
+	}
+	return nil
+}
+
+func newMulPlan(sg model.Subgraph, op model.Operator) (*mulPlan, error) {
+	in1T := sg.Tensors[op.Inputs[0]]
+	in2T := sg.Tensors[op.Inputs[1]]
+	outT := sg.Tensors[op.Outputs[0]]
+	for _, t := range []model.Tensor{in1T, in2T, outT} {
+		if t.Type != model.TensorInt8 {
+			return nil, fmt.Errorf("MUL: only int8 is supported")
+		}
+		if len(t.Quant.Scale) == 0 || t.Quant.Scale[0] <= 0 {
+			return nil, fmt.Errorf("MUL: missing quantization")
+		}
+	}
+	s1, err := broadcastStrides(in1T.Shape, outT.Shape)
+	if err != nil {
+		return nil, fmt.Errorf("MUL: %w", err)
+	}
+	s2, err := broadcastStrides(in2T.Shape, outT.Shape)
+	if err != nil {
+		return nil, fmt.Errorf("MUL: %w", err)
+	}
+	zpo := zeroPoint(outT)
+	activation := 0
+	if v, ok := op.Options["fused_activation"]; ok {
+		activation = v.(int)
+	}
+	actMin, actMax := activationBounds(activation, zpo)
+	return &mulPlan{
+		shape: outT.Shape,
+		s1:    s1, s2: s2, coord: make([]int, len(outT.Shape)),
+		n:    numElems(outT.Shape),
+		len1: numElems(in1T.Shape), len2: numElems(in2T.Shape),
+		m:   QuantizeMultiplier(float64(in1T.Quant.Scale[0]) * float64(in2T.Quant.Scale[0]) / float64(outT.Quant.Scale[0])),
 		zp1: zeroPoint(in1T), zp2: zeroPoint(in2T), zpo: zpo,
 		actMin: actMin, actMax: actMax,
 	}, nil

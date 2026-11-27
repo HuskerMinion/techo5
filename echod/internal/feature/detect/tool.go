@@ -15,8 +15,15 @@ type Detector struct {
 	front *microFront // nil: the detector's own front end, zserge's
 }
 
-// NewDetector loads a model for a tool, on the front end the daemon would run it on (exactFor).
+// NewDetector loads a model for a tool, on the front end the daemon would run it on (exactFor). A model
+// the daemon would refuse (wake.CheckMicro) is refused here too, so a tool says why instead of running
+// it and scoring nothing (#768).
 func NewDetector(m wake.Model) (*Detector, error) {
+	if m.Path != "" {
+		if err := wake.CheckMicro(m.Path); err != nil {
+			return nil, err
+		}
+	}
 	det, err := microwakeword.NewDetector(m.Config)
 	if err != nil {
 		return nil, err
@@ -43,6 +50,9 @@ func (d *Detector) ProcessAudio(samples []int16) bool {
 	}
 	return hit
 }
+
+// Err is why the last inference failed, nil when it ran.
+func (d *Detector) Err() error { return d.det.Err() }
 
 // SlidingAverage is the model's score: see microwakeword.Detector.
 func (d *Detector) SlidingAverage() float64 { return d.det.SlidingAverage() }

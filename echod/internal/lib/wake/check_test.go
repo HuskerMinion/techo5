@@ -71,6 +71,15 @@ func TestModelCheckTakesAddAndPools(t *testing.T) {
 	}
 }
 
+// A model averaged from several, as wakesmith's combined models are, ends in a MUL by a third and is
+// taken: the engine runs it (#768), and its own tests check what it gives.
+func TestModelCheckTakesMul(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "third_party", "microwakeword", "testdata", "mul.tflite")
+	if err := CheckMicro(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func stopModel(t *testing.T) []byte {
 	t.Helper()
 	b, err := os.ReadFile(stopPath)
