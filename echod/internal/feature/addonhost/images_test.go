@@ -19,10 +19,10 @@ import (
 // itself, loopback, link-local and any public address, and allowed on the LAN or at Home Assistant's
 // own host. None of these is dialed for real: the refusal comes before the connection is made.
 func TestImageFetchRefuses(t *testing.T) {
-	savedOwn, savedHA := netguard.OwnIP, haHost
-	t.Cleanup(func() { netguard.OwnIP, haHost = savedOwn, savedHA })
+	savedOwn, savedHA := netguard.OwnIP, haAddress
+	t.Cleanup(func() { netguard.OwnIP, haAddress = savedOwn, savedHA })
 	netguard.OwnIP = func(ip net.IP) bool { return ip.Equal(net.ParseIP("192.168.1.50")) }
-	haHost = func() string { return "" }
+	haAddress = func() string { return "" }
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	for _, addr := range []string{
@@ -48,8 +48,8 @@ func TestImageFetchRefuses(t *testing.T) {
 // A LAN server's image is fetched, held to MaxImage; Home Assistant's own host is fetched from whatever
 // it resolves to, so long as that is not the device itself.
 func TestImageFetchServes(t *testing.T) {
-	savedLAN, savedRefused, savedHA := imageLAN, netguard.Refused, haHost
-	t.Cleanup(func() { imageLAN, netguard.Refused, haHost = savedLAN, savedRefused, savedHA })
+	savedLAN, savedRefused, savedHA := imageLAN, netguard.Refused, haAddress
+	t.Cleanup(func() { imageLAN, netguard.Refused, haAddress = savedLAN, savedRefused, savedHA })
 	png := []byte("\x89PNG\r\n\x1a\n....")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -71,7 +71,7 @@ func TestImageFetchServes(t *testing.T) {
 	ha.Store("")
 	netguard.Refused = func(ip net.IP) bool { return !ip.Equal(net.ParseIP("127.0.0.1")) }
 	imageLAN = func(ip netip.Addr) bool { return !offLAN.Load() && ip == loop }
-	haHost = func() string { return ha.Load().(string) }
+	haAddress = func() string { return ha.Load().(string) }
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if b, err := fetchImage(ctx, srv.URL+"/a.png"); err != nil || string(b) != string(png) {
@@ -89,8 +89,36 @@ func TestImageFetchServes(t *testing.T) {
 	if _, err := fetchImage(ctx, "http://localhost:"+port+"/a.png"); err == nil {
 		t.Error("an image off the LAN was fetched")
 	}
-	ha.Store("localhost")
+	ha.Store("http://localhost:" + port)
 	if _, err := fetchImage(ctx, "http://localhost:"+port+"/a.png"); err != nil {
 		t.Errorf("an image at Home Assistant's host: %v", err)
+	}
+	// At Home Assistant's host, only Home Assistant: another port there, or another scheme, is another
+	// service the host runs, and refused, as is a redirect to one.
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(png) }))
+	defer other.Close()
+	otherPort := other.URL[strings.LastIndex(other.URL, ":")+1:]
+	if _, err := fetchImage(ctx, "http://localhost:"+otherPort+"/a.png"); err == nil {
+		t.Error("an image from another port at Home Assistant's host was fetched")
+	}
+	if _, err := imageDial(ctx, "tcp", "localhost:"+otherPort); err == nil {
+		t.Error("another port at Home Assistant's host was dialed")
+	}
+	if _, err := fetchImage(ctx, "https://localhost:"+port+"/a.png"); err == nil || !strings.Contains(err.Error(), "Home Assistant itself") {
+		t.Errorf("another scheme at Home Assistant's host: %v", err)
+	}
+	hop := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://localhost:"+otherPort+"/a.png", http.StatusFound)
+	}))
+	defer hop.Close()
+	hopPort := hop.URL[strings.LastIndex(hop.URL, ":")+1:]
+	ha.Store("http://localhost:" + hopPort)
+	if _, err := fetchImage(ctx, "http://localhost:"+hopPort+"/a.png"); err == nil {
+		t.Error("a redirect from Home Assistant to another port at its host was followed")
+	}
+	// An address with no port is its scheme's.
+	ha.Store("http://localhost")
+	if _, err := imageDial(ctx, "tcp", "localhost:"+port); err == nil || !strings.Contains(err.Error(), "port 80 only") {
+		t.Errorf("Home Assistant at port 80, dialed at %s: %v", port, err)
 	}
 }

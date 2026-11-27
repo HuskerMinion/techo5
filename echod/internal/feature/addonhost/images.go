@@ -25,7 +25,8 @@ import (
 // dialed, whatever the name resolved to and wherever a redirect led: never the device itself, loopback,
 // link-local or multicast (netguard), and nothing but a private address (10/8, 172.16/12, 192.168/16,
 // fc00::/7) or one in 100.64/10, where a Home Assistant reached over Tailscale is, unless the name dialed
-// is Home Assistant's own host, as the device was given it. The device's Home Assistant sign-in is never
+// is Home Assistant's own host, as the device was given it, and then only at Home Assistant's own scheme
+// and port. The device's Home Assistant sign-in is never
 // sent: what an image needs of Home Assistant is what its /local folder serves to anyone on the LAN.
 // What comes is held to addonapi.MaxImage bytes and fetchWithin, kept in RAM by the server, and never
 // written down.
@@ -37,27 +38,66 @@ const (
 	imageHeaderWithin = 8 * time.Second
 )
 
-// haHost is Home Assistant's host, as the device was given it, or "" with none; a variable for tests.
-var haHost = func() string {
-	u, err := neturl.Parse(hass.Get().Address())
-	if err != nil {
-		return ""
+// haAddress is Home Assistant's address, as the device was given it ("http://192.168.1.5:8123"), or ""
+// with none; a variable for tests.
+var haAddress = func() string { return hass.Get().Address() }
+
+// haOrigin is Home Assistant's scheme, host and port, the port its scheme's own when the address names
+// none; ok is false with no address, or one that does not read.
+func haOrigin() (scheme, host, port string, ok bool) {
+	u, err := neturl.Parse(haAddress())
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", "", "", false
 	}
-	return u.Hostname()
+	return u.Scheme, u.Hostname(), portOf(u), true
+}
+
+// portOf is the port an address is fetched from: the one it names, or its scheme's.
+func portOf(u *neturl.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if u.Scheme == "https" {
+		return "443"
+	}
+	return "80"
+}
+
+// atHA is whether host is Home Assistant's own host.
+func atHA(host string) bool {
+	_, ha, _, ok := haOrigin()
+	return ok && strings.EqualFold(strings.Trim(host, "[]"), ha)
+}
+
+// haURLProblem is what is wrong with fetching u, or nil: at Home Assistant's own host, only what
+// Home Assistant itself serves there, its scheme and port, not another service the host runs.
+func haURLProblem(u *neturl.URL) error {
+	scheme, host, port, ok := haOrigin()
+	if !ok || !strings.EqualFold(u.Hostname(), host) {
+		return nil
+	}
+	if u.Scheme != scheme || portOf(u) != port {
+		return fmt.Errorf("an add-on's image at Home Assistant's host is fetched from Home Assistant itself (%s, port %s) only", scheme, port)
+	}
+	return nil
 }
 
 // imageLAN is addonapi.LANAddr; a variable for tests, whose servers are on loopback.
 var imageLAN = addonapi.LANAddr
 
 // imageDial connects for an image's fetch: through netguard, and to a LAN address only, unless the
-// name dialed is Home Assistant's own host.
+// name dialed is Home Assistant's own host, at its own port.
 func imageDial(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, _, err := net.SplitHostPort(addr)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
 	d := netguard.Dialer(imageDialWithin)
-	if ha := haHost(); ha == "" || !strings.EqualFold(strings.Trim(host, "[]"), ha) {
+	if atHA(host) {
+		if _, _, haPort, _ := haOrigin(); port != haPort {
+			return nil, fmt.Errorf("an add-on's image at Home Assistant's host is fetched from its port %s only, not %s", haPort, port)
+		}
+	} else {
 		guard := d.Control
 		d.Control = func(network, address string, c syscall.RawConn) error {
 			if err := guard(network, address, c); err != nil {
@@ -93,7 +133,7 @@ var imageClient = &http.Client{
 		if req.URL.Scheme != "http" && req.URL.Scheme != "https" || req.URL.User != nil {
 			return errors.New("a redirect to an address that is not plain http or https")
 		}
-		return nil
+		return haURLProblem(req.URL)
 	},
 }
 
@@ -105,6 +145,9 @@ var errImageLarge = fmt.Errorf("an image is at most %d bytes", addonapi.MaxImage
 func fetchImage(ctx context.Context, u string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
+		return nil, err
+	}
+	if err := haURLProblem(req.URL); err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "image/png, image/jpeg")
