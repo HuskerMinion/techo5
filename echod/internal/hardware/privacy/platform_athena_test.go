@@ -5,6 +5,8 @@ package privacy
 import (
 	"errors"
 	"io"
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/HuskerMinion/techo5/echod/internal/lib/input"
@@ -171,5 +173,73 @@ func TestAthenaMuteIsHeldByTheDaemon(t *testing.T) {
 	_ = athenaMute{}.Set(true)
 	if cut, known, err := CodecCut(); err != nil || !known || !cut {
 		t.Errorf("converter reads cut=%v known=%v err=%v after a mute", cut, known, err)
+	}
+}
+
+// Releasing the software mute takes the flag down before the channels go on: a capture opening in
+// between reads the flag to decide the channels, and one that still read it set would switch them off
+// again under microphones that are meant to be live.
+func TestAthenaReleaseLowersTheFlagFirst(t *testing.T) {
+	newAthenaFake(t)
+	m := athenaMute{}
+	_ = m.Set(true)
+	var flagWhenOn []bool
+	SetCodec(func(cut bool) error {
+		if !cut {
+			flagWhenOn = append(flagWhenOn, SoftwareCut())
+		}
+		return nil
+	}, func() (bool, error) { return false, nil })
+	if err := m.Set(false); err != nil {
+		t.Fatal(err)
+	}
+	if len(flagWhenOn) != 1 || flagWhenOn[0] {
+		t.Fatalf("the channels went on with the flag still %v", flagWhenOn)
+	}
+}
+
+// Only the process that called HoldTheMute (the daemon) holds the mute.
+func TestMuteHeldHere(t *testing.T) {
+	was := heldHere.Load()
+	t.Cleanup(func() { heldHere.Store(was) })
+	heldHere.Store(false)
+	if MuteHeldHere() {
+		t.Fatal("a process that never called HoldTheMute held the mute")
+	}
+	HoldTheMute()
+	if !MuteHeldHere() {
+		t.Fatal("HoldTheMute did not take")
+	}
+}
+
+// The button's lift and a mute from Home Assistant at the same time: whichever lands last, the flag and
+// the converter's channels agree. Without athenaSoft the button could lower the flag, Home Assistant
+// mute, and the button's own half then switch the channels on under the software mute.
+func TestAthenaLiftRacesAMute(t *testing.T) {
+	newAthenaFake(t)
+	var mu sync.Mutex
+	off := false // the converter's channels, as last written
+	SetCodec(func(cut bool) error {
+		runtime.Gosched() // widen the gap between the two halves of a move
+		mu.Lock()
+		off = cut
+		mu.Unlock()
+		return nil
+	}, func() (bool, error) { mu.Lock(); defer mu.Unlock(); return off, nil })
+	m := athenaMute{}
+	release := []input.Event{{Type: input.EvSw, Code: swMuteDevice, Value: 0}}
+	for i := 0; i < 2000; i++ {
+		_ = m.Set(true)
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); athenaFollow(reader(release, nil), func() {}) }()
+		go func() { defer wg.Done(); _ = m.Set(true) }()
+		wg.Wait()
+		mu.Lock()
+		got := off
+		mu.Unlock()
+		if SoftwareCut() != got {
+			t.Fatalf("round %d: software mute %v, converter channels off %v", i, SoftwareCut(), got)
+		}
 	}
 }

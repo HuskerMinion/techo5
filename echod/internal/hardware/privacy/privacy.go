@@ -67,6 +67,17 @@ func SoftwareCut() bool { return softwareCut.Load() }
 // than this flag and the frames would stay silent afterwards.
 func Seed(muted bool) { seedSoftwareCut(muted) }
 
+// heldHere is whether this process is the daemon, the one that holds the mute. Another process (the
+// CLI's tools) has only its own copy of a software mute the daemon holds, so it must not write the
+// converter's channels from it (hardware/mic's athenaInit).
+var heldHere atomic.Bool
+
+// HoldTheMute marks this process as the daemon. The run command calls it before anything starts.
+func HoldTheMute() { heldHere.Store(true) }
+
+// MuteHeldHere reports whether this process is the daemon (HoldTheMute).
+func MuteHeldHere() bool { return heldHere.Load() }
+
 // codec switches the microphone converter's channels off (true) or on, and codecRead reads whether
 // they are off, for a device whose software mute includes the converter (the 2nd gen Show 8 on
 // TECHO5's mainline kernel, platform_athena.go). hardware/mic sets both, since the card is its own;

@@ -11,6 +11,7 @@ import (
 
 	"github.com/HuskerMinion/techo5/echod/internal/android/logd"
 	"github.com/HuskerMinion/techo5/echod/internal/boot"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/privacy"
 	"github.com/HuskerMinion/techo5/echod/internal/layout"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/panelctl"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/profile"
@@ -49,6 +50,8 @@ func newRunCmd() *cobra.Command {
 			signal.Ignore(syscall.SIGHUP)
 
 			safe.Go("profile", func() { profile.Watch(ctx) })
+			// This process holds the mute; the CLI's tools that open the capture do not.
+			privacy.HoldTheMute()
 			return boot.Run(ctx)
 		},
 	}
