@@ -83,19 +83,24 @@ var known = []geometry{
 		// "ASR FilterBank" and "ASR FixedBeamFormerV2", whose Channel Map is [1,2,4,5] with the
 		// comment "This selects 4 mics out of 7". LowLatency is what it names for both the normal and
 		// the diffused noise case, with EVD disabled.
-		name:      "FilterBank_768cvxGLow + FBFV2 8 beams",
-		Bands:     128,
-		FFTLen:    256,
-		Hop:       128,
-		WindowLen: 768,
-		Beams:     8,
-		Taps:      4,
-		order:     "maet",
-		perGroup:  1,
-		// Four ring positions, and only their rotation about the ring is fixed: rotating the map
-		// rotates every beam with it, which is how this ordering was recognized as the right one.
-		// AFE.cfg's "Channel Map": [1,2,4,5] counts channels in Amazon's order, not this array's.
-		mics:        []int{0, 3, 2, 1},
+		//
+		// The file runs beam, microphone, band, tap, with real and imaginary parts interleaved, and
+		// the Channel Map's numbers are this array's channels as they stand. Read that way the eight
+		// beams face 45 degrees apart, each 10-15 dB louder toward its own direction than away from
+		// it; read as microphone, band, beam, tap over [0,3,2,1], as this once was, no beam is more
+		// than about a decibel louder than another anywhere, which TestVendorBeamsPointSomewhere
+		// reports as six of eight beams winning. A band stepping every 16 values fits both readings,
+		// which is how the wrong one passed for right.
+		name:        "FilterBank_768cvxGLow + FBFV2 8 beams",
+		Bands:       128,
+		FFTLen:      256,
+		Hop:         128,
+		WindowLen:   768,
+		Beams:       8,
+		Taps:        4,
+		order:       "emat",
+		perGroup:    1,
+		mics:        []int{1, 2, 4, 5},
 		boostDB:     7.2,
 		windowFile:  "coefs_FilterBank_AnalysisSynthesis_768cvxGLow.cfg",
 		weightsFile: "coefs_FBFV2_LowLatency_8beams.cfg",
