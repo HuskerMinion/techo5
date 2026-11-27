@@ -35,7 +35,8 @@ func newWakeCmd() *cobra.Command {
 		Long: "Runs microWakeWord over the microphone array and prints every detection with the\n" +
 			"sliding-window score, plus how long inference takes per frame.\n\n" +
 			"The model is a .tflite file on the device. Nothing is sent anywhere. The feature front end is\n" +
-			"the daemon's: the exact one when TECHO5_WAKE_FRONTEND=exact is set.",
+			"the daemon's: the exact one on the Echo Dot 5th gen or when TECHO5_WAKE_FRONTEND=exact is set,\n" +
+			"the approximate one elsewhere or when it is set to approx.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			models, err := wake.Installed(dir)

@@ -76,7 +76,7 @@ const refHold = Rate
 // alone. Which path it reads is cancelInput's choice.
 type canceller struct {
 	// filter is swapped by fitTaps from the capture loop while SetAdapting reaches it from elsewhere.
-	filter atomic.Pointer[aec.Canceller]
+	filter atomic.Pointer[filterSlot]
 
 	// adapting is what SetAdapting last asked for, so a filter built by fitTaps starts the same way.
 	adapting atomic.Bool
@@ -103,15 +103,108 @@ type canceller struct {
 	hold int
 }
 
+// echoFilter is the built-in canceller's filter: aec.Canceller, or on a board with freqCancel the
+// frequency-domain one ahead of a short aec.Canceller (cascade).
+type echoFilter interface {
+	Process(mic, ref []int16) ([]int16, error)
+	ERLE() float64
+	SetAdapting(on bool)
+	Adapting() bool
+	Taps() int
+}
+
+// filterSlot holds the filter behind the atomic pointer.
+type filterSlot struct{ echoFilter }
+
+// newFilter is the filter of taps samples the board cancels with.
+func newFilter(taps int) (echoFilter, error) {
+	if freqCancel {
+		return newCascade(taps)
+	}
+	return aec.New(aec.Config{Taps: taps, Mu: cancelMu})
+}
+
+// cascade is aec.Freq, which takes the echo off evenly across the band, followed by a short
+// time-domain filter on what it left, which takes a few dB more off the bass, where the
+// frequency-domain filter's step control holds back.
+//
+// Measured on an Echo Dot 5th gen's own captures of music through its speaker (2026-11-23, 30 s at
+// 20 to 65% volume, the three microphones averaged, one pass as the daemon runs it), echo taken off
+// against the 1024-tap time-domain filter alone, 100-300 / 300-1000 / 1000-2000 / 2000-4000 /
+// 4000-7800 Hz:
+//
+//	35%:  28 / 27 / 31 / 24 / 17 dB   against 29 / 27 / 25 /  6 / 11
+//	65%:  27 / 24 / 27 / 20 / 13 dB   against 30 / 24 / 18 /  5 /  7
+//
+// "Hey Jarvis" laid over the same captures at -56 dBFS and scored through the daemon's path at 0.55:
+// 7 of 12 at 65% against 1 of 12, 8 against 7 at 50%, and nothing from the music alone with either. On
+// the unit's CPU it costs 1.7 ms a 20 ms frame against the 1024-tap filter's 2.0.
+type cascade struct {
+	freq *aec.Freq
+	tail *aec.Canceller
+
+	sumD, sumE float64
+}
+
+const (
+	cascadeTailTaps = 256
+	cascadeMu       = 0.1
+)
+
+func newCascade(taps int) (*cascade, error) {
+	f, err := aec.NewFreq(taps, Rate)
+	if err != nil {
+		return nil, err
+	}
+	t, err := aec.New(aec.Config{Taps: cascadeTailTaps, Mu: cascadeMu})
+	if err != nil {
+		return nil, err
+	}
+	return &cascade{freq: f, tail: t}, nil
+}
+
+func (c *cascade) Process(mic, ref []int16) ([]int16, error) {
+	e, err := c.freq.Process(mic, ref)
+	if err != nil {
+		return nil, err
+	}
+	out, err := c.tail.Process(e, ref)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mic {
+		d, o := float64(mic[i]), float64(out[i])
+		c.sumD = c.sumD*(1-1.0/aec.ERLETau) + d*d
+		c.sumE = c.sumE*(1-1.0/aec.ERLETau) + o*o
+	}
+	return out, nil
+}
+
+func (c *cascade) ERLE() float64 {
+	if c.sumD <= 0 || c.sumE <= 0 {
+		return 0
+	}
+	return 10 * math.Log10(c.sumD/c.sumE)
+}
+
+func (c *cascade) SetAdapting(on bool) {
+	c.freq.SetAdapting(on)
+	c.tail.SetAdapting(on)
+}
+
+func (c *cascade) Adapting() bool { return c.freq.Adapting() }
+
+func (c *cascade) Taps() int { return c.freq.Taps() }
+
 func newCanceller() *canceller {
-	f, err := aec.New(aec.Config{Taps: cancelTaps, Mu: cancelMu})
+	f, err := newFilter(cancelTaps)
 	if err != nil {
 		// Only a bad Taps or Mu reaches this, and both are constants above.
 		slog.Error("echo cancellation unavailable", "err", err)
 		return nil
 	}
 	c := &canceller{engine: "builtin"}
-	c.filter.Store(f)
+	c.filter.Store(&filterSlot{f})
 	c.adapting.Store(f.Adapting())
 	return c
 }
@@ -124,13 +217,13 @@ func (c *canceller) fitTaps(taps int) {
 	if old.Taps() == taps {
 		return
 	}
-	f, err := aec.New(aec.Config{Taps: taps, Mu: cancelMu})
+	f, err := newFilter(taps)
 	if err != nil {
 		slog.Error("echo cancellation: keeping the filter as it is", "taps", taps, "err", err)
 		return
 	}
 	f.SetAdapting(c.adapting.Load())
-	c.filter.Store(f)
+	c.filter.Store(&filterSlot{f})
 	f.SetAdapting(c.adapting.Load()) // a SetAdapting between the two lines above reached the old filter
 	slog.Info("echo cancellation filter length", "from", old.Taps(), "to", taps)
 }

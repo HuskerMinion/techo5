@@ -36,7 +36,7 @@ const (
 	reg = 1e-6
 
 	// erleTau is the averaging length of the reported ERLE, in samples.
-	erleTau = 8000
+	erleTau = ERLETau
 
 	// refreshEvery recomputes the running reference power from scratch, in multiples of the filter
 	// length. Maintaining it incrementally is what keeps a step O(taps) rather than O(taps) twice,
@@ -201,3 +201,7 @@ func (c *Canceller) Reset() {
 
 // Taps is the filter length it was built with.
 func (c *Canceller) Taps() int { return c.taps }
+
+// ERLETau is how many samples every canceller here averages its reported ERLE over, for a filter
+// built from them that reports its own.
+const ERLETau = 8000
