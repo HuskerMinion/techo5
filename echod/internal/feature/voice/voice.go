@@ -144,6 +144,7 @@ func build() *Voice {
 		},
 	}
 	v.turn = newConversation(v.vs)
+	v.turn.words.Store(&active)
 	slog.Info("wake words", "ours", len(ours), "active", active)
 	warnRepeatedWord()
 
@@ -632,7 +633,7 @@ func heldBy() string {
 func (v *Voice) OnWakeWord(load func(ids []string) []string, selected func()) {
 	v.vs.OnSetActiveWakeWords = func(ids []string) {
 		accepted := load(ids)
-		v.vs.ActiveWakeWords = accepted
+		v.setActiveWakeWords(accepted)
 
 		for slot := range wakeword.Slots {
 			id := ""
@@ -666,7 +667,7 @@ func (v *Voice) ChooseWakeWord(id string) {
 		return
 	}
 	ids := []string{id}
-	if cur := v.vs.ActiveWakeWords; len(cur) > 1 && cur[1] != id {
+	if cur := v.ActiveWakeWords(); len(cur) > 1 && cur[1] != id {
 		ids = append(ids, cur[1])
 	}
 	slog.Info("wake word chosen on the device", "id", id)
@@ -675,13 +676,27 @@ func (v *Voice) ChooseWakeWord(id string) {
 }
 
 // ActiveWakeWords is what the device is advertising as listening, by slot.
-func (v *Voice) ActiveWakeWords() []string { return v.vs.ActiveWakeWords }
+func (v *Voice) ActiveWakeWords() []string {
+	if v.turn != nil {
+		return v.turn.activeWords()
+	}
+	return v.vs.ActiveWakeWords
+}
+
+// setActiveWakeWords is what the satellite advertises, and the snapshot of it read off the connection's
+// goroutine (conversation.activeWords).
+func (v *Voice) setActiveWakeWords(ids []string) {
+	v.vs.ActiveWakeWords = ids
+	if v.turn != nil {
+		v.turn.words.Store(&ids)
+	}
+}
 
 // SetActiveWakeWords corrects what is advertised to what is actually running. The engine loads at
 // start-up rather than waiting to be told, so this is how the advertisement is reconciled with what
 // came up: anything that failed to load is not claimed.
 func (v *Voice) SetActiveWakeWords(ids []string) {
-	v.vs.ActiveWakeWords = ids
+	v.setActiveWakeWords(ids)
 	slog.Info("wake words listening", "active", ids)
 }
 

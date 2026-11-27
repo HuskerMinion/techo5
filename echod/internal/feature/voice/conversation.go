@@ -212,6 +212,12 @@ type conversation struct {
 	effect       atomic.Pointer[string]
 	effectPosted atomic.Bool
 
+	// words is what the satellite advertises as listening, by slot, kept here as it is set
+	// (Voice.setActiveWakeWords): read from any goroutine (ChimeNow runs on the wake engine's), where the
+	// satellite's own field is written on the connection's. Nil where nothing set it (a test's bare
+	// satellite), which then reads the field.
+	words atomic.Pointer[[]string]
+
 	// now is the clock, for tests.
 	now func() time.Time
 
@@ -1130,10 +1136,17 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	if c.phase != phaseIdle {
 		slog.Info("conversation interrupted", "was", c.phase, "from", c.slot+1, "slot", slot+1)
 		c.sound.Silence()
+		// A wake sound played at the word (#727) and still sounding has just been cut with the rest: the
+		// turn chimes again as it opens, or it would open with no sound at all.
+		chimed := n.chimed
+		if !chimed.IsZero() && c.now().Sub(chimed) < toneEnds(slot, n.followUp) {
+			slog.Info("the early wake sound was cut by the interrupt; the turn chimes as it opens", "slot", slot+1)
+			chimed = time.Time{}
+		}
 
 		// Held back before the turn ends, so that ending it does not hand the speaker back to a track
 		// for the moment it takes the next turn to open.
-		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity, chimed: n.chimed}
+		c.pending = &nextTurn{slot: slot, woke: n.woke, asked: n.asked, at: n.at, clarity: n.clarity, chimed: chimed}
 		c.turn.Cancels(activity.Interrupted)
 		c.idle("interrupted", activity.Canceled)
 
@@ -1244,6 +1257,11 @@ func (c *conversation) start(n nextTurn) (started bool) {
 	}
 	recording.Get().Opens(c.turn.ID(), slot)
 	be := c.be
+	// Set for every turn, not only one that waits: a turn on another backend, or one continued on Home
+	// Assistant's own run, has no RUN_START coming to clear it, and a lateRun left over from a turn that
+	// never got its own (refused as a duplicate, canceled first) would drop everything it is sent.
+	_, onHA := be.(ha)
+	c.lateRun = onHA && !n.continued && c.runTail
 	if !n.continued {
 		asked := phrase
 		if n.afterWatch && slot == 0 {
@@ -1263,9 +1281,6 @@ func (c *conversation) start(n nextTurn) (started bool) {
 				c.send("start", func() error { return rt.startFrom(gen) })
 			}
 		} else {
-			if _, ok := be.(ha); ok && c.runTail {
-				c.lateRun = true
-			}
 			c.send("start", func() error { return be.Start(asked) })
 		}
 	}
@@ -1476,6 +1491,8 @@ func (c *conversation) idle(why string, how activity.Ending) {
 	c.stopStreaming()
 	c.disarm()
 	c.closing, c.closingExact = false, false
+	// What comes now is past any turn: nothing is waiting on its own run's start.
+	c.lateRun = false
 
 	if was != phaseIdle {
 		if rt, ok := c.be.(*rtBackend); ok {
@@ -1678,17 +1695,27 @@ func (c *conversation) trouble() {
 	feedback.Failure()
 }
 
+// activeWords is the wake words advertised as listening, by slot: the snapshot set with them, safe to
+// read off the conversation's goroutine.
+func (c *conversation) activeWords() []string {
+	if p := c.words.Load(); p != nil {
+		return *p
+	}
+	return c.vs.ActiveWakeWords
+}
+
 // phraseFor is what Home Assistant expects a turn to report for one of its wake word slots: the
 // spoken phrase, not the model's id. Which pipeline runs is resolved by comparing that phrase against
 // each slot's select, so a turn from slot n has to report slot n's own phrase.
 func (c *conversation) phraseFor(slot int) (string, bool) {
-	if slot < 0 || slot >= len(c.vs.ActiveWakeWords) {
+	words := c.activeWords()
+	if slot < 0 || slot >= len(words) {
 		return "", false
 	}
 
 	// From what is on disk, because a slot is only active once its model loaded, and the advertised list
 	// is not kept anywhere to be read.
-	id := c.vs.ActiveWakeWords[slot]
+	id := words[slot]
 	if m, ok := wake.Find(wake.Lib().Ours(), id); ok {
 		return m.Phrase, true
 	}

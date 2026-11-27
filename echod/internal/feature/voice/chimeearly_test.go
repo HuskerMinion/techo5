@@ -262,3 +262,53 @@ func TestTheChimeIsPlacedWhereTheMicrophonesHeardIt(t *testing.T) {
 		t.Errorf("not heard yet: %v, want 0", got)
 	}
 }
+
+// A wake word that chimed as it was heard over a turn still running interrupts it, and the interrupt
+// silences the speaker, the early sound with it: the next turn chimes as it opens rather than opening
+// silently. A sound long since played out is not played again.
+func TestAnEarlyChimeCutByTheInterruptChimesAgain(t *testing.T) {
+	for name, ago := range map[string]time.Duration{"just chimed": 0, "played out": time.Minute} {
+		t.Run(name, func(t *testing.T) {
+			got := told(t)
+			c := streamedReply(t, got)
+			c.ha.ready = func() bool { return true }
+			c.ha.start = func(string) error { return nil }
+			chimes := countChimes(t)
+
+			now := time.Now()
+			c.handle(event{kind: evStart, slot: 0, woke: true, at: now, chimed: now.Add(-ago)})
+			c.handle(event{kind: evRunEnd})
+			if c.phase != phaseListening {
+				t.Fatalf("the next turn is %s, want listening", c.phase)
+			}
+			if want := map[bool]int{true: 1, false: 0}[ago == 0]; *chimes != want {
+				t.Errorf("chimed %d times as the turn opened, want %d", *chimes, want)
+			}
+		})
+	}
+}
+
+// The advertised wake words are read off the conversation's goroutine (ChimeNow, the phrase a turn
+// reports) while Home Assistant's selection sets them on the connection's: under -race, a snapshot.
+func TestTheWakeWordsAreReadWhileTheyAreSet(t *testing.T) {
+	v := wakeCallVoice()
+	v.SetActiveWakeWords([]string{"okay_nabu"})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := range 200 {
+			if i%2 == 0 {
+				v.SetActiveWakeWords([]string{"okay_nabu", "hey_jarvis"})
+			} else {
+				v.SetActiveWakeWords([]string{"okay_nabu"})
+			}
+		}
+	}()
+	for range 200 {
+		if _, ok := v.turn.phraseFor(0); !ok {
+			t.Fatal("the first slot's word went missing while the words were set")
+		}
+		_ = v.ActiveWakeWords()
+	}
+	<-done
+}

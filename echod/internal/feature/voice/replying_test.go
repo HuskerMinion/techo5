@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 	esphome "github.com/ygelfand/go-esphome-device"
 )
 
@@ -201,5 +202,41 @@ func TestTheInterruptedRunsLastEventsAreNotTheNextTurns(t *testing.T) {
 	c.handle(event{kind: evStreamAudio, audio: make([]byte, 1024)})
 	if c.phase != phaseReplying {
 		t.Fatalf("the new run's reply left the turn %s, want replying", c.phase)
+	}
+}
+
+// A turn that waits for its own run's start and never gets one, refused by Home Assistant as another
+// device's (#776), leaves nothing waiting: the next turn, on a backend with no RUN_START to come, hears
+// what it is sent rather than dropping it all as the run before's and hanging.
+func TestATurnRefusedBeforeItsRunStartsLeavesTheNextTurnHearing(t *testing.T) {
+	got := told(t)
+	c := streamedReply(t, got)
+	c.ha.ready = func() bool { return true }
+	c.ha.start = func(string) error { return nil }
+
+	c.handle(event{kind: evStart, slot: 0, woke: true, at: time.Now()})
+	c.handle(event{kind: evRunEnd})
+	if c.phase != phaseListening || !c.lateRun {
+		t.Fatalf("the next turn is %s, lateRun %v: want listening and waiting for its own run", c.phase, c.lateRun)
+	}
+	c.handle(event{kind: evError, code: errDuplicate, msg: "duplicate"})
+	if c.phase != phaseIdle {
+		t.Fatalf("the refused turn is %s, want idle", c.phase)
+	}
+
+	if err := config.Set().Brain().Set(config.Brain{Mode: config.BrainDirect, STT: "x:1", TTS: "x:1", LLM: "http://x"}); err != nil {
+		t.Fatal(err)
+	}
+	c.handle(event{kind: evStart, slot: 0, at: time.Now()})
+	if c.phase != phaseListening {
+		t.Fatalf("the direct turn is %s, want listening", c.phase)
+	}
+	if _, ok := c.be.(*direct); !ok {
+		t.Fatalf("the turn runs on %T, want the direct pipeline", c.be)
+	}
+	c.handle(event{kind: evHeard, text: "what time is it"})
+	c.handle(event{kind: evReplyText, text: "It's one."})
+	if c.shown.Reply != "It's one." || c.phase != phaseThinking {
+		t.Fatalf("the direct turn's reply text was dropped (phase %s, lateRun %v)", c.phase, c.lateRun)
 	}
 }
