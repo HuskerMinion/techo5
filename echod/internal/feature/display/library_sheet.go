@@ -1639,13 +1639,26 @@ func (d *Display) libraryKey(k string) {
 }
 
 // tileAction does what a tile's card says. A card that navigates to dashboard.AlarmsPath opens the
-// alarms (#651). One that navigates to dashboard.LibraryPath opens the music library, to play on the
+// alarms (#651). One that navigates to dashboard.WeatherPath or dashboard.RadarPath opens the forecast
+// or the rain map (#772), unless this device is set to no weather, as the weather_show action refuses
+// there. A finger on the dashboard means its screen is already lit, so nothing is lit for it; on the
+// dashboard a tap on the night light opened (dashNight), the page is held over the night as one Home
+// Assistant asks for is (askedAtNight), at the night light's level, or the red night clock would take
+// its place and the tap would seem to close the dashboard. One that navigates to dashboard.LibraryPath opens the music library, to play on the
 // card's media player when it names one; while this device is playing and the card is for its own
 // player, it opens Now Playing instead, which has the library's button.
 func (d *Display) tileAction(t *dashTile) {
 	a := *t.action
 	if a.View == dashboard.AlarmsPath {
 		d.OpenSheet("alarms")
+		return
+	}
+	if a.View == dashboard.WeatherPath || a.View == dashboard.RadarPath {
+		if config.Get().Home.WeatherEntity() != "" {
+			slog.Info("dashboard weather tile", "radar", a.View == dashboard.RadarPath)
+			d.ShowWeather(a.View == dashboard.RadarPath)
+			d.askedAtNight(time.Now())
+		}
 		return
 	}
 	if a.View == dashboard.LibraryPath {

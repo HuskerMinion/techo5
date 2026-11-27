@@ -511,8 +511,9 @@ func (f *Feature) CloseDrawn() {
 // Tap does what a tile's action says.
 func (f *Feature) Tap(a Action) {
 	if strings.HasPrefix(a.View, "#") {
-		// A hash names something of the screen's own (LibraryPath), which the screen opens itself; on
-		// a screen without it, it is nowhere to go rather than a view of that name.
+		// A hash names something of the screen's own (LibraryPath, AlarmsPath, WeatherPath, RadarPath),
+		// which the screen opens itself; on a screen without it, it is nowhere to go rather than a view
+		// of that name.
 		return
 	}
 	if a.View != "" {

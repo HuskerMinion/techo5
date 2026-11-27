@@ -461,6 +461,14 @@ const LibraryPath = "#techo5-library"
 // Alarms & Timers card, where an alarm is added or opened in its editor.
 const AlarmsPath = "#techo5-alarms"
 
+// WeatherPath and RadarPath are the navigation paths of a card that opens the screen's weather page
+// (#772): the forecast or the rain map, as a tap on the home screen's weather and the page's Radar
+// button do, on the device the card was tapped on.
+const (
+	WeatherPath = "#techo5-weather"
+	RadarPath   = "#techo5-radar"
+)
+
 // MusicTarget is the player music for entity is put on, as its media sheet puts it there: entity itself
 // when it is one of Music Assistant's, else Music Assistant's player of the same name; empty when there
 // is none or Home Assistant cannot say. It takes a look at Home Assistant, so it is for a goroutine of

@@ -177,6 +177,26 @@ tap_action:
 
 Home Assistant itself has no view of that name, so the same card does nothing in a browser.
 
+## Weather
+
+On the Echo Show and the Echo Spot, a card can open the weather page on the device it is tapped on:
+give it a tap action that navigates to `#techo5-weather` for the forecast, or `#techo5-radar` for the
+rain map, the page a question about the weather brings up. On a dashboard shared by several devices,
+each opens its own page, which the `weather_show` and `radar_show` actions can't do, as they name one
+device. On a dashboard opened from the night light, the page shows over the red night clock at the
+night light's level, and the dashboard comes back after it. A device set to no weather does nothing.
+
+```yaml
+type: button
+name: Rain map
+icon: mdi:weather-pouring
+tap_action:
+  action: navigate
+  navigation_path: "#techo5-radar"
+```
+
+Home Assistant itself has no view of these names, so the same card does nothing in a browser.
+
 ## Music library
 
 On the Echo Show (and the Skylight and Panel builds), a drawn dashboard can open Music Assistant's

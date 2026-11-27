@@ -2418,7 +2418,8 @@ has put out, at the night light's level (or at half brightness with no night lig
 the red night clock; the night comes back once the page closes. A screen somebody turned off stays
 off: the action still works, and the page is there if the screen is turned on before it closes. Fails
 on a device set to no weather (choose a source with `home_weather`, the "Weather source" select, or
-Settings, General, Weather). No arguments.
+Settings, General, Weather). No arguments. For a dashboard card that opens the page on whichever
+device it is tapped on, see [Weather](dashboards.md#weather) in the dashboards guide.
 
 ```yaml
 action: esphome.office_weather_show
