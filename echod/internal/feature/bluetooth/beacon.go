@@ -5,8 +5,6 @@ import (
 )
 
 const (
-	flagsDataType        = 0x01
-	generalDiscoverable  = 0x02
 	manufacturerDataType = 0xff
 	appleCompanyID       = 0x004c
 	iBeaconType          = 0x02
@@ -28,14 +26,15 @@ func beaconAdvertisement(minor int) []byte {
 		return nil
 	}
 
-	// Not "BR/EDR not supported", the usual iBeacon flag: the beacon goes out from the device's own
-	// address, which is also its classic Bluetooth, and a phone that hears it there takes the device
-	// for a low energy one. Android then lists it under the beacon's name, never as a speaker to pair
-	// with, and tapping it tries a low energy connection that goes nowhere. BPS and the like go by the
-	// UUID, major and minor, not the flags.
-	advertisement := []byte{
-		0x02, flagsDataType, generalDiscoverable,
-	}
+	// No flags at all (#773). The beacon goes out non-connectable (ADV_NONCONN_IND), where the Core
+	// specification leaves the flags out, and a flag is what makes a phone list it: "general
+	// discoverable" had Android show the device in its Bluetooth settings at all times, as if it
+	// were open for pairing, which it never is from the beacon. "BR/EDR not supported", the usual
+	// iBeacon flag, was worse: the beacon goes out from the device's own address, which is also its
+	// classic Bluetooth, and a phone took the device for a low energy one and never offered it as a
+	// speaker to pair with. BPS and the like go by the UUID, major and minor, not the flags; pairing
+	// mode is found by classic inquiry, as before.
+	var advertisement []byte
 	manufacturerLength := len(advertisement)
 	advertisement = append(advertisement, 0, manufacturerDataType)
 	advertisement = binary.LittleEndian.AppendUint16(advertisement, appleCompanyID)
