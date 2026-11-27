@@ -15,11 +15,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/HuskerMinion/techo5/echod/internal/config"
 )
 
-// Weather alerts from the U.S. National Weather Service (api.weather.gov, public domain): the ones in
-// force at home, for the clock's badge and the pills over the rain map, and the ones nearby with their
-// shapes, outlined on the map. Only in the U.S., only on a device with a screen.
+// Weather alerts: the ones in force at home, for the clock's badge and the pills over the rain map, and
+// the ones nearby with their shapes, outlined on the map. Only on a device with a screen. They come
+// from one of two sources, picked by Home Assistant's country (alerts_source.go): the U.S. National
+// Weather Service, here, or MeteoAlarm in Europe (alerts_meteoalarm.go).
+//
+// The NWS's (api.weather.gov, public domain) are for a home in the U.S.
 //
 // A warning drawn around a storm (tornado, severe thunderstorm, flash flood) comes with its own
 // polygon. The rest (wind, heat, winter, fog...) name the forecast zones or counties they cover, whose
@@ -45,6 +50,16 @@ type Alert struct {
 	Here        bool           // in force at home
 	Storm       bool           // drawn around a storm, rather than whole zones
 	Rings       [][][2]float64 // its outline(s), longitude and latitude; none when not drawn
+	Source      string         // "NWS", "MeteoAlarm"
+	// Level and Kind are a MeteoAlarm warning's awareness level (2 yellow, 3 orange, 4 red) and type
+	// (1 wind ... 13 rain-flood); 0 for the NWS's.
+	Level int
+	Kind  int
+	// Headline is a MeteoAlarm warning's whole headline, in the language shown, when it says more than
+	// Event; Issued is when the service issued it, which MeteoAlarm's terms ask to be shown.
+	Headline string
+	Issued   time.Time
+	texts    []alertText // a MeteoAlarm warning's words in each language it came in (inLanguage)
 }
 
 // AlertView is what the screen shows: the alerts in force at home, most severe first (an update and
@@ -75,6 +90,9 @@ type alertState struct {
 	// 404): until home moves, or a few hours, in case the 404 was the NWS's mistake and not the place.
 	outside time.Time
 	zones   map[string][][][2]float64
+	// src is the source last read, whose pace the next fetch keeps.
+	src alertSource
+	ma  meteoAlarm
 }
 
 // inUS is whether a place is where the NWS issues alerts: the lower 48, Alaska, Hawaii, Puerto Rico
@@ -99,7 +117,7 @@ func (f *Feature) Alerts() AlertView {
 	}
 	a := &f.alerts
 	a.mu.Lock()
-	due := !a.busy && (a.fetched.IsZero() || time.Since(a.fetched) > alertsEvery)
+	due := !a.busy && (a.fetched.IsZero() || time.Since(a.fetched) > a.wait())
 	if due {
 		a.busy = true
 	}
@@ -110,7 +128,23 @@ func (f *Feature) Alerts() AlertView {
 	}
 	// An alert that ended since the last fetch goes now, not at the next one: the screen may have been
 	// dark, and fetches only happen while it draws.
-	return v.without(time.Now())
+	// In the screen's language as it is now, which may have changed since the fetch.
+	return v.without(time.Now()).inLanguage(config.Get().Screen.Language)
+}
+
+// wait is how long a fetch is good for: the pace of the source last read.
+func (a *alertState) wait() time.Duration { return a.src.every() }
+
+// inLanguage is the view with each alert in the screen's language (Alert.inLanguage).
+func (v AlertView) inLanguage(lang string) AlertView {
+	tr := func(as []Alert) []Alert {
+		out := make([]Alert, len(as))
+		for i, a := range as {
+			out[i] = a.inLanguage(lang)
+		}
+		return out
+	}
+	return AlertView{Here: tr(v.Here), Near: tr(v.Near)}
 }
 
 // without is the view with the alerts over by now taken out.
@@ -134,15 +168,18 @@ const noPointFor = 6 * time.Hour
 
 func (f *Feature) fetchAlerts() {
 	a := &f.alerts
-	v, err := f.readAlerts()
+	v, src, err := f.readAlerts()
 	a.mu.Lock()
-	a.busy, a.fetched = false, time.Now()
+	if src != a.src || a.fetched.IsZero() {
+		slog.Info("alerts: source", "from", src.String())
+	}
+	a.busy, a.fetched, a.src = false, time.Now(), src
 	switch {
 	case errors.Is(err, errAlertPanic):
 		// Logged where it was caught, and tried after the usual wait: sooner, it would only come again.
 	case err != nil:
 		slog.Debug("alerts: fetch", "err", err)
-		a.fetched = time.Now().Add(-alertsEvery + 45*time.Second) // sooner than a good fetch would
+		a.fetched = time.Now().Add(-a.wait() + 45*time.Second) // sooner than a good fetch would
 	default:
 		changed := !sameAlerts(a.view, v)
 		a.view = v
@@ -157,7 +194,7 @@ func (f *Feature) fetchAlerts() {
 // readAlerts is buildAlerts, a panic in it made an error. Whatever an alert's text holds, a mistake
 // in reading it must not take the daemon down with it: the NWS keeps an alert up for hours, and a
 // crash would come back after every restart. It recovers outside a.mu, so no lock is left held.
-func (f *Feature) readAlerts() (v AlertView, err error) {
+func (f *Feature) readAlerts() (v AlertView, src alertSource, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			slog.Error("alerts: reading them failed", "panic", p)
@@ -167,21 +204,44 @@ func (f *Feature) readAlerts() (v AlertView, err error) {
 	return f.buildAlerts()
 }
 
-func (f *Feature) buildAlerts() (AlertView, error) {
+func (f *Feature) buildAlerts() (AlertView, alertSource, error) {
 	lat, lon, err := homeLocation()
 	if err != nil {
-		return AlertView{}, err
+		return AlertView{}, alertsFromNone, err
 	}
-	return f.buildAlertsAt(lat, lon)
+	src := alertSourceFor(lat, lon)
+	v, err := f.buildAlertsFrom(src, lat, lon)
+	return v, src, err
 }
 
-// buildAlertsAt is buildAlerts for a home at lat, lon.
+// buildAlertsFrom is the alerts for a home at lat, lon from a source.
+func (f *Feature) buildAlertsFrom(src alertSource, lat, lon float64) (AlertView, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	switch src {
+	case alertsFromNWS:
+		return f.buildNWSAlerts(ctx, lat, lon)
+	case alertsFromMeteoAlarm:
+		return f.buildMeteoAlarm(ctx, lat, lon)
+	}
+	return AlertView{}, nil
+}
+
+// buildAlertsAt is the NWS's alerts for a home at lat, lon, whatever source home's country picks.
 func (f *Feature) buildAlertsAt(lat, lon float64) (AlertView, error) {
 	if !inUS(lat, lon) {
 		return AlertView{}, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
+	return f.buildNWSAlerts(ctx, lat, lon)
+}
+
+// buildNWSAlerts is the NWS's alerts for a home at lat, lon in the U.S.
+func (f *Feature) buildNWSAlerts(ctx context.Context, lat, lon float64) (AlertView, error) {
+	if !inUS(lat, lon) {
+		return AlertView{}, nil
+	}
 	a := &f.alerts
 	a.mu.Lock()
 	if a.lat != lat || a.lon != lon {
@@ -349,7 +409,7 @@ func (r rawAlert) alert() Alert {
 	if !onset.After(time.Now()) {
 		onset = time.Time{} // under way: the page says when it ends, not when it began
 	}
-	return Alert{ID: r.ID, Event: p.Event, Severity: p.Severity, Sender: p.SenderName, Area: p.AreaDesc,
+	return Alert{ID: r.ID, Source: "NWS", Event: p.Event, Severity: p.Severity, Sender: p.SenderName, Area: p.AreaDesc,
 		Description: tidyText(p.Description), Instruction: tidyText(p.Instruction),
 		Onset: onset, Ends: p.Ends, Gone: gone, Color: AlertColor(p.Event, p.Severity)}
 }

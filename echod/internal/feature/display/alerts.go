@@ -178,7 +178,9 @@ func (r *renderer) alertPage(s scene) {
 	x := r.s(40)
 	r.text(r.title, a.Event, x, r.s(66), cream)
 	sub := alertWhen(a, s.now)
-	if a.Sender != "" {
+	if is := alertIssued(a, s.now); is != "" {
+		sub += "  ·  " + is // and who issued it goes under the text, where it has room
+	} else if a.Sender != "" {
 		sub += "  ·  " + a.Sender
 	}
 	r.text(r.small, r.clipTo(r.small, sub, r.w-x-r.margin), x, r.s(112), amber)
@@ -190,6 +192,10 @@ func (r *renderer) alertPage(s scene) {
 	}
 	var lines []line
 	width := r.w - x - r.margin
+	// A MeteoAlarm warning's own headline, which Event stands in for, comes first.
+	for _, l := range r.wrap(r.tiny, a.Headline, width) {
+		lines = append(lines, line{l, cream})
+	}
 	for _, p := range strings.Split(a.Description, "\n") {
 		for _, l := range r.wrap(r.tiny, p, width) {
 			lines = append(lines, line{l, cream})
@@ -198,6 +204,11 @@ func (r *renderer) alertPage(s scene) {
 	for _, p := range strings.Split(a.Instruction, "\n") {
 		for _, l := range r.wrap(r.tiny, p, width) {
 			lines = append(lines, line{l, amber})
+		}
+	}
+	if !a.Issued.IsZero() {
+		for _, l := range r.wrap(r.tiny, a.Sender, width) {
+			lines = append(lines, line{l, dim})
 		}
 	}
 	top, step := r.s(196), r.s(34)

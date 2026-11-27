@@ -61,13 +61,32 @@ project started on:
   else; the "Radar source" setting (settings screen, or the `radar_source` select) can pick either
   always. "Show the radar" asks for it directly. On a Show, Home Assistant's `weather_show` and
   `radar_show` actions open the forecast and the rain map, for a dashboard button or an automation.
-- **Weather alerts** (U.S.): the National Weather Service's alerts in force at home put a badge on the
-  clock (a pill on the Spot) and pills over the rain map, with the alerts' storm polygons and counties
-  outlined on it; a tap opens the alert's whole text, swiped sideways to the next. On unless turned off
-  ("Weather alerts" on the settings screen, or the `weather_alerts` switch). They are a convenience,
-  not an alert device: they are checked every few minutes while the screen is drawing, make no sound,
-  and a device that is off, offline or dark at night can miss one. For warnings that must wake you,
-  keep a NOAA Weather Radio or your phone's emergency alerts.
+- **Weather alerts** (U.S. and Europe): the official alerts in force at home put a badge on the
+  clock (a pill on the Spot) and pills over the rain map; a tap opens the alert's whole text, swiped
+  sideways to the next. Home Assistant's country picks where they come from. In the U.S. they are
+  the National Weather Service's, with their storm polygons and counties outlined on the map. In a
+  country MeteoAlarm covers they are [MeteoAlarm](https://meteoalarm.org)'s, the national weather
+  services' own warnings, yellow, orange or red, in the words the service issued them in: in the
+  screen's language where the service issues that language, else in English. Home's MeteoAlarm
+  regions are found from its location: the regions it lies in, and the coastal waters off it. They
+  come from MeteoAlarm's own region file, some 30 MB, downloaded when home is first looked up and
+  again only when MeteoAlarm publishes a new one (asked once a month); only the regions near home
+  are kept on the device. The U.K., Switzerland, Sweden, Norway, Estonia, Ukraine and Israel send
+  each warning with its own outline instead, which is matched against home's location. Every 10
+  minutes while the screen is drawing, the longest MeteoAlarm's
+  [terms](https://meteoalarm.org/en/live/page/terms-and-conditions) let what is shown lag behind
+  meteoalarm.org, the feed is asked whether it changed, and read again (a few megabytes for a big
+  country) only when it did, or after an hour. With no country set in Home Assistant, MeteoAlarm is
+  still used for a home in one of its regions, but **a home in a country whose warnings come as
+  outlines (the U.K., Switzerland, Sweden, Norway, Estonia, Luxembourg, Ukraine, Andorra, Israel)
+  gets no alerts without Home Assistant's country**, since the source follows the country. On unless
+  turned off ("Weather alerts" on the settings screen, or the `weather_alerts` switch). They are a
+  convenience, not an alert device: they make no sound, and a device that is off, offline or dark at
+  night can miss one. For warnings that must wake you, keep a weather radio or your phone's
+  emergency alerts. MeteoAlarm's terms ask redistributors to say: time delays between this device
+  and the www.meteoalarm.org website are possible. For the most up-to-date awareness information as
+  published by the participating National Meteorological and Hydrological Services, please refer to
+  www.meteoalarm.org.
 - **Radio**: the drawer's Radio side lists the stations, with a choice of list at the top. Favorites are the stations wired with
   `home_radio` (Home Assistant `input_select` lists played through a script). With a Home Assistant
   token, Local stations (within 100 km of home) and Popular worldwide come from Home Assistant's

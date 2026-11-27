@@ -297,8 +297,9 @@ next one from the new list is ready. Otherwise the device reads the list again e
 With access set up (step 1), the clock shows Home Assistant's own forecast for your home with no
 setup at all. To use a different `weather.*` entity, or none, use
 [`home_weather`](actions.md#choose-the-weather-shown-on-the-idle-screen). Settings → Display also
-has **Weather animation**, **Radar source** and **Weather alerts** (alerts are U.S. only, from the
-National Weather Service).
+has **Weather animation**, **Weather alerts** and **Radar source** (alerts are from the National
+Weather Service in the U.S. and MeteoAlarm in Europe, by Home Assistant's country, so set the country
+in Home Assistant's general settings).
 
 ## 4. Cameras
 

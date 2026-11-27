@@ -213,13 +213,7 @@ func inkOn(c color.RGBA) color.RGBA {
 // for one still to come, "Until 2:47 PM" for one under way, "In force" when the NWS gives no end.
 // A day is named when it is not today.
 func alertWhen(a home.Alert, now time.Time) string {
-	at := func(t time.Time) string {
-		t = t.Local()
-		if y, m, d := t.Date(); y != now.Year() || m != now.Month() || d != now.Day() {
-			return locale.ShortWeekday(t, screenLang()) + " " + clockText(t)
-		}
-		return clockText(t)
-	}
+	at := func(t time.Time) string { return alertAt(t, now) }
 	switch {
 	case !a.Onset.IsZero() && a.Onset.After(now) && !a.Ends.IsZero():
 		return fmt.Sprintf(tr("ui_alert_from_until"), at(a.Onset), at(a.Ends))
@@ -229,6 +223,23 @@ func alertWhen(a home.Alert, now time.Time) string {
 		return fmt.Sprintf(tr("ui_alert_until"), at(a.Ends))
 	}
 	return tr("ui_alert_in_force")
+}
+
+// alertAt is a time on the alert page: the clock, with the day when it is not today.
+func alertAt(t, now time.Time) string {
+	t = t.Local()
+	if y, m, d := t.Date(); y != now.Year() || m != now.Month() || d != now.Day() {
+		return locale.ShortWeekday(t, screenLang()) + " " + clockText(t)
+	}
+	return clockText(t)
+}
+
+// alertIssued is "Issued 10:40 AM", when the alert says when it was issued; "" when it does not.
+func alertIssued(a home.Alert, now time.Time) string {
+	if a.Issued.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf(tr("ui_alert_issued"), alertAt(a.Issued, now))
 }
 
 // otherKinds is how many kinds of alert there are at home besides the first's: the "+N" beside it on

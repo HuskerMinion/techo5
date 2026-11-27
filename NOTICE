@@ -308,6 +308,14 @@ Town names, echod/internal/feature/home/places.tsv.gz
   longitude and population. The rain map credits GeoNames on screen. tools/places/make_places.py
   makes the file from GeoNames' download.
 
+MeteoAlarm's warning regions, echod/internal/feature/home/testdata/meteoalarm-* (not shipped in
+any release)
+  From MeteoAlarm (https://meteoalarm.org, EUMETNET), the geocode and alias files published at
+  https://gitlab.com/meteoalarm-pm-group/documents, licensed under terms equivalent to the Creative
+  Commons Attribution 4.0 License (https://creativecommons.org/licenses/by/4.0/). Changes: eight
+  regions kept, their outlines thinned to about 100 m, for the tests. On a device the regions near
+  home are read from MeteoAlarm's own files when they are needed; nothing of them is in the image.
+
 Radar color tables, echod/internal/feature/home/radar_palettes.go
   The colors RainViewer's API documentation publishes for each radar reflectivity
   (https://www.rainviewer.com/files/rainviewer_api_colors_table.csv), and the palette of the Iowa

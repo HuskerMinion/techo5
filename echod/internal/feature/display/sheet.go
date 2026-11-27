@@ -177,7 +177,7 @@ func categoryRows(sv sheetView) (rows []settingRow, note string) {
 		rows = append(rows,
 			settingRow{label: tr("weather"), kind: ctlHeading},
 			settingRow{id: "weatherfx", label: tr("weather_animation"), sub: tr("rain_snow_and_storms_move_on_the_forecast"), kind: ctlToggle, on: weatherAnimation.Load()},
-			settingRow{id: "alerts", label: tr("weather_alerts"), sub: tr("the_nws_s_alerts_for_home_in_the_u_s"), kind: ctlToggle, on: home.AlertsOn()},
+			settingRow{id: "alerts", label: tr("weather_alerts"), sub: tr("official_weather_alerts_for_home"), kind: ctlToggle, on: home.AlertsOn()},
 			settingRow{id: "radarsrc", label: tr("radar_source"), sub: tr("automatic_uses_the_nws_in_the_lower_48"), kind: ctlChoice, value: home.RadarSourceOptions()[home.RadarSourceIndex()]},
 		)
 		// How the calendar looks, on a screen with a calendar page and once it shows a calendar.

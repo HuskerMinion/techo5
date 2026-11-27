@@ -146,8 +146,8 @@ type Home struct {
 	// automatic, which is the NWS when home is in the lower 48 and RainViewer anywhere else.
 	RadarSource string `json:"radar_source,omitempty"`
 
-	// AlertsOff turns the National Weather Service's alerts off (they are on for a device with a
-	// screen in the U.S.): no badge, no pills, no fetching.
+	// AlertsOff turns the weather alerts off (they are on for a device with a screen in the U.S. and
+	// in Europe): no badge, no pills, no fetching.
 	AlertsOff bool `json:"alerts_off,omitempty"`
 
 	// CameraSound plays a camera's own audio on this device while its view is up: the yard or the

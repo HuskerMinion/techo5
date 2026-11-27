@@ -24,6 +24,7 @@ var uiEnglish = map[string]string{
 	// pop-up's heading, a reminder with no words, the radio's notes, the clock styles' names, and
 	// the call page's microphone off (not ui_muted, which some languages read as the sound off).
 	"popup_started":                 "Started",
+	"ui_alert_issued":               "Issued %s",
 	"popup_in_a_minute":             "In a minute",
 	"popup_in_d_minutes":            "In %d minutes",
 	"popup_in_an_hour":              "In an hour",
@@ -144,6 +145,7 @@ var uiEnglish = map[string]string{
 	"dim_after_idle": "Dim after idle",
 	"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Down to Dimmest until touched, spoken to or somebody near",
 	"asks_twice":                                     "Asks twice",
+	"official_weather_alerts_for_home":               "Official weather alerts for home",
 	"at_night":                                       "At night",
 	"audio_output":                                   "Audio output",
 	"auto_brightness":                                "Auto-brightness",
@@ -517,7 +519,6 @@ var uiEnglish = map[string]string{
 	"tap_on_the_clock":                      "Tap on the clock",
 	"tap_to_go_back":                        "Tap to go back",
 	"the_mute_button_does_this_too":         "The mute button does this too",
-	"the_nws_s_alerts_for_home_in_the_u_s":  "The NWS's alerts for home, in the U.S.",
 	"the_words_in_time_looked_up_at_lrclib": "The words in time, looked up at LRCLIB",
 	"theme_personalize":                     "Make the theme your own",
 	"this_version":                          "This is %s",
@@ -1121,6 +1122,7 @@ var uiTranslations = map[string]map[string]string{
 		// Catalan, as the Institut d'Estudis Catalans writes it (Catalan as it is spoken and
 		// written in Barcelona), with tu: "toca" for the screen and "prem" for the buttons.
 		"popup_started":                 "Ha començat",
+		"ui_alert_issued":               "Emès %s",
 		"popup_in_a_minute":             "D'aquí a un minut",
 		"popup_in_d_minutes":            "D'aquí a %d minuts",
 		"popup_in_an_hour":              "D'aquí a una hora",
@@ -1224,6 +1226,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Activar el so",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB és el normal; pujar-ho pot distorsionar, sobretot amb més greus",
 		"a_browser_is_asking":                                  "UN NAVEGADOR DEMANA ACCÉS",
+		"official_weather_alerts_for_home":                     "Avisos meteorològics oficials per a la teva zona",
 		"a_camera_s_own_audio_while_its_view_is_up":            "El so de la càmera mentre es veu en pantalla",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Un toc torna a mostrar la pantalla fins que l'habitació queda en silenci",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspecte complet que s'aplica sobre el tema i la font",
@@ -1611,7 +1614,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Tocar el rellotge",
 		"tap_to_go_back":                        "Toca per a tornar",
 		"the_mute_button_does_this_too":         "El botó de silenci també ho fa",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Els avisos del NWS per a casa, als EUA",
 		"the_words_in_time_looked_up_at_lrclib": "La lletra sincronitzada, buscada a LRCLIB",
 		"theme_personalize":                     "Fes el tema a la teva manera",
 		"this_version":                          "Aquesta és la %s",
@@ -2198,6 +2200,7 @@ var uiTranslations = map[string]map[string]string{
 		// Valencian, as the Acadèmia Valenciana de la Llengua writes it (Catalan as it is written and
 		// spoken in Valencia), with tú: "toca" for the screen and "prem" for the buttons.
 		"popup_started":                 "Ha començat",
+		"ui_alert_issued":               "Emès %s",
 		"popup_in_a_minute":             "D'ací a un minut",
 		"popup_in_d_minutes":            "D'ací a %d minuts",
 		"popup_in_an_hour":              "D'ací a una hora",
@@ -2315,6 +2318,7 @@ var uiTranslations = map[string]map[string]string{
 		"dim_after_idle": "Atenuar després d'inactivitat",
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Baixa al mínim fins que la toques, li parles o algú s'hi acosta",
 		"asks_twice":                                     "Pregunta dues vegades",
+		"official_weather_alerts_for_home":               "Avisos meteorològics oficials per a la teua zona",
 		"at_night":                                       "De nit",
 		"audio_output":                                   "Eixida d'àudio",
 		"auto_brightness":                                "Brillantor automàtica",
@@ -2688,7 +2692,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Tocar el rellotge",
 		"tap_to_go_back":                        "Toca per a tornar",
 		"the_mute_button_does_this_too":         "El botó de silenci també ho fa",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Els avisos del NWS per a casa, als EUA",
 		"the_words_in_time_looked_up_at_lrclib": "La lletra sincronitzada, buscada en LRCLIB",
 		"theme_personalize":                     "Fes el tema a la teua manera",
 		"this_version":                          "Esta és la %s",
@@ -3276,6 +3279,7 @@ var uiTranslations = map[string]map[string]string{
 		// pop-up's heading, a reminder with no words, the radio's notes, the clock styles' names, and
 		// the call page's microphone off (not ui_muted, which some languages read as the sound off).
 		"popup_started":                 "Empezó",
+		"ui_alert_issued":               "Emitido %s",
 		"popup_in_a_minute":             "En un minuto",
 		"popup_in_d_minutes":            "En %d minutos",
 		"popup_in_an_hour":              "En una hora",
@@ -3711,6 +3715,7 @@ var uiTranslations = map[string]map[string]string{
 		"reset":                                     "Restablecer",
 		"reset_for_someone_else":                    "Restablecer para otra persona",
 		"clears_it_and_start_setting_it_up_again":             "Borra todo y permite volver a configurarlo",
+		"official_weather_alerts_for_home":                    "Avisos meteorológicos oficiales para tu zona",
 		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nombre, Home Assistant, alarmas, todo: toca otra vez",
 		"restart":                               "Reiniciar",
 		"said_as_it_rings":                      "Lo que dice al sonar",
@@ -3769,7 +3774,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Acción al tocar el reloj",
 		"tap_to_go_back":                        "Toca para volver",
 		"the_mute_button_does_this_too":         "El botón de silencio también lo hace",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Los avisos del NWS para tu casa, en EE. UU.",
 		"the_words_in_time_looked_up_at_lrclib": "La letra sincronizada, buscada en LRCLIB",
 		"theme_personalize":                     "Personaliza el tema a tu gusto",
 		"this_version":                          "Versión actual: %s",
@@ -4371,6 +4375,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Touchez l'écran pour commencer",
+		"ui_alert_issued":               "Émise %s",
 		"firstrun_tap_to_finish":        "Touchez l'écran pour terminer",
 		"firstrun_hello":                "Bonjour",
 		"firstrun_this_is_s":            "Voici %s.",
@@ -4699,6 +4704,7 @@ var uiTranslations = map[string]map[string]string{
 		"reset":                         "Réinitialiser",
 		"reset_for_someone_else":        "Réinitialiser pour quelqu'un d'autre",
 		"clears_it_and_start_setting_it_up_again":             "Efface et recommence la configuration",
+		"official_weather_alerts_for_home":                    "Alertes météo officielles pour le domicile",
 		"wifi_name_home_assistant_alarm_everything_tap_again": "Wi-Fi, nom, Home Assistant, alarmes, tout: appuyer à nouveau",
 		"restart":                       "Redémarrer",
 		"screen_language":               "Langue de l'écran",
@@ -4991,7 +4997,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                          "Touchez l'horloge",
 		"tap_to_go_back":                            "Touchez pour revenir",
 		"the_mute_button_does_this_too":             "Le bouton de coupure du son fait la même chose",
-		"the_nws_s_alerts_for_home_in_the_u_s":      "Alertes du NWS pour le domicile, aux États-Unis",
 		"the_words_in_time_looked_up_at_lrclib":     "Paroles synchronisées, récupérées sur LRCLIB",
 		"theme_personalize":                         "Personnalisez le thème",
 		"this_version":                              "Version %s",
@@ -5462,6 +5467,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Toca en calquera parte para comezar",
+		"ui_alert_issued":               "Emitido %s",
 		"firstrun_tap_to_finish":        "Toca en calquera parte para rematar",
 		"firstrun_hello":                "Ola",
 		"firstrun_this_is_s":            "Este é %s.",
@@ -5685,6 +5691,7 @@ var uiTranslations = map[string]map[string]string{
 		"dim_after_idle": "Atenuar sen uso",
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "Ata o máis tenue ata que alguén o toque, lle fale ou se achegue",
 		"asks_twice":                                     "Pregunta dúas veces",
+		"official_weather_alerts_for_home":               "Avisos meteorolóxicos oficiais para a casa",
 		"at_night":                                       "De noite",
 		"audio_output":                                   "Saída de son",
 		"auto_brightness":                                "Brillo automático",
@@ -6057,7 +6064,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Toque no reloxo",
 		"tap_to_go_back":                        "Toca para volver",
 		"the_mute_button_does_this_too":         "O botón de silencio tamén fai isto",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Os avisos do NWS para a casa, nos EUA",
 		"the_words_in_time_looked_up_at_lrclib": "A letra ao compás, buscada en LRCLIB",
 		"theme_personalize":                     "Fai teu o tema",
 		"this_version":                          "Esta é a %s",
@@ -6549,6 +6555,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Tocca un punto qualsiasi per iniziare",
+		"ui_alert_issued":               "Emessa %s",
 		"firstrun_tap_to_finish":        "Tocca un punto qualsiasi per finire",
 		"firstrun_hello":                "Ciao",
 		"firstrun_this_is_s":            "Questo è %s.",
@@ -6772,6 +6779,7 @@ var uiTranslations = map[string]map[string]string{
 		"dim_after_idle": "Attenua dopo l'inattività",
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "La luminosità scende al minimo finché qualcuno non tocca lo schermo, parla al dispositivo o si avvicina",
 		"asks_twice":                                     "Chiede due volte",
+		"official_weather_alerts_for_home":               "Allerte meteo ufficiali per casa",
 		"at_night":                                       "Di notte",
 		"audio_output":                                   "Uscita audio",
 		"auto_brightness":                                "Luminosità automatica",
@@ -7144,7 +7152,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Azione al tocco dell'orologio",
 		"tap_to_go_back":                        "Tocca per tornare indietro",
 		"the_mute_button_does_this_too":         "Anche il pulsante di silenziamento fa questo",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Avvisi meteo del NWS per la località negli Stati Uniti",
 		"the_words_in_time_looked_up_at_lrclib": "Testo sincronizzato recuperato da LRCLIB",
 		"theme_personalize":                     "Personalizza il tema",
 		"this_version":                          "Versione corrente: %s",
@@ -7640,6 +7647,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Tik ergens om te beginnen",
+		"ui_alert_issued":               "Uitgegeven %s",
 		"firstrun_tap_to_finish":        "Tik ergens om af te ronden",
 		"firstrun_hello":                "Hallo",
 		"firstrun_this_is_s":            "Dit is %s.",
@@ -7804,6 +7812,7 @@ var uiTranslations = map[string]map[string]string{
 		"deck_pc_key":   "De sleutel voor %s klopt niet",
 		// 0 dB is normal; boosts can distort, especially with more bass
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB is normaal; versterking kan vervormen, vooral met meer bas",
+		"official_weather_alerts_for_home":                            "Officiële weerwaarschuwingen voor thuis",
 		// A BROWSER IS ASKING
 		"a_browser_is_asking": "EEN BROWSER VRAAGT",
 		// A camera's own audio, while its view is up
@@ -8736,7 +8745,6 @@ var uiTranslations = map[string]map[string]string{
 		// The mute button does this too
 		"the_mute_button_does_this_too": "De dempknop doet dit ook",
 		// The NWS's alerts for home, in the U.S.
-		"the_nws_s_alerts_for_home_in_the_u_s": "De NWS-waarschuwingen voor thuis, in de VS",
 		// The words in time, looked up at LRCLIB
 		"the_words_in_time_looked_up_at_lrclib": "De songtekst op de maat, opgezocht bij LRCLIB",
 		// Make the theme your own
@@ -9462,6 +9470,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "画面をタップして開始",
+		"ui_alert_issued":               "発表 %s",
 		"firstrun_tap_to_finish":        "画面をタップして完了",
 		"firstrun_hello":                "こんにちは",
 		"firstrun_this_is_s":            "%sです。",
@@ -9685,6 +9694,7 @@ var uiTranslations = map[string]map[string]string{
 		"dim_after_idle": "無操作で暗くする",
 		"down_to_dimmest_until_touched_spoken_to_or_somebody_near": "触れる・話しかける・人が近づくまで最小の明るさに",
 		"asks_twice":                                     "2回確認する",
+		"official_weather_alerts_for_home":               "自宅の公式気象警報",
 		"at_night":                                       "夜間",
 		"audio_output":                                   "音声出力",
 		"auto_brightness":                                "明るさの自動調整",
@@ -10057,7 +10067,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "時計をタップ",
 		"tap_to_go_back":                        "タップして戻る",
 		"the_mute_button_does_this_too":         "ミュートボタンでも切り替え可能",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "米国NWSの気象警報を表示",
 		"the_words_in_time_looked_up_at_lrclib": "LRCLIBの同期歌詞を表示",
 		"theme_personalize":                     "テーマの各部分の色を変更",
 		"this_version":                          "現在のバージョン：%s",
@@ -10557,6 +10566,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Zum Starten irgendwo tippen",
+		"ui_alert_issued":               "Ausgegeben %s",
 		"firstrun_tap_to_finish":        "Zum Abschließen irgendwo tippen",
 		"firstrun_hello":                "Hallo",
 		"firstrun_this_is_s":            "Das ist %s.",
@@ -10819,6 +10829,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute": "Ton an",
 		// 0 dB is normal; boosts can distort, especially with more bass
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB ist normal; Verstärkung kann verzerren, besonders mit mehr Bass",
+		"official_weather_alerts_for_home":                            "Amtliche Wetterwarnungen für zu Hause",
 		// A BROWSER IS ASKING
 		"a_browser_is_asking": "EIN BROWSER FRAGT AN",
 		// A camera's own audio, while its view is up
@@ -11496,7 +11507,6 @@ var uiTranslations = map[string]map[string]string{
 		// The mute button does this too
 		"the_mute_button_does_this_too": "Die Stummtaste macht das auch",
 		// The NWS's alerts for home, in the U.S.
-		"the_nws_s_alerts_for_home_in_the_u_s": "Die NWS-Warnungen für zu Hause, in den USA",
 		// The words in time, looked up at LRCLIB
 		"the_words_in_time_looked_up_at_lrclib": "Der Songtext im Takt, nachgeschlagen bei LRCLIB",
 		// Make the theme your own
@@ -12271,6 +12281,7 @@ var uiTranslations = map[string]map[string]string{
 		// Romanian, with tu (the informal you, as Android and Home Assistant write it): "atinge" for the
 		// screen and "apasă" for the buttons. Ș and ț with the comma below, which the Go font draws.
 		"popup_started":                 "A început",
+		"ui_alert_issued":               "Emisă %s",
 		"popup_in_a_minute":             "Peste un minut",
 		"popup_in_d_minutes":            "Peste %d min",
 		"popup_in_an_hour":              "Peste o oră",
@@ -12374,6 +12385,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Pornește sunetul",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB e normal; amplificarea poate distorsiona, mai ales cu mai mult bas",
 		"a_browser_is_asking":                                  "UN BROWSER CERE ACCES",
+		"official_weather_alerts_for_home":                     "Avertizări meteo oficiale pentru zona ta",
 		"a_camera_s_own_audio_while_its_view_is_up":            "Sunetul propriu al unei camere, cât timp e afișată",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "O atingere aprinde ecranul până se face liniște în cameră",
 		"a_whole_look_over_the_theme_and_font":                 "Un aspect complet peste temă și font",
@@ -12761,7 +12773,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Atingere pe ceas",
 		"tap_to_go_back":                        "Atinge ca să revii",
 		"the_mute_button_does_this_too":         "Butonul de microfon face și asta",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Alertele NWS pentru casă, în SUA",
 		"the_words_in_time_looked_up_at_lrclib": "Versurile sincronizate, căutate pe LRCLIB",
 		"theme_personalize":                     "Personalizează tema",
 		"this_version":                          "Aceasta este %s",
@@ -13348,6 +13359,7 @@ var uiTranslations = map[string]map[string]string{
 		// First run on the screen (feature/display/render_firstrun.go, firstrun_spot.go): its steps, buttons
 		// and the welcome card. Names, networks and addresses are the %s and %d.
 		"firstrun_tap_to_begin":         "Başlamak için herhangi bir yere dokunun",
+		"ui_alert_issued":               "Yayın %s",
 		"firstrun_tap_to_finish":        "Bitirmek için herhangi bir yere dokunun",
 		"firstrun_hello":                "Merhaba",
 		"firstrun_this_is_s":            "Bu cihaz: %s.",
@@ -13706,6 +13718,7 @@ var uiTranslations = map[string]map[string]string{
 		"home_screen":                                    "Ana ekran",
 		"how_a_call_rings_here":                          "Aramanın burada nasıl çaldığı",
 		"how_dark_auto_brightness_goes_in_a_dark_room":       "Otomatik parlaklığın karanlık odada ne kadar karardığı",
+		"official_weather_alerts_for_home":                   "Ev için resmî hava uyarıları",
 		"how_long_a_camera_opened_here_stays_up":             "Buradan açılan bir kameranın ne kadar süre açık kaldığı",
 		"how_long_an_answer_stays_up_a_tap_clears_it":        "Bir yanıtın ne kadar süre göründüğü; dokunarak kapatılır",
 		"how_running_timers_show_on_the_clock":               "Çalışan zamanlayıcıların saatte nasıl göründüğü",
@@ -13945,7 +13958,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Saate dokun",
 		"tap_to_go_back":                        "Geri dönmek için dokun",
 		"the_mute_button_does_this_too":         "Sessiz düğmesi de bunu yapar",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "ABD'de ev için NWS uyarıları",
 		"the_words_in_time_looked_up_at_lrclib": "LRCLIB'den alınan zamanlı sözler",
 		"theme_personalize":                     "Temayı kendinize göre yapın",
 		"this_version":                          "Bu sürüm: %s",
@@ -14438,6 +14450,7 @@ var uiTranslations = map[string]map[string]string{
 	},
 	"pl": {
 		"popup_started":                 "Rozpoczęte",
+		"ui_alert_issued":               "Wydano %s",
 		"popup_in_a_minute":             "Za minutę",
 		"popup_in_d_minutes":            "Za %d min",
 		"popup_in_an_hour":              "Za godzinę",
@@ -14541,6 +14554,7 @@ var uiTranslations = map[string]map[string]string{
 		"drawer_unmute":                 "Wyłącz wyciszenie",
 		"0_db_is_normal_boosts_can_distort_especially_with_more_bass": "0 dB to norma; podbicie może zniekształcać, zwłaszcza przy mocniejszym basie",
 		"a_browser_is_asking":                                  "PRZEGLĄDARKA PROSI O DOSTĘP",
+		"official_weather_alerts_for_home":                     "Oficjalne ostrzeżenia pogodowe dla Twojej okolicy",
 		"a_camera_s_own_audio_while_its_view_is_up":            "Dźwięk z kamery, gdy jej obraz jest na ekranie",
 		"a_tap_brings_the_screen_back_until_the_room_is_quiet": "Dotknięcie przywraca ekran, aż w pokoju zrobi się cicho",
 		"a_whole_look_over_the_theme_and_font":                 "Cały wygląd ponad motywem i czcionką",
@@ -14928,7 +14942,6 @@ var uiTranslations = map[string]map[string]string{
 		"tap_on_the_clock":                      "Dotknięcie zegara",
 		"tap_to_go_back":                        "Dotknij, aby wrócić",
 		"the_mute_button_does_this_too":         "Przycisk wyciszenia robi to samo",
-		"the_nws_s_alerts_for_home_in_the_u_s":  "Ostrzeżenia NWS dla domu, w USA",
 		"the_words_in_time_looked_up_at_lrclib": "Tekst w rytm muzyki, z LRCLIB",
 		"theme_personalize":                     "Dostosuj motyw",
 		"this_version":                          "To jest %s",

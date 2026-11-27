@@ -113,7 +113,7 @@ type Feature struct {
 	weatherOpts *component.Options // weatherSel's options
 	radarSel    *esphome.Select    // where the rain map's radar comes from (radar_setting.go)
 
-	// alerts are the NWS's weather alerts at home and nearby (alerts.go); alertsSw turns them on and off.
+	// alerts are the weather alerts at home and nearby (alerts.go); alertsSw turns them on and off.
 	alerts     alertState
 	alertsSw   *esphome.Switch
 	weathers   []hass.Entity
