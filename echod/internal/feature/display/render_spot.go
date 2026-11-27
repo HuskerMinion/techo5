@@ -618,8 +618,18 @@ func (r *roundRenderer) clockFace(s roundScene) {
 func (r *roundRenderer) classicClockFace(s roundScene) {
 	now := s.now
 	r.alertPill(s.alerts.Here, clockPillY)
-	r.timeLine(now, 240)
-	r.centered(r.small, locale.LongDate(now, screenLang()), 290, colDim)
+	// An add-on's card along the foot of the face: the time and the date move up clear of it, and the
+	// lines that go under the date (the weather, a timer, a missed call) wait under the card.
+	up, under := 0, true
+	if top := r.addonCardTop(s); top > 0 {
+		up, under = max(0, 290+14-top), false
+	}
+	r.timeLine(now, 240-up)
+	r.centered(r.small, locale.LongDate(now, screenLang()), 290-up, colDim)
+	if !under {
+		r.statusWord(s, 118)
+		return
+	}
 
 	line := 332
 	if weatherLine(s.weather) != "" {

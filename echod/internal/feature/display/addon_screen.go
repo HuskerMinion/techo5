@@ -85,6 +85,15 @@ func (p *paint) addonCardHeight(v *addonCardView, box, inner image.Rectangle, dr
 	return min(box.Dy(), lay.height+2*m.pad+lineH(sceneFace(p.faceKey(), m.text[0], true))+m.gap[1])
 }
 
+// addonCardTop is where the card over the clock begins, as tall as what it holds; 0 with none.
+func (r *renderer) addonCardTop(s scene) int {
+	if s.addonCard == nil {
+		return 0
+	}
+	box, inner := r.addonCardRoom(s)
+	return box.Max.Y - r.addonCardHeight(s.addonCard, box, inner, &r.addon, s.redClockFace())
+}
+
 // addonClear forgets where the add-on's page and card were drawn, for a frame that draws neither.
 func (r *renderer) addonClear(s scene) {
 	r.addonForget(&r.addon, s.addonPage == nil, s.addonCard == nil)

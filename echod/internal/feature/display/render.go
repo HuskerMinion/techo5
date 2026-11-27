@@ -1200,6 +1200,18 @@ func (r *renderer) bigClock(s scene) {
 		box, _ := r.nextUpRect(s)
 		base = min(base, box.Min.Y-r.s(102))
 	}
+	// An add-on's card takes the foot as the next-up card does: the clock, the date and the timers'
+	// line under it move up clear of it, the clock smaller where it must be (clockFaces).
+	if top := r.addonCardTop(s); top > 0 {
+		under := r.s(102)
+		if foot {
+			under = r.s(74)
+		}
+		if timers {
+			under = timersAt + r.s(18)
+		}
+		base = min(base, top-under)
+	}
 	switch {
 	case glance && s.strip:
 		// The chips' row over the music strip is small: the clock and date move up only a little more.

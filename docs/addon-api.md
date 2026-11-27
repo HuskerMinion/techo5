@@ -337,21 +337,21 @@ Spot the ring menu (a long press) has an **Add-ons** item: with one such add-on 
 more a dial of them, each marked by its mark (below). The page fills the screen under the name bar: on a
 Show along the top, with the way out (×) at its end; on a Spot a band across the top of the circle,
 with the way out at the foot. What the scene holds is laid out inside the room left, each block inside
-the room its column, row or card gives it. Where there is too little, a column's gaps narrow and its
-pictures shrink (to a third at the least); what still does not fit whole is left out, words, buttons,
-chips, steppers and toggles alike, never drawn over the block beside or below it, over the bar or the
-way out, nor cut through its middle, and nothing left out takes a finger. Only a picture, or a card's
-ground, is cut cleanly at the edge instead. A list scrolls, so it is the place for more than fits: in a
-column with too little room it is seen in the room it has. The card is laid out the same way, as tall as
-what it keeps, at most a third of the screen: a card of more than that shows what fits whole (its chip
-row is left out, say, rather than half drawn). On the page:
+the room its column, row or card gives it, never drawn over the block beside or below it, over the bar
+or the way out. Where a column has too little room, its gaps narrow and its pictures shrink (to a third
+at the least); a page's column that still has more than its room scrolls, as a list does (a swipe up or
+down on it, a thumb and faded edges while there is more, its blocks cut cleanly at its edges, a tap only
+on what is seen), so every button, stepper and toggle on a page can be reached. The card, a glance at
+the clock, does not scroll: what does not fit whole in it is left out (its chip row, say, rather than
+half a chip), and it is as tall as what it keeps, at most a third of the screen. On the page:
 
 - a tap on a button, a chip or a list item with an id sends `touch`, and on a stepper's − or + or a
   toggle `change`, for what the finger was on: a tap
   the device read off a drawing of the page from before a change to that block (a new `scene.set`, or a
   patch of it, of something in it or of something it is in) is not sent, as the page under the finger is
   no longer the one drawn;
-- a swipe up or down scrolls the list under the finger (the first, if it is on none), which the daemon
+- a swipe up or down scrolls the list (or the column that has more than its room) under the finger (the
+  first, if it is on none), which the daemon
   draws with a thumb and faded edges while there is more; a new `scene.set` starts the page's lists at
   their tops again (a patch leaves them where they are);
 - a swipe right that starts at the left edge is the back gesture (`back`); any other swipe left or
@@ -361,7 +361,8 @@ row is left out, say, rather than half drawn). On the page:
   10 minutes unless chosen), unless something holds the screen awake (`awake.hold`).
 
 The card sits along the foot of the clock, where Next up is (the Next up card and the glance chips wait
-under it until it goes), as tall as what it holds and never more than a third of the screen, under the
+under it until it goes, and the clock, its date and its timers' line move up clear of it, the clock
+smaller where it must be, as they do for Next up), as tall as what it holds and never more than a third of the screen, under the
 add-on's name; on a Spot along the foot of the face. Of several add-ons' cards the one set last shows.
 A tap on a chip sends `touch`; a tap anywhere else on the card brings the add-on's page up (and counts as
 somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). It is drawn

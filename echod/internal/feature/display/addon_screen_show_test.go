@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
@@ -71,6 +72,10 @@ func TestAddonPreviews(t *testing.T) {
 		// over its neighbors or cut through.
 		h.set("meals", addonapi.OnPage, overflowPage(), addonNow)
 		frame("addon-overflow", scene{addonPage: addonPageOf(h, "meals")})
+		// The column scrolled to its end: its toggle and stepper, which a Show 5 has no room for at once.
+		over := addonPageOf(h, "meals")
+		over.scrolls[0] = 10000
+		frame("addon-overflow-scrolled", scene{addonPage: over})
 		h.set("meals", addonapi.OnCard, crowdedCard(), addonNow)
 		frame("addon-card-crowded", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})
 		h.set("meals", addonapi.OnCard, cardScene(), addonNow)
@@ -441,5 +446,31 @@ func TestAddonNightCardHidesControls(t *testing.T) {
 	night := withoutPressable(card)
 	if len(night.Children) != 1 || night.Children[0].Type != addonapi.BlockText {
 		t.Errorf("the night card holds %+v", night.Children)
+	}
+}
+
+// By day the clock, its date and its timers' line move up clear of an add-on's card, as they do for the
+// Next up card, whatever the card's height: nothing of the clock is cut by it.
+func TestAddonCardClearsTheClock(t *testing.T) {
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	keepPalette(t)
+	h := sampleHost(t, cookingPage())
+	useHost(t, h)
+	for _, panel := range showPanels()[:2] {
+		for name, card := range map[string]addonapi.Block{"short": addonapi.Text("Soup"), "crowded": crowdedCard(), "tall": cardScene()} {
+			h.set("meals", addonapi.OnCard, card, addonNow)
+			for _, timers := range [][]timer.Countdown{nil, sampleTimers()} {
+				s := scene{now: addonNow, phase: "idle", weather: hassSunny(), timers: timers, addonCard: addonCardOf(h, "meals")}
+				_, r := addonFrame(t, "", "", panel.wide, panel.high, s)
+				top := r.addonCardTop(s)
+				r.weatherMu.Lock()
+				date := r.dateAt
+				r.weatherMu.Unlock()
+				// dateAt is the date with a finger's room around it (16 px either way).
+				if date.Max.Y-r.s(16) > top {
+					t.Errorf("%s, a %s card, timers %v: the date reaches %d, under the card's top %d", panel.name, name, timers != nil, date.Max.Y-r.s(16), top)
+				}
+			}
+		}
 	}
 }

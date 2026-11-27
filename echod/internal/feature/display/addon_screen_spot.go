@@ -218,6 +218,19 @@ func (r *roundRenderer) addonPageSpot(s roundScene) {
 // a third of the face at the most.
 var spotAddonCard = image.Rect(104, side-44-160, side-104, side-44)
 
+// addonCardTop is where the card over the clock face begins, as tall as what it holds; 0 with none.
+func (r *roundRenderer) addonCardTop(s roundScene) int {
+	if s.addonCard == nil {
+		return 0
+	}
+	m := r.sceneMetrics()
+	label := sceneFace(r.faceKey(), m.text[0], true)
+	box := spotAddonCard
+	inner := image.Rect(box.Min.X+m.pad, box.Min.Y+m.pad+lineH(label)+m.gap[1], box.Max.X-m.pad, box.Max.Y-m.pad)
+	lay := r.laidAt(&r.addon.card, s.addonCard.id, s.addonCard.sc, s.addonCard.local, inner, true, s.nightClockFace(), s.addonCard.images)
+	return box.Max.Y - min(box.Dy(), lay.height+2*m.pad+lineH(label)+m.gap[1])
+}
+
 // addonCardSpot draws the card over the clock face or the night clock.
 func (r *roundRenderer) addonCardSpot(s roundScene) {
 	if s.addonCard == nil {

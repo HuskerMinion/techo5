@@ -737,5 +737,21 @@ Spot) and on the owner's text size, which an add-on cannot know when it sets a s
 PNGs at each size show an author what is left out. The Show 5 cards' bars moved up a few pixels, as a
 column's gaps now narrow where it is short of room; goldens of both cases are added on each screen.
 
-One thing seen and left for later: by day the clock does not move up for the card, as it does for the
-Next up card, so a card shorter than the clock's date line cuts across the date.
+One thing seen and left for later, and done since (below): by day the clock did not move up for the
+card, as it does for the Next up card, so a card shorter than the clock's date line cut across the date.
+
+After a look at it, two changes:
+
+- **A page's column scrolls; only the card leaves out.** On a page a control the person needs (a
+  stepper, a toggle, a button) vanishing on a Show 5 or a Spot is worse than a scroll. So a page's column
+  that still has more than its room, after its gaps narrow and its pictures shrink, scrolls as a list
+  does: the same swipe, the same thumb and faded edges, its blocks cut at its edges, taps only on what
+  is seen, its offset the daemon's and kept with the lists'. A column that holds a list gives the list
+  the room left and does not scroll itself, so there is never a scroll in a scroll. The card, a glance,
+  still leaves out what does not fit whole. Drawing a block's parts (a timer's time, a stepper's
+  number, a toggle's switch) now moves them with the block, as a list or a column scrolls it: in a list
+  they had stayed where the block was laid out.
+- **The clock makes room for the card.** By day the clock, its date and its timers' line move up clear
+  of an add-on's card, the clock smaller where it must be, as they do for the Next up card, on the Show
+  and on the Spot's classic face, whose weather, timer and missed-call lines wait under the card. The
+  card goldens on every screen moved for it.

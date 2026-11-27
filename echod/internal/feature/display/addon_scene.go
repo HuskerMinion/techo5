@@ -685,7 +685,7 @@ func (l *sceneLayouter) placeColumn(children []addonapi.Block, spacing string, r
 	fixed += gap * max(len(children)-1, 0)
 	if over := fixed - r.Dy(); over > 0 && len(children) > 1 {
 		// Too little room: the gaps narrow first, and then the pictures shrink (to a third at the
-		// least), before anything is left out (add).
+		// least), before a page's column scrolls or a card leaves anything out (add).
 		n := len(children) - 1
 		cut := min(gap, (over+n-1)/n)
 		gap -= cut
@@ -709,6 +709,12 @@ func (l *sceneLayouter) placeColumn(children []addonapi.Block, spacing string, r
 			}
 		}
 	}
+	if fixed > r.Dy() && !l.card && l.list == 0 && len(l.out.lists) < maxSceneLists && !holdsList(children) {
+		// On a page, a column with more than its room even so scrolls, as a list does: every control on
+		// a page must stay where a finger can reach it. (A card, a glance, leaves out what does not fit.)
+		l.scrollColumn(children, heights, gap, r)
+		return
+	}
 	if weights > 0 {
 		left := max(r.Dy()-fixed, 0)
 		for i := range children {
@@ -717,7 +723,12 @@ func (l *sceneLayouter) placeColumn(children []addonapi.Block, spacing string, r
 			}
 		}
 	}
-	y := r.Min.Y
+	l.stackColumn(children, heights, gap, r, r.Min.Y)
+}
+
+// stackColumn places children one under another in r's width from y, at heights, gap apart: a button,
+// a chip or an image at its own width, the rest at r's.
+func (l *sceneLayouter) stackColumn(children []addonapi.Block, heights []int, gap int, r image.Rectangle, y int) int {
 	for i := range children {
 		c := &children[i]
 		box := image.Rect(r.Min.X, y, r.Max.X, y+heights[i])
@@ -734,6 +745,35 @@ func (l *sceneLayouter) placeColumn(children []addonapi.Block, spacing string, r
 		l.place(c, box)
 		y += heights[i] + gap
 	}
+	return y
+}
+
+// scrollColumn lays a page's column with more than its room r out as a list is: its blocks at their own
+// heights in a content of their own, seen through r and scrolled by the daemon (sceneLayout.lists), cut
+// cleanly at r's edges, with a tap only on what is seen.
+func (l *sceneLayouter) scrollColumn(children []addonapi.Block, heights []int, gap int, r image.Rectangle) {
+	for i := range children {
+		if heights[i] == 0 {
+			heights[i] = l.size(&children[i], r.Dx()).Y // one with a weight, at its own height here
+		}
+	}
+	l.out.lists = append(l.out.lists, sceneList{view: r.Intersect(l.clip)})
+	was, wasClip := l.list, l.clip
+	l.list, l.clip = len(l.out.lists), unbounded
+	end := l.stackColumn(children, heights, gap, r, 0)
+	l.out.lists[l.list-1].content = max(end-gap, 0)
+	l.list, l.clip = was, wasClip
+}
+
+// holdsList is whether a list is among blocks, or in them: a column that holds one gives it the room
+// left, and does not scroll itself.
+func holdsList(blocks []addonapi.Block) bool {
+	for i := range blocks {
+		if blocks[i].Type == addonapi.BlockList || holdsList(blocks[i].Children) {
+			return true
+		}
+	}
+	return false
 }
 
 // placeRow lays a row's children out start to end in r, each at its width (rowWidths), centered top to
@@ -930,6 +970,9 @@ func (p *paint) drawScene(s *sceneLayout, scrolls []int, off image.Point, pal sc
 // drawBox draws one box at r.
 func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal scenePalette, timers sceneTimers, pics scenePics) {
 	b := box.b
+	// Its parts' places (a timer's time, a stepper's number, a toggle's switch) moved as the box was, as
+	// a list or a scrolling column moves it.
+	lbl := box.label.Add(r.Min.Sub(box.r.Min))
 	switch {
 	case box.rule:
 		for x := r.Min.X; x < r.Max.X; x++ {
@@ -973,7 +1016,7 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 		base := r.Min.Y + r.Dy()/2 + (f.Metrics().Ascent.Ceil()-f.Metrics().Descent.Ceil())/2
 		p.text(f, box.lines[0], r.Min.X, base, pal.text)
 		// The switch: a track, filled with the accent when on, and its knob at the end it is at.
-		sw := box.label
+		sw := lbl
 		rad := float64(sw.Dy()) / 2
 		knob := sw.Dy() - 2*max(sw.Dy()/10, 2)
 		pad := (sw.Dy() - knob) / 2
@@ -999,8 +1042,8 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 				p.text(f, box.lines[0], r.Min.X, base, pal.text)
 			}
 			bold := sceneFace(p.faceKey(), m.text[1], true)
-			v := p.fit(bold, box.lines[1], max(box.label.Dx(), 1))
-			p.text(bold, v, box.label.Min.X+(box.label.Dx()-p.width(bold, v))/2, base, pal.text)
+			v := p.fit(bold, box.lines[1], max(lbl.Dx(), 1))
+			p.text(bold, v, lbl.Min.X+(lbl.Dx()-p.width(bold, v))/2, base, pal.text)
 			return
 		}
 		// − or +, a round button, drawn faint where it would go past the range.
@@ -1055,7 +1098,7 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 			v = *b.Value
 		}
 		if b.Timer != "" {
-			bar.Max.X = box.label.Min.X - m.gap[2]
+			bar.Max.X = lbl.Min.X - m.gap[2]
 			if left, total, ok := timers.get(b.Timer); ok {
 				if total > 0 {
 					v = float64(left) / float64(total)
@@ -1063,7 +1106,7 @@ func (p *paint) drawBox(box *sceneBox, r image.Rectangle, m sceneMetrics, pal sc
 				// Its time at the end; past an hour it is longer than the room kept for it, and the bar
 				// gives up what it needs.
 				t := sceneTime(left)
-				x := box.label.Max.X - p.width(box.face, t)
+				x := lbl.Max.X - p.width(box.face, t)
 				bar.Max.X = min(bar.Max.X, x-m.gap[2])
 				p.text(box.face, t, x, r.Min.Y+r.Dy()/2+box.face.Metrics().Ascent.Ceil()/2-p.s(2), pal.text)
 			}

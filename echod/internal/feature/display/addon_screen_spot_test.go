@@ -76,6 +76,9 @@ func TestSpotAddonPreviews(t *testing.T) {
 	spotFrame(t, dir, "addon-controls", roundScene{addonPage: addonPageOf(h, "meals")})
 	h.set("meals", addonapi.OnPage, overflowPage(), spotAddonNow)
 	spotFrame(t, dir, "addon-overflow", roundScene{addonPage: addonPageOf(h, "meals"), timers: sampleTimers()})
+	over := addonPageOf(h, "meals")
+	over.scrolls[0] = 10000
+	spotFrame(t, dir, "addon-overflow-scrolled", roundScene{addonPage: over, timers: sampleTimers()})
 	h.set("meals", addonapi.OnCard, crowdedCard(), spotAddonNow)
 	spotFrame(t, dir, "addon-card-crowded", roundScene{addonCard: addonCardOf(h, "meals"), timers: sampleTimers()})
 	h.set("meals", addonapi.OnCard, cardScene(), spotAddonNow)

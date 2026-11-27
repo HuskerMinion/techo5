@@ -287,6 +287,17 @@ func TestAddonOverflowIsLeftOut(t *testing.T) {
 			}
 			leaves = append(leaves, r)
 		}
+		// On a page nothing is left out: the column too tall for its room scrolls, and its stepper and
+		// toggle are in it, reachable.
+		reach := map[string]bool{}
+		for _, b := range lay.boxes {
+			if b.b != nil && (b.b.ID == "servings" || b.b.ID == "warm") && b.tap != "" {
+				reach[b.b.ID] = true
+			}
+		}
+		if !reach["servings"] || !reach["warm"] {
+			t.Errorf("%v: the page's stepper and toggle are left out: %v", size, reach)
+		}
 		card := p.layoutScene(func() *addonapi.Block { c := crowdedCard(); return &c }(), image.Rect(60, 500, size.X-60, 500+size.Y/5), true, nil)
 		for _, b := range card.boxes {
 			if b.r.Max.Y > 500+card.height {
