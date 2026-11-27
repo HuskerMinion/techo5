@@ -63,6 +63,40 @@ func TestANullClearsAndAnOmissionDoesNot(t *testing.T) {
 	}
 }
 
+// Workaround for Music Assistant: switching to a new title with neither artist nor album keys
+// clears stale artist and album (aiosendspin omits None fields instead of sending nulls). When a
+// message carries either artist or album alongside a new title, the omitted field is preserved for
+// servers that send partial deltas (for example the next track by the same artist on a new album).
+func TestNewTitleClearsOmittedArtistAndAlbum(t *testing.T) {
+	var m metadata
+	m.merge(metadataMessage(t, `{"title":"Song A","artist":"Singer A","album":"CAPITAL 958"}`))
+
+	// Same artist, new track and album (artist key omitted as unchanged): artist is preserved.
+	if !m.merge(metadataMessage(t, `{"title":"Track 2","album":"Album 2"}`)) {
+		t.Fatal("next track by same artist did not count as a change")
+	}
+	if m.title != "Track 2" || m.artist != "Singer A" || m.album != "Album 2" {
+		t.Fatalf("after same-artist track = %+v, want title=Track 2 artist=Singer A album=Album 2", m)
+	}
+
+	// Switch to a radio station that sends only title (neither artist nor album keys present).
+	if !m.merge(metadataMessage(t, `{"title":"CRI 环球资讯广播"}`)) {
+		t.Fatal("switching to station with title only did not count as a change")
+	}
+	if m.title != "CRI 环球资讯广播" || m.artist != "" || m.album != "" {
+		t.Fatalf("after station switch = %+v, want title=CRI 环球资讯广播 artist=\"\" album=\"\"", m)
+	}
+
+	// Repeating the same title without artist/album does not clear them.
+	m.merge(metadataMessage(t, `{"title":"Song C","artist":"Singer C","album":"Album C"}`))
+	if m.merge(metadataMessage(t, `{"title":"Song C"}`)) {
+		t.Error("repeating the same title counted as a change")
+	}
+	if m.artist != "Singer C" || m.album != "Album C" {
+		t.Errorf("repeating the same title cleared fields: %+v", m)
+	}
+}
+
 // A station's tagged title shows as its song; any other title as it came.
 func TestCleanTitle(t *testing.T) {
 	iheart := `text="Static" song_spot="M" MediaBaseId="3097657" itunesTrackId="0" amgTrackId="-1" amgArtistId="0" TAID="0" TPID="312041972" cartcutId="0442511001" amgArtworkURL="https:///v3/catalog/track/312041972?ops=fit(200,200),format(%22jpeg%22)" length="00:03:25" unsID="-1" spotInstanceId="-1"`
