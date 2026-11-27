@@ -79,7 +79,7 @@ Each is one line on the consent screen, word for word:
 | `settings` | Has settings of its own on this page. | `settings.get`, `settings.reply` |
 | `entities` | Adds entities to Home Assistant: *sensor.step*. | `entity.set` |
 | `media` | Plays video and audio from the network on this device. | `media.play`, `media.pause`, `media.resume`, `media.stop`, `media.status` |
-| `screen` | Shows a page of its own under the Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed. | `scene.set`, `scene.patch`, `screen.open`, `screen.close`, `card.clear` (stage 2, requires `screen1`) |
+| `screen` | Shows a page of its own under the Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed. | `scene.set`, `scene.patch`, `screen.open`, `screen.close`, `card.clear`, `image.put`, `image.drop` (stage 2, requires `screen1`) |
 
 `commands`, `settings` and `entities` are declared in `addon.json` exactly when their capability is
 listed.
@@ -339,9 +339,13 @@ Show along the top, with the way out (×) at its end; on a Spot a band across th
 with the way out at the foot. What the scene holds is laid out inside the room left, and what does not
 fit is cut at its edge, never drawn over the bar or the way out. On the page:
 
-- a tap on a button, a chip or a list item with an id sends `touch`;
+- a tap on a button, a chip or a list item with an id sends `touch`, for what the finger was on: a tap
+  the device read off a drawing of the page from before a change to that block (a new `scene.set`, or a
+  patch of it, of something in it or of something it is in) is not sent, as the page under the finger is
+  no longer the one drawn;
 - a swipe up or down scrolls the list under the finger (the first, if it is on none), which the daemon
-  draws with a thumb and faded edges while there is more;
+  draws with a thumb and faded edges while there is more; a new `scene.set` starts the page's lists at
+  their tops again (a patch leaves them where they are);
 - a swipe right that starts at the left edge is the back gesture (`back`); any other swipe left or
   right is `swipe`;
 - the way out puts the page away whatever the add-on says, and so does the add-on stopping, or the
@@ -352,7 +356,11 @@ The card sits along the foot of the clock, where Next up is (the Next up card an
 under it until it goes), as tall as what it holds and never more than a third of the screen, under the
 add-on's name; on a Spot along the foot of the face. Of several add-ons' cards the one set last shows.
 A tap on a chip sends `touch`; a tap anywhere else on the card brings the add-on's page up (and counts as
-somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). Over the
+somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). It is drawn
+anew at most once a second, and once in five seconds over the night clock, however often the add-on
+sets or patches it: a card patched ten times a second (a changing picture, say) would otherwise keep the
+device drawing the clock all night. The page, which somebody is looking at, is drawn up to 10 times a
+second. Over the
 night clock it is drawn in the clock's dim red, nothing on it brighter than the clock itself, its name
 in the clock's own red so it can always be read, and takes no finger: a touch on a night light is the
 night light's, as everywhere. So its chips are not drawn there (nor a row left empty without them), and
@@ -365,9 +373,13 @@ screen; the API level in `addon.json` stays 1.
 listing, not by the author: `"icon": "mdi:chef-hat"`, `mdi:` and the name of a
 [Material Design Icons](https://pictogrammers.com/library/mdi/) icon, as Home Assistant names one. It is
 the add-on's mark on its row under the Add-ons tab, its item on the Spot's dial, its page's name bar and
-its card's label; without one the mark is its initials. The catalog refuses a name the device's icon
-font does not have, any other spelling (`hass:`, a bare name, capitals), and an icon on a version
-without the screen capability. Nothing in `addon.json` or anything the add-on sends can set or change
+its card's label; without one the mark is its initials. `mkcatalog` refuses, before it signs, a name
+the device's icon font does not have; a device reading a catalog refuses only any other spelling
+(`hass:`, a bare name, capitals) and an icon on a version without the screen capability, and draws the
+initials for an icon its font lacks, so a catalog signed against a newer font never leaves an older
+device without a catalog. The add-on's name on the name bar, its row and its card is its listing's,
+which `mkcatalog` holds to words with no control character and none that is not seen or reorders words
+(as a scene's words, below); a device draws it without any such character. Nothing in `addon.json` or anything the add-on sends can set or change
 it. It is a field of the version, not of the add-on, so that it rides on `screen1`: every device before
 stage 2 skips such a version whole, where a key it does not know beside the add-on's name would have it
 refuse the whole catalog, and `catalog.json` (format 1) never has it. Like everything else in a version,
@@ -447,6 +459,12 @@ drawing, so a page is drawn at once with the places of images still to come left
     {"type": "button", "id": "next", "label": "Next", "icon": "mdi:arrow-right"}]}]}
 ```
 
+**No PIN pad.** A scene, page or card, with ten or more buttons or chips one after another whose labels
+are each a single digit, in any script, is refused (`bad_request`, saying so): that is a PIN pad, and
+the PIN pad is the device's own. Rows, columns, spacers, dividers and empty words between the keys do
+not end a run; anything else that is seen does, so a calculator's keys, its operators among the
+digits, are taken. Labels are otherwise free text.
+
 **The card** holds only `column`, `row`, `text` (not `huge`, at most 3 lines and 200 characters),
 `chip`, `progress`, one `image` and `spacer`: at most 12 blocks, 3 deep. Nothing on it scrolls or is a
 button; it is a glance at the clock, and the page is where the add-on is used. A tap on one of its chips
@@ -460,12 +478,14 @@ keep their place behind it.
 | A scene, as JSON | 64 KB, after a patch as well as when set (and a message is 64 KB too) |
 | Blocks | 500 on a page, 12 on a card, every one counted |
 | Depth | 12 on a page, the root being 1, a child one more, a list's item two more than its list; 3 on a card |
-| Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters but a text's line breaks, and none that reorder text |
+| Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters (C0, DEL, C1) but a text's line breaks, none that reorder text (U+202A to U+202E, U+2066 to U+2069, U+061C), none that are not seen (U+200B to U+200F, U+FEFF), no line or paragraph separator (U+2028, U+2029), and at most 4 combining marks on a character |
+| Digit keys | fewer than 10 buttons or chips one after another labeled with one digit each (a PIN pad's keys, which is the device's own) |
 | Lines | `max_lines` at most 20 (3 on a card) |
 | Images | 32 on a page, 1 on a card; 256 KB and 1280 by 800 pixels each; an address at most 2048 characters |
 | Images kept | 8 MB an add-on, those put and those fetched together, each counted as its pixels at four bytes (or its bytes, when more); 64 put at once |
-| Drawing | at most 10 times a second, page and card together |
-| `screen.open` | 3 at once, then one every 10 seconds |
+| Drawing | the page at most 10 times a second; the card at most once a second, once in 5 seconds over the night clock |
+| Decoding | an add-on's images are decoded for the screen 8 at once, then 2 a second; the rest are drawn empty until their turn |
+| `screen.open` | one for each time a person asks; 3 at once, then one every 10 seconds |
 
 A scene past a size, a count, a depth or a length is answered `too_large`; any other fault, `bad_request`.
 Either way nothing changes. An add-on may set and patch as fast as its connection allows (20 a second):
@@ -493,7 +513,12 @@ every limit; a patch of an id the scene does not have is `bad_request`.
 opens the recipe. It is allowed only for 5 seconds after a person asked something of the add-on, which
 is one of its commands sent to it (from Home Assistant, by voice, or by its button), or a tap on its
 tile, its card or one of its blocks; at any other time it is answered `busy`, and nothing is brought
-up. Allowed at night, it lifts the night light, as a long press does, since somebody asked for the
+up. Each time a person asks allows one open: an open that is answered `ok` uses it up, and so does the
+owner putting the page away (the name bar's way out, or the back gesture), so a page somebody just
+closed is not brought straight back. A command counts as somebody asking whoever runs it: a Home
+Assistant automation that runs one of the add-on's commands (a schedule, a sensor) is a request too,
+and its open lights the screen at night like any other. That is the owner's automation, and theirs to
+choose; an add-on cannot run its own commands. Allowed at night, it lifts the night light, as a long press does, since somebody asked for the
 page; and where the night turns the screen off (Screen at night set to off) it turns the screen on for
 the page, as a tap on the dark screen does. Either way the night takes the screen back by its usual
 rules, once the room has been quiet as long as after a touch. It still waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
@@ -511,13 +536,17 @@ bytes, when that is more), which is what it takes decoded.
 
 A put that would take the add-on past 8 MB is refused, `too_large`, and nothing it put is let go to
 make room: drop one first. Images the device fetched by address count toward the same 8 MB, but are
-its own copies, which it can fetch again, so they make room for a put, the least recently drawn
-first. Images are kept in RAM only, never written to the device's storage, and go with the add-on's
+its own copies, which it can fetch again, so they make room for a put or another fetch, the least
+recently drawn first, but never one the page or the card shows now, nor one drawn in the last 5
+seconds: that would leave a hole in what is on the screen. One let go is not fetched again for 10
+seconds. An image by address with no room left (the page shows more than 8 MB of them) is not kept,
+its place drawn empty, and tried again after a minute, as one that failed is. Images are kept in RAM only, never written to the device's storage, and go with the add-on's
 last connection as its scenes do.
 
 #### card.clear
 
-Takes the add-on's card away from over the clock.
+Takes the add-on's card away from over the clock. It is out of view at once: no tap reaches it, nor a
+card set after it until the device has drawn that one.
 
 ### Events
 
@@ -534,14 +563,19 @@ gesture on the page in view. What it does is the add-on's: a step back within it
 
 #### screen.state
 
-`{"on": "page", "shown": true}`: the add-on's page or card came into view, or went out of it (`false`),
-as when the owner leaves it or a ring covers it. `{"on": "card", "shown": false, "dismissed": true}`:
-the owner swiped the card away; it is gone until the next `scene.set` of the card.
+`{"on": "page", "shown": true}`: the add-on's page came into view, or went out of it (`false`), as when
+the owner leaves it or a ring covers it. A page brought up before the add-on set one (its tile tapped as
+it starts) comes into view the moment it is set. `{"on": "card", "shown": false, "dismissed": true}`: the
+owner swiped the card away; it is gone until the next `scene.set` of the card. Of the card nothing else
+is said: it comes and goes with the clock, and when it is in view would tell an add-on when somebody is
+in the room looking at the clock.
 
 ### What stays
 
 Scenes and images are in memory only, the add-on's own: another add-on can neither see nor patch them,
-and touches go only to the add-on whose block was tapped. Its page, its card and its images go when its last connection closes,
+and touches go only to the add-on whose block was tapped. The device's decoded copies of its images are
+kept under its id and the bytes' SHA-256, so one add-on's image never stands for another's, and go with
+it too. Its page, its card and its images go when its last connection closes,
 when it stops and when it is removed, so a crashed add-on leaves no buttons that nothing answers; it
 sets them again after `hello`. Its tile is under the Add-ons tab while it runs.
 
@@ -561,6 +595,11 @@ response_variable: answer
 Home Assistant passes every argument on every call, so `args` is `""` for none. The answer is
 `{"text": "…"}`, which a sentence trigger can have the device say. An add-on that is not running
 fails the action with `unavailable`, so a voice command says so rather than nothing happening.
+
+A command sent this way counts as somebody asking something of the add-on, whatever sent it, a
+person, a voice command or an automation: for 5 seconds after it, an add-on with the screen may bring
+its page up (`screen.open`), and at night that lights the screen. An automation that runs an add-on's
+command at 3 a.m. can light the screen at 3 a.m.; that is the owner's choice, made in the automation.
 
 Each command that needs no arguments has a button, `button.<device>_addon_<id>_<command>`. A
 gesture on the device reaches an add-on through an automation: `esphome.techo5_gesture` triggers it,
@@ -594,7 +633,9 @@ and bytes; `scene page` or `scene card` prints one as it is now. The fake has no
 show, so `screen.open` brings the page up at once, when it may (within 5 seconds of a command or a
 tap, as on a device), and every card shows as it is set. From the keyboard, `tile` (a tap on the
 add-on's tile, which brings its page up), `touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
-say) and `dismiss` (the card swiped away) do what the owner would.
+say; the add-on is told of its page, and nothing of its card), `dismiss` (the card swiped away) and
+`close` (the name bar's way out) do what the owner would. `tile` before the add-on has set its page
+brings the waiting page up, and the page is in view as soon as it is set, as on a device.
 
 `-png page.png` draws the page to `page.png` and the card to `page-card.png` each time they change,
 with the device's own layout code, fonts and theme, at the size `-size` names: `show5` (960 by 480),

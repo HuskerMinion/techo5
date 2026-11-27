@@ -452,14 +452,16 @@ type Screen interface {
 	CardChanged(id string) // its card set, patched or gone
 	Open(id string)        // screen.open: bring the page up when nothing more pressing is
 	Close(id string)       // screen.close, or the page gone with the add-on
+	Dropped(id string)     // everything of the add-on's gone: its scenes and images (added after the reviews)
 }
 ```
 
 given with `addonhost.Get().SetScreen(sink)`. Each call says only that something may have changed and
 must return at once; the display reads `Host.Scene(id, on)` (a `serve.Scene`: the root block, which is
 never changed once given out, a revision and when it was set), lists the tiles with
-`Host.ScreenTiles()`, and tells the host `Shown(id, on, shown)`, `Touch(id, on, block)`,
-`Swipe(id, direction)`, `Back(id)` and `DismissCard(id)`.
+`Host.ScreenTiles()`, and tells the host `Shown(id, on, shown)`, `Touch(id, on, block, rev)` (the
+revision of the layout the tap was found in, since the reviews), `Swipe(id, direction)`, `Back(id)`,
+`Left(id)` (the way out, since the reviews) and `DismissCard(id)`.
 
 Storage: nothing per message. Scenes are in RAM, at most 64 KB each and two per add-on, and nothing
 about one is logged or written.
@@ -573,3 +575,80 @@ The maintainer's answers, and what was built for them:
    takes no finger, its chips are not drawn there (nor a row or column left with nothing else), so it
    never shows something to press that would do nothing; its words, picture and progress stay. The
    add-on's scene is untouched: the layout is made from a copy, and by day the chips are back.
+
+## Stage 2 as built (after the reviews)
+
+Two reviews of parts A and B, one for correctness and one for security, found what follows; each is
+fixed, with a test that would have caught it. [addon-api.md](addon-api.md) says the behavior. What
+changed, and why:
+
+- **A page waited for takes taps when it comes.** The display brings an add-on's page up before the
+  add-on has set one (its tile tapped as it starts) and draws it waiting; the server dropped that
+  `Shown(true)` for want of a page, and the display, which had said it, never said it again, so the page
+  that came took no taps. The server now keeps what the display said whether there is a scene or not,
+  and in view is that and a scene: the add-on is told `screen.state` shown the moment the page is set.
+  The fake daemon's `tile` had the same fault, and the same fix.
+- **Fetched images do not thrash.** A page whose images by address came to more than the 8 MB had
+  each fetch let another go, the next layout fetch that one again, and so on, each a new revision
+  that defeated the display's decoded copies. Now nothing the page or the card shows, or the display
+  asked for in the last 5 seconds, is let go (for a fetch or a put); a newcomer with no room is not kept,
+  its place drawn empty, and tried again after a minute; one let go is not fetched again for 10
+  seconds; and an image's key is its add-on's id and its bytes' SHA-256, so the same bytes fetched or
+  put again are the same key and are not decoded again.
+- **Images are each add-on's own** (the reviews' first finding each). The keys were a revision and a
+  name or an address, or an FNV hash of inline bytes, and the display's decoded pictures were one
+  store for every add-on: two add-ons could name one key. Keys now begin with the add-on's id, inline
+  bytes are hashed with SHA-256, and the display drops an add-on's pictures, failed marks and those on
+  their way when it goes (`Screen.Dropped`), where before they stayed until pushed out.
+- **A failed fetch makes way.** Fetches are two at a time an add-on; one that failed did not have the
+  page laid out again, so the images waiting behind it were never asked for. Now a fetch done either
+  way lays the scenes out again, and a timer lays them out again when a failed one's minute is up.
+- **Remembered failures are held.** The server's "not before" list (failed, no room, let go) and the
+  display's failed decodes grew with every address an add-on named. Both now forget what is due and,
+  past 256, the oldest.
+- **A tap is for the scene it was on.** Taps were matched by id alone: a tap read off a frame drawn
+  before a `scene.set`, or before a patch that turned a button into another, went to the new one. A
+  layout now carries its revision, the tap is sent with it (`Touch(id, on, block, rev)`), and the server
+  sends it only if that block, what is in it and what it is in are unchanged since (a patch elsewhere
+  leaves it be, so a page with a ticking progress still takes taps).
+- **One open for each asking.** One person's action allowed `screen.open` three times in its 5
+  seconds; now an open that succeeds uses it up, and so does the owner leaving the page by the way out
+  or the back gesture (`Host.Left`), so an add-on cannot bring straight back a page somebody just put
+  away. **Automations count**, as the maintainer decided: the add-on's own commands sent from Home
+  Assistant (a button, an automation, voice) still allow an open, and the docs now say plainly that an
+  automation running one at night lights the screen; the automation is the owner's.
+- **The card says nothing of being seen**, as the maintainer decided. `screen.state` shown and hidden for
+  the card told an add-on when the clock was in view, and so when somebody was in the room; only
+  `dismissed` is left. The page's `screen.state` stays, as a page is opened by somebody. `card.clear`
+  takes the card out of view at once, and a card set after it takes taps once the display has drawn it
+  (the display says a card is in view again when its `scene.set` changes, not only its add-on).
+- **The card is drawn at most once a second**, once in five over the night clock, and an add-on's
+  pictures are decoded at most 8 at once, then 2 a second. A card patched ten times a second with a new
+  picture each time kept a core decoding and drawing the clock all night. The page keeps its ten a
+  second: somebody is looking at it.
+- **Words hide and reorder nothing.** On top of C0 and the bidi overrides, a scene's words refuse C1
+  controls, the bidi embeddings, isolates and marks, the zero-width characters, U+FEFF and the line and
+  paragraph separators, and a character may carry at most 4 combining marks; a stack of dozens was
+  drawn far over the lines around it. The card's content is drawn inside its box only: its layout is
+  made for the tallest card and moved down, and could reach below a shorter one.
+- **No PIN pad**, as the maintainer decided: ten or more buttons or chips in a row labeled with a digit
+  each are refused, with an error that says why. Labels stay free text otherwise; a calculator, its
+  operators among its digits, is taken.
+- **The catalog's icon and name.** A device refused the whole catalog for an icon its font lacked, so a
+  catalog signed against a newer font would leave an older device with none. The strict check is now
+  `mkcatalog`'s (`Catalog.Publishable`), and a device draws the initials for an icon it lacks. An
+  add-on's name with a control character or one that hides or reorders words is refused by `mkcatalog`
+  too, and drawn without them by a device.
+- **The Spot.** Its dial of add-ons named them by their place in a list asked for again every 2
+  seconds, so one starting between the dial and the choice opened the wrong add-on; items are now
+  `addon:<id>`. Its volume overlay counted as covering the page, which went out of view and back with
+  each turn of the volume; the page now stays in view, dimmed under the volume. A call, whatever its
+  phase, now covers the page, as on the Show.
+- **Smaller ones.** `scaledPicture` answered no picture and no error for an image larger than its
+  header; it is an error now. A new `scene.set` starts the page's lists at their tops (they were kept
+  by position and survived a scene with other lists). The capability table names `image.put` and
+  `image.drop`. Staticcheck's findings in the branch (raw invisible characters in tests, a uint8 compared
+  past 255, the Spot's unused card height) are fixed.
+
+Storage, per day: still nothing. The new state (what the display last said, revisions of patched
+blocks, the "not before" list, decode budgets) is in RAM, bounded, and nothing new is logged.
