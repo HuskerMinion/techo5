@@ -484,7 +484,7 @@ func TestBan(t *testing.T) {
 	r := newRig(t, everything)
 	r.freeze()
 	c := r.dial()
-	for range strikeLimit {
+	for range strikeLimit.Load() {
 		_ = c.Fire(ctx(t), "x", nil) // 2 a second: the rest are strikes
 		_ = c.Fire(ctx(t), "x", nil)
 		_ = c.Fire(ctx(t), "x", nil)

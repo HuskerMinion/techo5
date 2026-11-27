@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
@@ -36,10 +37,13 @@ const SocketName = "api.sock"
 // Abuse: an add-on whose requests are refused for its limits this many times within strikeWindow is
 // disconnected, and its connections refused, for banFor.
 var (
-	strikeLimit  = 20
 	strikeWindow = time.Minute
 	banFor       = time.Minute
 )
+
+// strikeLimit is how many refusals within strikeWindow disconnect an add-on. Atomic, as a test changes
+// it while the connections of the test before may still be reading it.
+var strikeLimit = func() *atomic.Int64 { var n atomic.Int64; n.Store(20); return &n }()
 
 // Deadlines: the rest of a message once its length has arrived, and each write to an add-on. One that
 // sends half a message, or stops reading, is dropped rather than holding a goroutine for ever.
@@ -370,7 +374,7 @@ func (s *Server) strike(a *addon) {
 		}
 	}
 	a.strikes = append(kept, now)
-	ban := len(a.strikes) >= strikeLimit
+	ban := int64(len(a.strikes)) >= strikeLimit.Load()
 	var conns []*conn
 	if ban {
 		a.banned, a.strikes = now.Add(banFor), nil

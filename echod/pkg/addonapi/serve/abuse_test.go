@@ -70,7 +70,7 @@ func TestHugeHeadersAreStrikes(t *testing.T) {
 	l := captureLog(t)
 	r := newRig(t, everything)
 	r.freeze()
-	for range strikeLimit + 5 {
+	for range strikeLimit.Load() + 5 {
 		nc, err := net.Dial("unix", r.path)
 		if err != nil {
 			t.Fatal(err)
@@ -126,9 +126,8 @@ func TestManyKeysAreRefusedQuickly(t *testing.T) {
 
 // A request refused for the rate is refused before its message is parsed, and answered by its id.
 func TestTheRateIsTakenBeforeParsing(t *testing.T) {
-	was := strikeLimit
-	strikeLimit = 1000 // every bad message is a strike; this one is about the rate alone
-	t.Cleanup(func() { strikeLimit = was })
+	was := strikeLimit.Swap(1000) // every bad message is a strike; this one is about the rate alone
+	t.Cleanup(func() { strikeLimit.Store(was) })
 	r := newRig(t, everything)
 	r.freeze()
 	w := r.raw()
