@@ -733,7 +733,8 @@ func (f *Feature) buildMeteoAlarm(ctx context.Context, lat, lon float64) (AlertV
 	ma.caps = caps
 	if names != ma.names || !ma.logged {
 		ma.names, ma.logged = names, true
-		slog.Info("alerts: MeteoAlarm regions for home", "countries", strings.Join(area.countries, ","), "regions", names)
+		// At Debug: the regions say where the home is, which the log, sent with a bug report, need not.
+		slog.Debug("alerts: MeteoAlarm regions for home", "countries", strings.Join(area.countries, ","), "regions", names)
 	}
 	f.alerts.mu.Unlock()
 	return v, nil
