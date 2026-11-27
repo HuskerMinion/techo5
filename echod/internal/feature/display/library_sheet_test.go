@@ -624,6 +624,55 @@ func TestTheLibraryShufflesThroughMusicAssistant(t *testing.T) {
 	}
 }
 
+// A play through Music Assistant that times out may have been taken, only slow to be answered: Home
+// Assistant's play is not asked for on top of it, which would play the album again, in order. A play
+// Music Assistant refuses still goes to Home Assistant (above).
+func TestALibraryPlayThatTimesOutIsNotPlayedAgain(t *testing.T) {
+	noLibrary(t)
+	var mu sync.Mutex
+	var events []string
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Command string `json:"command"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		events = append(events, "ma "+body.Command)
+		mu.Unlock()
+		if body.Command == "player_queues/play_media" {
+			<-release
+		}
+		w.Write([]byte(`null`))
+	}))
+	defer srv.Close()
+	defer close(release)
+	libClient = func() (musicassistant.Client, bool) { return musicassistant.Client{URL: srv.URL, Token: "tok"}, true }
+	libQueueOf = func(string) string { return "up0a1b2c3d" }
+	prev, prevAfter, prevWait := sheetTap, libAfter, libQueueWait
+	sheetTap = func(a dashboard.Action) {
+		mu.Lock()
+		events = append(events, "ha "+a.Service)
+		mu.Unlock()
+	}
+	libAfter = func(_ time.Duration, f func()) *time.Timer { f(); return nil }
+	libQueueWait = 50 * time.Millisecond
+	t.Cleanup(func() { sheetTap, libAfter, libQueueWait = prev, prevAfter, prevWait })
+	got := func() string { mu.Lock(); defer mu.Unlock(); return strings.Join(events, "; ") }
+
+	if !libQueuePlay("media_player.ma_kitchen", []string{"library://album/1"}, true) {
+		t.Fatal("a play that timed out is left for Home Assistant to play again")
+	}
+	d := &Display{poke: make(chan struct{}, 1)}
+	album := libEntries("album", 1)[0]
+	d.libPlay("media_player.ma_kitchen", album, "album", true, libEnqueueReplace)
+	waitUntil(t, "a play", func() bool { return strings.Count(got(), "play_media") >= 2 })
+	time.Sleep(4 * libQueueWait)
+	if strings.Contains(got(), "ha music_assistant.play_media") {
+		t.Errorf("asked %q: Home Assistant played it again after the timeout", got())
+	}
+}
+
 // Play next and Add to queue only append to what is queued: the play goes out with that enqueue mode,
 // no shuffle is asked for even for a whole album, what is now playing is not marked as replaced, and
 // the library stays up so more can be added. Play still replaces and leaves.
