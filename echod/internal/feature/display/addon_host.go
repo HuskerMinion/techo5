@@ -79,6 +79,17 @@ func addonName(id string) string {
 	return id
 }
 
+// addonIcon is a running add-on's icon, as its catalog entry gives it; "" for none, when its mark is its
+// initials.
+func addonIcon(id string) string {
+	for _, t := range addonTiles() {
+		if t.ID == id {
+			return t.Icon
+		}
+	}
+	return ""
+}
+
 // addonRunning is whether the add-on runs, with the screen granted.
 func addonRunning(id string) bool {
 	for _, t := range addonTiles() {

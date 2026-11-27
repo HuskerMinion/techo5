@@ -508,10 +508,10 @@ why:
   drawer it had; with five tabs already, the drawer and its strip widen by a tab's room again. **On a
   Spot** it is an Add-ons item on the ring menu, before Settings, which opens the page with one add-on
   and a dial of them (each its initials) with more.
-- **The mark is the add-on's initials, not an icon.** Neither the manifest nor the catalog entry has
-  an icon, and adding one would change both formats; and an icon the add-on chose could pass for one of
-  the device's own (a lock, a phone), which the name bar is there to rule out. Its initials in the
-  theme's accent cannot. A catalog icon, chosen by the catalog's reviewers, is a question below.
+- **The mark is the add-on's initials, or the catalog reviewer's icon, never the add-on's.** An icon
+  the add-on chose could pass for one of the device's own (a lock, a phone), which the name bar is there
+  to rule out; its initials in the theme's accent cannot, and neither can an icon a reviewer picked for
+  it (below, after the maintainer's answers).
 - **The way out** is the name bar's × on a Show and a round button at the foot of a Spot. The back
   gesture, which the plan left unnamed, is a swipe right from the left edge (the strip a swipe in to
   the dashboard starts from); other swipes left and right are the add-on's.
@@ -544,10 +544,32 @@ Storage, per day: nothing. Scenes, images and the screen's decoded copies are in
 logged per message, per scene or per image (a failed fetch is said at most once a minute per add-on,
 and opening a page once, as the deck's opening is).
 
-Questions for the maintainer:
+The maintainer's answers, and what was built for them:
 
-1. Should catalog entries gain an icon (Material Design Icons by name, picked at review) for the tile
-   and the name bar, in place of the initials?
-2. Should a page opened by `screen.open` at night, with the night's Screen off (the panel out rather
-   than the night light), light the panel? As built it lifts the night light only; a dark panel stays
-   dark until it is touched, as for the dashboard.
+1. **A catalog icon, chosen by the reviewer.** A screen version's catalog entry may have `icon`,
+   `mdi:` and a Material Design Icons name (`"mdi:chef-hat"`), checked against the icon font the
+   display draws (`lib/mdi`): any other spelling (`hass:`, bare, capitals) or a name the font lacks is
+   refused, and so is an icon on a version without the screen capability, which has nothing to mark.
+   The device shows it on the add-on's row under the Add-ons tab, its item on the Spot's dial, its
+   page's name bar and its card's label, and its initials without one. The rows now carry the mark
+   either way (they had none), so a list with and without icons lines up. It is read from the catalog
+   the device believes, for the version installed, each time the tiles are asked for: never from the
+   manifest or anything the add-on sends, and never written on the device.
+   **It is a field of the version, not of the add-on.** The plan said the entry; but every device
+   reads the catalog strictly (`decodeStrict`), format 1 and format 2 alike, and one key it does not
+   know beside an add-on's name has it refuse the whole catalog. Inside a version it rides on
+   `screen1`, which the version needs anyway: a device before stage 2 skips the version whole, and
+   `catalog.json` (format 1) leaves it out. So it needs no new feature name, `mkcatalog` signs it as it
+   is written, and no older device notices it. The cost is that, like the rest of a version, it is fixed
+   once published (`catalog.Unchanged`): a new icon comes with a new version.
+2. **A dark panel at night is lit for an allowed `screen.open`.** Where the night turns the screen off
+   (Screen at night set to off), a page the server allows to open (in answer to a person) turns it on,
+   as a tap on the dark screen does; with the night light it lifts the night light, as before. It is
+   lit without saving the screen as on (a tap saves it, as somebody choosing it), so nothing is written
+   and the night's own rule puts it out again once the room has been quiet as long after the open as
+   after a touch, as it does after the tap. A refused open never reaches the display.
+3. **The night card.** Its name was drawn in the theme's dim and toned, too dark to read; the name is
+   what says whose card it is, so it is now drawn in the night clock's own red. And as the night card
+   takes no finger, its chips are not drawn there (nor a row or column left with nothing else), so it
+   never shows something to press that would do nothing; its words, picture and progress stay. The
+   add-on's scene is untouched: the layout is made from a copy, and by day the chips are back.

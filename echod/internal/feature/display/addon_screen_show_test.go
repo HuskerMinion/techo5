@@ -32,7 +32,8 @@ func addonFrame(t *testing.T, dir, name string, wide, high int, s scene) (*image
 
 // With SHOW_PREVIEW set, an add-on's page (Meals cooking, every block, a list), the drawer's Add-ons tab,
 // the card over the clock by day and over the night clock, and a ring over a page that is up, are written
-// there on the Show 5 and the Show 8, the page in the light Paper theme too.
+// there on the Show 5 and the Show 8, the page in the light Paper theme too, and the tab, the page and
+// the card with an icon from the catalog.
 func TestAddonPreviews(t *testing.T) {
 	dir := os.Getenv("SHOW_PREVIEW")
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
@@ -68,6 +69,14 @@ func TestAddonPreviews(t *testing.T) {
 		frame("addon-tab", scene{showDrawer: true, drawerTab: drawerAddons, weather: hassSunny()})
 		frame("addon-card", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})
 		frame("addon-card-night", scene{redClock: true, nightDim: true, addonCard: addonCardOf(h, "meals")})
+
+		// The icon a catalog reviewer chose for Meals, on its tile, its page's name bar and its card.
+		withIcon(h, "mdi:chef-hat")
+		frame("addon-icon-tab", scene{showDrawer: true, drawerTab: drawerAddons, weather: hassSunny()})
+		h.set("meals", addonapi.OnPage, cookingPage(), addonNow)
+		frame("addon-icon-page", scene{addonPage: addonPageOf(h, "meals")})
+		frame("addon-icon-card", scene{weather: hassSunny(), addonCard: addonCardOf(h, "meals")})
+		withIcon(h, "")
 
 		// Paper, a light theme.
 		applyTheme(themes[themeIndex("Paper")])

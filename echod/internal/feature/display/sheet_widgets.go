@@ -137,6 +137,17 @@ func (p *paint) headerH() int     { return p.grownForText(p.s(headerHBase)) }
 func (p *paint) rowH() int        { return p.grownForText(p.s(rowHBase)) }
 func (p *paint) rowIn() int       { return p.s(rowInBase) }
 
+// wordsIn is how far in from the card's edge a row's words start: past its mark, on a row with one.
+func (p *paint) wordsIn(row settingRow) int {
+	if row.mark != nil && !p.planned() {
+		return p.rowIn() + p.s(rowMarkW)
+	}
+	return p.rowIn()
+}
+
+// rowMarkW is the room a row's mark takes before its words, the gap after it included.
+const rowMarkW = 58
+
 // rowHeight is how tall row is drawn on card: a heading is shorter than a row with something on it,
 // and a Show row whose words take more lines, or whose button stands over its chip, is taller. It is
 // measured on the card the row is drawn on, the settings card's or the drawer's narrower panel.
@@ -184,7 +195,7 @@ func (p *paint) wordLines(card image.Rectangle, row settingRow) (labels, subs []
 		return nil, nil
 	}
 	fc := p.faces()
-	room := card.Max.X - p.s(26) - p.controlWidth(card, row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	room := card.Max.X - p.s(26) - p.controlWidth(card, row) - p.s(rowGap) - (card.Min.X + p.wordsIn(row))
 	if row.locked {
 		room -= p.s(lockGap + lockW)
 	}
@@ -207,7 +218,7 @@ func (p *paint) stacked(card image.Rectangle, row settingRow) bool {
 		return false
 	}
 	fc := p.faces()
-	room := card.Max.X - p.s(26) - p.sideBySideWidth(row) - p.s(rowGap) - (card.Min.X + p.rowIn())
+	room := card.Max.X - p.s(26) - p.sideBySideWidth(row) - p.s(rowGap) - (card.Min.X + p.wordsIn(row))
 	return max(p.width(fc.label, row.label), p.width(fc.sub, row.sub)) > room
 }
 
@@ -373,6 +384,13 @@ type settingRow struct {
 	role       int    // ctlSwatches: which role of the theme
 	rowTap     bool   // a tap on the row beside its control means something of its own (partRow)
 	locked     bool   // behind the settings lock while it is on: a padlock after its name
+	mark       *rowMark
+}
+
+// rowMark is a mark a row carries before its words: an add-on's under the drawer's Add-ons tab, the icon
+// its catalog entry gives it or its initials (addonMark), as its page's name bar has.
+type rowMark struct {
+	name, icon string
 }
 
 // part is which piece of a row a tap landed on.
@@ -776,11 +794,15 @@ func (r *paint) settingRow(card image.Rectangle, top int, row settingRow) {
 		var lines []rowLine
 		lines, base, lastLabel = r.rowLines(top, rh, row, face, labels, subs)
 		for _, l := range lines {
-			r.text(l.face, l.text, card.Min.X+r.rowIn(), l.y, l.col)
+			r.text(l.face, l.text, card.Min.X+r.wordsIn(row), l.y, l.col)
 		}
 	}
+	if row.mark != nil && !planned {
+		rad := r.s(20)
+		r.addonMark(row.mark.name, row.mark.icon, card.Min.X+r.rowIn()+rad, top+rh/2, rad, themePalette(), sceneFace(r.faceKey(), r.sceneMetrics().text[0], true))
+	}
 	if row.locked {
-		x := card.Min.X + r.rowIn() + r.width(face, lastLabel) + r.s(lockGap)
+		x := card.Min.X + r.wordsIn(row) + r.width(face, lastLabel) + r.s(lockGap)
 		r.padlock(x+r.s(lockW)/2, base-r.s(9), dim)
 		labelEnd = max(labelEnd, x+r.s(lockW))
 	}
@@ -949,21 +971,21 @@ func (r *paint) padlock(cx, cy int, col color.RGBA) {
 func (r *paint) rowWords(card image.Rectangle, row settingRow, face font.Face) (label, sub string, end int) {
 	fc := r.faces()
 	right := card.Max.X - r.s(26)
-	room := right - r.controlWidth(card, row) - r.s(rowGap) - (card.Min.X + r.rowIn())
+	room := right - r.controlWidth(card, row) - r.s(rowGap) - (card.Min.X + r.wordsIn(row))
 	if row.locked {
 		room -= r.s(lockGap + lockW) // the label gives way to its padlock, which follows it
 	}
 	// A provider's voice name can be arbitrarily long. Keep the setting's name
 	// readable and let the existing value fitting shorten the voice instead.
 	if row.id == "ttsvoice" {
-		available := right - (card.Min.X + r.rowIn()) - r.s(rowGap)
+		available := right - (card.Min.X + r.wordsIn(row)) - r.s(rowGap)
 		if row.locked {
 			available -= r.s(lockGap + lockW)
 		}
 		room = max(room, min(r.width(face, row.label), available/2))
 	}
 	label, sub = r.fit(face, row.label, room), r.fit(fc.sub, row.sub, room)
-	return label, sub, card.Min.X + r.rowIn() + max(r.width(face, label), r.width(fc.sub, sub))
+	return label, sub, card.Min.X + r.wordsIn(row) + max(r.width(face, label), r.width(fc.sub, sub))
 }
 
 // dayChip is the width of a ctlDays row's day and the gap between them: smaller on a round panel,

@@ -217,15 +217,32 @@ func sampleTimers() []timer.Countdown {
 // addonPageOf is h's page of id as a frame would draw it, its images decoded at once.
 func addonPageOf(h *fakeHost, id string) *addonPageView {
 	sc, ok := h.Scene(id, addonapi.OnPage)
-	return &addonPageView{id: id, name: addonNameIn(h, id), sc: sc, has: ok,
+	return &addonPageView{id: id, name: addonNameIn(h, id), icon: addonIconIn(h, id), sc: sc, has: ok,
 		images: func(b *addonapi.Block) ([]byte, string, bool) { return h.Image(id, b) }, pics: picturesNow}
 }
 
 // addonCardOf is h's card of id likewise.
 func addonCardOf(h *fakeHost, id string) *addonCardView {
 	sc, _ := h.Scene(id, addonapi.OnCard)
-	return &addonCardView{id: id, name: addonNameIn(h, id), sc: sc,
+	return &addonCardView{id: id, name: addonNameIn(h, id), icon: addonIconIn(h, id), sc: sc,
 		images: func(b *addonapi.Block) ([]byte, string, bool) { return h.Image(id, b) }, pics: picturesNow}
+}
+
+func addonIconIn(h *fakeHost, id string) string {
+	for _, t := range h.ScreenTiles() {
+		if t.ID == id {
+			return t.Icon
+		}
+	}
+	return ""
+}
+
+// withIcon gives h's Meals the icon a catalog reviewer chose for it.
+func withIcon(h *fakeHost, icon string) {
+	h.mu.Lock()
+	h.tiles[0].Icon = icon
+	h.mu.Unlock()
+	forgetTiles()
 }
 
 func addonNameIn(h *fakeHost, id string) string {
@@ -299,5 +316,95 @@ func TestCardLayout(t *testing.T) {
 	}
 	if lay.height >= room.Dy() || lay.height <= 0 {
 		t.Errorf("a card %d tall in %d", lay.height, room.Dy())
+	}
+}
+
+// Over the night clock the card shows only what cannot be pressed, since it takes no finger there: its
+// chips go, and a row left with nothing but them goes too, while its words, picture and progress stay.
+// The add-on's own scene is untouched.
+func TestNightCardShowsNothingPressable(t *testing.T) {
+	sc := addonapi.Column(cardScene(),
+		addonapi.Row(addonapi.Chip("a", "A", ""), addonapi.Block{Type: addonapi.BlockSpacer}, addonapi.Chip("b", "B", "")))
+	got := withoutPressable(sc)
+	var walk func(b addonapi.Block, depth int)
+	words, pics, bars := 0, 0, 0
+	walk = func(b addonapi.Block, depth int) {
+		switch {
+		case addonapi.Pressable(b.Type):
+			t.Errorf("a %s %q is left", b.Type, b.ID)
+		case b.Type == addonapi.BlockText:
+			words++
+		case b.Type == addonapi.BlockImage:
+			pics++
+		case b.Type == addonapi.BlockProgress:
+			bars++
+		}
+		for _, c := range b.Children {
+			walk(c, depth+1)
+		}
+	}
+	walk(got, 0)
+	if words != 1 || pics != 1 || bars != 1 || len(got.Children) != 1 {
+		t.Errorf("left %d words, %d pictures, %d bars, %d rows: %+v", words, pics, bars, len(got.Children), got)
+	}
+	if b, ok := sc.Find("next"); !ok || b.Type != addonapi.BlockChip {
+		t.Error("the add-on's scene lost its chip")
+	}
+
+	// Laid out on a card at night: nothing to tap; by day the chip is there.
+	img := image.NewRGBA(image.Rect(0, 0, 1280, 800))
+	p := &paint{dst: img, w: 1280, h: 800, sNum: 1280, sDen: 960}
+	room := image.Rect(60, 540, 1220, 760)
+	hs := hostScene{Root: cardScene(), Rev: 1}
+	var kept addonLaid
+	taps := func(lay *sceneLayout) (n int) {
+		for _, b := range lay.boxes {
+			if b.tap != "" {
+				n++
+			}
+		}
+		return n
+	}
+	if n := taps(p.laidAt(&kept, "meals", hs, room, true, false, nil)); n != 1 {
+		t.Errorf("by day the card has %d to tap", n)
+	}
+	if n := taps(p.laidAt(&kept, "meals", hs, room, true, true, nil)); n != 0 {
+		t.Errorf("at night the card has %d to tap", n)
+	}
+}
+
+// An add-on's mark is the icon its catalog entry gives it, drawn in the disc, or its initials without
+// one; an icon this build has no glyph for, or one not named as the catalog names them, is its initials,
+// never an empty disc.
+func TestAddonMarkIsTheIconOrTheInitials(t *testing.T) {
+	mark := func(icon string) *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, 80, 80))
+		p := &paint{dst: img, w: 80, h: 80}
+		m := p.sceneMetrics()
+		p.addonMark("Meals", icon, 40, 40, 30, themePalette(), sceneFace(p.faceKey(), m.text[0], true))
+		return img
+	}
+	initials, icon := mark(""), mark("mdi:chef-hat")
+	if string(initials.Pix) == string(icon.Pix) {
+		t.Error("the icon is drawn as the initials")
+	}
+	for _, bad := range []string{"mdi:no-such-icon-anywhere", "chef-hat", "hass:chef-hat"} {
+		if string(mark(bad).Pix) != string(initials.Pix) {
+			t.Errorf("%q is not drawn as the initials", bad)
+		}
+	}
+	// The page and the card carry the icon of the add-on's tile, which is the host's (its catalog entry).
+	h := sampleHost(t, cookingPage())
+	h.tiles[0].Icon = "mdi:chef-hat"
+	useHost(t, h)
+	d := &Display{poke: make(chan struct{}, 1)}
+	if v := d.addonPageNow(h, "meals", "Meals"); v.icon != "mdi:chef-hat" {
+		t.Errorf("the page's icon %q", v.icon)
+	}
+	if v := d.addonPageNow(h, "plex", "Plex Remote"); v.icon != "" {
+		t.Errorf("an add-on without one has the icon %q", v.icon)
+	}
+	if c := addonNewestCard(h); c == nil || c.icon != "mdi:chef-hat" {
+		t.Errorf("the card %+v", c)
 	}
 }

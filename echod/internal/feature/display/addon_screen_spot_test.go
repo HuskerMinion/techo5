@@ -55,8 +55,8 @@ func spotFrame(t *testing.T, dir, name string, s roundScene) (*image.RGBA, *roun
 }
 
 // With SPOT_PREVIEW set, an add-on's page (cooking, every block, a list), the ring menu with its Add-ons
-// item and the dial of add-ons, the card over the clock by day and over the night clock, and a ring over
-// a page that is up, are written there.
+// item and the dial of add-ons, the card over the clock by day and over the night clock, a ring over a
+// page that is up, and the dial, the page and the card with an icon from the catalog, are written there.
 func TestSpotAddonPreviews(t *testing.T) {
 	dir := os.Getenv("SPOT_PREVIEW")
 	config.Use(filepath.Join(t.TempDir(), "state.json"))
@@ -85,6 +85,14 @@ func TestSpotAddonPreviews(t *testing.T) {
 	h.set("meals", addonapi.OnCard, spotCard(), spotAddonNow)
 	spotFrame(t, dir, "addon-card", roundScene{addonCard: addonCardOf(h, "meals")})
 	spotFrame(t, dir, "addon-card-night", roundScene{redClock: true, addonCard: addonCardOf(h, "meals")})
+
+	// The icon a catalog reviewer chose for Meals, on the dial, its page's name bar and its card.
+	withIcon(h, "mdi:chef-hat")
+	spotFrame(t, dir, "addon-icon-dial", roundScene{menuOpen: true, menuMode: modeAddons, menuSel: 0, menuRot: restFor(0, 2)})
+	h.set("meals", addonapi.OnPage, spotCooking(), spotAddonNow)
+	spotFrame(t, dir, "addon-icon-page", roundScene{addonPage: addonPageOf(h, "meals")})
+	spotFrame(t, dir, "addon-icon-card", roundScene{addonCard: addonCardOf(h, "meals")})
+	withIcon(h, "")
 }
 
 // A page that is up is not drawn under the faces the device reserves, and the add-on is told it is out

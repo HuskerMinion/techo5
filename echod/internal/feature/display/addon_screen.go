@@ -34,7 +34,7 @@ func (r *renderer) addonPage(s scene) {
 		msg := r.fit(f, fmt.Sprintf(tr("addon_waiting"), v.name), content.Dx())
 		r.text(f, msg, content.Min.X+(content.Dx()-r.width(f, msg))/2, content.Min.Y+content.Dy()/2, dim)
 	}
-	r.addonBar(v.name, bar, closeAt, pal)
+	r.addonBar(v.name, v.icon, bar, closeAt, pal)
 	r.zmu.Lock()
 	r.addon.pageAt.id, r.addon.pageAt.lay, r.addon.pageAt.scrolls, r.addon.pageAt.close = v.id, lay, v.scrolls, closeAt
 	r.zmu.Unlock()
@@ -73,7 +73,7 @@ func (r *renderer) addonCardReserve(s scene) int {
 		return 0
 	}
 	box, inner := r.addonCardRoom(s)
-	return r.h - box.Max.Y + r.addonCardHeight(s.addonCard, box, inner, &r.addon) + r.s(nightInfoGap)
+	return r.h - box.Max.Y + r.addonCardHeight(s.addonCard, box, inner, &r.addon, s.redClockFace()) + r.s(nightInfoGap)
 }
 
 // addonClear forgets where the add-on's page and card were drawn, for a frame that draws neither.
@@ -162,7 +162,8 @@ func addonRows() ([]settingRow, string) {
 	}
 	rows := make([]settingRow, 0, len(tiles))
 	for _, t := range tiles {
-		rows = append(rows, settingRow{id: "addon:" + t.ID, label: t.Name, kind: ctlButton, button: tr("ui_open"), rowTap: true})
+		rows = append(rows, settingRow{id: "addon:" + t.ID, label: t.Name, kind: ctlButton, button: tr("ui_open"), rowTap: true,
+			mark: &rowMark{name: t.Name, icon: t.Icon}})
 	}
 	return rows, ""
 }

@@ -54,7 +54,7 @@ func RenderAddonScene(screen, name, on string, root addonapi.Block, images func(
 		bar, closeAt, content := p.addonPageRooms()
 		lay := p.laid(&drawn.page, "addon", sc, content, false, images)
 		p.drawScene(lay, nil, image.Point{}, pal, timers, picturesNow)
-		p.addonBar(name, bar, closeAt, pal)
+		p.addonBar(name, "", bar, closeAt, pal)
 	}
 	if p.round {
 		// The Spot's panel is a circle: what lies outside it is never seen.

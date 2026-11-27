@@ -244,6 +244,12 @@ show/addon-card-show5.png
 show/addon-card-show8.png
 show/addon-cards-show5.png
 show/addon-cards-show8.png
+show/addon-icon-card-show5.png
+show/addon-icon-card-show8.png
+show/addon-icon-page-show5.png
+show/addon-icon-page-show8.png
+show/addon-icon-tab-show5.png
+show/addon-icon-tab-show8.png
 show/addon-list-scrolled-show5.png
 show/addon-list-scrolled-show8.png
 show/addon-list-show5.png
@@ -261,6 +267,9 @@ spot/addon-blocks.png
 spot/addon-card-night.png
 spot/addon-card.png
 spot/addon-cards.png
+spot/addon-icon-card.png
+spot/addon-icon-dial.png
+spot/addon-icon-page.png
 spot/addon-dial.png
 spot/addon-list.png
 spot/addon-menu.png

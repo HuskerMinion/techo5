@@ -334,7 +334,7 @@ images.
 **Where it shows.** On a Show the drawer (a swipe in from the right edge of the clock) has an
 **Add-ons** tab while an add-on with the screen runs, with a row for each; Open brings its page up. On a
 Spot the ring menu (a long press) has an **Add-ons** item: with one such add-on it opens its page, with
-more a dial of them, each marked by its initials. The page fills the screen under the name bar: on a
+more a dial of them, each marked by its mark (below). The page fills the screen under the name bar: on a
 Show along the top, with the way out (×) at its end; on a Spot a band across the top of the circle,
 with the way out at the foot. What the scene holds is laid out inside the room left, and what does not
 fit is cut at its edge, never drawn over the bar or the way out. On the page:
@@ -353,16 +353,36 @@ under it until it goes), as tall as what it holds and never more than a third of
 add-on's name; on a Spot along the foot of the face. Of several add-ons' cards the one set last shows.
 A tap on a chip sends `touch`; a tap anywhere else on the card brings the add-on's page up (and counts as
 somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). Over the
-night clock it is drawn in the clock's dim red, nothing on it brighter than the clock itself, and takes
-no finger: a touch on a night light is the night light's, as everywhere.
+night clock it is drawn in the clock's dim red, nothing on it brighter than the clock itself, its name
+in the clock's own red so it can always be read, and takes no finger: a touch on a night light is the
+night light's, as everywhere. So its chips are not drawn there (nor a row left empty without them), and
+it never shows something to press that would do nothing.
 
 A version that uses it requires `screen1` beside `api1` in the catalog, and names no Dot, which has no
-screen; the API level in `addon.json` stays 1. A device without the screen's ops skips the version. On
+screen; the API level in `addon.json` stays 1.
+
+**The icon.** A screen version's catalog entry may have an `icon`, chosen by whoever reviews the
+listing, not by the author: `"icon": "mdi:chef-hat"`, `mdi:` and the name of a
+[Material Design Icons](https://pictogrammers.com/library/mdi/) icon, as Home Assistant names one. It is
+the add-on's mark on its row under the Add-ons tab, its item on the Spot's dial, its page's name bar and
+its card's label; without one the mark is its initials. The catalog refuses a name the device's icon
+font does not have, any other spelling (`hass:`, a bare name, capitals), and an icon on a version
+without the screen capability. Nothing in `addon.json` or anything the add-on sends can set or change
+it. It is a field of the version, not of the add-on, so that it rides on `screen1`: every device before
+stage 2 skips such a version whole, where a key it does not know beside the add-on's name would have it
+refuse the whole catalog, and `catalog.json` (format 1) never has it. Like everything else in a version,
+it is fixed once published; a new icon comes with a new version.
+
+```json
+{"version": "0.2.0", "requires": ["api1", "screen1"], "api": 1,
+ "capabilities": ["commands", "screen", "timers"], "icon": "mdi:chef-hat", "...": "the rest as for any version"}
+``` A device without the screen's ops skips the version. On
 a device with no screen for add-ons, every screen op is answered `unavailable`.
 
-**What a page can never do.** The name bar over the page, with the add-on's name and its mark (its
-initials, never an icon the add-on picks, which could pass for one of the device's own), is the
-daemon's and cannot be hidden or covered. Nothing in a block names a color, a position or a size in
+**What a page can never do.** The name bar over the page, with the add-on's name and its mark, is the
+daemon's and cannot be hidden or covered. The mark is the icon the catalog's reviewer chose for the
+version (below), or without one the add-on's initials; never an icon the add-on picks, which could pass
+for one of the device's own (a padlock, a phone). Nothing in a block names a color, a position or a size in
 pixels: a card is marked with one of the theme's own colors by name, and there is no accept or decline
 color. The PIN pad and everything behind the settings lock, the settings sheet, the setup page's and
 DLNA video's questions, Cast's Accept or Decline, alarm and timer ring screens, the call screens, the
@@ -474,7 +494,9 @@ opens the recipe. It is allowed only for 5 seconds after a person asked somethin
 is one of its commands sent to it (from Home Assistant, by voice, or by its button), or a tap on its
 tile, its card or one of its blocks; at any other time it is answered `busy`, and nothing is brought
 up. Allowed at night, it lifts the night light, as a long press does, since somebody asked for the
-page. It still waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
+page; and where the night turns the screen off (Screen at night set to off) it turns the screen on for
+the page, as a tap on the dark screen does. Either way the night takes the screen back by its usual
+rules, once the room has been quiet as long as after a touch. It still waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
 screen the device reserves), as the dashboard and Cast do, and `screen.state` says when it is in view.
 `bad_request` with no page set. `screen.close` asks for it to be put away.
 

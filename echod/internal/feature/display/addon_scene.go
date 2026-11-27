@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/image/font"
 
+	"github.com/HuskerMinion/techo5/echod/internal/lib/mdi"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
@@ -898,8 +899,9 @@ func (p *paint) unscaled(px int) int {
 	return px * p.sDen / p.sNum
 }
 
-// addonInitials is an add-on's mark on its tile and its name bar: up to two capitals of its name. Not an
-// icon the add-on chooses: a picture it picked could pass for one of the device's own.
+// addonInitials is an add-on's mark on its tile and its name bar when its catalog entry gives it no icon:
+// up to two capitals of its name. Never an icon the add-on chooses: a picture it picked could pass for one
+// of the device's own. The icon there is, is the catalog reviewer's (catalog.Version.Icon).
 func addonInitials(name string) string {
 	out := ""
 	for _, w := range strings.FieldsFunc(name, func(r rune) bool { return r == ' ' || r == '-' || r == '_' }) {
@@ -913,13 +915,29 @@ func addonInitials(name string) string {
 	return out
 }
 
-// addonMark draws an add-on's initials in a disc of the accent, centered on cx, cy.
-func (p *paint) addonMark(name string, cx, cy, rad int, pal scenePalette, f font.Face) {
+// addonMark draws an add-on's mark in a disc of the accent, centered on cx, cy: the icon its catalog entry
+// gives it, or without one (or one this build has no glyph for) its initials.
+func (p *paint) addonMark(name, icon string, cx, cy, rad int, pal scenePalette, f font.Face) {
 	p.aaDisc(float64(cx), float64(cy), float64(rad), pal.accent)
+	if addonHasIcon(icon) {
+		side := rad * 13 / 10
+		p.mdiIconIn(icon, image.Rect(cx-side/2, cy-side/2, cx+side/2, cy+side/2), p.unscaled(side), pal.onAccent)
+		return
+	}
 	in := addonInitials(name)
 	w := p.width(f, in)
 	asc := f.Metrics().Ascent.Ceil() - f.Metrics().Descent.Ceil()
 	p.text(f, in, cx-w/2, cy+asc/2, pal.onAccent)
+}
+
+// addonHasIcon is whether icon is one to draw as an add-on's mark: one the catalog gave it (a check made
+// again here, as the catalog was), with a glyph in this build's font.
+func addonHasIcon(icon string) bool {
+	if !strings.HasPrefix(icon, "mdi:") {
+		return false
+	}
+	_, ok := mdi.Rune(icon)
+	return ok
 }
 
 // addonPicKey is an image as it is kept: its bytes' key, at a size, filled or fitted.

@@ -89,8 +89,8 @@ func addonItemHint(id itemID) (string, bool) {
 	return strings.Join(names, " · "), true
 }
 
-// addonIcon draws an add-on item: the Add-ons item a puzzle piece, an add-on its initials in a ring, as
-// a camera is drawn.
+// addonIcon draws an add-on item: the Add-ons item a puzzle piece, an add-on the icon its catalog entry
+// gives it or else its initials, in a ring, as a camera is drawn.
 func (r *roundRenderer) addonIcon(id itemID, x, y, u, w float64, c color.RGBA) bool {
 	if id == itemAddons {
 		side := int(2.2 * u)
@@ -102,12 +102,18 @@ func (r *roundRenderer) addonIcon(id itemID, x, y, u, w float64, c color.RGBA) b
 		return false
 	}
 	name, _ := addonItemName(id)
+	r.ringAt(x, y, u-w/2, u+w/2, 0, 6.2832, c)
+	if tiles := addonTiles(); i < len(tiles) && addonHasIcon(tiles[i].Icon) {
+		// The icon its catalog entry gives it, in the ring, as a camera's initials are.
+		side := int(1.3 * u)
+		r.mdiIconIn(tiles[i].Icon, image.Rect(int(x)-side/2, int(y)-side/2, int(x)+side/2, int(y)+side/2), side, c)
+		return true
+	}
 	face := r.label
 	if u > 20 {
 		face = r.title
 	}
 	in := addonInitials(name)
-	r.ringAt(x, y, u-w/2, u+w/2, 0, 6.2832, c)
 	r.text(face, in, int(x)-r.width(face, in)/2, int(y)+int(u*0.38), c)
 	return true
 }
@@ -180,7 +186,7 @@ func (r *roundRenderer) addonPageSpot(s roundScene) {
 		msg := r.fit(f, fmt.Sprintf(tr("addon_waiting"), v.name), content.Dx())
 		r.text(f, msg, center-r.width(f, msg)/2, center, dim)
 	}
-	r.addonBar(v.name, bar, closeAt, pal)
+	r.addonBar(v.name, v.icon, bar, closeAt, pal)
 	r.zmu.Lock()
 	r.addon.pageAt.id, r.addon.pageAt.lay, r.addon.pageAt.scrolls, r.addon.pageAt.close = v.id, lay, v.scrolls, closeAt
 	r.zmu.Unlock()
