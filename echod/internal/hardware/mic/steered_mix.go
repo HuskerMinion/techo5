@@ -20,14 +20,15 @@ import (
 //
 // While playing, the beam does not move: the canceller behind it learns one path (cancelInput, via
 // pathFixed), and what the microphones hear is mostly the device anyway.
+//
+// Where to point comes from the finder (steered.go), the same one the ring and Wake word direction
+// read (Source.findFacing takes it from here while this mix runs), so the beam listens where the ring
+// points. Its onset weighting and voting keep it on the talker through the room's reflections, which a
+// locator taken at its word does not.
 type steered struct {
-	bf     *array.Beamformer
-	loc    *array.Locator
-	act    activity
-	in     [][]float32
-	next   int
-	votes  int
-	active float64
+	bf   *array.Beamformer
+	find *finder
+	in   [][]float32
 
 	// beam is the direction listened in; bf.Beam is which slot plays it, the plain beam or nulled.
 	beam   int
@@ -60,14 +61,13 @@ const (
 func newSteered() *steered {
 	s := &steered{
 		bf:     array.NewBeamformer(arrayGeometry, steerBlock, Rate, steerBeams, steerMinWNG),
-		loc:    array.NewLocator(arrayGeometry, steerBlock, Rate, locateLo, locateHi, locateGrid),
+		find:   newFinder(),
 		in:     make([][]float32, len(arrayGeometry)),
 		refBF:  array.NewBeamformer(array.Geometry{{}}, steerBlock, Rate, 1, steerMinWNG),
 		refBuf: make([][]float32, 1),
 		nullOf: -1,
 	}
 	s.nulled = s.bf.Extra(0)
-	s.loc.Decay = locateDecay
 	s.bf.Spectrum = s.spectrum
 	s.refBF.Spectrum = func(x [][]complex64) { s.refs = append(s.refs, append([]complex64(nil), x[0]...)) }
 	bins := s.bf.Bins()
@@ -89,33 +89,31 @@ func (s *steered) spectrum(x [][]complex64) {
 	}
 	if s.playing && ref != nil {
 		s.learnSpeaker(x, ref)
-		return
 	}
-	if s.hold {
-		return
-	}
+}
 
-	s.loc.AddSpectra(x, s.active)
-	if s.active == 0 {
+// steerHysteresis is how far past the edge between two beams the finder's bearing has to be before
+// the beam turns: the finder answers on a 5 degree grid, and a talker standing on an edge would
+// otherwise swing the beam to and fro.
+const steerHysteresis = 5.0
+
+// steer turns the beam toward the finder's bearing, unless it is held.
+func (s *steered) steer() {
+	if s.hold || s.playing || s.find.bearing < 0 {
 		return
 	}
-	b, c := s.loc.Bearing()
-	if c < confident {
-		return
-	}
-	beam := int(math.Round(b/(2*math.Pi)*steerBeams)) % steerBeams
+	at := s.find.bearing / (2 * math.Pi) * steerBeams
+	beam := int(math.Round(at)) % steerBeams
 	if beam == s.beam {
-		s.votes = 0
 		return
 	}
-	if beam != s.next {
-		s.next, s.votes = beam, 0
+	// How far the bearing is from the current beam, in beams.
+	off := math.Abs(math.Remainder(at-float64(s.beam), steerBeams))
+	if off*360/steerBeams < 180/steerBeams+steerHysteresis {
+		return
 	}
-	s.votes++
-	if s.votes >= steerHold {
-		s.beam, s.votes = beam, 0
-		s.bf.Beam = beam
-	}
+	s.beam = beam
+	s.bf.Beam = beam
 }
 
 // learnSpeaker adds a block of playback to the speaker's response, and every so often rebuilds the
@@ -169,19 +167,22 @@ func (s *steered) mix(raw []byte, mics [][]int16) []int16 {
 	toFloat(s.in, mics, n)
 
 	s.playing = false
+	var ref []int16
 	if raw != nil {
-		ref := make([]int16, n)
+		ref = make([]int16, n)
 		referenceInto(raw, ref)
 		s.playing = playing(ref)
 		toFloat(s.refBuf, [][]int16{ref}, n)
 		s.refBF.Process(s.refBuf)
 	}
+	// Without the loopback the finder cannot hear through the speaker, and is told nothing plays: the
+	// same as before there was one to read.
+	s.find.lookRef(mics, ref, s.playing)
+	s.steer()
 	if !s.playing {
 		s.bf.Beam = s.beam
 	}
 
-	// The weight is the frame's, held for the blocks it completes.
-	s.active = s.act.weight(s.in)
 	y := s.bf.Process(s.in)
 	s.refs = s.refs[:0]
 	out := make([]int16, n)

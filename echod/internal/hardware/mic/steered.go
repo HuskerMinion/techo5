@@ -41,10 +41,6 @@ const (
 
 	// confident is the steered response's peak over its mean that a bearing is acted on at.
 	confident = 0.06
-
-	// steerHold is how many blocks in a row a new beam has to win before it is switched to: about
-	// 100 ms, so a single loud frame off to one side does not swing the beam mid-word.
-	steerHold = 12
 )
 
 // activity measures how far each block stands over the room's floor, as a weight from 0 to 1.

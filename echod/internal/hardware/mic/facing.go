@@ -13,8 +13,9 @@ const ringOffset = 320.0
 // Facing is where the loudest sound is, as a fraction clockwise round the ring from segment 0, and
 // whether that is known yet.
 //
-// Asking is what starts the work, so the first call comes back unknown and the next frame has an answer.
-// Nothing keeps it going: a delay and sum per frame is not free and only the ring wants it.
+// On the seven-microphone ring, asking is what starts the work, so the first call comes back unknown and
+// the next frame has an answer. Nothing keeps it going: a delay and sum per frame is not free and only
+// the ring wants it. A measured array's finder runs on every frame instead (findFacing).
 func (s *Source) Facing() (float64, bool) {
 	s.wantFacing.Store(true)
 
@@ -50,13 +51,21 @@ func (s *Source) findFacing(raw []byte, mics [][]int16) {
 	// so it has to have been listening before anyone asked. It costs a transform per microphone every
 	// 8 ms.
 	if arrayGeometry != nil {
-		if s.arrayFinder == nil {
-			s.arrayFinder = newFinder()
+		// The superdirective mix steers by a finder of its own and has already given it this frame:
+		// the same answer, without localizing twice.
+		f := s.arrayFinder
+		if st, ok := s.mixer.(*steered); ok {
+			f = st.find
+		} else {
+			if f == nil {
+				f = newFinder()
+				s.arrayFinder = f
+			}
+			ref := make([]int16, len(mics[0]))
+			referenceInto(raw, ref)
+			f.lookRef(mics, ref, playing(ref))
 		}
-		ref := make([]int16, len(mics[0]))
-		referenceInto(raw, ref)
-		s.arrayFinder.lookRef(mics, ref, playing(ref))
-		if b := s.arrayFinder.bearing; b >= 0 {
+		if b := f.bearing; b >= 0 {
 			s.facing.Store(int32(math.Round(b / (2 * math.Pi) * 3600)))
 		}
 		return
