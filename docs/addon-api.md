@@ -341,7 +341,10 @@ the room its column, row or card gives it, never drawn over the block beside or 
 or the way out. Where a column has too little room, its gaps narrow and its pictures shrink (to a third
 at the least); a page's column that still has more than its room scrolls, as a list does (a swipe up or
 down on it, a thumb and faded edges while there is more, its blocks cut cleanly at its edges, a tap only
-on what is seen), so every button, stepper and toggle on a page can be reached. The card, a glance at
+on what is seen, and a gutter at its right edge for the thumb, which never lies over a block), so
+every button, stepper and toggle on a page can be reached. In a list or a scrolling column, words and
+controls are drawn, and take a finger, only whole: one the view's edge would cut waits until it is
+scrolled fully into view, so the edges never show a sliver of a line; a picture is cut cleanly. The card, a glance at
 the clock, does not scroll: what does not fit whole in it is left out (its chip row, say, rather than
 half a chip), and it is as tall as what it keeps, at most a third of the screen. On the page:
 
@@ -362,7 +365,11 @@ half a chip), and it is as tall as what it keeps, at most a third of the screen.
 
 The card sits along the foot of the clock, where Next up is (the Next up card and the glance chips wait
 under it until it goes, and the clock, its date and its timers' line move up clear of it, the clock
-smaller where it must be, as they do for Next up), as tall as what it holds and never more than a third of the screen, under the
+smaller where it must be, as they do for Next up, in every clock style; a style with lines too many for
+the room left, on a Show 5, leaves some out (the Agenda's date, the Sun's date, the Dashboard's weather
+line, the Analog's own weather line, which the weather corner then has), a clock style at the foot is
+drawn above the card as at the center, and on a Spot every face but the classic one, laid out for the
+whole circle, is drawn whole and smaller above the card), as tall as what it holds and never more than a third of the screen, under the
 add-on's name; on a Spot along the foot of the face. Of several add-ons' cards the one set last shows.
 A tap on a chip sends `touch`; a tap anywhere else on the card brings the add-on's page up (and counts as
 somebody asking, below); a swipe across it puts it away (`screen.state` with `dismissed`). It is drawn

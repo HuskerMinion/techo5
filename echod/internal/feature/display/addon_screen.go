@@ -62,7 +62,7 @@ func (r *renderer) addonCardRoom(s scene) (box, inner image.Rectangle) {
 
 // addonCard draws the card over the clock, by day or in the night clock's tone.
 func (r *renderer) addonCard(s scene) {
-	if s.addonCard == nil {
+	if s.addonCard == nil || addonCardUnpainted {
 		return
 	}
 	box, inner := r.addonCardRoom(s)

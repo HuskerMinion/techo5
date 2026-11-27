@@ -171,6 +171,10 @@ type addonCardKept struct {
 	timer *time.Timer
 }
 
+// addonCardUnpainted leaves the card out of a frame that still makes room for it: for a test to see what
+// the clock draws where the card goes (nothing).
+var addonCardUnpainted = false
+
 // addonCardEvery and addonCardNightEvery are how often the card over the clock may be drawn anew, at
 // most, by day and over the night clock: an add-on patching its card ten times a second (a changing
 // picture, say) would keep a core drawing the clock all night. The page, which somebody is looking at,

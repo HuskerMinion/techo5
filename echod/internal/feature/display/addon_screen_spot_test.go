@@ -6,13 +6,16 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
+	"github.com/HuskerMinion/techo5/echod/internal/feature/home"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
 
@@ -240,5 +243,70 @@ func TestSpotAddonPageUnderTheVolumeAndACall(t *testing.T) {
 	d.addonSceneSpot(&s)
 	if s.addonPage != nil {
 		t.Error("the page was drawn over a call")
+	}
+}
+
+// With SPOT_PREVIEW set, an add-on's card over the clock face by day in every clock style, at the center
+// and at the foot: the classic face moves up clear of it, every other face is drawn whole above it.
+func TestSpotAddonCardOverEveryStyle(t *testing.T) {
+	dir := os.Getenv("SPOT_PREVIEW")
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	h := sampleHost(t, spotCooking())
+	useHost(t, h)
+	at := spotAddonNow
+	var week []hass.Day
+	for i, c := range []string{"partlycloudy", "rainy", "sunny", "cloudy", "snowy"} {
+		week = append(week, hass.Day{When: at.AddDate(0, 0, i), Condition: c, High: float64(72 - 3*i), Low: float64(51 - 2*i)})
+	}
+	facts := styleFacts{
+		rise: time.Date(2026, 11, 27, 7, 28, 0, 0, time.Local), set: time.Date(2026, 11, 27, 16, 55, 0, 0, time.Local), sunOK: true,
+		days: week, places: worldPlaces(nil),
+		next: []hass.Event{{Summary: "Dentist", Start: at.Add(83 * time.Minute), End: at.Add(143 * time.Minute)}},
+	}
+	t.Cleanup(func() {
+		_ = config.Set().Screen().ClockStyle(styleClassic)
+		_ = config.Set().Screen().ClockPosition("")
+	})
+	for _, pos := range []string{"", "bottom"} {
+		for _, st := range clockStyles {
+			if pos != "" && !footStyle(st.value) {
+				continue
+			}
+			if err := config.Set().Screen().ClockStyle(st.value); err != nil {
+				t.Fatal(err)
+			}
+			if err := config.Set().Screen().ClockPosition(pos); err != nil {
+				t.Fatal(err)
+			}
+			name := "addon-card-style-" + strings.ToLower(st.label)
+			if pos != "" {
+				name += "-" + pos
+			}
+			sc := roundScene{style: facts, weather: home.Weather{Condition: "sunny", Temp: "68°"}, addonCard: addonCardOf(h, "meals")}
+			spotFrame(t, dir, name, sc)
+			// Nothing of the face where the card goes: drawn without the card, the card's room (inside the
+			// rim) is the face's ground.
+			addonCardUnpainted = true
+			img, r := spotFrame(t, "", "", sc)
+			addonCardUnpainted = false
+			box := spotAddonCard
+			box.Min.Y = r.addonCardTop(sc)
+			if box.Min.Y <= 0 {
+				t.Fatal("no card")
+			}
+			if st.value == styleGlow {
+				continue // its ground is its glow
+			}
+			for y := box.Min.Y; y < box.Max.Y; y++ {
+				for x := box.Min.X; x < box.Max.X; x++ {
+					if dx, dy := x-center, y-center; dx*dx+dy*dy > 200*200 {
+						continue // the rim, the device's own, round the face's edge
+					}
+					if c := img.RGBAAt(x, y); c != colBackground {
+						t.Fatalf("%s at %q: the face draws %v at %d,%d, under the card %v", st.label, pos, c, x, y, box)
+					}
+				}
+			}
+		}
 	}
 }

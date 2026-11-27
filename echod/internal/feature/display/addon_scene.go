@@ -604,13 +604,20 @@ func (l *sceneLayouter) place(b *addonapi.Block, r image.Rectangle) {
 		f := l.face(addonapi.SizeBody, false)
 		ctl := min(l.stepperControls(b), r.Dx())
 		label := ""
-		if b.Label != "" {
-			label = l.p.fit(f, b.Label, max(r.Dx()-ctl-m.gap[2], 1))
+		if room := r.Dx() - ctl - m.gap[2]; b.Label != "" && room >= l.p.width(f, "W…") {
+			label = l.p.fit(f, b.Label, room) // no room for a letter of it: none, rather than a lone "…"
 		}
 		side := min(m.button, r.Dy())
+		if full := l.stepperControls(b); full > r.Dx() {
+			// Narrower than − number +: the buttons shrink (to two thirds at the least) before they would
+			// overlap the number or each other; past that the number gives up its room (cut with "…").
+			side = max(min(side, side-(full-r.Dx()+1)/2), side*2/3)
+			side = min(side, r.Dx()/2)
+		}
 		top := r.Min.Y + (r.Dy()-side)/2
 		plus := image.Rect(r.Max.X-side, top, r.Max.X, top+side)
-		minus := image.Rect(max(r.Max.X-ctl, r.Min.X), top, max(r.Max.X-ctl, r.Min.X)+side, top+side)
+		left := max(r.Max.X-ctl, r.Min.X)
+		minus := image.Rect(left, top, min(left+side, plus.Min.X), top+side)
 		l.add(sceneBox{b: b, r: r, lines: []string{label, stepperValue(b)}, face: f,
 			label: image.Rect(minus.Max.X, r.Min.Y, plus.Min.X, r.Max.Y)})
 		l.add(sceneBox{b: b, r: minus, tap: b.ID, step: -1})
@@ -758,12 +765,24 @@ func (l *sceneLayouter) scrollColumn(children []addonapi.Block, heights []int, g
 		}
 	}
 	l.out.lists = append(l.out.lists, sceneList{view: r.Intersect(l.clip)})
+	// Its blocks keep clear of the thumb at its right edge (scrollHints), so the thumb is never drawn
+	// over one, nor a finger meant for the thumb's place taken by one.
+	inner := r
+	inner.Max.X -= scrollGutter(l.p)
+	for i := range children {
+		if children[i].Type != addonapi.BlockImage {
+			heights[i] = l.size(&children[i], inner.Dx()).Y
+		}
+	}
 	was, wasClip := l.list, l.clip
 	l.list, l.clip = len(l.out.lists), unbounded
-	end := l.stackColumn(children, heights, gap, r, 0)
+	end := l.stackColumn(children, heights, gap, inner, 0)
 	l.out.lists[l.list-1].content = max(end-gap, 0)
 	l.list, l.clip = was, wasClip
 }
+
+// scrollGutter is the room a scrolling column leaves at its right edge for its thumb.
+func scrollGutter(p *paint) int { return p.s(22) }
 
 // holdsList is whether a list is among blocks, or in them: a column that holds one gives it the room
 // left, and does not scroll itself.
@@ -861,6 +880,22 @@ func (s *sceneLayout) at(i int, scrolls []int, off image.Point) (image.Rectangle
 	return r, r.Intersect(lv)
 }
 
+// shown is at, but nothing seen of a block in a list or a scrolling column that is only partly in its
+// view: words, a button, a chip, a stepper or a toggle is drawn, and takes a finger, only whole, so a
+// scroll leaves no sliver of a line at the view's edge; a picture, the rule between items and an item's
+// whole are cut at the edge, a picture only while a third of it is seen.
+func (s *sceneLayout) shown(i int, scrolls []int, off image.Point) (image.Rectangle, image.Rectangle) {
+	r, seen := s.at(i, scrolls, off)
+	b := s.boxes[i]
+	if b.list == 0 || seen == r || b.item || b.rule {
+		return r, seen
+	}
+	if b.b != nil && (b.b.Type == addonapi.BlockImage || b.lead) && seen.Dy()*3 >= r.Dy() {
+		return r, seen
+	}
+	return r, image.Rectangle{}
+}
+
 // tapAt is the id a tap at pt sends, if it is on something that can be tapped: the innermost, so a button
 // in a list's item is the button's, and anywhere else on the item the item's.
 func (s *sceneLayout) tapAt(pt image.Point, slop int, scrolls []int, off image.Point) string {
@@ -875,7 +910,7 @@ func (s *sceneLayout) tapStepAt(pt image.Point, slop int, scrolls []int, off ima
 		if s.boxes[i].tap == "" {
 			continue
 		}
-		_, seen := s.at(i, scrolls, off)
+		_, seen := s.shown(i, scrolls, off)
 		if seen.Empty() {
 			continue
 		}
@@ -931,7 +966,7 @@ func (p *paint) drawScene(s *sceneLayout, scrolls []int, off image.Point, pal sc
 	room := s.room.Add(off).Intersect(screen.Rect)
 	var clip image.RGBA
 	for i := range s.boxes {
-		r, seen := s.at(i, scrolls, off)
+		r, seen := s.shown(i, scrolls, off)
 		if seen.Empty() {
 			continue
 		}

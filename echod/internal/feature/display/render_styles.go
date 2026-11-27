@@ -83,6 +83,13 @@ func (r *renderer) styledClock(s scene, style string) {
 	if s.strip && glance {
 		bottom -= r.s(overStripChipHigh + overStripChipGap) // the chips' row over the music strip
 	}
+	// An add-on's card takes the foot as the next-up card does: the style's box ends clear of it, and its
+	// faces fit into what is left.
+	r.cardUp = false
+	if top := r.addonCardTop(s); top > 0 {
+		bottom = min(bottom, top-r.s(14))
+		r.cardUp = true
+	}
 	if style == styleGlow {
 		r.glowGround(s)
 		r.skinBackdrop(s)
@@ -93,7 +100,8 @@ func (r *renderer) styledClock(s scene, style string) {
 	}
 	box := image.Rect(r.margin, r.s(84), r.w-r.margin, bottom)
 	r.cornered = false
-	if align, foot := clockAlign(); foot && cornerStyle(style) {
+	if align, foot := clockAlign(); foot && cornerStyle(style) && r.addonCardTop(s) == 0 {
+		// (With an add-on's card at the foot the style is drawn whole above it, as at the center.)
 		box, r.cornered = r.cornerBox(s, style, align, bottom), true
 	}
 	// The style's box wanders a few pixels as the classic clock does, against the panel keeping a
@@ -122,7 +130,9 @@ func (r *renderer) styledClock(s scene, style string) {
 		r.styleDateUnder(s, box, box.Max.Y-r.s(8))
 	case styleAnalog:
 		r.analogStyle(s, box)
-		corner = r.cornered // in a corner it leaves the weather to the weather corner
+		// In a corner, or in a box too short for its own weather line (an add-on's card has the foot), it
+		// leaves the weather to the weather corner.
+		corner = r.cornered || analogShort(r, box)
 	case styleWords:
 		r.wordsStyle(s, box)
 	case styleSun:
@@ -231,6 +241,11 @@ func (r *renderer) bigStyle(s scene, box image.Rectangle) {
 func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 	// In a corner (Clock position) the dial and the words beside it come down together.
 	k, rad := 1.0, float64(min(box.Dy()/2+r.s(20), box.Dx()/4))
+	if analogShort(r, box) {
+		// A box too short for its weather line (an add-on's card has the foot): the weather corner has
+		// the weather, and the dial keeps inside the box, clear of it.
+		k, rad = 0.75, float64(min(box.Dy()/2-r.s(18), box.Dx()/4))
+	}
 	if r.cornered {
 		k, rad = 0.62, float64(min(box.Dy()/2, box.Dx()/5))
 	}
@@ -249,7 +264,7 @@ func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 	r.text(df, date, x, mid+r.s(at(12)), dateColor(dim))
 	r.setDateAt(image.Rect(x, mid-r.s(at(96)), x+max(r.width(day, locale.Weekday(s.now, screenLang())), r.width(df, date)), mid+r.s(at(24))))
 	// In a corner the weather corner at the top has the weather.
-	if line := weatherText(s); line != "" && !r.cornered {
+	if line := weatherText(s); line != "" && !r.cornered && !analogShort(r, box) {
 		wy := mid + r.s(82)
 		ix := x
 		if s.weather.Condition != "" {
@@ -262,6 +277,11 @@ func (r *renderer) analogStyle(s scene, box image.Rectangle) {
 		r.text(r.small, line, ix, wy, dim)
 		r.setWeatherAt(image.Rect(x, wy-r.s(40), ix+r.width(r.small, line), wy+r.s(14)))
 	}
+}
+
+// analogShort is a box too short for the Analog style's own weather line under its date.
+func analogShort(r *renderer, box image.Rectangle) bool {
+	return r.cardUp && box.Min.Y+box.Dy()/2+r.s(96) > box.Max.Y+r.s(20)
 }
 
 // weatherText is the weather's reading and words, as the corner writes them.
@@ -471,6 +491,11 @@ func (r *renderer) sunStyle(s scene, box image.Rectangle) bool {
 	if ampm != "" {
 		r.text(r.title, ampm, x+r.width(tf, hm)+gap, base, dateColor(amber))
 	}
+	if r.cardUp && base+r.s(46) > box.Max.Y+r.s(6) {
+		// Too short a box even for the smallest time and its date (an add-on's card has the foot): the
+		// time alone, the date and the weather left out rather than drawn over what is under the box.
+		return true
+	}
 	r.styleDateUnder(s, box, base+r.s(46))
 	line := weatherText(s)
 	light := sunWords(s.now, rise, set)
@@ -646,7 +671,9 @@ func (r *renderer) dashboardStyle(s scene, box image.Rectangle) {
 	// Without room for the row, today's weather on a line, so the style that leaves out the weather
 	// corner still says what it is outside and still opens the forecast.
 	if !showRow || (s.weather.Temp != "" && !tempShown) {
-		if line := weatherText(s); line != "" {
+		// Where the box is too short for it (an add-on's card has the foot), it is left out rather than
+		// drawn over the date.
+		if line := weatherText(s); line != "" && (!r.cardUp || base+r.s(100) <= box.Max.Y+r.s(10)) {
 			y := min(base+r.s(100), box.Max.Y)
 			ix := box.Min.X
 			if s.weather.Condition != "" {

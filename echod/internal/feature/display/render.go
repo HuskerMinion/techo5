@@ -401,8 +401,10 @@ type renderer struct {
 	// around the home clock (lcarsFrame).
 	lcarsDrawn bool
 
-	// addon is the add-on page's and card's layouts, and where they were last drawn (addon_screen.go).
-	addon addonDrawn
+	// addon is the add-on page's and card's layouts, and where they were last drawn (addon_screen.go);
+	// cardUp is a styled clock drawn this frame over one by day, whose box is short for it (render_styles.go).
+	addon  addonDrawn
+	cardUp bool
 
 	// deckZones are the deck's buttons where they were last drawn, in order, read by the touch
 	// goroutine under zmu (render_deck.go).

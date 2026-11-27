@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/timer"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/hass"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/palette"
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
@@ -473,4 +475,74 @@ func TestAddonCardClearsTheClock(t *testing.T) {
 			}
 		}
 	}
+}
+
+// With SHOW_PREVIEW set, an add-on's card over the clock by day in every clock style, and the compact
+// clock at the foot, on the Show 5 and the Show 8: each makes room for the card, nothing of it under it.
+func TestAddonCardOverEveryStyle(t *testing.T) {
+	dir := os.Getenv("SHOW_PREVIEW")
+	config.Use(filepath.Join(t.TempDir(), "state.json"))
+	keepPalette(t)
+	h := sampleHost(t, cookingPage())
+	useHost(t, h)
+	at := addonNow
+	var week []hass.Day
+	for i, c := range []string{"partlycloudy", "rainy", "sunny", "cloudy", "snowy"} {
+		week = append(week, hass.Day{When: at.AddDate(0, 0, i), Condition: c, High: float64(72 - 3*i), Low: float64(51 - 2*i)})
+	}
+	facts := styleFacts{
+		rise: time.Date(2026, 11, 27, 7, 28, 0, 0, time.Local), set: time.Date(2026, 11, 27, 16, 55, 0, 0, time.Local), sunOK: true,
+		days: week, places: worldPlaces(nil),
+		next: []hass.Event{{Summary: "Dentist", Start: at.Add(83 * time.Minute), End: at.Add(143 * time.Minute)},
+			{Summary: "Soccer practice", Start: at.Add(233 * time.Minute), End: at.Add(293 * time.Minute)}},
+	}
+	t.Cleanup(func() {
+		_ = config.Set().Screen().ClockStyle(styleClassic)
+		_ = config.Set().Screen().ClockPosition("")
+	})
+	for _, panel := range showPanels()[:2] {
+		for _, pos := range []string{"", "bottom-center", "bottom-left"} {
+			for _, st := range clockStyles {
+				if pos != "" && st.value != styleClassic && st.value != styleAnalog {
+					continue // at the foot: the compact clock, and a corner style
+				}
+				if err := config.Set().Screen().ClockStyle(st.value); err != nil {
+					t.Fatal(err)
+				}
+				if err := config.Set().Screen().ClockPosition(pos); err != nil {
+					t.Fatal(err)
+				}
+				s := scene{now: at, phase: "idle", weather: hassSunny(), style: facts, timers: sampleTimers(),
+					addonCard: addonCardOf(h, "meals")}
+				name := "addon-card-style-" + strings.ToLower(st.label)
+				if pos != "" {
+					name += "-" + pos
+				}
+				addonFrame(t, dir, name+"-"+panel.name, panel.wide, panel.high, s)
+				// Nothing of the clock where the card goes: drawn without the card, that room is the ground.
+				addonCardUnpainted = true
+				img, r := addonFrame(t, "", "", panel.wide, panel.high, s)
+				addonCardUnpainted = false
+				box, _ := r.addonCardRoom(s)
+				box.Min.Y = r.addonCardTop(s)
+				if st.value != styleGlow { // Glow's ground is its glow
+					if p, ok := inked(img, box, walnut); ok {
+						t.Errorf("%s %s at %q: the clock draws at %v, under the card %v", panel.name, st.label, pos, p, box)
+					}
+				}
+			}
+		}
+	}
+}
+
+// inked is a pixel in box that is not ground, if there is one.
+func inked(img *image.RGBA, box image.Rectangle, ground color.RGBA) (image.Point, bool) {
+	for y := box.Min.Y; y < box.Max.Y; y++ {
+		for x := box.Min.X; x < box.Max.X; x++ {
+			if c := img.RGBAAt(x, y); c != ground {
+				return image.Pt(x, y), true
+			}
+		}
+	}
+	return image.Point{}, false
 }

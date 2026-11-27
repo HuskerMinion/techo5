@@ -755,3 +755,23 @@ After a look at it, two changes:
   of an add-on's card, the clock smaller where it must be, as they do for the Next up card, on the Show
   and on the Spot's classic face, whose weather, timer and missed-call lines wait under the card. The
   card goldens on every screen moved for it.
+
+A look at those goldens found three more, done:
+
+- **No slivers at a scroll's edges.** A block scrolled mostly out of a column's view left a few pixels
+  of its words above the fade. In a list or a scrolling column, words and controls are now drawn, and
+  take a finger, only when wholly in view; pictures are cut cleanly, while a third of one is seen. The
+  lists' own edges are the cleaner for it.
+- **A thumb gutter.** A scrolling column's thumb was drawn over a toggle at its right edge. Its blocks
+  now keep clear of a gutter for the thumb, so neither the thumb nor a finger meant for it lands on one;
+  on the Spot a column inside the circle has a straight thumb at its own edge, the circle's arc being the
+  list's. A stepper narrower than − number + shrinks its buttons (to two thirds) rather than overlap
+  them, and leaves out a label it has no room for rather than drawing a lone "…".
+- **Every clock style makes room for the card.** The Show's styles draw into a box that now ends above
+  the card, as for Next up; on a Show 5 the Agenda, the Sun, the Dashboard and the Analog had lines past
+  their box, which they now leave out where it is short (the Analog leaving the weather to the weather
+  corner, its dial and words smaller); a corner style at the foot is drawn above the card as at the
+  center. On the Spot every face but the classic one is laid out for the whole circle, with no room to
+  give, so it is drawn whole and smaller above the card, put down where it is not the face's ground so a
+  photo behind shows through. A test draws each style on the Show 5, the Show 8 and the Spot with the
+  card left out and holds the card's room to the ground; goldens of each are added.

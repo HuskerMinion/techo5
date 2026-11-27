@@ -279,6 +279,7 @@ type roundRenderer struct {
 	nightBuf                         *image.RGBA // the night layer kept between frames (nightLayerFor)
 	paint                                        // the canvas, and the settings screen's tap zones
 	addon                            addonDrawn  // the add-on page's and card's layouts, and where they were drawn
+	squeeze                          *image.RGBA // a face drawn whole before it is drawn smaller over an add-on's card
 	callDrawn                        bool        // the frame last drawn has the Call button on it; for taps
 	clock, title, body, small, label font.Face
 	tiny                             font.Face
@@ -603,6 +604,18 @@ func (r *roundRenderer) rim(s roundScene) {
 
 func (r *roundRenderer) clockFace(s roundScene) {
 	defer r.styleNameTag(s)
+	// An add-on's card along the foot of the face: the classic face moves its time and date up clear of
+	// it (classicClockFace); every other face, laid out for the whole circle, is drawn whole and smaller
+	// above the card (addonSqueezed), so nothing of it is under the card.
+	if top := r.addonCardTop(s); top > 0 && (s.style.style() != styleClassic || (clockAtFoot() && footStyle(s.style.style()))) {
+		r.addonSqueezed(top-10, func() { r.clockFaceWhole(s) })
+		return
+	}
+	r.clockFaceWhole(s)
+}
+
+// clockFaceWhole is the clock face in the style in force, laid out for the whole circle.
+func (r *roundRenderer) clockFaceWhole(s roundScene) {
 	if style := s.style.style(); clockAtFoot() && footStyle(style) {
 		r.footClockFace(s, style)
 		return

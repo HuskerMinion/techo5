@@ -306,3 +306,37 @@ func TestAddonOverflowIsLeftOut(t *testing.T) {
 		}
 	}
 }
+
+// A scrolling column leaves its thumb a gutter, and shows its words and controls only whole: scrolled
+// part of the way, nothing is drawn or tapped of a block cut by the view's edge.
+func TestAddonScrollingColumnEdges(t *testing.T) {
+	h := sampleHost(t, overflowPage())
+	useHost(t, h)
+	img := image.NewRGBA(image.Rect(0, 0, 960, 480))
+	p := &paint{dst: img, w: 960, h: 480, sNum: 960, sDen: 960}
+	_, _, content := p.addonPageRooms()
+	sc, _ := h.Scene("meals", addonapi.OnPage)
+	lay := p.layoutScene(&sc.Root, content, false, func(b *addonapi.Block) ([]byte, string, bool) { return h.Image("meals", b) })
+	col := lay.lists[0] // the left column, laid out before the list beside it
+	if lay.maxScroll(0) <= 0 {
+		t.Fatal("the column does not scroll on a Show 5")
+	}
+	for step := 0; step <= lay.maxScroll(0); step += 7 {
+		scrolls := []int{step}
+		for i, b := range lay.boxes {
+			if b.list != 1 {
+				continue
+			}
+			r, seen := lay.shown(i, scrolls, image.Point{})
+			if b.tap != "" && r.Max.X > col.view.Max.X-scrollGutter(p) {
+				t.Errorf("a tap target at %v reaches the thumb's gutter of %v", r, col.view)
+			}
+			if seen.Empty() || b.b == nil || b.b.Type == addonapi.BlockImage {
+				continue
+			}
+			if seen != r {
+				t.Errorf("scrolled %d: a %s is shown cut, %v of %v", step, b.b.Type, seen, r)
+			}
+		}
+	}
+}

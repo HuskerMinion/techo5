@@ -10,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	xdraw "golang.org/x/image/draw"
+
 	"github.com/HuskerMinion/techo5/echod/internal/feature/addonhost"
 	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
+	"github.com/HuskerMinion/techo5/echod/internal/lib/picscale"
 
 	"github.com/HuskerMinion/techo5/echod/pkg/addonapi"
 )
@@ -231,9 +234,38 @@ func (r *roundRenderer) addonCardTop(s roundScene) int {
 	return box.Max.Y - min(box.Dy(), lay.height+2*m.pad+lineH(label)+m.gap[1])
 }
 
+// addonSqueezed draws what f draws for the whole face smaller, into the circle's width above bottom, as a
+// face laid out for the whole circle cannot make room for the card itself: drawn on the face's ground,
+// scaled, and put down where it is not that ground, so a photo behind the face shows through it.
+func (r *roundRenderer) addonSqueezed(bottom int, f func()) {
+	if bottom <= 0 {
+		return
+	}
+	full := r.dst
+	if r.squeeze == nil || r.squeeze.Rect != full.Rect {
+		r.squeeze = image.NewRGBA(full.Rect)
+	}
+	fillCanvas(r.squeeze, colBackground)
+	r.dst = r.squeeze
+	f()
+	r.dst = full
+	w := full.Rect.Dx() * bottom / full.Rect.Dy()
+	small := image.NewRGBA(image.Rect(0, 0, w, bottom))
+	picscale.CatmullRom.Scale(small, small.Rect, r.squeeze, r.squeeze.Rect, xdraw.Src)
+	x0 := full.Rect.Min.X + (full.Rect.Dx()-w)/2
+	for y := range bottom {
+		for x := range w {
+			c := small.RGBAAt(x, y)
+			if c != colBackground {
+				full.SetRGBA(x0+x, full.Rect.Min.Y+y, c)
+			}
+		}
+	}
+}
+
 // addonCardSpot draws the card over the clock face or the night clock.
 func (r *roundRenderer) addonCardSpot(s roundScene) {
-	if s.addonCard == nil {
+	if s.addonCard == nil || addonCardUnpainted {
 		return
 	}
 	m := r.sceneMetrics()

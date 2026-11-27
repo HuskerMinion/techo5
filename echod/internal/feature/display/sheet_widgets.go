@@ -600,7 +600,9 @@ func (r *paint) scrollHints(list image.Rectangle, scroll, maxScroll int, bg colo
 		}
 	}
 	total := float64(list.Dy() + maxScroll)
-	if r.round {
+	// On the round face the thumb is an arc just inside the circle, for a view that reaches its right
+	// side; one further in (an add-on's column beside a list) has a straight thumb at its own edge.
+	if r.round && list.Max.X > r.w*3/4 {
 		// An arc just inside the circle's right edge, a quarter of it long: the thumb is where the view
 		// sits in the whole, over a faint track.
 		cx, cy := float64(r.w)/2, float64(r.h)/2

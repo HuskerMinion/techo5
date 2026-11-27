@@ -145,11 +145,18 @@ func (r *renderer) agendaStyle(s scene, box image.Rectangle) {
 	}
 	day := r.styleFace(true, 34)
 	left := col - r.s(30) - box.Min.X
-	r.text(day, r.clipTo(day, locale.Weekday(s.now, screenLang()), left), box.Min.X, base+r.s(64), cream)
-	date := locale.MonthDay(s.now, screenLang())
-	r.text(r.small, r.clipTo(r.small, date, left), box.Min.X, base+r.s(108), dateColor(dim))
-	r.setDateAt(image.Rect(box.Min.X, base+r.s(30), col-r.s(30), base+r.s(118)))
-	if a := alarmSuffix(s); a != "" {
+	// The day, the date and an alarm under the time, each where the box has room for it: a short box (an
+	// add-on's card has the foot) leaves out the ones that would be drawn under it.
+	fits := func(y int) bool { return !r.cardUp || y <= box.Max.Y+r.s(10) }
+	if fits(base + r.s(64)) {
+		r.text(day, r.clipTo(day, locale.Weekday(s.now, screenLang()), left), box.Min.X, base+r.s(64), cream)
+	}
+	if fits(base + r.s(108)) {
+		date := locale.MonthDay(s.now, screenLang())
+		r.text(r.small, r.clipTo(r.small, date, left), box.Min.X, base+r.s(108), dateColor(dim))
+		r.setDateAt(image.Rect(box.Min.X, base+r.s(30), col-r.s(30), base+r.s(118)))
+	}
+	if a := alarmSuffix(s); a != "" && fits(base+r.s(150)) {
 		r.text(r.tiny, r.clipTo(r.tiny, strings.TrimPrefix(a, "  ·  "), left), box.Min.X, base+r.s(150), amber)
 	}
 
