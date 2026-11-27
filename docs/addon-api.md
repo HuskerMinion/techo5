@@ -3,7 +3,9 @@
 An add-on installed from TECHO5's catalog can talk to the device it runs on: answer commands from Home
 Assistant and voice, say words, play short sounds, set timers that ring on the device, keep the screen
 on, have settings of its own on the setup page, add entities to Home Assistant, and play a video or
-audio. This is level 1 of the API (`api1`). The plan it was built from, and the stages after it, are in
+audio. This is level 1 of the API (`api1`). Stage 2 (`screen1`) adds a page of the add-on's own and a
+card over the clock, drawn by the daemon from a scene the add-on sends: see
+[Stage 2: the screen](#stage-2-the-screen). The plan it was built from, and the stages after it, are in
 [addon-api-plan.md](addon-api-plan.md).
 
 Everything here is checked by the daemon on every request. An add-on gets only the capabilities its
@@ -77,6 +79,7 @@ Each is one line on the consent screen, word for word:
 | `settings` | Has settings of its own on this page. | `settings.get`, `settings.reply` |
 | `entities` | Adds entities to Home Assistant: *sensor.step*. | `entity.set` |
 | `media` | Plays video and audio from the network on this device. | `media.play`, `media.pause`, `media.resume`, `media.stop`, `media.status` |
+| `screen` | Shows a page of its own under the Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed. | `scene.set`, `scene.patch`, `screen.open`, `screen.close`, `card.clear` (stage 2, requires `screen1`) |
 
 `commands`, `settings` and `entities` are declared in `addon.json` exactly when their capability is
 listed.
@@ -123,7 +126,8 @@ message.
 Each message, either way, is a 4-byte big-endian length and then that many bytes of UTF-8 JSON, at most
 64 KB. Messages are read strictly: a key that isn't known, a key given twice or in another case, keys
 that aren't lowercase ASCII letters, digits and underscores, more than 256 keys in an object, nesting
-deeper than 16, or anything after the value refuses the message.
+deeper than 32 (a scene nests two for each level of its blocks), or anything after the value refuses
+the message.
 
 | Message | Shape |
 | --- | --- |
@@ -316,6 +320,149 @@ connects later asks `media.status`.
 one of the add-on's entities. The add-on carries it out and sets the state itself with `entity.set`,
 so the entity never says what didn't happen.
 
+## Stage 2: the screen
+
+With the `screen` capability an add-on has a **page** of its own, a tile under the Add-ons tab that
+opens full screen under a name bar, and a **card**, a small one over the clock (at most a third of the
+screen), that may stay over the night clock, drawn in its dim colors. It draws neither: it sends a
+**scene**, a tree of blocks, and the daemon lays it out and draws it in the device's own theme, fonts
+and colors, at the Show 5's, the Show 8's or the Spot's size. No pixels come from the add-on but its
+images.
+
+A version that uses it requires `screen1` beside `api1` in the catalog, and names no Dot, which has no
+screen; the API level in `addon.json` stays 1. A device without the screen's ops skips the version. On
+a device with no screen for add-ons, every screen op is answered `unavailable`.
+
+**What a page can never do.** The name bar over the page, with the add-on's name and icon, is the
+daemon's and cannot be hidden or covered. Nothing in a block names a color, a position or a size in
+pixels: a card is marked with one of the theme's own colors by name, and there is no accept or decline
+color. The PIN pad and everything behind the settings lock, the settings sheet, the setup page's and
+DLNA video's questions, Cast's Accept or Decline, alarm and timer ring screens, the call screens, the
+camera's live view and first-run are the device's: while one is up, an add-on's page and card are not
+drawn and get no touches. That is what keeps a page from passing for a question the device asks.
+
+### Scenes
+
+A scene is one block, the root, holding the rest. Every block has a `type`, and may have an `id`
+(lowercase letters, digits and underscores, starting with a letter, at most 32), unique in its scene,
+by which `scene.patch` replaces it. A block may have only its type's fields; any other is refused, as an
+unknown key is.
+
+| Block | Fields | Notes |
+| --- | --- | --- |
+| `column`, `row` | `children`, `spacing` | top to bottom, start to end |
+| `list` | `sections`: each `{"heading": "…", "items": [blocks]}` | scrolls, which is the daemon's; no list inside a list |
+| `card` | `children`, `spacing`, `accent` | `accent` is one of the theme's: `accent`, `dim`, `rules` |
+| `text` | `text`, `size`, `bold`, `align`, `max_lines` | `size`: `small`, `body` (the default), `title`, `huge`; `align`: `start`, `center`, `end`; line breaks kept |
+| `image` | `url` or `data`, `fit` | `fit`: `contain` (the default) or `cover` |
+| `button` | `label`, `icon`, an `id` | a tap sends `touch` |
+| `chip` | `label`, `icon`, `selected`, an `id` | a tap sends `touch`; `selected` for a row of tabs |
+| `progress` | `value` or `timer` | `value` from 0 to 1, or `timer`, one of the add-on's own timers by `timer.start`'s id, counted down with the clock's |
+| `divider`, `spacer` | | |
+
+`spacing` is `none`, `small`, `normal` (the default) or `large`. Any child of a row or a column may have
+a `weight`, from 1 to 12: its share of the room the children without one leave. A button or a chip has
+a label, an icon (`mdi:…`, as Home Assistant names one) or both, and must have an `id`. Only buttons
+and chips can be tapped.
+
+An image is fetched from `url`, an http or https address on the LAN or Home Assistant (an address given
+as a number must be a private one, 10/8, 172.16/12, 192.168/16, fc00::/7, or 100.64/10 as Tailscale
+uses; never the device itself, loopback or link-local; a name is checked against what it resolves to
+when it is fetched), with no user or password in it. Or it is `data`, a JPEG or a PNG's bytes (base64
+in JSON), which count toward the scene's 64 KB, so bytes suit an icon or a thumbnail and a photo goes
+by address. Either way at most 256 KB and 1280 by 800 pixels, either way up; of bytes, the header is
+checked when the scene is set.
+
+```json
+{"type": "column", "children": [
+  {"type": "row", "children": [
+    {"type": "chip", "id": "shopping", "label": "Shopping"},
+    {"type": "chip", "id": "cooking", "label": "Cooking", "selected": true}]},
+  {"type": "text", "id": "step", "text": "Step 2 of 5\nStir the onions", "size": "title", "max_lines": 3},
+  {"type": "image", "url": "http://192.168.1.20:9000/api/media/recipes/1/images/original.webp", "fit": "cover"},
+  {"type": "progress", "id": "timer", "timer": "local:abc"},
+  {"type": "row", "children": [
+    {"type": "button", "id": "back", "label": "Back", "icon": "mdi:arrow-left"},
+    {"type": "spacer", "weight": 1},
+    {"type": "button", "id": "next", "label": "Next", "icon": "mdi:arrow-right"}]}]}
+```
+
+**The card** holds only `column`, `row`, `text` (not `huge`, at most 3 lines and 200 characters),
+`chip`, `progress`, one `image` and `spacer`: at most 12 blocks, 3 deep. Nothing on it scrolls or is a
+button; it is a glance at the clock, and the page is where the add-on is used. A tap on one of its chips
+sends `touch`; a swipe puts the card away. Of several add-ons' cards the newest shows, and the others
+keep their place behind it.
+
+### Limits
+
+| Limit | |
+| --- | --- |
+| A scene, as JSON | 64 KB, after a patch as well as when set (and a message is 64 KB too) |
+| Blocks | 500 on a page, 12 on a card, every one counted |
+| Depth | 12 on a page, the root being 1, a child one more, a list's item two more than its list; 3 on a card |
+| Words | a text block 1000 characters (200 on a card), a label 40, a heading 64; no control characters but a text's line breaks, and none that reorder text |
+| Lines | `max_lines` at most 20 (3 on a card) |
+| Images | 32 on a page, 1 on a card; 256 KB and 1280 by 800 pixels each; an address at most 2048 characters |
+| Drawing | at most 10 times a second, page and card together |
+| `screen.open` | 3 at once, then one every 10 seconds |
+
+A scene past a size, a count, a depth or a length is answered `too_large`; any other fault, `bad_request`.
+Either way nothing changes. An add-on may set and patch as fast as its connection allows (20 a second):
+each is checked and kept at once, and what is drawn is the latest, at most 10 times a second, so a
+faster sender's frames are merged, never queued.
+
+### Ops
+
+#### scene.set
+
+`{"on": "page", "scene": {…}}` sets the whole scene of the add-on's page, or with `"on": "card"` its
+card, which shows over the clock at once. A `progress` tied to a timer must name one of the add-on's
+own.
+
+#### scene.patch
+
+`{"on": "page", "id": "timer", "block": {"type": "progress", "timer": "local:def"}}` replaces the block
+of that id, wherever it is in the scene, so a chip's time or a ticked item does not send the page again.
+The new block keeps the id (it may leave it out, and may not give another). The patched scene is held to
+every limit; a patch of an id the scene does not have is `bad_request`.
+
+#### screen.open, screen.close
+
+`screen.open` asks for the add-on's page to be brought up, from a command, say, so "start cooking"
+opens the recipe. It waits behind whatever is more pressing (a ring, a call, a turn, the settings, any
+screen the device reserves), as the dashboard and Cast do, and `screen.state` says when it is in view.
+`bad_request` with no page set. `screen.close` asks for it to be put away.
+
+#### card.clear
+
+Takes the add-on's card away from over the clock.
+
+### Events
+
+#### touch
+
+`{"id": "next", "on": "page"}`: a tap on one of the add-on's buttons or chips, on its page or its card.
+Only for what is in view.
+
+#### swipe, back
+
+`{"direction": "left"}` or `"right"`: a swipe across the page in view. `back` (no data): the back
+gesture on the page in view. What it does is the add-on's: a step back within its page, or
+`screen.close`. The name bar's own way out is the daemon's, and always leaves.
+
+#### screen.state
+
+`{"on": "page", "shown": true}`: the add-on's page or card came into view, or went out of it (`false`),
+as when the owner leaves it or a ring covers it. `{"on": "card", "shown": false, "dismissed": true}`:
+the owner swiped the card away; it is gone until the next `scene.set` of the card.
+
+### What stays
+
+Scenes are in memory only, the add-on's own: another add-on can neither see nor patch them, and touches
+go only to the add-on whose block was tapped. Its page and card go when its last connection closes,
+when it stops and when it is removed, so a crashed add-on leaves no buttons that nothing answers; it
+sets them again after `hello`. Its tile is under the Add-ons tab while it runs.
+
 ## From Home Assistant
 
 The `addon_command` action (`esphome.<device>_addon_command`) calls a command:
@@ -341,8 +488,9 @@ and it calls `addon_command`.
 
 The daemon writes nothing per message, and logs nothing per message or connection. The socket is on
 `/run`, in RAM. An add-on's settings are written to `/data/techo5-addons/<id>/settings.json` (root's,
-`0600`) only when Save changes them. Its timers, queues, holds, entity states and what its media is
-doing are in memory only; nothing about `media.state` is logged above Debug.
+`0600`) only when Save changes them. Its timers, queues, holds, entity states, scenes and what its
+media is doing are in memory only; nothing about `media.state` is logged above Debug, and nothing about
+a scene at all.
 
 ## The fake daemon
 
@@ -355,7 +503,15 @@ It reads `addon.json` as a device would, serves the socket with the device's own
 not as root), grants every capability the manifest lists, logs every request and what it would have
 done, and takes from the keyboard what a device would send: `command NAME [JSON]`, `press NAME`,
 `entity ID JSON`, `push ID`, `settings JSON`, `test [JSON]`, `stop` and `quit`. `-settings values.json`
-gives it settings to start with, and `-family spot` or `dot` changes the device hello describes.
+gives it settings to start with, and `-family spot` or `dot` changes the device hello describes (a dot
+refuses the screen, as a Dot does).
+
+Scenes are checked as a device checks them, and each change is said in the log with its size in blocks
+and bytes; `scene page` or `scene card` prints one as it is now. The fake has nothing more pressing to
+show, so `screen.open` brings the page up at once and every card shows as it is set. From the keyboard,
+`touch ID [page|card]`, `swipe left|right`, `back`, `shown page|card on|off` (a ring covering the page,
+say) and `dismiss` (the card swiped away) do what the owner would. It does not draw the scene yet; a
+PNG of it, made with the device's own layout code, comes with the screen's drawing on the device.
 
 Media the add-on plays buffers for a second and then plays, its position moving on as a device's
 does, and `media.state` is sent with the device's own timing. From the keyboard, `media playing`,
@@ -365,4 +521,7 @@ does next.
 
 In Go, `Client.StartMedia` answers the media's id, `Client.MediaStatus` asks `media.status`, and
 `Client.WatchMedia` has `media.state` events arrive decoded on a channel of their own instead of on
-`Events`.
+`Events`. `Client.SetScene`, `PatchScene`, `OpenScreen`, `CloseScreen` and `ClearCard` are the screen's
+ops, `Client.WatchScreen` has its events arrive decoded on a channel of their own, and `Column`, `Row`,
+`Card`, `List`, `Text`, `Title`, `Button`, `Chip`, `Progress`, `Countdown`, `Image`, `ImageData`,
+`Divider` and `Spacer` build blocks. `SetScene` checks a scene as the device does before sending it.

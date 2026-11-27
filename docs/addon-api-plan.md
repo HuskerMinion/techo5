@@ -4,9 +4,12 @@ A local interface that installed add-ons use to extend the device: commands Home
 can call, words said on the device, its own timers, settings on the setup page, entities, and later a
 screen drawn by the daemon. Meals, the Mealie add-on from #720, is the first user.
 
-**Status (2026-11-26):** stage 1 (`api1`) built on `feat-addon-api1`, as written down in
-[addon-api.md](addon-api.md); stages 2 and 3 not started. Where stage 1 differs from this plan, the
-section [Stage 1 as built](#stage-1-as-built) at the end says how and why.
+**Status (2026-11-27):** stage 1 (`api1`) merged, as written down in [addon-api.md](addon-api.md).
+Stage 2 (`screen1`) part A, the protocol, the scene model and its checks, the host's state and the
+interface the display implements, built on `feat-addon-screen1`; part B, drawing it on the device and
+the fake daemon's PNG, not started. Stage 3 not started. Where a stage differs from this plan, the
+sections [Stage 1 as built](#stage-1-as-built) and [Stage 2 as built](#stage-2-as-built-part-a) at
+the end say how and why.
 
 ## What is already there
 
@@ -388,3 +391,83 @@ decisions, with these changes, each made for the reason given:
 Storage, per day on a device with one add-on in use: nothing per message, nothing per timer, and
 nothing logged per message; a settings write each time Save changes them (a few hundred bytes, so a
 handful of writes in a day of setting up, none after). What the add-on writes itself is its own.
+
+## Stage 2 as built (part A)
+
+Part A is the protocol and everything short of drawing: the `screen` capability, `screen1` in the
+catalog, the scene model and its checks in `pkg/addonapi` (scene.go), the ops and events, the server's
+keeping and merging of scenes (`pkg/addonapi/serve`, screen.go), the host's half and the interface the
+display implements (`feature/addonhost`, screen.go), the fake daemon's scenes and keys, and the Go
+client's. [addon-api.md](addon-api.md) says what was built. Where it differs from the plan, and why:
+
+- **One `screen` capability**, not `screen` and `card`, with the line "Shows a page of its own under the
+  Add-ons tab, and a small card over the clock, which may stay over the night clock, dimmed." The card
+  is the page's glance, and two lines for one thing are two the owner cannot tell apart; the line says
+  the night clock, as the decisions allow it there.
+- **The API level stays 1.** The screen adds ops and events and changes none, so `addon.json` says
+  `"api": 1` and a version with `screen` requires `screen1` beside `api1`. A device before stage 2
+  skips it; the catalog refuses a version with `screen` that names the Dot.
+- **Names.** `scene.set`, `scene.patch`, `screen.open`, `screen.close`, `card.clear`; events `touch`,
+  `swipe`, `back`, `screen.state`. Where a scene goes is `"on": "page"` or `"card"`, and a touch says
+  `on` too, so a page's and a card's ids may be alike.
+- **A text's weight is `bold`.** The plan gave `weight` to both a row's child (its share of the room)
+  and a text (its font); one key cannot be both, so a child's share is `weight` and a text is `bold`.
+  Text also has `align`, and a chip `selected`, which the Shopping, Plan and Cooking tabs need.
+- **Accents are the theme's roles**: `accent`, `dim`, `rules`. They follow the owner's theme and the
+  night clock's dimming, and none is the green or red of Answer and Decline. Buttons have no accent at
+  all. A test holds `Block` to its list of fields, so one that could name a color, a place or the name
+  bar cannot be added without that test being looked at.
+- **Only buttons and chips can be tapped**, and each must have an id; any block may have one, to be
+  patched.
+- **Depth 12**, a list's item counting two (its section is a level). A scene nests two in JSON for each
+  level of blocks, so the message's nesting cap went from 16 to 32 (`MaxNesting`), for every message.
+- **Image bytes count toward the scene's 64 KB**, as a message is 64 KB: bytes suit an icon, and a
+  photo goes by address, which the daemon fetches (part B) to 256 KB. The plan's "256 KB for an image"
+  message is not built; see the questions below. An address given as a number must be private or in
+  100.64/10 (Tailscale), never loopback or link-local; a name is checked when it is fetched.
+- **The card's limits** are blocks rather than pixels: `column`, `row`, `text` (not `huge`, 3 lines,
+  200 characters), `chip`, `progress`, one `image` and `spacer`, at most 12 blocks 3 deep, checked at
+  `scene.set`. That is what keeps it within a third of the screen; the display holds it to that too.
+- **Merging**: scenes are never refused for their rate. Each set and patch is checked and kept at once,
+  and the display is told at most 10 times a second, page and card together; it reads the latest. Only
+  the connection's own 20 a second bounds the requests. `screen.open` is 3 at once, then one every 10 s
+  (`rate_limited`, a strike): it takes the screen from whoever looks at it.
+- **Scenes go with the last connection**, as well as when the add-on stops or is removed: a crashed
+  add-on's page would otherwise keep buttons nothing answers. It sets them again after `hello`, as it
+  does its entity states.
+- **Touches only for what is in view.** The display says when a page or a card comes into view and
+  goes (`Shown`, which the add-on hears as `screen.state`), marking it hidden under any reserved screen;
+  a touch, swipe or back on what is hidden is dropped by the server, whatever the display sends. A
+  swipe on the card is the daemon's: it puts the card away, and the add-on is told `dismissed`.
+- **Back is the add-on's**, so a page can step back within itself; the name bar's way out (part B) is
+  the daemon's and always leaves.
+- **A device without a screen** refuses the screen's ops (`unavailable`): the server has no `Screen`
+  until the display gives it one, and on a Dot the host never takes one.
+
+The display's side (part B implements it): `serve.Screen`, which `addonhost.ScreenSink` names,
+
+```go
+type Screen interface {
+	PageChanged(id string) // the add-on's page set, patched or gone
+	CardChanged(id string) // its card set, patched or gone
+	Open(id string)        // screen.open: bring the page up when nothing more pressing is
+	Close(id string)       // screen.close, or the page gone with the add-on
+}
+```
+
+given with `addonhost.Get().SetScreen(sink)`. Each call says only that something may have changed and
+must return at once; the display reads `Host.Scene(id, on)` (a `serve.Scene`: the root block, which is
+never changed once given out, a revision and when it was set), lists the tiles with
+`Host.ScreenTiles()`, and tells the host `Shown(id, on, shown)`, `Touch(id, on, block)`,
+`Swipe(id, direction)`, `Back(id)` and `DismissCard(id)`.
+
+Storage: nothing per message. Scenes are in RAM, at most 64 KB each and two per add-on, and nothing
+about one is logged or written.
+
+Questions for part B:
+
+1. A larger message for image bytes (the plan's 256 KB), as an `image.put` op that a scene's image
+   names, or images by address only?
+2. Should a list item be tappable as a whole (a recipe in a list), as a `button` laid out as a row is
+   now, or by a pressable row?
+3. Should `screen.open` be refused at night, or left to the display's "more pressing" rule?
