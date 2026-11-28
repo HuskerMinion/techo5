@@ -24,7 +24,7 @@ import (
 //
 // TECHO5_WAKEBENCH is one or more bench directories, comma separated; TECHO5_MODELS the models, and
 // TECHO5_WAKE the word (alexa). Scored on the exact front end, as the daemon scores on this board, at
-// the daemon's cutoffs: 0.85 without music, 0.55 over it. Reports only.
+// the daemon's cutoffs: 0.85 without music, 0.55 over it, or TECHO5_CUTOFFS. Reports only.
 func TestReplayWakebench(t *testing.T) {
 	dirs, models := os.Getenv("TECHO5_WAKEBENCH"), os.Getenv("TECHO5_MODELS")
 	if dirs == "" || models == "" {
@@ -75,6 +75,16 @@ func TestReplayWakebench(t *testing.T) {
 			}})
 		}
 	}
+	// TECHO5_CUTOFFS is "quiet,playing" when the device ran other thresholds than the defaults.
+	quietCut, playCut := 0.85, 0.55
+	if c := strings.Split(os.Getenv("TECHO5_CUTOFFS"), ","); len(c) == 2 {
+		q, err1 := strconv.ParseFloat(c[0], 64)
+		p, err2 := strconv.ParseFloat(c[1], 64)
+		if err1 != nil || err2 != nil {
+			t.Fatalf("TECHO5_CUTOFFS %q: want quiet,playing", os.Getenv("TECHO5_CUTOFFS"))
+		}
+		quietCut, playCut = q, p
+	}
 	totals := map[string][2]int{}
 	for _, dir := range strings.Split(dirs, ",") {
 		takes, _ := filepath.Glob(filepath.Join(dir, "raw-vol*.s24"))
@@ -89,9 +99,9 @@ func TestReplayWakebench(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cut := 0.55
+			cut := playCut
 			if tag == "vol000" {
-				cut = 0.85
+				cut = quietCut
 			}
 			line := fmt.Sprintf("%-40s", filepath.Base(dir)+"/"+tag)
 			for _, mx := range mixes {
@@ -118,7 +128,8 @@ func TestReplayWakebench(t *testing.T) {
 func benchPrompts(t *testing.T, dir, tag string) []float64 {
 	t.Helper()
 	start := -1.0
-	re := regexp.MustCompile(`\[(\d+\.\d+)\] raw dump started`)
+	// The uptime is padded to a width, so a short one has spaces after the bracket.
+	re := regexp.MustCompile(`\[\s*(\d+\.\d+)\] raw dump started`)
 	if f, err := os.Open(filepath.Join(dir, "log-"+tag+".txt")); err == nil {
 		sc := bufio.NewScanner(f)
 		sc.Buffer(make([]byte, 1<<20), 1<<20)
