@@ -19,6 +19,7 @@ import (
 	"github.com/HuskerMinion/techo5/echod/internal/component"
 	"github.com/HuskerMinion/techo5/echod/internal/config"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/led"
+	"github.com/HuskerMinion/techo5/echod/internal/hardware/mic"
 	"github.com/HuskerMinion/techo5/echod/internal/hardware/speaker"
 	"github.com/HuskerMinion/techo5/echod/internal/lib/hook"
 )
@@ -273,11 +274,11 @@ func newSlot(n int) slot {
 		}
 	}
 	component.BindEffect(s.effect, led.EffectNames(), nil,
-		func(v string) error { return config.Set().Wake(n).Effect(v) })
+		func(v string) error { return followTalker(config.Set().Wake(n).Effect(v)) })
 	component.BindOverride(s.thinking, led.EffectNames(),
-		func(v string) error { return config.Set().Wake(n).ThinkingEffect(v) })
+		func(v string) error { return followTalker(config.Set().Wake(n).ThinkingEffect(v)) })
 	component.BindOverride(s.replying, led.EffectNames(),
-		func(v string) error { return config.Set().Wake(n).ReplyingEffect(v) })
+		func(v string) error { return followTalker(config.Set().Wake(n).ReplyingEffect(v)) })
 	s.delivery.OnCommand = func(label string) {
 		how, ok := config.ByLabel(deliveries(), label)
 		if !ok {
@@ -446,5 +447,23 @@ func (w *WakeWord) Restore(c config.Config) {
 		s.maxListen.Set(float32(saved.MaxListen))
 		s.maxThink.Set(float32(saved.MaxThink))
 	}
+	followTalker(nil)
 	slog.Info("restored", "what", "wake word settings", "slots", len(w.slots))
+}
+
+// followTalker keeps the microphones' finder listening while any wake word plays Toward Talker, so the
+// arc points at whoever just said it whichever mix is chosen (mic.KeepFacing). It is called after a
+// wake word's effect is saved, and hands back how that went.
+func followTalker(err error) error {
+	if !mic.HasDirection() {
+		return err
+	}
+	on := false
+	for _, s := range config.Get().Wake.Slots(Slots) {
+		if s.Effect == led.EffectTalker || s.ThinkingEffect == led.EffectTalker || s.ReplyingEffect == led.EffectTalker {
+			on = true
+		}
+	}
+	mic.Get().KeepFacing("Toward Talker", on)
+	return err
 }

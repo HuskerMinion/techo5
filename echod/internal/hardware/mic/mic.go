@@ -115,6 +115,10 @@ type Source struct {
 	arrayFinder *finder
 	facing      atomic.Int32
 	wantFacing  atomic.Bool
+	// askedAt is when Facing was last asked, in Unix nanoseconds, and keep who keeps the measured
+	// array's finder running regardless (KeepFacing).
+	askedAt atomic.Int64
+	keep    facingDemand
 }
 
 // SetMixing chooses how the microphones are combined. It takes effect on the next frame, and reports
