@@ -96,3 +96,52 @@ func hue(h float64) Color {
 		return Color{R: 255, G: 0, B: ramp(6 - x)}
 	}
 }
+
+// toHSV is a color's hue (0-1 round the wheel), saturation and value (each 0-1).
+func toHSV(c Color) (h, s, v float64) {
+	r, g, b := float64(c.R)/255, float64(c.G)/255, float64(c.B)/255
+	hi, lo := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
+	v = hi
+	d := hi - lo
+	if hi > 0 {
+		s = d / hi
+	}
+	if d == 0 {
+		return 0, s, v
+	}
+	switch hi {
+	case r:
+		h = math.Mod((g-b)/d, 6)
+	case g:
+		h = (b-r)/d + 2
+	default:
+		h = (r-g)/d + 4
+	}
+	return math.Mod(h/6+1, 1), s, v
+}
+
+// fromHSV is toHSV's inverse.
+func fromHSV(h, s, v float64) Color {
+	h = math.Mod(math.Mod(h, 1)+1, 1) * 6
+	s, v = math.Max(0, math.Min(1, s)), math.Max(0, math.Min(1, v))
+	c := v * s
+	x := c * (1 - math.Abs(math.Mod(h, 2)-1))
+	var r, g, b float64
+	switch int(h) {
+	case 0:
+		r, g = c, x
+	case 1:
+		r, g = x, c
+	case 2:
+		g, b = c, x
+	case 3:
+		g, b = x, c
+	case 4:
+		r, b = x, c
+	default:
+		r, b = c, x
+	}
+	m := v - c
+	to := func(f float64) byte { return byte(math.Round((f + m) * 255)) }
+	return Color{R: to(r), G: to(g), B: to(b)}
+}

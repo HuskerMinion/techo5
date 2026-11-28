@@ -15,6 +15,7 @@ var ambientEffects = []Effect{
 	{Name: EffectRipple, New: ripple},
 	{Name: EffectStandingWave, New: standing},
 	{Name: EffectTwinkle, New: twinkle},
+	{Name: EffectTalker, New: toward, Derives: true, Placed: true},
 
 	// In colors of their own, where the colors are the point: a flame is not a shape, and an
 	// aurora in one color is a ring that cannot make up its mind.

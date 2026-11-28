@@ -90,6 +90,16 @@ type Effect struct {
 	// what makes an effect unable to be anything else: there is no sensible still frame to fall back
 	// on when nothing is listening for it.
 	Senses func(p Palette, r Room) Frame
+
+	// Derives is an effect that inherits the ring's color and works out a companion to it (a lighter,
+	// shifted hue), so it may light channels the ring's color does not have. It still follows the ring:
+	// a different color in gives different colors out.
+	Derives bool
+
+	// Placed is an effect whose segments are places round the device rather than steps of a motion:
+	// it points at something. Reversing it would point at the mirror image, so it is never reversed.
+	// Every room effect is treated as placed too.
+	Placed bool
 }
 
 // Effect names. A pairing that brings its own colors is named for the palette and the motion, so
@@ -101,6 +111,8 @@ const (
 	EffectRipple       = "Ripple"
 	EffectStandingWave = "Standing Wave"
 	EffectTwinkle      = "Twinkle"
+	// EffectTalker points at whoever is talking, where the microphones can tell (SetTalker).
+	EffectTalker = "Toward Talker"
 
 	// Ambient, in their own.
 	EffectCrimsonHeartbeat = "Crimson Heartbeat"
@@ -262,14 +274,18 @@ func through(frame, under Frame) Frame {
 // RunEffectReversed animates the same effect the other way round the ring, which is how the device
 // says it has stopped listening and is now waiting on an answer.
 //
-// Reversing an effect that reacts to the room is allowed and means nothing: what it shows comes from
-// the room rather than from a direction of travel.
+// Reversing an effect that reacts to the room, or one that points somewhere (Placed), is allowed and
+// changes nothing: what it shows comes from the room rather than from a direction of travel, and
+// mirrored it would point the wrong way.
 func RunEffectReversed(ctx context.Context, r *Ring, name string, base Color, room Room, under Frame) error {
 	frame, err := effect(name, base, room)
 	if err != nil {
 		return err
 	}
-	return play(ctx, r, 0, through(reverse(frame), under))
+	if e := byName[name]; !e.Placed && e.Senses == nil {
+		frame = reverse(frame)
+	}
+	return play(ctx, r, 0, through(frame, under))
 }
 
 // reverse mirrors a frame around the ring, turning clockwise motion into anticlockwise without an

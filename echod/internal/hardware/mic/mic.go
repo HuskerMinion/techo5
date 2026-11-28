@@ -109,9 +109,16 @@ type Source struct {
 
 	// Which way the loudest sound is, as a beam, or -1 until something asks. finder belongs to the
 	// reader; wantFacing is how anything else asks it to look.
-	finder     *Beamformer
-	facing     atomic.Int32
-	wantFacing atomic.Bool
+	finder *Beamformer
+	// arrayFinder replaces finder where the array's geometry was measured (steered.go); facing then
+	// holds tenths of a degree clockwise from segment 0 rather than a beam.
+	arrayFinder *finder
+	facing      atomic.Int32
+	wantFacing  atomic.Bool
+	// askedAt is when Facing was last asked, in Unix nanoseconds, and keep who keeps the measured
+	// array's finder running regardless (KeepFacing).
+	askedAt atomic.Int64
+	keep    facingDemand
 }
 
 // SetMixing chooses how the microphones are combined. It takes effect on the next frame, and reports
@@ -477,7 +484,7 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 	// The recent history is kept whether or not anyone is listening: a wake word is only recognized
 	// once it has been said, so by the time a turn starts, the words after it are already past.
 	mics := Decode(raw)
-	frame := s.mixer.Mix(mics)
+	frame := mixFrame(s.mixer, raw, mics)
 
 	// While something is playing, an echo canceled fixed path replaces the mix (cancelInput): the filter
 	// learns a single acoustic path, and the beamformer would steer at the loudest thing in the room,
@@ -508,7 +515,7 @@ func (s *Source) broadcastSelected(raw []byte, cut bool, external *aspResponse) 
 	// Before the noise reduction, which would lower the floor it is measured against.
 	s.standout.add(frame, s.leveler.leastNow())
 
-	s.findFacing(mics)
+	s.findFacing(raw, mics)
 
 	// After the echo canceller, so the estimator is not asked to learn the speaker as part of the
 	// room, and before leveling, so the gain is not put back on a floor that has just been removed.

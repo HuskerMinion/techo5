@@ -124,6 +124,15 @@ var ocean = Palette{
 	{R: 0x90, G: 0xF0, B: 0xE0},
 }
 
+// listening is the color of a device that heard its name: a deep blue ring with a cyan arc toward the
+// talker, the pairing Amazon's own ring uses. Two colors rather than two brightnesses, because the
+// Dot 5's fabric spreads every module over its neighbors and evens brightness out, while a change of
+// hue survives it: a white ring with one module at full and the rest at a sixteenth looked even.
+var listening = Palette{
+	{R: 0x00, G: 0x06, B: 0x50},
+	{R: 0x60, G: 0xF0, B: 0xFF},
+}
+
 // ice is the cold end of white: a blue shadow up to the glare off a surface. Hottest last, unlike
 // fire, because ice reads as bright rather than as warm.
 var ice = Palette{

@@ -56,6 +56,22 @@ func (Center) Mix(mics [][]int16) []int16 {
 // Anything that steers is not one.
 type fixedPath interface{ fixedPath() }
 
+// heldPath marks a mix that steers but holds still at times, and says when.
+type heldPath interface{ pathFixed() bool }
+
+// rawMixer is a mix that reads the whole frame, the loopback too.
+type rawMixer interface {
+	MixRaw(raw []byte, mics [][]int16) []int16
+}
+
+// mixFrame mixes one frame, handing a mix that wants it the loopback too.
+func mixFrame(m Mixer, raw []byte, mics [][]int16) []int16 {
+	if rm, ok := m.(rawMixer); ok {
+		return rm.MixRaw(raw, mics)
+	}
+	return m.Mix(mics)
+}
+
 func (Center) fixedPath()  {}
 func (Average) fixedPath() {}
 
@@ -67,6 +83,9 @@ func cancelInput(m Mixer, mics [][]int16, mixed []int16) []int16 {
 		return mics[CenterMic]
 	}
 	if _, ok := m.(fixedPath); ok && mixed != nil {
+		return mixed
+	}
+	if p, ok := m.(heldPath); ok && p.pathFixed() && mixed != nil {
 		return mixed
 	}
 	return Average{}.Mix(mics)
@@ -88,7 +107,12 @@ var mixes = sync.OnceValue(func() []mix {
 	}
 	// Steering needs the ring: the delays are the Dot's geometry, and two microphones have no
 	// direction to resolve.
-	if Mics >= 3 {
+	switch {
+	case arrayGeometry != nil:
+		// A board whose geometry was measured steers with it. The delay and sum below assumes the
+		// seven-microphone ring, which this array is not.
+		out = append(out, mix{config.MixSuperdirective, func() Mixer { return newSteered() }})
+	case Mics >= 3:
 		out = append(out, mix{config.MixDelaySum, func() Mixer { return NewBeamformer() }})
 	}
 

@@ -1557,6 +1557,42 @@ To retry manually, change **Microphone ASP selected** to Built-in, then back to 
 
 See [External microphone ASP](external-asp.md) for the helper interface, requirements and limitations.
 
+### The Echo Dot 5th gen's microphones
+
+The Echo Dot 5th gen has three microphones in an L, 22.5 mm a side, under the top. Their places were
+measured on a unit, so it can tell which way a voice comes from, which no other device here does. Three
+things use that.
+
+**Superdirective beam** is a choice of **Microphone mixing** (the device's microphone settings in Home
+Assistant), and the Dot 5's default. The others are **Center mic** and **All microphones**. It
+listens toward whoever spoke last and turns down sound from everywhere else, the room's reflections
+included. While the device plays music or speaks, the beam stops turning and puts a null on the Dot's
+own speaker, which it learns from what is being played. That is where it helps most, and the
+further away you are, the more: replayed over 114 wake words said about 6 m away with the device's
+own music at 0 to 65% volume, it caught 79, against 60 for Center mic. A meter away the two catch
+about the same, with or without music. It costs about a fifth of one core more than Center mic. If
+the wake word is harder to catch with it in your room, choose **Center mic**.
+
+**Toward Talker** is a ring effect: a blue ring with a cyan arc pointing at whoever is talking, which
+eases round as they move. Choose it as a **Wake word effect** (or Thinking or Replying effect) in Home
+Assistant, as with any other effect. It points over music too, since the direction is found with the
+device's own speaker taken out. Where the device cannot tell, it glows evenly. On a ring set to another
+color, the ring and the arc follow that color.
+
+**Send wake word direction** (a switch under the device's microphone settings in Home Assistant, off
+by default) fills **Wake word direction**: where the wake word that opened the last request came from,
+in degrees clockwise from the back of the device (the power socket) seen from above. It is set as the
+word is heard, before the request starts, so an automation on the request can read it, for example to
+turn on the lamp on the side the person is standing. It holds until the next wake word. With the switch
+off, the sensor reads unknown and the direction stays on the device. It is off by default because it
+says where somebody is in the room, like **Presence detection**. A settings file never turns it on,
+and neither does the remote API.
+
+The direction is found all the time while the beam is chosen, since it steers by it. With **Center
+mic** or **All microphones**, it is found only while something needs it: Send wake word direction is
+on, a wake word plays Toward Talker, or a ring effect such as Room Compass is showing. Otherwise
+nothing is spent on it.
+
 ### Two wake words, two assistants
 
 The device listens for two wake words at once, and each one starts its own voice assistant. Use one

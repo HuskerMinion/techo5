@@ -40,6 +40,11 @@ type Wake struct {
 
 	// Send uploads each kept clip to a trainer on the home network (wakesend.go). Off unless chosen.
 	Send WakeSend `json:"send,omitzero"`
+
+	// SendDirection puts where each wake word came from on Home Assistant's Wake word direction, on a
+	// board that can tell (feature/detect, direction.go). Off unless chosen: it says where somebody is
+	// in the room, as Motion and Presence detection do, and those are off until turned on too.
+	SendDirection bool `json:"send_direction,omitempty"`
 }
 
 // OnHA is what Home Assistant's wake word engine is asked to do. Both are off unless chosen: either one

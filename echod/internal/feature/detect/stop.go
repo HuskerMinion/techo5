@@ -177,6 +177,7 @@ func (d *Detect) Entities() []esphome.Entity {
 		out = append(out, c.word, c.threshold)
 	}
 	out = append(out, d.frames.busy, d.frames.rate, d.frames.worst)
+	out = append(out, d.direction.entities()...)
 	return append(out, d.score, d.wakeProblem, d.onHA.stream, d.onHA.confirm, d.onHA.threshold, d.onHA.faint, d.clipsTotal, d.clipsKinds,
 		d.keepClips, d.send.to, d.send.unsent, d.send.status)
 }
@@ -257,6 +258,7 @@ func (d *Detect) Restore(c config.Config) {
 	// Off, anything an earlier run left behind goes too.
 	d.clips.enable(keep)
 	d.restoreSend(c)
+	d.direction.restore(c)
 }
 
 // newClipsEntities are how many wake clips the device keeps (clips.go): all of them, and each kind.

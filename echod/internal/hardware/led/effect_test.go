@@ -95,6 +95,19 @@ func TestEffectsUseTheColorsTheCatalogueSaysTheyDo(t *testing.T) {
 				return
 			}
 
+			if e.Derives {
+				same := true
+				for i := range red {
+					if !slices.Equal(red[i], blue[i]) {
+						same = false
+					}
+				}
+				if same {
+					t.Fatal("derives its colors from the ring's, but shows the same whatever the ring's color")
+				}
+				return
+			}
+
 			for i, f := range red {
 				for seg, c := range f {
 					if c.G != 0 || c.B != 0 {
