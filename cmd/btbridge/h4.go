@@ -70,8 +70,8 @@ func capFeaturePages(pkt []byte, max byte) bool {
 // then (LE Advertising Set Terminated, Advertising Timeout) and the kernel never enables it again, so
 // an advertisement bluetoothd added went out twice and stopped (Improv was never seen). Legacy
 // advertising has no duration and runs until it is turned off. Its 31 bytes are all bluetoothd's
-// advertisements take. The same bit also turns the kernel's scanning to the legacy commands.
-// Reports whether the packet was changed.
+// advertisements take. The 5.4 kernel scans and connects by what the supported commands say instead
+// (hideExtScan). Reports whether the packet was changed.
 func hideExtAdv(pkt []byte) bool {
 	// 04 0e plen ncmd opcode(03 20) status features[8]
 	if len(pkt) < 15 || pkt[0] != h4Event || pkt[1] != 0x0e || pkt[4] != 0x03 || pkt[5] != 0x20 || pkt[6] != 0 {
@@ -81,6 +81,26 @@ func hideExtAdv(pkt []byte) bool {
 		return false
 	}
 	pkt[8] &^= 0x30
+	return true
+}
+
+// hideExtScan clears LE Set Extended Scan Parameters, LE Set Extended Scan Enable and LE Extended Create
+// Connection (octet 37, bits 5 to 7) in the controller's answer to Read Local Supported Commands, so the
+// kernel scans and connects with the legacy commands, the ones the daemon's BLE proxy scans with on its
+// raw HCI socket (echod hardware/ble). The 5.4 kernel picks the extended ones by these bits alone, and
+// the MediaTek controller refuses one family after the other was used (Command Disallowed): the
+// kernel's extended scan for a connection bluetoothd made then failed at once, Busy, and no device
+// could be connected through the proxy. Reports whether the packet was changed.
+func hideExtScan(pkt []byte) bool {
+	// 04 0e plen ncmd opcode(02 10) status commands[64]
+	const octet37 = 7 + 37
+	if len(pkt) < 7+64 || pkt[0] != h4Event || pkt[1] != 0x0e || pkt[4] != 0x02 || pkt[5] != 0x10 || pkt[6] != 0 {
+		return false
+	}
+	if pkt[octet37]&0xe0 == 0 {
+		return false
+	}
+	pkt[octet37] &^= 0xe0
 	return true
 }
 

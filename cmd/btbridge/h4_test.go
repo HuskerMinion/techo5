@@ -174,3 +174,38 @@ func TestHideExtAdv(t *testing.T) {
 		}
 	}
 }
+
+// Read Local Supported Commands: the extended scan and create connection commands are hidden, the
+// rest of octet 37 and every other octet kept, and other events pass untouched.
+func TestHideExtScan(t *testing.T) {
+	cmds := func(status byte) []byte {
+		p := append([]byte{0x04, 0x0e, 0x44, 0x01, 0x02, 0x10, status}, make([]byte, 64)...)
+		for i := range 64 {
+			p[7+i] = 0xff
+		}
+		return p
+	}
+	p := cmds(0)
+	if !hideExtScan(p) {
+		t.Fatal("the commands were not changed")
+	}
+	if p[7+37] != 0x1f {
+		t.Errorf("octet 37 = %#x, want 0x1f", p[7+37])
+	}
+	for i := range 64 {
+		if i != 37 && p[7+i] != 0xff {
+			t.Errorf("octet %d changed to %#x", i, p[7+i])
+		}
+	}
+	if hideExtScan(p) {
+		t.Error("changed again with nothing left to hide")
+	}
+	failed := cmds(1)
+	short := cmds(0)[:7+37]
+	for _, q := range [][]byte{failed, short, evt} {
+		before := append([]byte(nil), q...)
+		if hideExtScan(q) || !bytes.Equal(q, before) {
+			t.Errorf("% x was changed", before)
+		}
+	}
+}
