@@ -54,6 +54,7 @@ var keptByRestore = map[string]keptSetting{
 	"camera_live":                  {func(c *config.Config) { c.Home.CameraLive = true }, func(c config.Config) bool { return c.Home.CameraLive }},
 	"screen_camera_dot":            {func(c *config.Config) { c.Screen.CameraDotWatchedOnly = true }, func(c config.Config) bool { return c.Screen.CameraDotWatchedOnly }},
 	"keep_wake_clips":              {func(c *config.Config) { c.Wake.KeepClips = true }, func(c config.Config) bool { return c.Wake.KeepClips }},
+	"send_wake_direction":          {func(c *config.Config) { c.Wake.SendDirection = true }, func(c config.Config) bool { return c.Wake.SendDirection }},
 	"send_wake_clips_to": {func(c *config.Config) {
 		c.Wake.Send = config.WakeSend{Target: config.SendCustom, URL: "http://192.168.1.2", Token: "t"}
 	}, func(c config.Config) bool { return c.Wake.Send.Target != "" || c.Wake.Send.URL != "" }},

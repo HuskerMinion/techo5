@@ -177,6 +177,11 @@ func (w Writer) KeepClips(v bool) error {
 	return w.st.Update(func(c *Config) { c.Wake.KeepClips = false })
 }
 
+// SendDirection records whether Wake word direction is sent to Home Assistant.
+func (w Writer) SendDirection(v bool) error {
+	return w.st.Update(func(c *Config) { c.Wake.SendDirection = v })
+}
+
 func errSlot(n int) error { return fmt.Errorf("config: wake slot %d", n) }
 
 // Labeled is a setting whose values name themselves. The entity layer binds any of these to a

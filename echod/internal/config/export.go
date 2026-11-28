@@ -398,6 +398,8 @@ func KeepOwn(c *Config, from Config) {
 	c.Wake.Stop.ID = from.Wake.Stop.ID
 	c.Wake.OnHA.Stream, c.Wake.OnHA.Confirm = from.Wake.OnHA.Stream, from.Wake.OnHA.Confirm
 	c.Wake.KeepClips = from.Wake.KeepClips
+	// Where each wake word came from, which says where somebody is in the room.
+	c.Wake.SendDirection = from.Wake.SendDirection
 	// Where kept clips are uploaded to, and with what token: the device's own, never a file's.
 	c.Wake.Send = from.Wake.Send
 	c.Presence.On, c.Presence.Gestures = from.Presence.On, from.Presence.Gestures
