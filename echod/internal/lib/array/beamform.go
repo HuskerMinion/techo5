@@ -273,7 +273,9 @@ func (b *Beamformer) Omega(k int) float64 { return 2 * math.Pi * float64(k) * b.
 // source at bearing unchanged and nothing of a source whose response across the microphones is null
 // (relative to any one of them), and of what is left lets through as little of a diffuse room as it can.
 // It is the linearly constrained minimum variance solution against the diffuse field, loaded until its
-// white noise gain reaches minWNG.
+// white noise gain reaches minWNG. Where the two constraints alone forbid that, which on the Dot 5's
+// 22 mm is below about 1 kHz (-15 to -18 dB at 300 Hz against a -10 dB floor), the loading's ceiling
+// leaves it next to the least-norm weights that meet them, the most white noise gain there is to have.
 //
 // The null is for the device's own speaker. It sits a few centimetres under the microphones, far
 // nearer than any talker, so its response is nothing like a far source's and has to be measured; and a

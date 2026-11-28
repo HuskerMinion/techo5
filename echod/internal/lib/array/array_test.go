@@ -2,6 +2,7 @@ package array
 
 import (
 	"math"
+	"math/cmplx"
 	"math/rand/v2"
 	"testing"
 )
@@ -181,4 +182,89 @@ func TestBeamformerPassesItsBearingAndRejectsOthers(t *testing.T) {
 	if math.Abs(on) > 1.5 || off > on-3 {
 		t.Errorf("beam 3: %.1f dB from its bearing, %.1f dB from the opposite side", on, off)
 	}
+}
+
+// nearField is how g hears a point source at p, height z under the plane: each microphone's phase and
+// level, as a speaker a few centimetres under the array reaches it.
+func nearField(g Geometry, omega float64, p Vec, z float64) []complex128 {
+	h := make([]complex128, len(g))
+	for m := range g {
+		r := math.Hypot(g[m].Sub(p).Len(), z)
+		h[m] = cmplx.Rect(z/r, -omega*r/SpeedOfSound)
+	}
+	return h
+}
+
+// Constrained passes the talker's bearing unchanged, lets nothing of the speaker through, keeps its
+// white noise gain, and with nothing to tell the two apart keeps the talker as Superdirective would.
+func TestConstrainedNullsTheSpeakerAndKeepsTheTalker(t *testing.T) {
+	g := lShape.Centered()
+	const minWNG = 0.1 // -10 dB, as the Dot 5's mix uses
+	response := func(w, x []complex128) complex128 {
+		var r complex128
+		for m := range w {
+			r += cmplx.Conj(w[m]) * x[m]
+		}
+		return r
+	}
+	for _, deg := range []float64{0, 75, 150, 225, 300} {
+		for _, f := range []float64{300, 1000, 3000, 6000} {
+			omega := 2 * math.Pi * f
+			d := Steering(g, omega, Radians(deg))
+			h := nearField(g, omega, Vec{0.004, -0.003}, 0.03)
+			w := Constrained(g, omega, Radians(deg), h, minWNG)
+
+			if r := response(w, d); cmplx.Abs(r-1) > 1e-6 {
+				t.Errorf("%v° at %v Hz: the talker comes through as %v", deg, f, r)
+			}
+			if r := response(w, h); cmplx.Abs(r) > 1e-6 {
+				t.Errorf("%v° at %v Hz: the speaker comes through at %.1f dB", deg, f, 20*math.Log10(cmplx.Abs(r)))
+			}
+			// The white noise gain reaches the floor, or where both constraints together forbid that (low
+			// down, where the talker and the speaker reach three microphones 22 mm apart almost alike),
+			// comes as close as any weights meeting them can: the least-norm solution's.
+			if wng, best := wngOf(w), wngOf(leastNorm(d, h)); wng < math.Min(minWNG, best)*0.99 {
+				t.Errorf("%v° at %v Hz: white noise gain %.1f dB, where %.1f dB was possible", deg, f,
+					10*math.Log10(wng), 10*math.Log10(math.Min(minWNG, best)))
+			}
+		}
+	}
+
+	// A null where the talker is cannot be met: the talker is kept, as Superdirective keeps them.
+	omega := 2 * math.Pi * 2000.0
+	d := Steering(g, omega, 1)
+	got, want := Constrained(g, omega, 1, d, minWNG), Superdirective(g, omega, 1, minWNG)
+	for m := range got {
+		if cmplx.Abs(got[m]-want[m]) > 1e-9 {
+			t.Fatalf("null on the talker: weights %v, want Superdirective's %v", got, want)
+		}
+	}
+}
+
+// wngOf is w's white noise gain for a response of 1 where it is constrained to be.
+func wngOf(w []complex128) float64 {
+	var norm float64
+	for _, v := range w {
+		norm += real(v)*real(v) + imag(v)*imag(v)
+	}
+	return 1 / norm
+}
+
+// leastNorm is the weights of least norm that pass d unchanged and null h: C(CᴴC)⁻¹[1 0]ᵀ, C = [d h].
+func leastNorm(d, h []complex128) []complex128 {
+	dot := func(a, b []complex128) complex128 {
+		var s complex128
+		for i := range a {
+			s += cmplx.Conj(a[i]) * b[i]
+		}
+		return s
+	}
+	m11, m12, m21, m22 := dot(d, d), dot(d, h), dot(h, d), dot(h, h)
+	det := m11*m22 - m12*m21
+	a, b := m22/det, -m21/det
+	w := make([]complex128, len(d))
+	for i := range w {
+		w[i] = d[i]*a + h[i]*b
+	}
+	return w
 }
