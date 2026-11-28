@@ -35,16 +35,18 @@ type hciFilter struct {
 // sizeof(struct hci_ufilter) is 16; this fails to compile if the layout above drifts from it.
 var _ [0]struct{} = [unsafe.Sizeof(hciFilter{}) - 16]struct{}{}
 
-// openKernel opens a raw socket on hci0 that sees every event. Packets on it carry the H4 type byte
-// first, the same as the node, so everything after the open is shared. Reads time out after a second
-// so Stop never waits on a quiet controller.
+// openKernel opens a raw socket on hci0 that sees every event, and the commands the kernel and other
+// sockets send: the kernel turns the scan off to connect a device bluetoothd asked for, and never on
+// again, and the reader takes it back when it sees that (Radio.parse). Packets on it carry the H4 type
+// byte first, the same as the node, so everything after the open is shared. Reads time out after a
+// second so Stop never waits on a quiet controller.
 func openKernel() (int, error) {
 	fd, err := unix.Socket(unix.AF_BLUETOOTH, unix.SOCK_RAW|unix.SOCK_CLOEXEC, unix.BTPROTO_HCI)
 	if err != nil {
 		return -1, fmt.Errorf("ble: hci socket: %w", err)
 	}
 	all := ^uint32(0)
-	filter := hciFilter{typeMask: 1 << h4Event, eventMask: [2]uint32{all, all}}
+	filter := hciFilter{typeMask: 1<<h4Event | 1<<h4Command, eventMask: [2]uint32{all, all}}
 	if _, _, errno := unix.Syscall6(unix.SYS_SETSOCKOPT, uintptr(fd), unix.SOL_HCI, hciFilterOpt,
 		uintptr(unsafe.Pointer(&filter)), unsafe.Sizeof(filter), 0); errno != 0 {
 		_ = unix.Close(fd)

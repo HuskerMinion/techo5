@@ -752,7 +752,7 @@ HTTP.
   the Dot is connected to a Bluetooth speaker. Tried on a Dot, a Show and a Spot.
   **Turn the Bluetooth proxy off** on a device a phone plays to: the proxy keeps scanning on the same
   radio, and the phone's sound stutters or drops while it does (#105).
-- **Bluetooth proxy connections.** On the Show and the Spot, the **Bluetooth proxy connections**
+- **Bluetooth proxy connections.** On the Show, the Spot and the Echo Dot 5th gen, the **Bluetooth proxy connections**
   switch in Home Assistant, off by default, lets Home Assistant connect to BLE devices through the
   device, up to three at a time, the way an ESP32 proxy does: an integration that controls a device (a
   humidifier, a lock, a light) can reach it, not only read what it advertises. It works only while the
@@ -768,6 +768,9 @@ HTTP.
   Scanning pauses for the second or two a connection takes. Pairing is offered, as above;
   clearing the cache from Home Assistant is not. Devices that authenticate in their own protocol work. Tried on
   a Spot with a Boneco H400 through the Boneco integration; the Show has not made an LE connection yet.
+  Tried on an Echo Dot 5th gen with a Xiaomi Flower Care plant sensor, whose battery Home Assistant
+  reads over a connection; the scan goes on during and after it, and Wi-Fi was unaffected. The older
+  Dots scan only, with no switch. Pairing through the Dot 5th gen is offered but has not been tried.
 - **Bluetooth, the rest of it.** A phone playing to the device has one volume, the device's: its
   volume slider moves the device's volume, and the device's buttons and Home Assistant move the
   slider (night volume still caps a raise from the phone), unless **Bluetooth sets the volume** is

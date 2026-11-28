@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 )
 
 // Node is the controller's HCI character device.
@@ -25,7 +26,12 @@ const (
 	cmdLEAdvertisingEnable = 0x200A
 	cmdLEScanParams        = 0x200B
 	cmdLEScanEnable        = 0x200C
+	cmdLECreateConnection  = 0x200D
 )
+
+// retakeAfter is how long after another socket turned the scan off the radio turns it on again: the
+// kernel stops it to connect a device, and a connection it is still making is left alone (initiating).
+var retakeAfter = 2 * time.Second
 
 // How much of the time the radio listens, in units of 0.625 ms: 18.75 ms out of every 200 ms. Wifi
 // and Bluetooth share one antenna here, so a window equal to the interval never gives it back.
@@ -74,7 +80,16 @@ type Radio struct {
 	// connects and the reader turns on again when it disconnects. Set before the reader starts and
 	// cleared after it has finished, so the reader reads it without mu.
 	offering bool
-	stop     context.CancelFunc
+	// active is the running scan's kind (Start's active), for Pause's resume to start it again.
+	active bool
+	// paused counts Pauses out: while any is, the scan Start asked for is left off.
+	paused int
+	// retake is the timer that turns the scan on again after another socket turned it off (parse).
+	retake *time.Timer
+	// initiating says the kernel has sent LE Create Connection and the connection is not complete yet.
+	// Set and cleared by the reader, read by retake's timer.
+	initiating atomic.Bool
+	stop       context.CancelFunc
 	// finished is both the reader's completion signal and its handoff of an unfinished H4 event.
 	finished chan []byte
 	// held carries an unfinished H4 event between synchronous startup commands.
@@ -132,7 +147,8 @@ func (r *Radio) Start(scan, active bool, advertisement []byte, found func(Advert
 	}
 	r.fd = fd
 
-	if err := r.begin(scan, active, advertisement); err != nil {
+	// A scan asked for while paused is started by the last resume instead.
+	if err := r.begin(scan && r.paused == 0, active, advertisement); err != nil {
 		_ = syscall.Close(fd)
 		r.fd = -1
 		r.held = nil
@@ -141,12 +157,67 @@ func (r *Radio) Start(scan, active bool, advertisement []byte, found func(Advert
 
 	ctx, cancel := context.WithCancel(context.Background())
 	r.stop, r.finished, r.open = cancel, make(chan []byte, 1), true
-	r.scanning = scan
+	r.scanning, r.active = scan, active
 	held := r.held
 	r.held = nil
 
 	go r.read(ctx, found, held, r.finished)
 	return nil
+}
+
+// Pause stops the scan until the returned resume is called, while bluetoothd makes a connection for the
+// proxy (feature/bluetooth): the kernel then scans for the device with parameters of its own and
+// creates the connection when it hears it, and the controller refuses new scan parameters, and with
+// them the kernel's attempt, while this socket's scan runs. Resume starts the scan again as Start had it,
+// parameters first, since the kernel's may have been left behind. Pauses nest.
+//
+// The reader owns the socket's replies while the radio runs, so these commands are only written: their
+// Command Complete events come back to it, which has no use for them, as after a disconnect in Offer.
+func (r *Radio) Pause() (resume func()) {
+	r.mu.Lock()
+	r.paused++
+	if r.paused == 1 && r.open && r.scanning {
+		if err := write(r.fd, cmdLEScanEnable, []byte{0x00, 0x00}); err != nil {
+			slog.Debug("ble: pausing the scan", "err", err)
+		}
+	}
+	r.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			r.paused--
+			if r.paused == 0 && r.open && r.scanning {
+				if err := r.rescan(); err != nil {
+					slog.Debug("ble: resuming the scan", "err", err)
+				}
+			}
+		})
+	}
+}
+
+// rescan writes the scan Start set up again: off, its parameters, on. Held with mu, the radio open.
+func (r *Radio) rescan() error {
+	if err := write(r.fd, cmdLEScanEnable, []byte{0x00, 0x00}); err != nil {
+		return err
+	}
+	if err := write(r.fd, cmdLEScanParams, scanParams(r.active)); err != nil {
+		return err
+	}
+	return write(r.fd, cmdLEScanEnable, []byte{0x01, 0x00})
+}
+
+// scanParams is LE Set Scan Parameters' parameters: active or passive, the radio's interval and window.
+func scanParams(active bool) []byte {
+	scan := make([]byte, 7)
+	if active {
+		scan[0] = 0x01
+	}
+	binary.LittleEndian.PutUint16(scan[1:], scanInterval)
+	binary.LittleEndian.PutUint16(scan[3:], scanWindow)
+	return scan
 }
 
 // ErrNoKernelStack is Offer on a device whose kernel's Bluetooth stack does not own the controller:
@@ -239,6 +310,9 @@ func (r *Radio) Stop() {
 	stop, done, fd := r.stop, r.finished, r.fd
 	r.open = false
 	r.scanning = false
+	if r.retake != nil {
+		r.retake.Stop()
+	}
 	r.mu.Unlock()
 
 	stop()
@@ -291,14 +365,7 @@ func (r *Radio) begin(scanning, active bool, advertisement []byte) error {
 	// This MTK controller can scan and advertise together, but only when scanning is enabled first.
 	// Enabling advertising first leaves the subsequent scan command waiting indefinitely.
 	if scanning {
-		scan := make([]byte, 7)
-		if active {
-			scan[0] = 0x01
-		}
-		binary.LittleEndian.PutUint16(scan[1:], scanInterval)
-		binary.LittleEndian.PutUint16(scan[3:], scanWindow)
-
-		if err := r.send("scan parameters", cmdLEScanParams, scan); err != nil {
+		if err := r.send("scan parameters", cmdLEScanParams, scanParams(active)); err != nil {
 			return err
 		}
 		if err := r.send("scan enable", cmdLEScanEnable, []byte{0x01, 0x00}); err != nil {
@@ -373,7 +440,7 @@ func (r *Radio) read(ctx context.Context, found func(Advertisement), held []byte
 // controller had ready, and the last can be cut short.
 func (r *Radio) parse(b []byte, found func(Advertisement)) ([]byte, error) {
 	for {
-		event, remainder, ok, err := nextEvent(b)
+		event, remainder, ok, err := nextPacket(b)
 		if err != nil {
 			return nil, err
 		}
@@ -382,8 +449,13 @@ func (r *Radio) parse(b []byte, found func(Advertisement)) ([]byte, error) {
 		}
 
 		switch {
+		case event[0] == h4Command:
+			r.sent(event)
 		case event[1] == evtLEMeta:
 			r.reports.Add(1)
+			if len(event) > 3 && (event[3] == leConnectionComplete || event[3] == leEnhancedConnComplete) {
+				r.initiating.Store(false)
+			}
 			reports(event[3:], found)
 		case event[1] == evtDisconnectionComplete && r.offering:
 			// The controller stopped advertising when the central connected. Its Command Complete
@@ -395,6 +467,54 @@ func (r *Radio) parse(b []byte, found func(Advertisement)) ([]byte, error) {
 		}
 		b = remainder
 	}
+}
+
+// sent follows a command another socket on hci0 sent the controller (this socket's own never come back
+// to it): the kernel, connecting a device bluetoothd asked for, stops the scan, sets one of its own up
+// with the device in its accept list, stops that once it hears it, and creates the connection, and
+// leaves scanning off then. The radio's scan is taken back retakeAfter later, once no connection is
+// being made and no Pause is out. On the reader's goroutine.
+func (r *Radio) sent(pkt []byte) {
+	if len(pkt) < 4 {
+		return
+	}
+	switch binary.LittleEndian.Uint16(pkt[1:]) {
+	case cmdLECreateConnection:
+		r.initiating.Store(true)
+	case cmdLEScanEnable:
+		if len(pkt) >= 5 && pkt[4] == 0x00 {
+			r.mu.Lock()
+			r.retakeLater()
+			r.mu.Unlock()
+		}
+	}
+}
+
+// retakeLater turns the scan on again retakeAfter from now, if it is still wanted then. Held with mu.
+func (r *Radio) retakeLater() {
+	if !r.open || !r.scanning {
+		return
+	}
+	if r.retake != nil {
+		r.retake.Reset(retakeAfter)
+		return
+	}
+	r.retake = time.AfterFunc(retakeAfter, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		switch {
+		case !r.open || !r.scanning:
+		case r.initiating.Load():
+			r.retake.Reset(retakeAfter)
+		case r.paused > 0:
+			// The last resume starts the scan again.
+		default:
+			slog.Debug("ble: scan taken back from the kernel")
+			if err := r.rescan(); err != nil {
+				slog.Debug("ble: taking the scan back", "err", err)
+			}
+		}
+	})
 }
 
 // reports walks an LE Meta event: event type, address type, address, data length, data, RSSI.

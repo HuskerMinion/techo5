@@ -8,11 +8,9 @@ import (
 )
 
 // notOnThisDevice is what the Echo Dot does not put up: it has no screen and no camera.
-var notOnThisDevice = []string{
+var notOnThisDevice = append([]string{
 	// Cast is the Show's receiver (feature/cast).
 	"cast", "cast_state",
-	// The Dot's proxy drives the HCI node itself and makes no connections.
-	"bluetooth_proxy_connections",
 	"calendar_popup_all_day", "calendar_popup_before", "calendar_popup_chime", "calendar_popup_sources_chosen", "calendar_popups", "calendar_sources_chosen",
 	"camera_live", "camera_sound", "camera_web_access", "lyrics", "now_playing_follows", "radar_source", "screen", "screen_answer_time", "screen_auto_brightness", "screen_call_button", "screen_call_screen", "screen_camera_time", "screen_clock_format", "screen_clock_position", "screen_clock_style", "screen_date_color", "screen_glance_chip_size", "screen_glance_with_music", "screen_weather_position", "screen_language", "screen_skin", "screen_timer_style", "screen_turn_style", "screen_night_warmth",
 	"screen_now_playing", "screen_theme", "screen_theme_mode", "screen_light_theme", "screen_weather_animation", "screen_at_night", "screen_night_clock_style", "screen_night_end", "screen_weekend_night_start", "screen_weekend_night_end", "screen_night_hours", "screen_night_light_level", "screen_auto_brightness_dimmest", "screen_dim_after_idle", "screen_dim", "screen_dimmed", "screen_night_mode", "screen_night_start", "screen_dashboard", "screen_dashboard_idle", "screen_dashboard_kiosk", "screen_dashboard_view",
@@ -26,7 +24,7 @@ var notOnThisDevice = []string{
 	"screen_font", "screen_text_size", "screen_power", "screen_touched", "screen_ignores_room_lights", "tessera_screen",
 	"screen_camera_picture", "screen_camera_strips", "screen_camera_strips_shade",
 	"calendar_opens_on", "calendar_day_timeline", "calendar_coming_up_refined", "calendar_month_details", "calendar_event_icons", "calendar_countdowns", "calendar_week_view", "calendar_chip_size", "calendar_next_up", "calendar_dashboard_events", "calendar_next_up_within", "calendar_weather", "calendar_week_starts_monday",
-}
+}, noProxyConnections()...)
 
 // speaker_gain is the codec's driver gain on the Dot (hardware/speaker/paths_dot.go), always there:
 // all_test.go's stand-in for a missing TAS5805M comes too late for the media player, built before it.
@@ -40,6 +38,16 @@ func audioOutput() []string {
 		return []string{"audio_output"}
 	}
 	return nil
+}
+
+// bluetooth_proxy_connections is put up where the proxy lends connections through bluetoothd
+// (feature/bluetooth/central_cannoli.go): the Echo Dot 5th gen. The older Dots' proxy drives the HCI
+// node itself and makes none.
+func noProxyConnections() []string {
+	if layout.Cannoli() {
+		return nil
+	}
+	return []string{"bluetooth_proxy_connections"}
 }
 
 // presence, presence_detection and presence_sensitivity are put up where the speaker and the microphones

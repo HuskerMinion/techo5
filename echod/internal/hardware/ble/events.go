@@ -13,22 +13,43 @@ const (
 	evtCommandStatus         = 0x0F
 	evtLEMeta                = 0x3E
 	leAdvertisingReport      = 0x02
+	leConnectionComplete     = 0x01
+	leEnhancedConnComplete   = 0x0A
 )
 
-// nextEvent removes one complete H4 event from the front. Remainder is the partial packet to hold,
-// or nil when the stream is malformed.
-func nextEvent(b []byte) (event, remainder []byte, ok bool, err error) {
-	if len(b) < 3 {
+// nextPacket removes one complete H4 packet from the front: an event, or on hci0 a command another
+// socket sent (kernel.go). Remainder is the partial packet to hold, or nil when the stream is malformed.
+func nextPacket(b []byte) (packet, remainder []byte, ok bool, err error) {
+	var size int
+	switch {
+	case len(b) < 3:
 		return nil, b, false, nil
-	}
-	if b[0] != h4Event {
+	case b[0] == h4Event:
+		size = 3 + int(b[2])
+	case b[0] == h4Command:
+		if len(b) < 4 {
+			return nil, b, false, nil
+		}
+		size = 4 + int(b[3])
+	default:
 		return nil, nil, false, fmt.Errorf("unexpected H4 packet type 0x%02x", b[0])
 	}
-	size := 3 + int(b[2])
 	if len(b) < size {
 		return nil, b, false, nil
 	}
 	return b[:size], b[size:], true, nil
+}
+
+// nextEvent removes one complete H4 event from the front, passing over the commands before it.
+// Remainder is the partial packet to hold, or nil when the stream is malformed.
+func nextEvent(b []byte) (event, remainder []byte, ok bool, err error) {
+	for {
+		packet, rest, ok, err := nextPacket(b)
+		if err != nil || !ok || packet[0] == h4Event {
+			return packet, rest, ok, err
+		}
+		b = rest
+	}
 }
 
 // commandResult consumes complete events until it finds the matching Command Complete.

@@ -43,9 +43,10 @@ func main() {
 		"(the Echo Show, whose controller encrypts them with E0; h4.go p192Key)")
 	peripheral := flag.Bool("accept-as-peripheral", false, "accept incoming connections as peripheral, never "+
 		"asking for a role switch (the Echo Dot, whose controller then cannot authenticate; h4.go acceptAsPeripheral)")
-	legacyAdv := flag.Bool("legacy-advertising", false, "report no LE extended advertising to the kernel, so it "+
-		"advertises with the legacy commands (the Echo Dot 5th gen, whose 5.4 kernel lets an extended "+
-		"advertisement end after 2 s; h4.go hideExtAdv)")
+	legacyAdv := flag.Bool("legacy-advertising", false, "report no LE extended advertising, scanning or "+
+		"connecting to the kernel, so it uses the legacy commands (the Echo Dot 5th gen, whose 5.4 kernel lets "+
+		"an extended advertisement end after 2 s, and whose controller refuses the kernel's extended scan "+
+		"once the BLE proxy scanned with the legacy one; h4.go hideExtAdv, hideExtScan)")
 	flag.Parse()
 
 	if *bdaddr == "idme" {
@@ -158,6 +159,9 @@ func stpToVhci(stp int, vhci *os.File, maxPage int, p192, legacyAdv bool) error 
 			}
 			if legacyAdv && hideExtAdv(pkt) {
 				fmt.Fprintln(os.Stderr, "btbridge: LE extended advertising hidden from the kernel")
+			}
+			if legacyAdv && hideExtScan(pkt) {
+				fmt.Fprintln(os.Stderr, "btbridge: LE extended scanning and connecting hidden from the kernel")
 			}
 			if p192 && p192Key(pkt) {
 				fmt.Fprintln(os.Stderr, "btbridge: a new link key passed on as the P-192 kind")
